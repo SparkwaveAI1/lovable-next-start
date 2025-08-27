@@ -149,6 +149,50 @@ export type Database = {
         }
         Relationships: []
       }
+      automation_logs: {
+        Row: {
+          automation_type: string
+          business_id: string
+          created_at: string | null
+          error_message: string | null
+          execution_time_ms: number | null
+          id: string
+          processed_data: Json | null
+          source_data: Json | null
+          status: string
+        }
+        Insert: {
+          automation_type: string
+          business_id: string
+          created_at?: string | null
+          error_message?: string | null
+          execution_time_ms?: number | null
+          id?: string
+          processed_data?: Json | null
+          source_data?: Json | null
+          status: string
+        }
+        Update: {
+          automation_type?: string
+          business_id?: string
+          created_at?: string | null
+          error_message?: string | null
+          execution_time_ms?: number | null
+          id?: string
+          processed_data?: Json | null
+          source_data?: Json | null
+          status?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "automation_logs_business_id_fkey"
+            columns: ["business_id"]
+            isOneToOne: false
+            referencedRelation: "businesses"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       businesses: {
         Row: {
           business_type: string

@@ -1,11 +1,31 @@
-import { useState } from "react"
-import { Activity, AlertCircle, Zap } from "lucide-react"
+import { useState, useEffect } from "react"
+import { Activity, AlertCircle, Zap, TrendingUp } from "lucide-react"
 import { DashboardHeader } from "@/components/DashboardHeader"
 import { StatsCard } from "@/components/StatsCard"
-import { mockStats } from "@/lib/supabase"
+import { getDashboardStats } from "@/lib/supabase"
 
 const Index = () => {
   const [selectedBusinessId, setSelectedBusinessId] = useState<string>()
+  const [stats, setStats] = useState({
+    activeAutomations: 0,
+    todayActivity: 0,
+    errors: 0,
+    totalRuns: 0,
+    successRate: 0
+  })
+  const [isLoadingStats, setIsLoadingStats] = useState(true)
+
+  // Load dashboard stats
+  useEffect(() => {
+    const loadStats = async () => {
+      setIsLoadingStats(true)
+      const dashboardStats = await getDashboardStats(selectedBusinessId)
+      setStats(dashboardStats)
+      setIsLoadingStats(false)
+    }
+
+    loadStats()
+  }, [selectedBusinessId])
 
   return (
     <div className="min-h-screen bg-background">
@@ -26,24 +46,30 @@ const Index = () => {
         </div>
 
         {/* Stats Grid */}
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
+        <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
           <StatsCard
             title="Active Automations"
-            value={mockStats.activeAutomations}
+            value={isLoadingStats ? 0 : stats.activeAutomations}
             icon={Zap}
-            description="Currently running"
+            description="Running workflows"
           />
           <StatsCard
             title="Today's Activity"
-            value={mockStats.todayActivity}
+            value={isLoadingStats ? 0 : stats.todayActivity}
             icon={Activity}
-            description="Processed today"
+            description="Executions today"
           />
           <StatsCard
             title="Errors"
-            value={mockStats.errors}
+            value={isLoadingStats ? 0 : stats.errors}
             icon={AlertCircle}
-            description="Requires attention"
+            description="Failed executions"
+          />
+          <StatsCard
+            title="Success Rate"
+            value={isLoadingStats ? 0 : stats.successRate}
+            icon={TrendingUp}
+            description="Overall performance (%)"
           />
         </div>
 
