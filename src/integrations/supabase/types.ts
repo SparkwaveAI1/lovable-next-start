@@ -149,6 +149,50 @@ export type Database = {
         }
         Relationships: []
       }
+      businesses: {
+        Row: {
+          business_type: string
+          created_at: string
+          description: string | null
+          id: string
+          name: string
+          parent_business_id: string | null
+          slug: string
+          status: string | null
+          updated_at: string
+        }
+        Insert: {
+          business_type: string
+          created_at?: string
+          description?: string | null
+          id?: string
+          name: string
+          parent_business_id?: string | null
+          slug: string
+          status?: string | null
+          updated_at?: string
+        }
+        Update: {
+          business_type?: string
+          created_at?: string
+          description?: string | null
+          id?: string
+          name?: string
+          parent_business_id?: string | null
+          slug?: string
+          status?: string | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "businesses_parent_business_id_fkey"
+            columns: ["parent_business_id"]
+            isOneToOne: false
+            referencedRelation: "businesses"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
     }
     Views: {
       [_ in never]: never
