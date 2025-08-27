@@ -237,6 +237,44 @@ export type Database = {
           },
         ]
       }
+      webhook_endpoints: {
+        Row: {
+          business_id: string
+          created_at: string | null
+          endpoint_slug: string
+          id: string
+          is_active: boolean | null
+          secret_key: string
+          webhook_type: string
+        }
+        Insert: {
+          business_id: string
+          created_at?: string | null
+          endpoint_slug: string
+          id?: string
+          is_active?: boolean | null
+          secret_key: string
+          webhook_type: string
+        }
+        Update: {
+          business_id?: string
+          created_at?: string | null
+          endpoint_slug?: string
+          id?: string
+          is_active?: boolean | null
+          secret_key?: string
+          webhook_type?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "webhook_endpoints_business_id_fkey"
+            columns: ["business_id"]
+            isOneToOne: false
+            referencedRelation: "businesses"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
     }
     Views: {
       [_ in never]: never
