@@ -1,42 +1,23 @@
-import { createClient } from '@supabase/supabase-js'
+import { supabase } from "@/integrations/supabase/client"
+import { Business } from "@/types/business"
 
-// These will be configured when we set up the Supabase integration
-const supabaseUrl = process.env.SUPABASE_URL || ''
-const supabaseAnonKey = process.env.SUPABASE_ANON_KEY || ''
+// Export the supabase client for backward compatibility
+export { supabase }
 
-export const supabase = createClient(supabaseUrl, supabaseAnonKey)
-
-// Mock data for development until Supabase is configured
-export const mockBusinesses = [
-  {
-    id: '1',
-    name: 'Fight Flow Academy',
-    slug: 'fight-flow-academy',
-    description: 'Martial arts training and community',
-    active: true
-  },
-  {
-    id: '2',
-    name: 'Sparkwave AI',
-    slug: 'sparkwave-ai',
-    description: 'AI automation solutions',
-    active: true
-  },
-  {
-    id: '3',
-    name: 'PersonaAI',
-    slug: 'persona-ai',
-    description: 'AI-powered persona generation',
-    active: true
-  },
-  {
-    id: '4',
-    name: 'CharX World',
-    slug: 'charx-world',
-    description: 'Character creation platform',
-    active: true
+// Business data functions
+export async function getBusinesses(): Promise<Business[]> {
+  const { data, error } = await supabase
+    .from('businesses')
+    .select('*')
+    .order('name')
+  
+  if (error) {
+    console.error('Error fetching businesses:', error)
+    return []
   }
-]
+  
+  return data || []
+}
 
 export const mockStats = {
   activeAutomations: 0,

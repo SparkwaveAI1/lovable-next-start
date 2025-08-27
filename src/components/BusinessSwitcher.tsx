@@ -1,4 +1,4 @@
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import { Check, ChevronsUpDown, Building2 } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { Button } from "@/components/ui/button"
@@ -14,7 +14,8 @@ import {
   PopoverContent,
   PopoverTrigger,
 } from "@/components/ui/popover"
-import { mockBusinesses } from "@/lib/supabase"
+import { getBusinesses } from "@/lib/supabase"
+import { Business } from "@/types/business"
 
 interface BusinessSwitcherProps {
   selectedBusinessId?: string
@@ -23,8 +24,21 @@ interface BusinessSwitcherProps {
 
 export function BusinessSwitcher({ selectedBusinessId, onBusinessChange }: BusinessSwitcherProps) {
   const [open, setOpen] = useState(false)
+  const [businesses, setBusinesses] = useState<Business[]>([])
+  const [loading, setLoading] = useState(true)
   
-  const selectedBusiness = mockBusinesses.find(business => business.id === selectedBusinessId)
+  useEffect(() => {
+    const fetchBusinesses = async () => {
+      setLoading(true)
+      const data = await getBusinesses()
+      setBusinesses(data)
+      setLoading(false)
+    }
+    
+    fetchBusinesses()
+  }, [])
+  
+  const selectedBusiness = businesses.find(business => business.id === selectedBusinessId)
 
   return (
     <Popover open={open} onOpenChange={setOpen}>
@@ -34,11 +48,17 @@ export function BusinessSwitcher({ selectedBusinessId, onBusinessChange }: Busin
           role="combobox"
           aria-expanded={open}
           className="w-[280px] justify-between bg-card shadow-card hover:shadow-card-hover transition-smooth"
+          disabled={loading}
         >
           <div className="flex items-center gap-2">
             <Building2 className="h-4 w-4 text-primary" />
             <span className="font-medium">
-              {selectedBusiness ? selectedBusiness.name : "Select business..."}
+              {loading 
+                ? "Loading..." 
+                : selectedBusiness 
+                  ? selectedBusiness.name 
+                  : "Select business..."
+              }
             </span>
           </div>
           <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
@@ -49,7 +69,7 @@ export function BusinessSwitcher({ selectedBusinessId, onBusinessChange }: Busin
           <CommandInput placeholder="Search businesses..." />
           <CommandEmpty>No business found.</CommandEmpty>
           <CommandGroup>
-            {mockBusinesses.map((business) => (
+            {businesses.map((business) => (
               <CommandItem
                 key={business.id}
                 value={business.name}
