@@ -4,6 +4,7 @@ import { DashboardHeader } from "@/components/DashboardHeader"
 import { StatsCard } from "@/components/StatsCard"
 import { WebhookTester } from "@/components/WebhookTester"
 import { getDashboardStats } from "@/lib/supabase"
+import { ActivityLog } from "@/components/ActivityLog"
 
 const Index = () => {
   const [selectedBusinessId, setSelectedBusinessId] = useState<string>()
@@ -85,6 +86,11 @@ const Index = () => {
             </div>
           </div>
         )}
+
+        {/* Activity Log */}
+        <div className="mb-8">
+          <ActivityLog businessId={selectedBusinessId} />
+        </div>
 
         {/* Placeholder for future content */}
         <div className="bg-card rounded-lg border border-border p-8 text-center shadow-card">
