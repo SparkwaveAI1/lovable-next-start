@@ -5,6 +5,7 @@ import { StatsCard } from "@/components/StatsCard"
 import { WebhookTester } from "@/components/WebhookTester"
 import { getDashboardStats } from "@/lib/supabase"
 import { ActivityLog } from "@/components/ActivityLog"
+import { GoHighLevelConfig } from "@/components/GoHighLevelConfig"
 
 const Index = () => {
   const [selectedBusinessId, setSelectedBusinessId] = useState<string>()
@@ -75,14 +76,23 @@ const Index = () => {
           />
         </div>
 
-        {/* Test Interface - Show when Fight Flow Academy is selected */}
+        {/* Configuration and Testing - Show when business is selected */}
         {selectedBusinessId && (
-          <div className="mb-8">
-            <h3 className="text-xl font-semibold text-foreground mb-4">
-              Automation Testing
-            </h3>
-            <div className="max-w-md">
-              <WebhookTester />
+          <div className="space-y-8 mb-8">
+            <div>
+              <h3 className="text-xl font-semibold text-foreground mb-4">
+                GoHighLevel Configuration
+              </h3>
+              <GoHighLevelConfig businessId={selectedBusinessId} />
+            </div>
+            
+            <div>
+              <h3 className="text-xl font-semibold text-foreground mb-4">
+                Automation Testing
+              </h3>
+              <div className="max-w-md">
+                <WebhookTester businessId={selectedBusinessId} />
+              </div>
             </div>
           </div>
         )}

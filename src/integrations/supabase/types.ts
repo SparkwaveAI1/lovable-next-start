@@ -237,6 +237,39 @@ export type Database = {
           },
         ]
       }
+      ghl_configurations: {
+        Row: {
+          business_id: string
+          created_at: string
+          id: string
+          is_active: boolean | null
+          location_id: string
+          pipeline_id: string
+          stage_id: string
+          updated_at: string
+        }
+        Insert: {
+          business_id: string
+          created_at?: string
+          id?: string
+          is_active?: boolean | null
+          location_id: string
+          pipeline_id: string
+          stage_id: string
+          updated_at?: string
+        }
+        Update: {
+          business_id?: string
+          created_at?: string
+          id?: string
+          is_active?: boolean | null
+          location_id?: string
+          pipeline_id?: string
+          stage_id?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
       webhook_endpoints: {
         Row: {
           business_id: string
