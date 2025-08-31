@@ -2,12 +2,17 @@ import { useState } from "react"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
-import { Zap, Send, CheckCircle, XCircle, Loader2 } from "lucide-react"
+import { Switch } from "@/components/ui/switch"
+import { Label } from "@/components/ui/label"
+import { Separator } from "@/components/ui/separator"
+import { Zap, Send, CheckCircle, XCircle, Loader2, Shield, Settings } from "lucide-react"
 import { useToast } from "@/hooks/use-toast"
 
 export function WebhookTester() {
   const [isLoading, setIsLoading] = useState(false)
   const [lastResult, setLastResult] = useState<any>(null)
+  const [testMode, setTestMode] = useState(true) // Start in safe test mode
+  const [ghlEnabled, setGhlEnabled] = useState(false)
   const { toast } = useToast()
 
   const testWebhook = async () => {
@@ -19,7 +24,10 @@ export function WebhookTester() {
       email: "test@example.com", 
       phone: "555-0123",
       formType: "free_trial_signup",
-      source: "wix_form_test"
+      source: "wix_form_test",
+      // Safety parameters
+      testMode: testMode,
+      ghlEnabled: ghlEnabled
     }
 
     try {
@@ -80,6 +88,56 @@ export function WebhookTester() {
       </CardHeader>
       
       <CardContent className="space-y-4">
+        {/* Safety Controls */}
+        <div className="space-y-4 bg-muted/30 rounded-lg p-4 border border-border/50">
+          <div className="flex items-center gap-2 mb-3">
+            <Shield className="h-4 w-4 text-primary" />
+            <Label className="text-sm font-medium text-foreground">Safety Controls</Label>
+          </div>
+          
+          <div className="space-y-3">
+            <div className="flex items-center justify-between">
+              <div className="space-y-0.5">
+                <Label htmlFor="test-mode" className="text-sm font-medium">Test Mode</Label>
+                <p className="text-xs text-muted-foreground">
+                  Skips GoHighLevel API calls, shows what would be sent
+                </p>
+              </div>
+              <Switch
+                id="test-mode"
+                checked={testMode}
+                onCheckedChange={setTestMode}
+              />
+            </div>
+            
+            <div className="flex items-center justify-between">
+              <div className="space-y-0.5">
+                <Label htmlFor="ghl-enabled" className="text-sm font-medium">GoHighLevel Integration</Label>
+                <p className="text-xs text-muted-foreground">
+                  Enable actual GoHighLevel contact creation
+                </p>
+              </div>
+              <Switch
+                id="ghl-enabled"
+                checked={ghlEnabled}
+                onCheckedChange={setGhlEnabled}
+                disabled={testMode} // Disabled when in test mode
+              />
+            </div>
+          </div>
+          
+          {testMode && (
+            <div className="flex items-center gap-2 p-2 bg-primary/10 rounded-md border border-primary/20">
+              <Shield className="h-3 w-3 text-primary" />
+              <p className="text-xs text-primary font-medium">
+                Safe Mode: No external API calls will be made
+              </p>
+            </div>
+          )}
+        </div>
+        
+        <Separator />
+
         <Button 
           onClick={testWebhook}
           disabled={isLoading}

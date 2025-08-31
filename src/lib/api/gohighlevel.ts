@@ -28,8 +28,38 @@ export interface GoHighLevelResponse {
 export const createGoHighLevelContact = async (
   contact: GoHighLevelContact,
   apiKey: string,
-  locationId: string
+  locationId: string,
+  dryRun: boolean = false
 ): Promise<GoHighLevelResponse> => {
+  // Validate required fields
+  if (!contact.firstName || !contact.email) {
+    return {
+      success: false,
+      error: 'Missing required fields: firstName and email are required',
+    };
+  }
+
+  // Log what would be sent (useful for both dry run and actual calls)
+  console.log('GoHighLevel contact data to be sent:', {
+    ...contact,
+    locationId,
+    dryRun
+  });
+
+  // If in dry run mode, return success with the data that would be sent
+  if (dryRun) {
+    return {
+      success: true,
+      contact: {
+        ...contact,
+        locationId,
+        id: 'dry-run-contact-id',
+        status: 'DRY_RUN'
+      },
+      message: 'DRY RUN: Contact would be created successfully in GoHighLevel',
+    };
+  }
+
   try {
     const response = await fetch('https://rest.gohighlevel.com/v1/contacts/', {
       method: 'POST',

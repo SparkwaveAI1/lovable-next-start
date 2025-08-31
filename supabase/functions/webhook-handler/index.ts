@@ -16,7 +16,25 @@ interface GoHighLevelContact {
   timestamp?: string;
 }
 
-async function createGoHighLevelContact(leadData: GoHighLevelContact) {
+async function createGoHighLevelContact(leadData: GoHighLevelContact, testMode: boolean = false) {
+  // If in test mode, return mock success without calling API
+  if (testMode) {
+    console.log('TEST MODE: GoHighLevel integration skipped');
+    console.log('Would create contact with data:', leadData);
+    return {
+      success: true,
+      contact: {
+        id: 'test-mode-contact-id',
+        firstName: leadData.leadName.split(' ')[0],
+        lastName: leadData.leadName.split(' ').slice(1).join(' '),
+        email: leadData.leadEmail,
+        phone: leadData.leadPhone,
+        status: 'TEST_MODE'
+      },
+      message: 'TEST MODE: Contact would be created in GoHighLevel (API call skipped)',
+    };
+  }
+
   const ghlApiKey = Deno.env.get('GOHIGHLEVEL_API_KEY');
   
   if (!ghlApiKey) {
@@ -163,13 +181,28 @@ serve(async (req: Request) => {
 
       console.log('Processed lead data:', processedData);
 
-      // Create contact in GoHighLevel
-      try {
-        ghlResult = await createGoHighLevelContact(processedData);
-        console.log('GoHighLevel integration result:', ghlResult);
-      } catch (error) {
-        console.error('GoHighLevel integration failed:', error);
-        ghlResult = { success: false, error: error.message };
+      // Extract safety parameters from request
+      const testMode = requestBody.testMode === true;
+      const ghlEnabled = requestBody.ghlEnabled === true;
+
+      console.log('Safety settings:', { testMode, ghlEnabled });
+
+      // Create contact in GoHighLevel if enabled or in test mode
+      if (ghlEnabled || testMode) {
+        try {
+          ghlResult = await createGoHighLevelContact(processedData, testMode);
+          console.log('GoHighLevel integration result:', ghlResult);
+        } catch (error) {
+          console.error('GoHighLevel integration failed:', error);
+          ghlResult = { success: false, error: error.message };
+        }
+      } else {
+        console.log('GoHighLevel integration disabled by user settings');
+        ghlResult = {
+          success: true,
+          message: 'GoHighLevel integration disabled - no contact created',
+          status: 'DISABLED'
+        };
       }
     }
 
