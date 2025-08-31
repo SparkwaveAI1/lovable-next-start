@@ -4,6 +4,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { Switch } from "@/components/ui/switch"
 import { Label } from "@/components/ui/label"
+import { Input } from "@/components/ui/input"
 import { Separator } from "@/components/ui/separator"
 import { Zap, Send, CheckCircle, XCircle, Loader2, Shield, Settings } from "lucide-react"
 import { useToast } from "@/hooks/use-toast"
@@ -13,6 +14,9 @@ export function WebhookTester() {
   const [lastResult, setLastResult] = useState<any>(null)
   const [testMode, setTestMode] = useState(true) // Start in safe test mode
   const [ghlEnabled, setGhlEnabled] = useState(false)
+  const [pipelineId, setPipelineId] = useState("pipeline_id_here")
+  const [stageId, setStageId] = useState("stage_id_here")
+  const [opportunityValue, setOpportunityValue] = useState("129")
   const { toast } = useToast()
 
   const testWebhook = async () => {
@@ -27,7 +31,11 @@ export function WebhookTester() {
       source: "wix_form_test",
       // Safety parameters
       testMode: testMode,
-      ghlEnabled: ghlEnabled
+      ghlEnabled: ghlEnabled,
+      // GoHighLevel configuration
+      pipelineId: pipelineId,
+      stageId: stageId,
+      opportunityValue: parseInt(opportunityValue) || 129
     }
 
     try {
@@ -114,7 +122,7 @@ export function WebhookTester() {
               <div className="space-y-0.5">
                 <Label htmlFor="ghl-enabled" className="text-sm font-medium">GoHighLevel Integration</Label>
                 <p className="text-xs text-muted-foreground">
-                  Enable actual GoHighLevel contact creation
+                  Enable actual GoHighLevel contact and opportunity creation
                 </p>
               </div>
               <Switch
@@ -123,6 +131,47 @@ export function WebhookTester() {
                 onCheckedChange={setGhlEnabled}
                 disabled={testMode} // Disabled when in test mode
               />
+            </div>
+            
+            {/* GoHighLevel Configuration */}
+            <div className="space-y-3 pt-3 border-t border-border/30">
+              <Label className="text-sm font-medium text-foreground">GoHighLevel Configuration</Label>
+              
+              <div className="grid grid-cols-2 gap-3">
+                <div className="space-y-2">
+                  <Label htmlFor="pipeline-id" className="text-xs text-muted-foreground">Pipeline ID</Label>
+                  <Input
+                    id="pipeline-id"
+                    value={pipelineId}
+                    onChange={(e) => setPipelineId(e.target.value)}
+                    placeholder="Enter pipeline ID"
+                    className="text-xs"
+                  />
+                </div>
+                
+                <div className="space-y-2">
+                  <Label htmlFor="stage-id" className="text-xs text-muted-foreground">Stage ID</Label>
+                  <Input
+                    id="stage-id"
+                    value={stageId}
+                    onChange={(e) => setStageId(e.target.value)}
+                    placeholder="Enter stage ID"
+                    className="text-xs"
+                  />
+                </div>
+              </div>
+              
+              <div className="space-y-2">
+                <Label htmlFor="opportunity-value" className="text-xs text-muted-foreground">Opportunity Value ($)</Label>
+                <Input
+                  id="opportunity-value"
+                  value={opportunityValue}
+                  onChange={(e) => setOpportunityValue(e.target.value)}
+                  placeholder="129"
+                  type="number"
+                  className="text-xs"
+                />
+              </div>
             </div>
           </div>
           
@@ -178,7 +227,7 @@ export function WebhookTester() {
         )}
 
         <div className="text-xs text-muted-foreground bg-muted/50 rounded-md p-2">
-          <strong>Test Data:</strong> Sends sample form data to webhook endpoint to verify integration is working.
+          <strong>Test Data:</strong> Sends sample form data to webhook endpoint to verify integration is working. Creates both Contact and Opportunity in GoHighLevel when enabled.
         </div>
       </CardContent>
     </Card>

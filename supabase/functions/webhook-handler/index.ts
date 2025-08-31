@@ -16,22 +16,34 @@ interface GoHighLevelContact {
   timestamp?: string;
 }
 
-async function createGoHighLevelContact(leadData: GoHighLevelContact, testMode: boolean = false) {
+async function createLeadInGoHighLevel(leadData: GoHighLevelContact, testMode: boolean = false) {
   // If in test mode, return mock success without calling API
   if (testMode) {
     console.log('TEST MODE: GoHighLevel integration skipped');
-    console.log('Would create contact with data:', leadData);
+    console.log('Would create contact and opportunity with data:', leadData);
     return {
-      success: true,
       contact: {
-        id: 'test-mode-contact-id',
-        firstName: leadData.leadName.split(' ')[0],
-        lastName: leadData.leadName.split(' ').slice(1).join(' '),
-        email: leadData.leadEmail,
-        phone: leadData.leadPhone,
-        status: 'TEST_MODE'
+        success: true,
+        contact: {
+          id: 'test-mode-contact-id',
+          firstName: leadData.leadName.split(' ')[0],
+          lastName: leadData.leadName.split(' ').slice(1).join(' '),
+          email: leadData.leadEmail,
+          phone: leadData.leadPhone,
+          status: 'TEST_MODE'
+        },
+        message: 'TEST MODE: Contact would be created in GoHighLevel (API call skipped)',
       },
-      message: 'TEST MODE: Contact would be created in GoHighLevel (API call skipped)',
+      opportunity: {
+        success: true,
+        opportunity: {
+          id: 'test-mode-opportunity-id',
+          title: `${leadData.formType || 'Contact'} - ${leadData.leadName}`,
+          contactId: 'test-mode-contact-id',
+          status: 'TEST_MODE'
+        },
+        message: 'TEST MODE: Opportunity would be created in GoHighLevel (API call skipped)',
+      }
     };
   }
 
@@ -60,10 +72,11 @@ async function createGoHighLevelContact(leadData: GoHighLevelContact, testMode: 
     },
   };
 
-  console.log('Creating GoHighLevel contact:', contactData);
+  console.log('Creating GoHighLevel contact and opportunity:', contactData);
 
   try {
-    const response = await fetch('https://rest.gohighlevel.com/v1/contacts/', {
+    // Step 1: Create Contact
+    const contactResponse = await fetch('https://rest.gohighlevel.com/v1/contacts/', {
       method: 'POST',
       headers: {
         'Authorization': `Bearer ${ghlApiKey}`,
@@ -72,27 +85,86 @@ async function createGoHighLevelContact(leadData: GoHighLevelContact, testMode: 
       body: JSON.stringify(contactData),
     });
 
-    const data = await response.json();
+    const contactData_result = await contactResponse.json();
 
-    if (!response.ok) {
-      console.error('GoHighLevel API Error:', data);
+    if (!contactResponse.ok) {
+      console.error('GoHighLevel Contact API Error:', contactData_result);
       return {
-        success: false,
-        error: `API Error ${response.status}: ${data.message || 'Unknown error'}`,
+        contact: {
+          success: false,
+          error: `Contact API Error ${contactResponse.status}: ${contactData_result.message || 'Unknown error'}`,
+        },
+        opportunity: {
+          success: false,
+          error: 'Contact creation failed, skipping opportunity creation',
+        }
       };
     }
 
-    console.log('GoHighLevel contact created successfully:', data);
+    console.log('GoHighLevel contact created successfully:', contactData_result);
+
+    // Step 2: Create Opportunity
+    const opportunityData = {
+      title: `${leadData.formType || 'Contact'} - ${leadData.leadName}`,
+      status: 'open',
+      pipelineId: leadData.pipelineId || 'default_pipeline',
+      stageId: leadData.stageId || 'default_stage',
+      contactId: contactData_result.id,
+      monetaryValue: leadData.opportunityValue || (leadData.formType === 'free_trial_signup' ? 129 : 0),
+      source: leadData.source || 'wix_form',
+    };
+
+    const opportunityResponse = await fetch('https://rest.gohighlevel.com/v1/opportunities/', {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${ghlApiKey}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(opportunityData),
+    });
+
+    const opportunityResult = await opportunityResponse.json();
+
+    if (!opportunityResponse.ok) {
+      console.error('GoHighLevel Opportunity API Error:', opportunityResult);
+      return {
+        contact: {
+          success: true,
+          contact: contactData_result,
+          message: 'Contact created successfully in GoHighLevel',
+        },
+        opportunity: {
+          success: false,
+          error: `Opportunity API Error ${opportunityResponse.status}: ${opportunityResult.message || 'Unknown error'}`,
+        }
+      };
+    }
+
+    console.log('GoHighLevel opportunity created successfully:', opportunityResult);
+
     return {
-      success: true,
-      contact: data,
-      message: 'Contact created successfully in GoHighLevel',
+      contact: {
+        success: true,
+        contact: contactData_result,
+        message: 'Contact created successfully in GoHighLevel',
+      },
+      opportunity: {
+        success: true,
+        opportunity: opportunityResult,
+        message: 'Opportunity created successfully in GoHighLevel',
+      }
     };
   } catch (error) {
     console.error('GoHighLevel API Error:', error);
     return {
-      success: false,
-      error: error instanceof Error ? error.message : 'Unknown error occurred',
+      contact: {
+        success: false,
+        error: error instanceof Error ? error.message : 'Unknown error occurred',
+      },
+      opportunity: {
+        success: false,
+        error: 'Contact creation failed, skipping opportunity creation',
+      }
     };
   }
 }
@@ -176,7 +248,10 @@ serve(async (req: Request) => {
         leadPhone: requestBody.phone || '',
         formType: requestBody.formType || 'contact',
         source: 'wix_form',
-        timestamp: new Date().toISOString()
+        timestamp: new Date().toISOString(),
+        pipelineId: requestBody.pipelineId || 'default_pipeline',
+        stageId: requestBody.stageId || 'default_stage',
+        opportunityValue: requestBody.opportunityValue || 129
       };
 
       console.log('Processed lead data:', processedData);
@@ -187,10 +262,10 @@ serve(async (req: Request) => {
 
       console.log('Safety settings:', { testMode, ghlEnabled });
 
-      // Create contact in GoHighLevel if enabled or in test mode
+      // Create contact and opportunity in GoHighLevel if enabled or in test mode
       if (ghlEnabled || testMode) {
         try {
-          ghlResult = await createGoHighLevelContact(processedData, testMode);
+          ghlResult = await createLeadInGoHighLevel(processedData, testMode);
           console.log('GoHighLevel integration result:', ghlResult);
         } catch (error) {
           console.error('GoHighLevel integration failed:', error);
@@ -200,7 +275,7 @@ serve(async (req: Request) => {
         console.log('GoHighLevel integration disabled by user settings');
         ghlResult = {
           success: true,
-          message: 'GoHighLevel integration disabled - no contact created',
+          message: 'GoHighLevel integration disabled - no contact or opportunity created',
           status: 'DISABLED'
         };
       }
