@@ -5,7 +5,8 @@ import { Button } from "@/components/ui/button"
 import { Label } from "@/components/ui/label"
 import { Alert, AlertDescription } from "@/components/ui/alert"
 import { Badge } from "@/components/ui/badge"
-import { Loader2, CheckCircle, AlertCircle, Settings } from "lucide-react"
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
+import { Loader2, CheckCircle, AlertCircle, Settings, Search } from "lucide-react"
 import { supabase } from "@/integrations/supabase/client"
 import { useToast } from "@/hooks/use-toast"
 
@@ -28,6 +29,18 @@ interface ConnectionTestResult {
   stageValid?: boolean
 }
 
+interface Pipeline {
+  id: string
+  name: string
+  stages: Array<{ id: string; name: string }>
+}
+
+interface DiscoveryResult {
+  success: boolean
+  message: string
+  pipelines?: Pipeline[]
+}
+
 export function GoHighLevelConfig({ businessId }: GoHighLevelConfigProps) {
   const [config, setConfig] = useState<GHLConfig>({
     locationId: '',
@@ -37,7 +50,10 @@ export function GoHighLevelConfig({ businessId }: GoHighLevelConfigProps) {
   const [isLoading, setIsLoading] = useState(false)
   const [isTesting, setIsTesting] = useState(false)
   const [isSaving, setIsSaving] = useState(false)
+  const [isDiscovering, setIsDiscovering] = useState(false)
   const [testResult, setTestResult] = useState<ConnectionTestResult | null>(null)
+  const [discoveryResult, setDiscoveryResult] = useState<DiscoveryResult | null>(null)
+  const [selectedPipeline, setSelectedPipeline] = useState<Pipeline | null>(null)
   const { toast } = useToast()
 
   // Load existing configuration
@@ -128,6 +144,75 @@ export function GoHighLevelConfig({ businessId }: GoHighLevelConfigProps) {
       })
     } finally {
       setIsTesting(false)
+    }
+  }
+
+  const discoverPipelinesAndStages = async () => {
+    if (!config.locationId) {
+      toast({
+        title: "Missing Location ID",
+        description: "Please enter a Location ID before discovering pipelines.",
+        variant: "destructive"
+      })
+      return
+    }
+
+    setIsDiscovering(true)
+    setDiscoveryResult(null)
+
+    try {
+      const { data, error } = await supabase.functions.invoke('test-ghl-connection', {
+        body: {
+          locationId: config.locationId,
+          discoverMode: true
+        }
+      })
+
+      if (error) throw error
+
+      setDiscoveryResult(data)
+      
+      if (data.success && data.pipelines) {
+        toast({
+          title: "Discovery Successful",
+          description: `Found ${data.pipelines.length} pipelines with their stages.`,
+        })
+      } else {
+        toast({
+          title: "Discovery Failed",
+          description: data.message,
+          variant: "destructive"
+        })
+      }
+    } catch (error) {
+      console.error('Discovery error:', error)
+      setDiscoveryResult({
+        success: false,
+        message: error instanceof Error ? error.message : 'Pipeline discovery failed'
+      })
+      toast({
+        title: "Discovery Failed",
+        description: "Unable to discover pipelines and stages.",
+        variant: "destructive"
+      })
+    } finally {
+      setIsDiscovering(false)
+    }
+  }
+
+  const selectPipelineAndStage = (pipelineId: string, stageId: string) => {
+    const pipeline = discoveryResult?.pipelines?.find(p => p.id === pipelineId)
+    if (pipeline) {
+      setConfig(prev => ({
+        ...prev,
+        pipelineId: pipelineId,
+        stageId: stageId
+      }))
+      setSelectedPipeline(pipeline)
+      toast({
+        title: "Configuration Updated",
+        description: `Selected "${pipeline.name}" pipeline and stage.`,
+      })
     }
   }
 
@@ -275,7 +360,17 @@ export function GoHighLevelConfig({ businessId }: GoHighLevelConfigProps) {
               </div>
             </div>
 
-            <div className="flex gap-3">
+            <div className="flex flex-wrap gap-3">
+              <Button 
+                onClick={discoverPipelinesAndStages} 
+                variant="outline"
+                disabled={isDiscovering || !config.locationId}
+              >
+                {isDiscovering && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                <Search className="mr-2 h-4 w-4" />
+                Discover IDs
+              </Button>
+
               <Button 
                 onClick={testConnection} 
                 variant="outline"
@@ -293,6 +388,40 @@ export function GoHighLevelConfig({ businessId }: GoHighLevelConfigProps) {
                 Save Configuration
               </Button>
             </div>
+
+            {discoveryResult && discoveryResult.success && discoveryResult.pipelines && (
+              <div className="space-y-4 p-4 border rounded-lg bg-muted/50">
+                <h3 className="font-medium">Available Pipelines & Stages</h3>
+                <div className="space-y-3">
+                  {discoveryResult.pipelines.map((pipeline) => (
+                    <div key={pipeline.id} className="space-y-2">
+                      <div className="flex items-center justify-between">
+                        <h4 className="font-medium text-sm">{pipeline.name}</h4>
+                        <Badge variant="outline" className="text-xs">{pipeline.id}</Badge>
+                      </div>
+                      <div className="grid gap-2 pl-4">
+                        {pipeline.stages.map((stage) => (
+                          <div key={stage.id} className="flex items-center justify-between text-sm">
+                            <span>{stage.name}</span>
+                            <div className="flex items-center gap-2">
+                              <Badge variant="secondary" className="text-xs">{stage.id}</Badge>
+                              <Button
+                                size="sm"
+                                variant="outline"
+                                onClick={() => selectPipelineAndStage(pipeline.id, stage.id)}
+                                className="h-6 px-2 text-xs"
+                              >
+                                Select
+                              </Button>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
 
             {testResult && (
               <Alert className={testResult.success ? "border-green-200 bg-green-50" : "border-red-200 bg-red-50"}>

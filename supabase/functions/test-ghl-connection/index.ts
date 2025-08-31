@@ -11,6 +11,7 @@ interface TestConnectionRequest {
   locationId: string;
   pipelineId?: string;
   stageId?: string;
+  discoverMode?: boolean;
 }
 
 interface TestConnectionResponse {
@@ -19,6 +20,11 @@ interface TestConnectionResponse {
   availableLocations?: Array<{ id: string; name: string }>;
   pipelineValid?: boolean;
   stageValid?: boolean;
+  pipelines?: Array<{
+    id: string;
+    name: string;
+    stages: Array<{ id: string; name: string }>;
+  }>;
 }
 
 serve(async (req: Request) => {
@@ -39,9 +45,9 @@ serve(async (req: Request) => {
       });
     }
 
-    const { locationId, pipelineId, stageId }: TestConnectionRequest = await req.json();
+    const { locationId, pipelineId, stageId, discoverMode }: TestConnectionRequest = await req.json();
 
-    console.log('Testing GoHighLevel connection:', { locationId, pipelineId, stageId });
+    console.log('Testing GoHighLevel connection:', { locationId, pipelineId, stageId, discoverMode });
 
     // Test 1: Get available locations to verify API key works
     console.log('Testing API key with locations endpoint...');
@@ -82,6 +88,58 @@ serve(async (req: Request) => {
       }), {
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       });
+    }
+
+    // If in discovery mode, fetch and return all pipelines and stages
+    if (discoverMode && locationId) {
+      console.log('Discovery mode: fetching all pipelines and stages...');
+      
+      try {
+        const pipelinesResponse = await fetch(`https://rest.gohighlevel.com/v1/pipelines/?locationId=${locationId}`, {
+          method: 'GET',
+          headers: {
+            'Authorization': `Bearer ${apiKey}`,
+            'Content-Type': 'application/json',
+          },
+        });
+
+        if (!pipelinesResponse.ok) {
+          return new Response(JSON.stringify({
+            success: false,
+            message: `Failed to fetch pipelines: ${pipelinesResponse.statusText}`
+          }), {
+            headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+          });
+        }
+
+        const pipelinesData = await pipelinesResponse.json();
+        console.log('Discovery pipelines response:', JSON.stringify(pipelinesData, null, 2));
+
+        const pipelines = pipelinesData.pipelines?.map((pipeline: any) => ({
+          id: pipeline.id,
+          name: pipeline.name,
+          stages: pipeline.stages?.map((stage: any) => ({
+            id: stage.id,
+            name: stage.name
+          })) || []
+        })) || [];
+
+        return new Response(JSON.stringify({
+          success: true,
+          message: `Found ${pipelines.length} pipelines for location "${locationId}".`,
+          pipelines
+        }), {
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        });
+      } catch (error) {
+        console.error('Discovery error:', error);
+        return new Response(JSON.stringify({
+          success: false,
+          message: `Discovery failed: ${error instanceof Error ? error.message : 'Unknown error'}`
+        }), {
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        });
+      }
     }
 
     let pipelineValid = false;
