@@ -237,6 +237,7 @@ export const formatLeadForGoHighLevel = (leadData: any): GoHighLevelContact => {
     tags: ['wix_lead', leadData.formType || 'contact'],
     customFields: {
       original_form_type: leadData.formType,
+      comments: leadData.comments || leadData.message || '',
       submission_timestamp: new Date().toISOString(),
     },
   };
