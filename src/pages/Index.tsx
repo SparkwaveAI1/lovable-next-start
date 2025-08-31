@@ -2,6 +2,7 @@ import { useState, useEffect } from "react"
 import { Activity, AlertCircle, Zap, TrendingUp } from "lucide-react"
 import { DashboardHeader } from "@/components/DashboardHeader"
 import { StatsCard } from "@/components/StatsCard"
+import { WebhookTester } from "@/components/WebhookTester"
 import { getDashboardStats } from "@/lib/supabase"
 
 const Index = () => {
@@ -73,6 +74,18 @@ const Index = () => {
           />
         </div>
 
+        {/* Test Interface - Show when Fight Flow Academy is selected */}
+        {selectedBusinessId && (
+          <div className="mb-8">
+            <h3 className="text-xl font-semibold text-foreground mb-4">
+              Automation Testing
+            </h3>
+            <div className="max-w-md">
+              <WebhookTester />
+            </div>
+          </div>
+        )}
+
         {/* Placeholder for future content */}
         <div className="bg-card rounded-lg border border-border p-8 text-center shadow-card">
           <div className="max-w-md mx-auto">
@@ -82,7 +95,7 @@ const Index = () => {
             </h3>
             <p className="text-muted-foreground mb-4">
               {selectedBusinessId 
-                ? "Your automation dashboard will appear here once we connect to Supabase."
+                ? "Your automation dashboard will appear here. Test the webhook above to verify the integration."
                 : "Select a business above to start managing your automations."
               }
             </p>

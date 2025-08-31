@@ -6,6 +6,79 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
 
+// GoHighLevel API Integration
+interface GoHighLevelContact {
+  leadName: string;
+  leadEmail?: string;
+  leadPhone?: string;
+  formType?: string;
+  source?: string;
+  timestamp?: string;
+}
+
+async function createGoHighLevelContact(leadData: GoHighLevelContact) {
+  const ghlApiKey = Deno.env.get('GOHIGHLEVEL_API_KEY');
+  
+  if (!ghlApiKey) {
+    throw new Error('GoHighLevel API key not configured');
+  }
+
+  // Format lead data for GoHighLevel
+  const nameParts = leadData.leadName.split(' ');
+  const firstName = nameParts[0] || 'Unknown';
+  const lastName = nameParts.slice(1).join(' ') || '';
+
+  const contactData = {
+    firstName,
+    lastName,
+    name: leadData.leadName,
+    email: leadData.leadEmail || '',
+    phone: leadData.leadPhone || '',
+    source: leadData.source || 'wix_form',
+    tags: ['wix_lead', leadData.formType || 'contact'],
+    customFields: {
+      original_form_type: leadData.formType,
+      submission_timestamp: leadData.timestamp,
+    },
+  };
+
+  console.log('Creating GoHighLevel contact:', contactData);
+
+  try {
+    const response = await fetch('https://rest.gohighlevel.com/v1/contacts/', {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${ghlApiKey}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(contactData),
+    });
+
+    const data = await response.json();
+
+    if (!response.ok) {
+      console.error('GoHighLevel API Error:', data);
+      return {
+        success: false,
+        error: `API Error ${response.status}: ${data.message || 'Unknown error'}`,
+      };
+    }
+
+    console.log('GoHighLevel contact created successfully:', data);
+    return {
+      success: true,
+      contact: data,
+      message: 'Contact created successfully in GoHighLevel',
+    };
+  } catch (error) {
+    console.error('GoHighLevel API Error:', error);
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : 'Unknown error occurred',
+    };
+  }
+}
+
 serve(async (req: Request) => {
   // Handle CORS preflight requests
   if (req.method === 'OPTIONS') {
@@ -75,6 +148,7 @@ serve(async (req: Request) => {
     // Process based on webhook type
     let processedData = {};
     let automationType = 'unknown';
+    let ghlResult = null;
 
     if (endpoint.webhook_type === 'wix_form') {
       automationType = 'wix_to_ghl';
@@ -88,6 +162,15 @@ serve(async (req: Request) => {
       };
 
       console.log('Processed lead data:', processedData);
+
+      // Create contact in GoHighLevel
+      try {
+        ghlResult = await createGoHighLevelContact(processedData);
+        console.log('GoHighLevel integration result:', ghlResult);
+      } catch (error) {
+        console.error('GoHighLevel integration failed:', error);
+        ghlResult = { success: false, error: error.message };
+      }
     }
 
     // Log automation execution
@@ -96,12 +179,13 @@ serve(async (req: Request) => {
     let errorMessage = null;
 
     try {
-      // Here we would normally send data to GoHighLevel
-      // For now, we'll simulate successful processing
       console.log(`Processing ${automationType} for business: ${endpoint.businesses?.name}`);
       
-      // Simulate processing time
-      await new Promise(resolve => setTimeout(resolve, 100));
+      // Check if GoHighLevel integration was successful
+      if (ghlResult && !ghlResult.success) {
+        status = 'error';
+        errorMessage = ghlResult.error || 'GoHighLevel integration failed';
+      }
       
     } catch (error) {
       status = 'error';
@@ -119,7 +203,10 @@ serve(async (req: Request) => {
         automation_type: automationType,
         status: status,
         source_data: requestBody,
-        processed_data: processedData,
+        processed_data: { 
+          ...processedData, 
+          gohighlevel_result: ghlResult 
+        },
         error_message: errorMessage,
         execution_time_ms: executionTime
       });
