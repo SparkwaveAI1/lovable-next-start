@@ -2,3 +2,6 @@ project_id = "wrsoacujxcskydlzgopa"
 
 [functions.webhook-handler]
 verify_jwt = false
+
+[functions.test-ghl-connection]
+verify_jwt = false
