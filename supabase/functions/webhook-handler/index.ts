@@ -16,7 +16,7 @@ interface GoHighLevelContact {
   timestamp?: string;
 }
 
-async function createLeadInGoHighLevel(leadData: GoHighLevelContact, testMode: boolean = false, ghlConfig: any) {
+async function createLeadInGoHighLevel(leadData: GoHighLevelContact, testMode: boolean = false) {
   // If in test mode, return mock success without calling API
   if (testMode) {
     console.log('TEST MODE: GoHighLevel integration skipped');
@@ -48,7 +48,6 @@ async function createLeadInGoHighLevel(leadData: GoHighLevelContact, testMode: b
   }
 
   const ghlApiKey = Deno.env.get('GOHIGHLEVEL_API_KEY');
-  console.log('Environment check - GOHIGHLEVEL_API_KEY present:', !!ghlApiKey);
   
   if (!ghlApiKey) {
     throw new Error('GoHighLevel API key not configured');
@@ -108,23 +107,18 @@ async function createLeadInGoHighLevel(leadData: GoHighLevelContact, testMode: b
     const opportunityData = {
       title: `${leadData.formType || 'Contact'} - ${leadData.leadName}`,
       status: 'open',
-      pipelineId: leadData.pipelineId,
-      stageId: leadData.stageId,
-      contactId: contactData_result.contact.id,
-      locationId: ghlConfig?.location_id,
+      pipelineId: leadData.pipelineId || 'default_pipeline',
+      stageId: leadData.stageId || 'default_stage',
+      contactId: contactData_result.id,
       monetaryValue: leadData.opportunityValue || (leadData.formType === 'free_trial_signup' ? 129 : 0),
       source: leadData.source || 'wix_form',
     };
 
-    console.log('Creating opportunity with data:', JSON.stringify(opportunityData, null, 2));
-    console.log('Using official V2 API endpoint: https://services.leadconnectorhq.com/opportunities/');
-
-    const opportunityResponse = await fetch('https://services.leadconnectorhq.com/opportunities/', {
+    const opportunityResponse = await fetch('https://rest.gohighlevel.com/v1/opportunities/', {
       method: 'POST',
       headers: {
         'Authorization': `Bearer ${ghlApiKey}`,
         'Content-Type': 'application/json',
-        'Version': '2021-07-28',
       },
       body: JSON.stringify(opportunityData),
     });
@@ -248,77 +242,31 @@ serve(async (req: Request) => {
 
     if (endpoint.webhook_type === 'wix_form') {
       automationType = 'wix_to_ghl';
-      
-      // Load GoHighLevel configuration from database
-      const { data: ghlConfig } = await supabase
-        .from('ghl_configurations')
-        .select('location_id, pipeline_id, stage_id')
-        .eq('business_id', endpoint.business_id)
-        .eq('is_active', true)
-        .maybeSingle();
-
-      // Extract contact data from Wix webhook payload
-      const contactData = requestBody.data?.contact || {};
-      const formData = requestBody.data || requestBody;
-      
-      // Get name from contact data or form fields
-      let leadName = 'Unknown';
-      if (contactData.name?.first || contactData.name?.last) {
-        leadName = `${contactData.name.first || ''} ${contactData.name.last || ''}`.trim();
-      } else if (formData.name || formData.fullName) {
-        leadName = formData.name || formData.fullName;
-      }
-      
-      // Get email - try contact data first, then form fields
-      let leadEmail = '';
-      if (contactData.email) {
-        leadEmail = contactData.email;
-      } else if (contactData.emails && contactData.emails.length > 0) {
-        // Use primary email or first email
-        const primaryEmail = contactData.emails.find(e => e.primary) || contactData.emails[0];
-        leadEmail = primaryEmail.email;
-      } else if (formData.email) {
-        leadEmail = formData.email;
-      }
-      
-      // Get phone - try contact data first, then form fields
-      let leadPhone = '';
-      if (contactData.phone) {
-        leadPhone = contactData.phone;
-      } else if (contactData.phones && contactData.phones.length > 0) {
-        // Use primary phone or first phone
-        const primaryPhone = contactData.phones.find(p => p.primary) || contactData.phones[0];
-        leadPhone = primaryPhone.phone || primaryPhone.formattedPhone;
-      } else if (formData.phone) {
-        leadPhone = formData.phone;
-      }
-
       processedData = {
-        leadName,
-        leadEmail,
-        leadPhone,
-        formType: formData.formType || formData.formName || 'contact',
-        comments: formData.comments || formData.message || '',
+        leadName: requestBody.name || requestBody.fullName || 'Unknown',
+        leadEmail: requestBody.email || '',
+        leadPhone: requestBody.phone || '',
+        formType: requestBody.formType || 'contact',
+        comments: requestBody.comments || requestBody.message || '',
         source: 'wix_form',
         timestamp: new Date().toISOString(),
-        // Use database config first, then request body, then defaults
-        pipelineId: ghlConfig?.pipeline_id || requestBody.pipelineId || 'default_pipeline',
-        stageId: ghlConfig?.stage_id || requestBody.stageId || 'default_stage',
+        pipelineId: requestBody.pipelineId || 'default_pipeline',
+        stageId: requestBody.stageId || 'default_stage',
         opportunityValue: requestBody.opportunityValue || 129
       };
 
       console.log('Processed lead data:', processedData);
 
-      // Extract safety parameters from request - enable GHL by default if config exists
+      // Extract safety parameters from request
       const testMode = requestBody.testMode === true;
-      const ghlEnabled = requestBody.ghlEnabled !== undefined ? requestBody.ghlEnabled === true : !!ghlConfig;
+      const ghlEnabled = requestBody.ghlEnabled === true;
 
-      console.log('Safety settings:', { testMode, ghlEnabled, hasConfig: !!ghlConfig });
+      console.log('Safety settings:', { testMode, ghlEnabled });
 
       // Create contact and opportunity in GoHighLevel if enabled or in test mode
       if (ghlEnabled || testMode) {
         try {
-          ghlResult = await createLeadInGoHighLevel(processedData, testMode, ghlConfig);
+          ghlResult = await createLeadInGoHighLevel(processedData, testMode);
           console.log('GoHighLevel integration result:', ghlResult);
         } catch (error) {
           console.error('GoHighLevel integration failed:', error);

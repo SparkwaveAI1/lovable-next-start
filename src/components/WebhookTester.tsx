@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react"
+import { useState } from "react"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
@@ -8,57 +8,16 @@ import { Input } from "@/components/ui/input"
 import { Separator } from "@/components/ui/separator"
 import { Zap, Send, CheckCircle, XCircle, Loader2, Shield, Settings } from "lucide-react"
 import { useToast } from "@/hooks/use-toast"
-import { supabase } from "@/integrations/supabase/client"
 
-interface WebhookTesterProps {
-  businessId?: string
-}
-
-export function WebhookTester({ businessId }: WebhookTesterProps = {}) {
+export function WebhookTester() {
   const [isLoading, setIsLoading] = useState(false)
   const [lastResult, setLastResult] = useState<any>(null)
-  const [testMode, setTestMode] = useState(false) // Live mode by default
-  const [ghlEnabled, setGhlEnabled] = useState(true) // Enable GHL by default
-  const [pipelineId, setPipelineId] = useState("")
-  const [stageId, setStageId] = useState("")
+  const [testMode, setTestMode] = useState(true) // Start in safe test mode
+  const [ghlEnabled, setGhlEnabled] = useState(false)
+  const [pipelineId, setPipelineId] = useState("pipeline_id_here")
+  const [stageId, setStageId] = useState("stage_id_here")
   const [opportunityValue, setOpportunityValue] = useState("129")
-  const [configLoaded, setConfigLoaded] = useState(false)
   const { toast } = useToast()
-
-  // Load GoHighLevel configuration if available
-  useEffect(() => {
-    if (businessId && !configLoaded) {
-      loadGhlConfiguration()
-    }
-  }, [businessId, configLoaded])
-
-  const loadGhlConfiguration = async () => {
-    try {
-      const { data, error } = await supabase
-        .from('ghl_configurations')
-        .select('*')
-        .eq('business_id', businessId)
-        .eq('is_active', true)
-        .maybeSingle()
-
-      if (error) {
-        console.error('Error loading GHL config:', error)
-        return
-      }
-
-      if (data) {
-        setPipelineId(data.pipeline_id)
-        setStageId(data.stage_id)
-        setConfigLoaded(true)
-        toast({
-          title: "Configuration Loaded",
-          description: "Using saved GoHighLevel configuration for testing.",
-        })
-      }
-    } catch (error) {
-      console.error('Error loading configuration:', error)
-    }
-  }
 
   const testWebhook = async () => {
     setIsLoading(true)

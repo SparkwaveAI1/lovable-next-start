@@ -2,12 +2,8 @@ import { useState, useEffect } from "react"
 import { Activity, AlertCircle, Zap, TrendingUp } from "lucide-react"
 import { DashboardHeader } from "@/components/DashboardHeader"
 import { StatsCard } from "@/components/StatsCard"
-
+import { WebhookTester } from "@/components/WebhookTester"
 import { getDashboardStats } from "@/lib/supabase"
-import { ActivityLog } from "@/components/ActivityLog"
-import { GoHighLevelConfig } from "@/components/GoHighLevelConfig"
-import { SMSTester } from "@/components/SMSTester"
-import { GHLDebugTest } from "@/components/GHLDebugTest"
 
 const Index = () => {
   const [selectedBusinessId, setSelectedBusinessId] = useState<string>()
@@ -78,35 +74,17 @@ const Index = () => {
           />
         </div>
 
-        {/* Configuration - Show when business is selected */}
+        {/* Test Interface - Show when Fight Flow Academy is selected */}
         {selectedBusinessId && (
           <div className="mb-8">
             <h3 className="text-xl font-semibold text-foreground mb-4">
-              GoHighLevel Configuration
+              Automation Testing
             </h3>
-            <GoHighLevelConfig businessId={selectedBusinessId} />
+            <div className="max-w-md">
+              <WebhookTester />
+            </div>
           </div>
         )}
-
-        {/* SMS Testing - Show when business is selected */}
-        {selectedBusinessId && (
-          <div className="mb-8">
-            <h3 className="text-xl font-semibold text-foreground mb-4">
-              SMS Webhook Testing
-            </h3>
-            <SMSTester businessId={selectedBusinessId} />
-          </div>
-        )}
-
-        {/* Debug Test */}
-        <div className="mb-8">
-          <GHLDebugTest />
-        </div>
-
-        {/* Activity Log */}
-        <div className="mb-8">
-          <ActivityLog businessId={selectedBusinessId} />
-        </div>
 
         {/* Placeholder for future content */}
         <div className="bg-card rounded-lg border border-border p-8 text-center shadow-card">
@@ -117,7 +95,7 @@ const Index = () => {
             </h3>
             <p className="text-muted-foreground mb-4">
               {selectedBusinessId 
-                ? "Your automation monitoring dashboard is ready. Configure GoHighLevel above to start processing form submissions."
+                ? "Your automation dashboard will appear here. Test the webhook above to verify the integration."
                 : "Select a business above to start managing your automations."
               }
             </p>
