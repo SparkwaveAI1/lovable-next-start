@@ -107,9 +107,9 @@ async function createLeadInGoHighLevel(leadData: GoHighLevelContact, testMode: b
     const opportunityData = {
       title: `${leadData.formType || 'Contact'} - ${leadData.leadName}`,
       status: 'open',
-      pipelineId: leadData.pipelineId || 'default_pipeline',
-      stageId: leadData.stageId || 'default_stage',
-      contactId: contactData_result.id,
+      pipelineId: leadData.pipelineId,
+      stageId: leadData.stageId,
+      contactId: contactData_result.contact.id,
       monetaryValue: leadData.opportunityValue || (leadData.formType === 'free_trial_signup' ? 129 : 0),
       source: leadData.source || 'wix_form',
     };
@@ -242,6 +242,15 @@ serve(async (req: Request) => {
 
     if (endpoint.webhook_type === 'wix_form') {
       automationType = 'wix_to_ghl';
+      
+      // Load GoHighLevel configuration from database
+      const { data: ghlConfig } = await supabase
+        .from('ghl_configurations')
+        .select('location_id, pipeline_id, stage_id')
+        .eq('business_id', endpoint.business_id)
+        .eq('is_active', true)
+        .maybeSingle();
+
       processedData = {
         leadName: requestBody.name || requestBody.fullName || 'Unknown',
         leadEmail: requestBody.email || '',
@@ -250,8 +259,9 @@ serve(async (req: Request) => {
         comments: requestBody.comments || requestBody.message || '',
         source: 'wix_form',
         timestamp: new Date().toISOString(),
-        pipelineId: requestBody.pipelineId || 'default_pipeline',
-        stageId: requestBody.stageId || 'default_stage',
+        // Use database config first, then request body, then defaults
+        pipelineId: ghlConfig?.pipeline_id || requestBody.pipelineId || 'default_pipeline',
+        stageId: ghlConfig?.stage_id || requestBody.stageId || 'default_stage',
         opportunityValue: requestBody.opportunityValue || 129
       };
 
