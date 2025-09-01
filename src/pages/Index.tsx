@@ -5,6 +5,7 @@ import { StatsCard } from "@/components/StatsCard"
 
 import { getDashboardStats } from "@/lib/supabase"
 import { ActivityLog } from "@/components/ActivityLog"
+import { supabase } from "@/integrations/supabase/client"
 // import { GoHighLevelConfig } from "@/components/GoHighLevelConfig"
 
 const Index = () => {
@@ -35,8 +36,30 @@ const Index = () => {
     loadStats()
   }, [selectedBusinessId])
 
-  const handleTestContact = () => {
-    console.log('Form data:', contactForm);
+  const handleTestContact = async () => {
+    try {
+      const { error } = await supabase
+        .from('contacts')
+        .insert({
+          business_id: selectedBusinessId,
+          first_name: contactForm.fullName.split(' ')[0] || '',
+          last_name: contactForm.fullName.split(' ').slice(1).join(' ') || '',
+          email: contactForm.email,
+          phone: contactForm.phone,
+          source: 'manual_test',
+          status: 'new_lead'
+        });
+
+      if (error) {
+        console.error('Error storing contact:', error);
+      } else {
+        console.log('Contact stored successfully');
+        // Clear form
+        setContactForm({ fullName: '', email: '', phone: '' });
+      }
+    } catch (error) {
+      console.error('Failed to store contact:', error);
+    }
   }
 
   return (
