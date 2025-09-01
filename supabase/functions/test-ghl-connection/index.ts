@@ -47,57 +47,70 @@ serve(async (req) => {
     console.log('API key found, making request to GoHighLevel...');
     console.log('Using API endpoint: https://rest.gohighlevel.com/v1/opportunities/pipelines');
 
-    // Fetch pipelines from GoHighLevel using V1 API (same as webhook-handler)
-    const pipelinesResponse = await fetch('https://rest.gohighlevel.com/v1/opportunities/pipelines', {
-      method: 'GET',
-      headers: {
-        'Authorization': `Bearer ${ghlApiKey}`,
-        'Content-Type': 'application/json'
-      }
-    });
-
-    console.log('GoHighLevel response status:', pipelinesResponse.status);
-    console.log('GoHighLevel response headers:', Object.fromEntries(pipelinesResponse.headers.entries()));
-
-    if (!pipelinesResponse.ok) {
-      const errorText = await pipelinesResponse.text();
-      console.error('GoHighLevel API error:', pipelinesResponse.status, errorText);
+    // Get location ID from configuration
+    const { data: locationConfig, error: locationError } = await supabase
+      .from('ghl_configurations')
+      .select('location_id')
+      .eq('is_active', true)
+      .single();
+    
+    if (locationError || !locationConfig?.location_id) {
+      console.error('Location ID not found in database:', locationError);
       return new Response(
-        JSON.stringify({ 
-          error: 'Failed to fetch pipelines from GoHighLevel',
-          status: pipelinesResponse.status,
-          details: errorText
-        }),
+        JSON.stringify({ error: 'Location ID not configured in database' }),
         { 
-          status: pipelinesResponse.status, 
+          status: 500, 
           headers: { ...corsHeaders, 'Content-Type': 'application/json' } 
         }
       );
     }
 
-    const pipelinesData = await pipelinesResponse.json();
-    console.log('Successfully fetched pipelines data:', JSON.stringify(pipelinesData, null, 2));
-
-    // Extract pipeline and stage information
-    const pipelines = pipelinesData.pipelines || [];
-    console.log('Found pipelines count:', pipelines.length);
+    console.log('Testing contact creation with GoHighLevel API...');
     
-    const formattedPipelines = pipelines.map((pipeline: any) => ({
-      id: pipeline.id,
-      name: pipeline.name,
-      stages: pipeline.stages?.map((stage: any) => ({
-        id: stage.id,
-        name: stage.name
-      })) || []
-    }));
+    // Test contact creation - this is what the automation actually needs
+    const contactResponse = await fetch('https://rest.gohighlevel.com/v1/contacts/', {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${ghlApiKey}`,
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({
+        firstName: 'Test',
+        lastName: 'Connection',
+        email: 'test-connection@example.com',
+        locationId: locationConfig.location_id,
+        phone: '+1234567890'
+      })
+    });
 
-    console.log('Formatted pipelines:', JSON.stringify(formattedPipelines, null, 2));
+    console.log('Contact creation response status:', contactResponse.status);
+    console.log('Contact creation response headers:', Object.fromEntries(contactResponse.headers.entries()));
+
+    if (!contactResponse.ok) {
+      const errorText = await contactResponse.text();
+      console.error('GoHighLevel contact creation error:', contactResponse.status, errorText);
+      return new Response(
+        JSON.stringify({ 
+          error: 'Failed to create test contact in GoHighLevel',
+          status: contactResponse.status,
+          details: errorText
+        }),
+        { 
+          status: contactResponse.status, 
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' } 
+        }
+      );
+    }
+
+    const contactData = await contactResponse.json();
+    console.log('Successfully created test contact:', JSON.stringify(contactData, null, 2));
 
     return new Response(
       JSON.stringify({
         success: true,
-        pipelines: formattedPipelines,
-        totalPipelines: pipelines.length
+        message: 'Contact creation test successful',
+        contactId: contactData.contact?.id,
+        apiStatus: 'working'
       }),
       {
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
