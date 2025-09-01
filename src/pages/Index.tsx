@@ -5,7 +5,6 @@ import { StatsCard } from "@/components/StatsCard"
 
 import { getDashboardStats } from "@/lib/supabase"
 import { ActivityLog } from "@/components/ActivityLog"
-import { GoHighLevelConfig } from "@/components/GoHighLevelConfig"
 
 const Index = () => {
   const [selectedBusinessId, setSelectedBusinessId] = useState<string>()
@@ -76,15 +75,6 @@ const Index = () => {
           />
         </div>
 
-        {/* Configuration - Show when business is selected */}
-        {selectedBusinessId && (
-          <div className="mb-8">
-            <h3 className="text-xl font-semibold text-foreground mb-4">
-              GoHighLevel Configuration
-            </h3>
-            <GoHighLevelConfig businessId={selectedBusinessId} />
-          </div>
-        )}
 
         {/* Activity Log */}
         <div className="mb-8">
@@ -100,7 +90,7 @@ const Index = () => {
             </h3>
             <p className="text-muted-foreground mb-4">
               {selectedBusinessId 
-                ? "Your automation monitoring dashboard is ready. Configure GoHighLevel above to start processing form submissions."
+                ? "Your automation monitoring dashboard is ready. Your CRM system is active and processing form submissions."
                 : "Select a business above to start managing your automations."
               }
             </p>
