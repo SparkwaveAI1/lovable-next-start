@@ -23,6 +23,13 @@ export function WebhookTester({ businessId }: WebhookTesterProps = {}) {
   const [stageId, setStageId] = useState("")
   const [opportunityValue, setOpportunityValue] = useState("129")
   const [configLoaded, setConfigLoaded] = useState(false)
+  const [pipelineResults, setPipelineResults] = useState<{
+    formProcessing?: { status: string, message: string },
+    contactCreation?: { status: string, message: string, contactId?: string },
+    opportunityCreation?: { status: string, message: string, opportunityId?: string },
+    welcomeSMS?: { status: string, message: string, messageId?: string },
+    conversationInit?: { status: string, message: string }
+  } | null>(null)
   const { toast } = useToast()
 
   // Load GoHighLevel configuration if available
@@ -63,6 +70,7 @@ export function WebhookTester({ businessId }: WebhookTesterProps = {}) {
   const testWebhook = async () => {
     setIsLoading(true)
     setLastResult(null)
+    setPipelineResults(null)
 
     const testData = {
       name: "Test Lead",
@@ -93,10 +101,34 @@ export function WebhookTester({ businessId }: WebhookTesterProps = {}) {
       const result = await response.json()
       setLastResult({ ...result, status: response.status })
 
-      if (response.ok) {
+      // Parse detailed pipeline results
+      if (response.ok && result.ghlResult) {
+        setPipelineResults({
+          formProcessing: { status: 'success', message: 'Form data processed successfully' },
+          contactCreation: {
+            status: result.ghlResult.contact?.success ? 'success' : 'failed',
+            message: result.ghlResult.contact?.message || 'Contact creation failed',
+            contactId: result.ghlResult.contact?.contact?.id
+          },
+          opportunityCreation: {
+            status: result.ghlResult.opportunity?.success ? 'success' : 'failed', 
+            message: result.ghlResult.opportunity?.message || 'Opportunity creation failed',
+            opportunityId: result.ghlResult.opportunity?.opportunity?.id
+          },
+          welcomeSMS: {
+            status: result.welcomeSMS?.success ? 'success' : 'failed',
+            message: result.welcomeSMS?.message || 'Welcome SMS failed',
+            messageId: result.welcomeSMS?.messageId
+          },
+          conversationInit: {
+            status: result.conversationState ? 'success' : 'failed',
+            message: result.conversationState ? 'Conversation ready for replies' : 'Conversation setup failed'
+          }
+        })
+
         toast({
-          title: "Webhook Test Successful",
-          description: "Test data sent and processed successfully",
+          title: "Pipeline Test Successful",
+          description: "Complete automation pipeline executed successfully",
         })
       } else {
         toast({
@@ -246,6 +278,47 @@ export function WebhookTester({ businessId }: WebhookTesterProps = {}) {
             </>
           )}
         </Button>
+
+        {pipelineResults && (
+          <div className="space-y-4">
+            <div className="flex items-center gap-2">
+              <Settings className="h-4 w-4 text-primary" />
+              <h4 className="font-medium text-foreground">Automation Pipeline Results</h4>
+            </div>
+            
+            <div className="space-y-3">
+              {Object.entries(pipelineResults).map(([step, result]) => (
+                <div key={step} className="flex items-center justify-between p-3 border border-border rounded-lg bg-background/50">
+                  <div className="flex-1">
+                    <div className="flex items-center gap-2">
+                      {result.status === 'success' ? (
+                        <CheckCircle className="h-4 w-4 text-success" />
+                      ) : (
+                        <XCircle className="h-4 w-4 text-destructive" />
+                      )}
+                      <span className="font-medium text-foreground capitalize">
+                        {step.replace(/([A-Z])/g, ' $1').replace(/^./, str => str.toUpperCase())}
+                      </span>
+                    </div>
+                    <p className="text-sm text-muted-foreground mt-1">{result.message}</p>
+                    {(result as any).contactId && (
+                      <p className="text-xs text-primary">Contact ID: {(result as any).contactId}</p>
+                    )}
+                    {(result as any).opportunityId && (
+                      <p className="text-xs text-primary">Opportunity ID: {(result as any).opportunityId}</p>
+                    )}
+                    {(result as any).messageId && (
+                      <p className="text-xs text-primary">Message ID: {(result as any).messageId}</p>
+                    )}
+                  </div>
+                  <Badge variant={result.status === 'success' ? 'default' : 'destructive'} className="ml-3">
+                    {result.status}
+                  </Badge>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
 
         {lastResult && (
           <div className="space-y-2">

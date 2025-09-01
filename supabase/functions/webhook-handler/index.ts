@@ -470,12 +470,27 @@ serve(async (req: Request) => {
       console.log(`Successfully logged ${automationType} execution`);
     }
 
-    // Return success response
+    // Get pipeline results for response
+    const customerPhone = processedData.leadPhone;
+    const welcomeSmsResult = processedData.welcomeSMS;
+    const conversationCreated = customerPhone && ghlResult?.contact?.success;
+
+    // Return success response with detailed pipeline results
     return new Response(
       JSON.stringify({ 
         success: true, 
         message: `Webhook processed successfully for ${endpoint.businesses?.name}`,
-        executionTime: executionTime
+        executionTime: executionTime,
+        ghlResult: ghlResult,
+        welcomeSMS: welcomeSmsResult,
+        conversationState: conversationCreated,
+        processedData: processedData,
+        pipelineSteps: {
+          contactCreation: ghlResult?.contact?.success || false,
+          opportunityCreation: ghlResult?.opportunity?.success || false,
+          welcomeSMSSent: welcomeSmsResult?.success || false,
+          conversationInitialized: conversationCreated || false
+        }
       }),
       { 
         status: 200, 
