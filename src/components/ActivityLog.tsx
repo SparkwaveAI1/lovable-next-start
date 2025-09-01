@@ -33,9 +33,18 @@ export function ActivityLog({ businessId }: ActivityLogProps) {
     return new Date(timestamp).toLocaleString();
   };
 
-  const getSourceDataSummary = (sourceData: any) => {
+  const getSourceDataSummary = (sourceData: any, log: any) => {
     if (!sourceData) return 'No data';
     
+    // Handle SMS conversation logs
+    if (log.automation_type === 'sms_conversation' && log.processed_data) {
+      const direction = log.sms_direction === 'inbound' ? '📱' : '📤';
+      const message = log.processed_data.message;
+      const truncatedMessage = message?.length > 40 ? message.substring(0, 40) + '...' : message;
+      return `${direction} ${log.sms_from} → ${log.sms_to}: "${truncatedMessage}"`;
+    }
+    
+    // Handle form submissions
     const name = sourceData.name || sourceData.leadName || '';
     const email = sourceData.email || sourceData.leadEmail || '';
     const phone = sourceData.phone || sourceData.leadPhone || '';
@@ -112,9 +121,9 @@ export function ActivityLog({ businessId }: ActivityLogProps) {
                   <TableCell>
                     {getStatusBadge(log.status)}
                   </TableCell>
-                  <TableCell className="max-w-xs truncate">
-                    {getSourceDataSummary(log.source_data)}
-                  </TableCell>
+                   <TableCell className="max-w-xs truncate">
+                     {getSourceDataSummary(log.source_data, log)}
+                   </TableCell>
                   <TableCell className="font-mono text-sm">
                     {log.execution_time_ms ? `${log.execution_time_ms}ms` : '-'}
                   </TableCell>
