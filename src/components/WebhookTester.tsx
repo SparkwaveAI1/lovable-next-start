@@ -28,7 +28,6 @@ export function WebhookTester() {
       email: "test@example.com", 
       phone: "555-0123",
       formType: "free_trial_signup",
-      comments: "Interested in free trial classes",
       source: "wix_form_test",
       // Safety parameters
       testMode: testMode,

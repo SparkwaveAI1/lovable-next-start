@@ -247,7 +247,6 @@ serve(async (req: Request) => {
         leadEmail: requestBody.email || '',
         leadPhone: requestBody.phone || '',
         formType: requestBody.formType || 'contact',
-        comments: requestBody.comments || requestBody.message || '',
         source: 'wix_form',
         timestamp: new Date().toISOString(),
         pipelineId: requestBody.pipelineId || 'default_pipeline',
