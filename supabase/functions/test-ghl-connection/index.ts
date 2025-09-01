@@ -1,5 +1,6 @@
 import "https://deno.land/x/xhr@0.1.0/mod.ts";
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
+import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -16,19 +17,32 @@ serve(async (req) => {
   }
 
   try {
-    console.log('Getting GOHIGHLEVEL_API_KEY from environment...');
-    const ghlApiKey = Deno.env.get('GOHIGHLEVEL_API_KEY');
+    console.log('Getting GoHighLevel API key from database...');
     
-    if (!ghlApiKey) {
-      console.error('GOHIGHLEVEL_API_KEY not found in environment');
+    // Initialize Supabase client
+    const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
+    const supabaseKey = Deno.env.get('SUPABASE_ANON_KEY')!;
+    const supabase = createClient(supabaseUrl, supabaseKey);
+    
+    // Get GHL configuration from database
+    const { data: ghlConfig, error: configError } = await supabase
+      .from('ghl_configurations')
+      .select('api_key')
+      .eq('is_active', true)
+      .single();
+    
+    if (configError || !ghlConfig?.api_key) {
+      console.error('GoHighLevel API key not found in database:', configError);
       return new Response(
-        JSON.stringify({ error: 'GoHighLevel API key not configured' }),
+        JSON.stringify({ error: 'GoHighLevel API key not configured in database' }),
         { 
           status: 500, 
           headers: { ...corsHeaders, 'Content-Type': 'application/json' } 
         }
       );
     }
+    
+    const ghlApiKey = ghlConfig.api_key;
 
     console.log('API key found, making request to GoHighLevel...');
     console.log('Using API endpoint: https://rest.gohighlevel.com/v1/opportunities/pipelines');

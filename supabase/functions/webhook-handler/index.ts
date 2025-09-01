@@ -16,7 +16,7 @@ interface GoHighLevelContact {
   timestamp?: string;
 }
 
-async function createLeadInGoHighLevel(leadData: GoHighLevelContact, testMode: boolean = false) {
+async function createLeadInGoHighLevel(leadData: GoHighLevelContact, testMode: boolean = false, supabase: any) {
   // If in test mode, return mock success without calling API
   if (testMode) {
     console.log('TEST MODE: GoHighLevel integration skipped');
@@ -47,7 +47,14 @@ async function createLeadInGoHighLevel(leadData: GoHighLevelContact, testMode: b
     };
   }
 
-  const ghlApiKey = Deno.env.get('GOHIGHLEVEL_API_KEY');
+  // Get GHL API key from database
+  const { data: ghlConfig, error: configError } = await supabase
+    .from('ghl_configurations')
+    .select('api_key')
+    .eq('is_active', true)
+    .single();
+  
+  const ghlApiKey = ghlConfig?.api_key;
   
   if (!ghlApiKey) {
     throw new Error('GoHighLevel API key not configured');
@@ -265,7 +272,7 @@ serve(async (req: Request) => {
       // Create contact and opportunity in GoHighLevel if enabled or in test mode
       if (ghlEnabled || testMode) {
         try {
-          ghlResult = await createLeadInGoHighLevel(processedData, testMode);
+          ghlResult = await createLeadInGoHighLevel(processedData, testMode, supabase);
           console.log('GoHighLevel integration result:', ghlResult);
         } catch (error) {
           console.error('GoHighLevel integration failed:', error);
