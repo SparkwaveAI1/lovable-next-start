@@ -76,6 +76,35 @@ const Index = () => {
           />
         </div>
 
+        {/* Test Contact Storage Form - Show when business is selected */}
+        {selectedBusinessId && (
+          <div className="mb-8">
+            <div className="bg-card p-6 rounded-lg border border-border shadow-card">
+              <h3 className="text-lg font-medium text-foreground mb-4">Test Contact Storage</h3>
+              <div className="space-y-4">
+                <input 
+                  type="text" 
+                  placeholder="Full Name" 
+                  className="w-full p-3 border border-border rounded-md bg-background text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary"
+                />
+                <input 
+                  type="email" 
+                  placeholder="Email" 
+                  className="w-full p-3 border border-border rounded-md bg-background text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary"
+                />
+                <input 
+                  type="tel" 
+                  placeholder="Phone" 
+                  className="w-full p-3 border border-border rounded-md bg-background text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary"
+                />
+                <button className="bg-primary text-primary-foreground px-4 py-2 rounded-md hover:bg-primary/90 transition-colors">
+                  Test Store Contact
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
         {/* Configuration - Show when business is selected */}
         {/* Temporarily hidden - GoHighLevel Configuration
         {selectedBusinessId && (
