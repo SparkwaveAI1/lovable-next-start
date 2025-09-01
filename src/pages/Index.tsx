@@ -7,6 +7,7 @@ import { getDashboardStats } from "@/lib/supabase"
 import { ActivityLog } from "@/components/ActivityLog"
 import { GoHighLevelConfig } from "@/components/GoHighLevelConfig"
 import { SMSTester } from "@/components/SMSTester"
+import { GHLDebugTest } from "@/components/GHLDebugTest"
 
 const Index = () => {
   const [selectedBusinessId, setSelectedBusinessId] = useState<string>()
@@ -96,6 +97,11 @@ const Index = () => {
             <SMSTester businessId={selectedBusinessId} />
           </div>
         )}
+
+        {/* Debug Test */}
+        <div className="mb-8">
+          <GHLDebugTest />
+        </div>
 
         {/* Activity Log */}
         <div className="mb-8">
