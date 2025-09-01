@@ -110,6 +110,7 @@ async function createLeadInGoHighLevel(leadData: GoHighLevelContact, testMode: b
       pipelineId: leadData.pipelineId,
       stageId: leadData.stageId,
       contactId: contactData_result.contact.id,
+      locationId: ghlConfig?.location_id,
       monetaryValue: leadData.opportunityValue || (leadData.formType === 'free_trial_signup' ? 129 : 0),
       source: leadData.source || 'wix_form',
     };
