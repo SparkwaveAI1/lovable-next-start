@@ -299,6 +299,7 @@ export type Database = {
       contacts: {
         Row: {
           business_id: string | null
+          comments: string | null
           created_at: string | null
           email: string | null
           first_name: string | null
@@ -312,6 +313,7 @@ export type Database = {
         }
         Insert: {
           business_id?: string | null
+          comments?: string | null
           created_at?: string | null
           email?: string | null
           first_name?: string | null
@@ -325,6 +327,7 @@ export type Database = {
         }
         Update: {
           business_id?: string | null
+          comments?: string | null
           created_at?: string | null
           email?: string | null
           first_name?: string | null
