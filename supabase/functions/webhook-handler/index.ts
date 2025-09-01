@@ -115,7 +115,10 @@ async function createLeadInGoHighLevel(leadData: GoHighLevelContact, testMode: b
       source: leadData.source || 'wix_form',
     };
 
-    const opportunityResponse = await fetch('https://rest.gohighlevel.com/v1/opportunities/', {
+    console.log('Creating opportunity with data:', JSON.stringify(opportunityData, null, 2));
+    console.log('Using API endpoint: https://services.leadconnectorhq.com/opportunities/');
+
+    const opportunityResponse = await fetch('https://services.leadconnectorhq.com/opportunities/', {
       method: 'POST',
       headers: {
         'Authorization': `Bearer ${ghlApiKey}`,
