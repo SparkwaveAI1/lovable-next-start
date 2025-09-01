@@ -16,7 +16,7 @@ interface GoHighLevelContact {
   timestamp?: string;
 }
 
-async function createLeadInGoHighLevel(leadData: GoHighLevelContact, testMode: boolean = false) {
+async function createLeadInGoHighLevel(leadData: GoHighLevelContact, testMode: boolean = false, ghlConfig: any) {
   // If in test mode, return mock success without calling API
   if (testMode) {
     console.log('TEST MODE: GoHighLevel integration skipped');
@@ -313,7 +313,7 @@ serve(async (req: Request) => {
       // Create contact and opportunity in GoHighLevel if enabled or in test mode
       if (ghlEnabled || testMode) {
         try {
-          ghlResult = await createLeadInGoHighLevel(processedData, testMode);
+          ghlResult = await createLeadInGoHighLevel(processedData, testMode, ghlConfig);
           console.log('GoHighLevel integration result:', ghlResult);
         } catch (error) {
           console.error('GoHighLevel integration failed:', error);
