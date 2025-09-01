@@ -2,8 +2,10 @@ import { useState, useEffect } from "react"
 import { Activity, AlertCircle, Zap, TrendingUp } from "lucide-react"
 import { DashboardHeader } from "@/components/DashboardHeader"
 import { StatsCard } from "@/components/StatsCard"
-import { WebhookTester } from "@/components/WebhookTester"
+
 import { getDashboardStats } from "@/lib/supabase"
+import { ActivityLog } from "@/components/ActivityLog"
+import { GoHighLevelConfig } from "@/components/GoHighLevelConfig"
 
 const Index = () => {
   const [selectedBusinessId, setSelectedBusinessId] = useState<string>()
@@ -74,17 +76,20 @@ const Index = () => {
           />
         </div>
 
-        {/* Test Interface - Show when Fight Flow Academy is selected */}
+        {/* Configuration - Show when business is selected */}
         {selectedBusinessId && (
           <div className="mb-8">
             <h3 className="text-xl font-semibold text-foreground mb-4">
-              Automation Testing
+              GoHighLevel Configuration
             </h3>
-            <div className="max-w-md">
-              <WebhookTester />
-            </div>
+            <GoHighLevelConfig businessId={selectedBusinessId} />
           </div>
         )}
+
+        {/* Activity Log */}
+        <div className="mb-8">
+          <ActivityLog businessId={selectedBusinessId} />
+        </div>
 
         {/* Placeholder for future content */}
         <div className="bg-card rounded-lg border border-border p-8 text-center shadow-card">
@@ -95,7 +100,7 @@ const Index = () => {
             </h3>
             <p className="text-muted-foreground mb-4">
               {selectedBusinessId 
-                ? "Your automation dashboard will appear here. Test the webhook above to verify the integration."
+                ? "Your automation monitoring dashboard is ready. Configure GoHighLevel above to start processing form submissions."
                 : "Select a business above to start managing your automations."
               }
             </p>

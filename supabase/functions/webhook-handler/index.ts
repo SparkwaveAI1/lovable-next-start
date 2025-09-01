@@ -107,9 +107,10 @@ async function createLeadInGoHighLevel(leadData: GoHighLevelContact, testMode: b
     const opportunityData = {
       title: `${leadData.formType || 'Contact'} - ${leadData.leadName}`,
       status: 'open',
-      pipelineId: leadData.pipelineId || 'default_pipeline',
-      stageId: leadData.stageId || 'default_stage',
-      contactId: contactData_result.id,
+      pipelineId: leadData.pipelineId,
+      stageId: leadData.stageId,
+      contactId: contactData_result.contact.id,
+      locationId: ghlConfig?.location_id,
       monetaryValue: leadData.opportunityValue || (leadData.formType === 'free_trial_signup' ? 129 : 0),
       source: leadData.source || 'wix_form',
     };
@@ -242,25 +243,72 @@ serve(async (req: Request) => {
 
     if (endpoint.webhook_type === 'wix_form') {
       automationType = 'wix_to_ghl';
+      
+      // Load GoHighLevel configuration from database
+      const { data: ghlConfig } = await supabase
+        .from('ghl_configurations')
+        .select('location_id, pipeline_id, stage_id')
+        .eq('business_id', endpoint.business_id)
+        .eq('is_active', true)
+        .maybeSingle();
+
+      // Extract contact data from Wix webhook payload
+      const contactData = requestBody.data?.contact || {};
+      const formData = requestBody.data || requestBody;
+      
+      // Get name from contact data or form fields
+      let leadName = 'Unknown';
+      if (contactData.name?.first || contactData.name?.last) {
+        leadName = `${contactData.name.first || ''} ${contactData.name.last || ''}`.trim();
+      } else if (formData.name || formData.fullName) {
+        leadName = formData.name || formData.fullName;
+      }
+      
+      // Get email - try contact data first, then form fields
+      let leadEmail = '';
+      if (contactData.email) {
+        leadEmail = contactData.email;
+      } else if (contactData.emails && contactData.emails.length > 0) {
+        // Use primary email or first email
+        const primaryEmail = contactData.emails.find(e => e.primary) || contactData.emails[0];
+        leadEmail = primaryEmail.email;
+      } else if (formData.email) {
+        leadEmail = formData.email;
+      }
+      
+      // Get phone - try contact data first, then form fields
+      let leadPhone = '';
+      if (contactData.phone) {
+        leadPhone = contactData.phone;
+      } else if (contactData.phones && contactData.phones.length > 0) {
+        // Use primary phone or first phone
+        const primaryPhone = contactData.phones.find(p => p.primary) || contactData.phones[0];
+        leadPhone = primaryPhone.phone || primaryPhone.formattedPhone;
+      } else if (formData.phone) {
+        leadPhone = formData.phone;
+      }
+
       processedData = {
-        leadName: requestBody.name || requestBody.fullName || 'Unknown',
-        leadEmail: requestBody.email || '',
-        leadPhone: requestBody.phone || '',
-        formType: requestBody.formType || 'contact',
+        leadName,
+        leadEmail,
+        leadPhone,
+        formType: formData.formType || formData.formName || 'contact',
+        comments: formData.comments || formData.message || '',
         source: 'wix_form',
         timestamp: new Date().toISOString(),
-        pipelineId: requestBody.pipelineId || 'default_pipeline',
-        stageId: requestBody.stageId || 'default_stage',
+        // Use database config first, then request body, then defaults
+        pipelineId: ghlConfig?.pipeline_id || requestBody.pipelineId || 'default_pipeline',
+        stageId: ghlConfig?.stage_id || requestBody.stageId || 'default_stage',
         opportunityValue: requestBody.opportunityValue || 129
       };
 
       console.log('Processed lead data:', processedData);
 
-      // Extract safety parameters from request
+      // Extract safety parameters from request - enable GHL by default if config exists
       const testMode = requestBody.testMode === true;
-      const ghlEnabled = requestBody.ghlEnabled === true;
+      const ghlEnabled = requestBody.ghlEnabled !== undefined ? requestBody.ghlEnabled === true : !!ghlConfig;
 
-      console.log('Safety settings:', { testMode, ghlEnabled });
+      console.log('Safety settings:', { testMode, ghlEnabled, hasConfig: !!ghlConfig });
 
       // Create contact and opportunity in GoHighLevel if enabled or in test mode
       if (ghlEnabled || testMode) {
