@@ -65,9 +65,9 @@ export function WebhookTester({ businessId }: WebhookTesterProps = {}) {
     setLastResult(null)
 
     const testData = {
-      name: "Test Lead",
-      email: "test@example.com", 
-      phone: "555-0123",
+      name: "Sarah Johnson",
+      email: "sarah@test.com", 
+      phone: "555-9876",
       formType: "free_trial_signup",
       comments: "Interested in free trial classes",
       source: "wix_form_test",
