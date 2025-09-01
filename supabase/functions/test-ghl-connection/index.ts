@@ -34,7 +34,7 @@ serve(async (req: Request) => {
   }
 
   try {
-    const apiKey = Deno.env.get('GOHIGHLEVEL_API_KEY'); // SECRET REFRESH - 2025-09-01T13:55:00Z
+    const apiKey = Deno.env.get('GOHIGHLEVEL_API_KEY');
     console.log('Environment check - GOHIGHLEVEL_API_KEY present:', !!apiKey);
     
     if (!apiKey) {
