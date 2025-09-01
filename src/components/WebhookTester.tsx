@@ -6,8 +6,9 @@ import { Switch } from "@/components/ui/switch"
 import { Label } from "@/components/ui/label"
 import { Input } from "@/components/ui/input"
 import { Separator } from "@/components/ui/separator"
-import { Zap, Send, CheckCircle, XCircle, Loader2, Shield, Settings } from "lucide-react"
+import { Zap, Send, CheckCircle, XCircle, Loader2, Shield, Settings, RefreshCw } from "lucide-react"
 import { useToast } from "@/hooks/use-toast"
+import { supabase } from "@/integrations/supabase/client"
 
 export function WebhookTester() {
   const [isLoading, setIsLoading] = useState(false)
@@ -17,7 +18,55 @@ export function WebhookTester() {
   const [pipelineId, setPipelineId] = useState("pipeline_id_here")
   const [stageId, setStageId] = useState("stage_id_here")
   const [opportunityValue, setOpportunityValue] = useState("129")
+  const [isLoadingConfig, setIsLoadingConfig] = useState(false)
+  const [pipelines, setPipelines] = useState<any[]>([])
   const { toast } = useToast()
+
+  const fetchGHLConfig = async () => {
+    setIsLoadingConfig(true)
+    try {
+      const { data, error } = await supabase.functions.invoke('test-ghl-connection')
+      
+      if (error) {
+        toast({
+          title: "Failed to fetch GoHighLevel config",
+          description: error.message,
+          variant: "destructive",
+        })
+        return
+      }
+
+      if (data?.success && data?.pipelines?.length > 0) {
+        setPipelines(data.pipelines)
+        // Auto-select first pipeline and stage if available
+        const firstPipeline = data.pipelines[0]
+        if (firstPipeline) {
+          setPipelineId(firstPipeline.id)
+          if (firstPipeline.stages?.length > 0) {
+            setStageId(firstPipeline.stages[0].id)
+          }
+        }
+        toast({
+          title: "GoHighLevel config loaded",
+          description: `Found ${data.pipelines.length} pipeline(s)`,
+        })
+      } else {
+        toast({
+          title: "No pipelines found",
+          description: "Check your GoHighLevel API key configuration",
+          variant: "destructive",
+        })
+      }
+    } catch (error) {
+      toast({
+        title: "Error fetching config",
+        description: error instanceof Error ? error.message : "Unknown error",
+        variant: "destructive",
+      })
+    } finally {
+      setIsLoadingConfig(false)
+    }
+  }
 
   const testWebhook = async () => {
     setIsLoading(true)
@@ -135,7 +184,28 @@ export function WebhookTester() {
             
             {/* GoHighLevel Configuration */}
             <div className="space-y-3 pt-3 border-t border-border/30">
-              <Label className="text-sm font-medium text-foreground">GoHighLevel Configuration</Label>
+              <div className="flex items-center justify-between">
+                <Label className="text-sm font-medium text-foreground">GoHighLevel Configuration</Label>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={fetchGHLConfig}
+                  disabled={isLoadingConfig}
+                  className="h-7 text-xs"
+                >
+                  {isLoadingConfig ? (
+                    <>
+                      <Loader2 className="h-3 w-3 mr-1 animate-spin" />
+                      Loading...
+                    </>
+                  ) : (
+                    <>
+                      <RefreshCw className="h-3 w-3 mr-1" />
+                      Fetch Config
+                    </>
+                  )}
+                </Button>
+              </div>
               
               <div className="grid grid-cols-2 gap-3">
                 <div className="space-y-2">
@@ -160,6 +230,26 @@ export function WebhookTester() {
                   />
                 </div>
               </div>
+
+              {pipelines.length > 0 && (
+                <div className="space-y-2">
+                  <Label className="text-xs text-muted-foreground">Available Pipelines & Stages</Label>
+                  <div className="text-xs text-muted-foreground bg-muted/50 rounded p-2 max-h-32 overflow-y-auto">
+                    {pipelines.map((pipeline) => (
+                      <div key={pipeline.id} className="mb-2">
+                        <div className="font-medium">
+                          {pipeline.name} (ID: {pipeline.id})
+                        </div>
+                        {pipeline.stages?.map((stage: any) => (
+                          <div key={stage.id} className="ml-2 text-muted-foreground">
+                            • {stage.name} (ID: {stage.id})
+                          </div>
+                        ))}
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
               
               <div className="space-y-2">
                 <Label htmlFor="opportunity-value" className="text-xs text-muted-foreground">Opportunity Value ($)</Label>
