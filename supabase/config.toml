@@ -5,3 +5,6 @@ verify_jwt = false
 
 [functions.test-ghl-connection]
 verify_jwt = false
+
+[functions.debug-env]
+verify_jwt = false
