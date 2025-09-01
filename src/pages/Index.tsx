@@ -6,6 +6,7 @@ import { StatsCard } from "@/components/StatsCard"
 import { getDashboardStats } from "@/lib/supabase"
 import { ActivityLog } from "@/components/ActivityLog"
 import { GoHighLevelConfig } from "@/components/GoHighLevelConfig"
+import { SMSTester } from "@/components/SMSTester"
 
 const Index = () => {
   const [selectedBusinessId, setSelectedBusinessId] = useState<string>()
@@ -83,6 +84,16 @@ const Index = () => {
               GoHighLevel Configuration
             </h3>
             <GoHighLevelConfig businessId={selectedBusinessId} />
+          </div>
+        )}
+
+        {/* SMS Testing - Show when business is selected */}
+        {selectedBusinessId && (
+          <div className="mb-8">
+            <h3 className="text-xl font-semibold text-foreground mb-4">
+              SMS Webhook Testing
+            </h3>
+            <SMSTester businessId={selectedBusinessId} />
           </div>
         )}
 
