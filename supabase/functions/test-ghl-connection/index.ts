@@ -7,16 +7,20 @@ const corsHeaders = {
 };
 
 serve(async (req) => {
+  console.log('=== test-ghl-connection function called ===');
+  
   // Handle CORS preflight requests
   if (req.method === 'OPTIONS') {
+    console.log('Handling OPTIONS request');
     return new Response(null, { headers: corsHeaders });
   }
 
   try {
+    console.log('Getting GOHIGHLEVEL_API_KEY from environment...');
     const ghlApiKey = Deno.env.get('GOHIGHLEVEL_API_KEY');
     
     if (!ghlApiKey) {
-      console.error('GOHIGHLEVEL_API_KEY not found');
+      console.error('GOHIGHLEVEL_API_KEY not found in environment');
       return new Response(
         JSON.stringify({ error: 'GoHighLevel API key not configured' }),
         { 
@@ -26,7 +30,8 @@ serve(async (req) => {
       );
     }
 
-    console.log('Testing GoHighLevel connection...');
+    console.log('API key found, making request to GoHighLevel...');
+    console.log('Using API endpoint: https://services.leadconnectorhq.com/opportunities/pipelines');
 
     // Fetch pipelines from GoHighLevel
     const pipelinesResponse = await fetch('https://services.leadconnectorhq.com/opportunities/pipelines', {
@@ -37,6 +42,9 @@ serve(async (req) => {
         'Version': '2021-07-28'
       }
     });
+
+    console.log('GoHighLevel response status:', pipelinesResponse.status);
+    console.log('GoHighLevel response headers:', Object.fromEntries(pipelinesResponse.headers.entries()));
 
     if (!pipelinesResponse.ok) {
       const errorText = await pipelinesResponse.text();
@@ -55,10 +63,12 @@ serve(async (req) => {
     }
 
     const pipelinesData = await pipelinesResponse.json();
-    console.log('Successfully fetched pipelines:', pipelinesData);
+    console.log('Successfully fetched pipelines data:', JSON.stringify(pipelinesData, null, 2));
 
     // Extract pipeline and stage information
     const pipelines = pipelinesData.pipelines || [];
+    console.log('Found pipelines count:', pipelines.length);
+    
     const formattedPipelines = pipelines.map((pipeline: any) => ({
       id: pipeline.id,
       name: pipeline.name,
@@ -67,6 +77,8 @@ serve(async (req) => {
         name: stage.name
       })) || []
     }));
+
+    console.log('Formatted pipelines:', JSON.stringify(formattedPipelines, null, 2));
 
     return new Response(
       JSON.stringify({
@@ -81,6 +93,7 @@ serve(async (req) => {
 
   } catch (error) {
     console.error('Error in test-ghl-connection function:', error);
+    console.error('Error stack:', error.stack);
     return new Response(
       JSON.stringify({ 
         error: 'Internal server error',
