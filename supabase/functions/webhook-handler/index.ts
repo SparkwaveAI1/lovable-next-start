@@ -48,6 +48,7 @@ async function createLeadInGoHighLevel(leadData: GoHighLevelContact, testMode: b
   }
 
   const ghlApiKey = Deno.env.get('GOHIGHLEVEL_API_KEY');
+  console.log('Environment check - GOHIGHLEVEL_API_KEY present:', !!ghlApiKey);
   
   if (!ghlApiKey) {
     throw new Error('GoHighLevel API key not configured');
