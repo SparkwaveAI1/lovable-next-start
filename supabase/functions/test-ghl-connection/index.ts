@@ -31,15 +31,14 @@ serve(async (req) => {
     }
 
     console.log('API key found, making request to GoHighLevel...');
-    console.log('Using API endpoint: https://services.leadconnectorhq.com/opportunities/pipelines');
+    console.log('Using API endpoint: https://rest.gohighlevel.com/v1/opportunities/pipelines');
 
-    // Fetch pipelines from GoHighLevel
-    const pipelinesResponse = await fetch('https://services.leadconnectorhq.com/opportunities/pipelines', {
+    // Fetch pipelines from GoHighLevel using V1 API (same as webhook-handler)
+    const pipelinesResponse = await fetch('https://rest.gohighlevel.com/v1/opportunities/pipelines', {
       method: 'GET',
       headers: {
         'Authorization': `Bearer ${ghlApiKey}`,
-        'Content-Type': 'application/json',
-        'Version': '2021-07-28'
+        'Content-Type': 'application/json'
       }
     });
 
