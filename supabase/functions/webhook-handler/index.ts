@@ -327,6 +327,26 @@ serve(async (req: Request) => {
           status: 'DISABLED'
         };
       }
+
+      // Store contact in our CRM database
+      const { error: contactError } = await supabase
+        .from('contacts')
+        .insert({
+          business_id: endpoint.business_id,
+          first_name: processedData.leadName?.split(' ')[0] || 'Unknown',
+          last_name: processedData.leadName?.split(' ').slice(1).join(' ') || '',
+          email: processedData.leadEmail,
+          phone: processedData.leadPhone,
+          source: 'wix_form',
+          status: 'new_lead',
+          status_notes: `Form submission: ${processedData.formType || 'contact'}`
+        });
+
+      if (contactError) {
+        console.error('Failed to store contact:', contactError);
+      } else {
+        console.log('Contact stored successfully in CRM database');
+      }
     }
 
     // Log automation execution
