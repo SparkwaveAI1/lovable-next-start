@@ -251,12 +251,48 @@ serve(async (req: Request) => {
         .eq('is_active', true)
         .maybeSingle();
 
+      // Extract contact data from Wix webhook payload
+      const contactData = requestBody.data?.contact || {};
+      const formData = requestBody.data || requestBody;
+      
+      // Get name from contact data or form fields
+      let leadName = 'Unknown';
+      if (contactData.name?.first || contactData.name?.last) {
+        leadName = `${contactData.name.first || ''} ${contactData.name.last || ''}`.trim();
+      } else if (formData.name || formData.fullName) {
+        leadName = formData.name || formData.fullName;
+      }
+      
+      // Get email - try contact data first, then form fields
+      let leadEmail = '';
+      if (contactData.email) {
+        leadEmail = contactData.email;
+      } else if (contactData.emails && contactData.emails.length > 0) {
+        // Use primary email or first email
+        const primaryEmail = contactData.emails.find(e => e.primary) || contactData.emails[0];
+        leadEmail = primaryEmail.email;
+      } else if (formData.email) {
+        leadEmail = formData.email;
+      }
+      
+      // Get phone - try contact data first, then form fields
+      let leadPhone = '';
+      if (contactData.phone) {
+        leadPhone = contactData.phone;
+      } else if (contactData.phones && contactData.phones.length > 0) {
+        // Use primary phone or first phone
+        const primaryPhone = contactData.phones.find(p => p.primary) || contactData.phones[0];
+        leadPhone = primaryPhone.phone || primaryPhone.formattedPhone;
+      } else if (formData.phone) {
+        leadPhone = formData.phone;
+      }
+
       processedData = {
-        leadName: requestBody.name || requestBody.fullName || 'Unknown',
-        leadEmail: requestBody.email || '',
-        leadPhone: requestBody.phone || '',
-        formType: requestBody.formType || 'contact',
-        comments: requestBody.comments || requestBody.message || '',
+        leadName,
+        leadEmail,
+        leadPhone,
+        formType: formData.formType || formData.formName || 'contact',
+        comments: formData.comments || formData.message || '',
         source: 'wix_form',
         timestamp: new Date().toISOString(),
         // Use database config first, then request body, then defaults
