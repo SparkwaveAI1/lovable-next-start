@@ -47,7 +47,7 @@ async function createLeadInGoHighLevel(leadData: GoHighLevelContact, testMode: b
     };
   }
 
-  const ghlApiKey = Deno.env.get('GOHIGHLEVEL_API_KEY');
+  const ghlApiKey = Deno.env.get('GOHIGHLEVEL_API_KEY'); // SECRET REFRESH - 2025-09-01T13:55:00Z
   console.log('Environment check - GOHIGHLEVEL_API_KEY present:', !!ghlApiKey);
   
   if (!ghlApiKey) {

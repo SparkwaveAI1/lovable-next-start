@@ -16,8 +16,8 @@ serve(async (req) => {
     const supabaseUrl = Deno.env.get('SUPABASE_URL');
     const supabaseKey = Deno.env.get('SUPABASE_ANON_KEY');
     
-    // Force edge function restart by changing timestamp
-    const restartTimestamp = '2025-09-01T06:00:00.000Z';
+    // Force edge function restart by changing timestamp - SECRET REFRESH
+    const restartTimestamp = '2025-09-01T13:55:00.000Z';
     
     console.log('=== ENVIRONMENT DEBUG (Restart: ' + restartTimestamp + ') ===');
     console.log('GOHIGHLEVEL_API_KEY present:', !!apiKey);
