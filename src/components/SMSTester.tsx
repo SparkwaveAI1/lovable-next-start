@@ -17,13 +17,32 @@ export function SMSTester({ businessId }: SMSTesterProps) {
   const [testResult, setTestResult] = useState<{
     success: boolean;
     message: string;
+    conversationId?: string;
+    aiResponse?: string;
+    smsResult?: any;
     data?: any;
   } | null>(null);
+
+  // Test scenarios for different conversation types
+  const testScenarios = [
+    {
+      name: "Trial Class Request",
+      message: "Hi! I'm interested in a free trial class at Fight Flow Academy. When are you available?"
+    },
+    {
+      name: "Class Inquiry",
+      message: "What martial arts classes do you offer? I'm a complete beginner."
+    },
+    {
+      name: "Pricing Question",
+      message: "How much does membership cost? Do you have monthly rates?"
+    }
+  ];
 
   const [smsData, setSmsData] = useState({
     from: '+19195551234',
     to: '+19195556789',
-    message: "Hi! I'm interested in a free trial class at Fight Flow Academy. When are you available?",
+    message: testScenarios[0].message,
     businessPhone: '+19195556789'
   });
 
@@ -64,13 +83,15 @@ export function SMSTester({ businessId }: SMSTesterProps) {
       if (response.ok) {
         setTestResult({
           success: true,
-          message: 'SMS webhook test successful! Check the activity log for the SMS entry.',
+          message: '✅ Complete SMS conversation flow successful!',
+          conversationId: result.conversationId,
+          aiResponse: result.aiResponse,
           data: result
         });
       } else {
         setTestResult({
           success: false,
-          message: `SMS webhook test failed: ${result.error || 'Unknown error'}`,
+          message: `❌ SMS webhook test failed: ${result.error || 'Unknown error'}`,
           data: result
         });
       }
@@ -137,6 +158,23 @@ export function SMSTester({ businessId }: SMSTesterProps) {
         </div>
 
         <div className="space-y-2">
+          <Label>Quick Test Scenarios</Label>
+          <div className="flex flex-wrap gap-2">
+            {testScenarios.map((scenario) => (
+              <Button
+                key={scenario.name}
+                variant="outline"
+                size="sm"
+                onClick={() => setSmsData(prev => ({ ...prev, message: scenario.message }))}
+                className="text-xs"
+              >
+                {scenario.name}
+              </Button>
+            ))}
+          </div>
+        </div>
+
+        <div className="space-y-2">
           <Label htmlFor="message">SMS Message</Label>
           <Textarea
             id="message"
@@ -167,9 +205,23 @@ export function SMSTester({ businessId }: SMSTesterProps) {
                 <p className={testResult.success ? 'text-green-700' : 'text-red-700'}>
                   {testResult.message}
                 </p>
+                
+                {testResult.success && testResult.aiResponse && (
+                  <div className="p-3 bg-blue-50 rounded border border-blue-200">
+                    <p className="font-medium text-blue-900 text-sm">AI Response Generated:</p>
+                    <p className="text-blue-800 text-sm italic">"{testResult.aiResponse}"</p>
+                  </div>
+                )}
+                
+                {testResult.conversationId && (
+                  <div className="text-sm text-muted-foreground">
+                    <strong>Conversation ID:</strong> {testResult.conversationId}
+                  </div>
+                )}
+                
                 {testResult.data && (
                   <details className="text-sm">
-                    <summary className="cursor-pointer font-medium">View Response</summary>
+                    <summary className="cursor-pointer font-medium">View Full Response</summary>
                     <pre className="mt-2 p-2 bg-muted rounded text-xs overflow-x-auto">
                       {JSON.stringify(testResult.data, null, 2)}
                     </pre>
@@ -183,13 +235,17 @@ export function SMSTester({ businessId }: SMSTesterProps) {
         <Alert>
           <Phone className="h-4 w-4" />
           <AlertDescription>
-            <strong>Test Instructions:</strong>
+            <strong>Complete SMS Flow Test:</strong>
             <ol className="list-decimal list-inside mt-2 space-y-1 text-sm">
-              <li>Click "Test SMS Webhook" to send sample SMS data</li>
-              <li>Check the Activity Log for a new SMS entry with 📱 indicator</li>
-              <li>Verify conversation state is created in the database</li>
-              <li>Confirm proper formatting: phone numbers and message preview</li>
+              <li>📱 Inbound SMS processed & logged</li>
+              <li>🤖 OpenAI generates contextual response</li>
+              <li>📤 Response sent via GoHighLevel SMS API</li>
+              <li>📊 Both messages appear in Activity Log</li>
+              <li>💬 Conversation state maintained in database</li>
             </ol>
+            <p className="mt-2 text-xs text-muted-foreground">
+              Check Activity Log after testing to verify conversation pairs (📱 inbound, 📤 outbound)
+            </p>
           </AlertDescription>
         </Alert>
       </CardContent>
