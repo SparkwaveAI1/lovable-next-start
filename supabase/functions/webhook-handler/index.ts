@@ -123,6 +123,7 @@ async function createLeadInGoHighLevel(leadData: GoHighLevelContact, testMode: b
       headers: {
         'Authorization': `Bearer ${ghlApiKey}`,
         'Content-Type': 'application/json',
+        'Version': '2021-07-28',
       },
       body: JSON.stringify(opportunityData),
     });
