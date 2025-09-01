@@ -7,7 +7,6 @@ import { getDashboardStats } from "@/lib/supabase"
 import { ActivityLog } from "@/components/ActivityLog"
 import { GoHighLevelConfig } from "@/components/GoHighLevelConfig"
 import { SMSTester } from "@/components/SMSTester"
-import { GHLDiagnostic } from "@/components/GHLDiagnostic"
 
 const Index = () => {
   const [selectedBusinessId, setSelectedBusinessId] = useState<string>()
@@ -80,16 +79,11 @@ const Index = () => {
 
         {/* Configuration - Show when business is selected */}
         {selectedBusinessId && (
-          <div className="mb-8 space-y-6">
+          <div className="mb-8">
             <h3 className="text-xl font-semibold text-foreground mb-4">
               GoHighLevel Configuration
             </h3>
             <GoHighLevelConfig businessId={selectedBusinessId} />
-            
-            {/* API Diagnostic Tool */}
-            <div className="mt-6">
-              <GHLDiagnostic locationId="7SZrsXYcxMVQN1APGMwK" />
-            </div>
           </div>
         )}
 
