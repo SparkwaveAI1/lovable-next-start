@@ -1,10 +1,66 @@
+import "https://deno.land/x/xhr@0.1.0/mod.ts";
 import { serve } from 'https://deno.land/std@0.168.0/http/server.ts';
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
+
+const OPENAI_API_KEY = Deno.env.get('OPENAI_API_KEY');
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
+
+// OpenAI conversation function
+async function processWithOpenAI(messageContent: string, conversationContext: any, fromPhone: string) {
+  const systemPrompt = `You are an AI assistant for Fight Flow Academy, a martial arts school and gym in Raleigh, NC. 
+
+Your role:
+- Answer questions about classes, pricing, schedules
+- Book free trial classes when requested  
+- Be friendly and helpful
+- Keep responses concise for SMS (under 160 characters when possible)
+
+Current context: This is an SMS conversation with a potential student.
+
+If someone wants to book a trial class, respond with: "I'd love to schedule your free trial! What day works best for you this week?"
+
+Previous conversation context: ${JSON.stringify(conversationContext)}`;
+
+  try {
+    console.log('Processing message with OpenAI:', messageContent);
+    
+    const response = await fetch('https://api.openai.com/v1/chat/completions', {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${OPENAI_API_KEY}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        model: 'gpt-4o-mini',
+        messages: [
+          { role: 'system', content: systemPrompt },
+          { role: 'user', content: messageContent }
+        ],
+        max_tokens: 150,
+        temperature: 0.7
+      })
+    });
+
+    if (!response.ok) {
+      console.error('OpenAI API error:', response.status, response.statusText);
+      return "Thanks for your message! We'll get back to you soon.";
+    }
+
+    const data = await response.json();
+    const aiResponse = data.choices[0]?.message?.content || "Thanks for your message! We'll get back to you soon.";
+    
+    console.log('OpenAI response generated:', aiResponse);
+    return aiResponse;
+    
+  } catch (error) {
+    console.error('Error processing with OpenAI:', error);
+    return "Thanks for your message! We'll get back to you soon.";
+  }
+}
 
 serve(async (req) => {
   if (req.method === 'OPTIONS') {
@@ -56,16 +112,34 @@ serve(async (req) => {
       .eq('business_id', businessId)
       .single();
 
+    let conversationContext = {};
+    if (existingConversation) {
+      conversationContext = existingConversation.conversation_context || {};
+    }
+
+    // Process message with OpenAI
+    console.log('Processing message with AI...');
+    const aiResponse = await processWithOpenAI(messageContent, conversationContext, fromPhone);
+    
+    // Update conversation context with new messages
+    const updatedContext = {
+      ...conversationContext,
+      messages: [
+        ...(conversationContext.messages || []),
+        { role: 'user', content: messageContent, timestamp: new Date().toISOString() },
+        { role: 'assistant', content: aiResponse, timestamp: new Date().toISOString() }
+      ],
+      last_inbound_message: messageContent,
+      last_ai_response: aiResponse
+    };
+
     if (existingConversation) {
       // Update existing conversation
       await supabase
         .from('conversation_state')
         .update({
           last_message_at: new Date().toISOString(),
-          conversation_context: {
-            ...existingConversation.conversation_context,
-            last_inbound_message: messageContent
-          }
+          conversation_context: updatedContext
         })
         .eq('id', existingConversation.id);
     } else {
@@ -75,10 +149,7 @@ serve(async (req) => {
         .insert({
           contact_phone: fromPhone,
           business_id: businessId,
-          conversation_context: {
-            initial_message: messageContent,
-            last_inbound_message: messageContent
-          },
+          conversation_context: updatedContext,
           status: 'active'
         });
     }
@@ -95,7 +166,9 @@ serve(async (req) => {
           from: fromPhone,
           to: toPhone,
           message: messageContent,
-          direction: 'inbound'
+          direction: 'inbound',
+          ai_response: aiResponse,
+          ai_processing: 'completed'
         },
         conversation_id: conversationId,
         sms_from: fromPhone,
@@ -111,13 +184,14 @@ serve(async (req) => {
       );
     }
 
-    console.log('SMS successfully processed and logged');
+    console.log('SMS successfully processed with AI response');
 
     return new Response(
       JSON.stringify({ 
         success: true, 
-        message: 'SMS received and logged',
-        conversationId: conversationId
+        message: 'SMS received, processed with AI, and logged',
+        conversationId: conversationId,
+        aiResponse: aiResponse
       }),
       { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     );
