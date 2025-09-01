@@ -17,6 +17,11 @@ const Index = () => {
     successRate: 0
   })
   const [isLoadingStats, setIsLoadingStats] = useState(true)
+  const [contactForm, setContactForm] = useState({
+    fullName: '',
+    email: '',
+    phone: ''
+  })
 
   // Load dashboard stats
   useEffect(() => {
@@ -29,6 +34,10 @@ const Index = () => {
 
     loadStats()
   }, [selectedBusinessId])
+
+  const handleTestContact = () => {
+    console.log('Form data:', contactForm);
+  }
 
   return (
     <div className="min-h-screen bg-background">
@@ -84,20 +93,29 @@ const Index = () => {
               <div className="space-y-4">
                 <input 
                   type="text" 
-                  placeholder="Full Name" 
+                  placeholder="Full Name"
+                  value={contactForm.fullName}
+                  onChange={(e) => setContactForm(prev => ({...prev, fullName: e.target.value}))}
                   className="w-full p-3 border border-border rounded-md bg-background text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary"
                 />
                 <input 
                   type="email" 
-                  placeholder="Email" 
+                  placeholder="Email"
+                  value={contactForm.email}
+                  onChange={(e) => setContactForm(prev => ({...prev, email: e.target.value}))}
                   className="w-full p-3 border border-border rounded-md bg-background text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary"
                 />
                 <input 
                   type="tel" 
-                  placeholder="Phone" 
+                  placeholder="Phone"
+                  value={contactForm.phone}
+                  onChange={(e) => setContactForm(prev => ({...prev, phone: e.target.value}))}
                   className="w-full p-3 border border-border rounded-md bg-background text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary"
                 />
-                <button className="bg-primary text-primary-foreground px-4 py-2 rounded-md hover:bg-primary/90 transition-colors">
+                <button 
+                  onClick={handleTestContact}
+                  className="bg-primary text-primary-foreground px-4 py-2 rounded-md hover:bg-primary/90 transition-colors"
+                >
                   Test Store Contact
                 </button>
               </div>
