@@ -35,6 +35,8 @@ serve(async (req: Request) => {
 
   try {
     const apiKey = Deno.env.get('GOHIGHLEVEL_API_KEY');
+    console.log('Environment check - GOHIGHLEVEL_API_KEY present:', !!apiKey);
+    
     if (!apiKey) {
       return new Response(JSON.stringify({
         success: false,
