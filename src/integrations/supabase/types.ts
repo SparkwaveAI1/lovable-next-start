@@ -249,6 +249,53 @@ export type Database = {
           },
         ]
       }
+      class_schedule: {
+        Row: {
+          business_id: string | null
+          class_name: string | null
+          created_at: string | null
+          day_of_week: number | null
+          end_time: string | null
+          id: string
+          instructor: string | null
+          is_active: boolean | null
+          max_capacity: number | null
+          start_time: string | null
+        }
+        Insert: {
+          business_id?: string | null
+          class_name?: string | null
+          created_at?: string | null
+          day_of_week?: number | null
+          end_time?: string | null
+          id?: string
+          instructor?: string | null
+          is_active?: boolean | null
+          max_capacity?: number | null
+          start_time?: string | null
+        }
+        Update: {
+          business_id?: string | null
+          class_name?: string | null
+          created_at?: string | null
+          day_of_week?: number | null
+          end_time?: string | null
+          id?: string
+          instructor?: string | null
+          is_active?: boolean | null
+          max_capacity?: number | null
+          start_time?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "class_schedule_business_id_fkey"
+            columns: ["business_id"]
+            isOneToOne: false
+            referencedRelation: "businesses"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       contacts: {
         Row: {
           business_id: string | null
