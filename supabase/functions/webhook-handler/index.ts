@@ -16,6 +16,38 @@ interface GoHighLevelContact {
   timestamp?: string;
 }
 
+// SMS sending function for welcome messages
+async function sendWelcomeSMS(toPhone: string, message: string, ghlApiKey: string, locationId: string) {
+  try {
+    console.log(`Sending welcome SMS to ${toPhone}: "${message}"`);
+    
+    const response = await fetch('https://rest.gohighlevel.com/v1/conversations/messages', {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${ghlApiKey}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        type: 'SMS',
+        phone: toPhone,
+        message: message,
+        locationId: locationId
+      })
+    });
+
+    const result = await response.json();
+    
+    if (!response.ok) {
+      throw new Error(`GHL SMS API Error: ${result.message || 'Unknown error'}`);
+    }
+
+    return { success: true, messageId: result.id };
+  } catch (error) {
+    console.error('Failed to send welcome SMS:', error);
+    return { success: false, error: error.message };
+  }
+}
+
 async function createLeadInGoHighLevel(leadData: GoHighLevelContact, testMode: boolean = false, ghlConfig: any) {
   // If in test mode, return mock success without calling API
   if (testMode) {
@@ -319,6 +351,67 @@ serve(async (req: Request) => {
         try {
           ghlResult = await createLeadInGoHighLevel(processedData, testMode, ghlConfig);
           console.log('GoHighLevel integration result:', ghlResult);
+          
+          // After successful contact creation, send welcome SMS
+          if (ghlResult && ghlResult.contact && ghlResult.contact.success) {
+            const customerPhone = processedData.leadPhone;
+            const businessPhone = '+19195556789'; // Configure this per business
+            
+            if (customerPhone && ghlConfig) {
+              const welcomeMessage = `Hi ${processedData.leadName}! Thanks for your interest in Fight Flow Academy. I'm here to help answer questions and schedule your free trial class. What would you like to know?`;
+              
+              // Get GHL API key for SMS sending
+              const ghlApiKey = Deno.env.get('GOHIGHLEVEL_API_KEY');
+              
+              if (ghlApiKey) {
+                // Send welcome SMS
+                const welcomeSmsResult = await sendWelcomeSMS(
+                  customerPhone,
+                  welcomeMessage, 
+                  ghlApiKey,
+                  ghlConfig.location_id
+                );
+                
+                // Log the welcome SMS
+                await supabase
+                  .from('automation_logs')
+                  .insert({
+                    business_id: endpoint.business_id,
+                    automation_type: 'welcome_sms',
+                    status: welcomeSmsResult.success ? 'success' : 'failed',
+                    source_data: { formSubmission: processedData },
+                    processed_data: {
+                      from: businessPhone,
+                      to: customerPhone,
+                      message: welcomeMessage,
+                      direction: 'outbound'
+                    },
+                    conversation_id: `${customerPhone}_${businessPhone}`,
+                    sms_from: businessPhone,
+                    sms_to: customerPhone,
+                    sms_direction: 'outbound',
+                    error_message: welcomeSmsResult.error || null,
+                    execution_time_ms: 0
+                  });
+                
+                // Initialize conversation state for future replies
+                await supabase
+                  .from('conversation_state')
+                  .insert({
+                    contact_phone: customerPhone,
+                    business_id: endpoint.business_id,
+                    conversation_context: {
+                      source: 'form_submission',
+                      initial_contact_data: processedData,
+                      welcome_message_sent: true
+                    },
+                    status: 'active'
+                  });
+                
+                console.log('Welcome SMS sent and conversation state initialized');
+              }
+            }
+          }
         } catch (error) {
           console.error('GoHighLevel integration failed:', error);
           ghlResult = { success: false, error: error.message };
