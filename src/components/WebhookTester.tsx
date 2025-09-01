@@ -17,8 +17,8 @@ interface WebhookTesterProps {
 export function WebhookTester({ businessId }: WebhookTesterProps = {}) {
   const [isLoading, setIsLoading] = useState(false)
   const [lastResult, setLastResult] = useState<any>(null)
-  const [testMode, setTestMode] = useState(true) // Start in safe test mode
-  const [ghlEnabled, setGhlEnabled] = useState(false)
+  const [testMode, setTestMode] = useState(false) // Live mode by default
+  const [ghlEnabled, setGhlEnabled] = useState(true) // Enable GHL by default
   const [pipelineId, setPipelineId] = useState("")
   const [stageId, setStageId] = useState("")
   const [opportunityValue, setOpportunityValue] = useState("129")

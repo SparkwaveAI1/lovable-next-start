@@ -267,11 +267,11 @@ serve(async (req: Request) => {
 
       console.log('Processed lead data:', processedData);
 
-      // Extract safety parameters from request
+      // Extract safety parameters from request - enable GHL by default if config exists
       const testMode = requestBody.testMode === true;
-      const ghlEnabled = requestBody.ghlEnabled === true;
+      const ghlEnabled = requestBody.ghlEnabled !== undefined ? requestBody.ghlEnabled === true : !!ghlConfig;
 
-      console.log('Safety settings:', { testMode, ghlEnabled });
+      console.log('Safety settings:', { testMode, ghlEnabled, hasConfig: !!ghlConfig });
 
       // Create contact and opportunity in GoHighLevel if enabled or in test mode
       if (ghlEnabled || testMode) {
