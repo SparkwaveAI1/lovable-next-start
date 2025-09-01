@@ -153,33 +153,45 @@ export type Database = {
         Row: {
           automation_type: string
           business_id: string
+          conversation_id: string | null
           created_at: string | null
           error_message: string | null
           execution_time_ms: number | null
           id: string
           processed_data: Json | null
+          sms_direction: string | null
+          sms_from: string | null
+          sms_to: string | null
           source_data: Json | null
           status: string
         }
         Insert: {
           automation_type: string
           business_id: string
+          conversation_id?: string | null
           created_at?: string | null
           error_message?: string | null
           execution_time_ms?: number | null
           id?: string
           processed_data?: Json | null
+          sms_direction?: string | null
+          sms_from?: string | null
+          sms_to?: string | null
           source_data?: Json | null
           status: string
         }
         Update: {
           automation_type?: string
           business_id?: string
+          conversation_id?: string | null
           created_at?: string | null
           error_message?: string | null
           execution_time_ms?: number | null
           id?: string
           processed_data?: Json | null
+          sms_direction?: string | null
+          sms_from?: string | null
+          sms_to?: string | null
           source_data?: Json | null
           status?: string
         }
@@ -231,6 +243,44 @@ export type Database = {
           {
             foreignKeyName: "businesses_parent_business_id_fkey"
             columns: ["parent_business_id"]
+            isOneToOne: false
+            referencedRelation: "businesses"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      conversation_state: {
+        Row: {
+          business_id: string
+          contact_phone: string
+          conversation_context: Json | null
+          created_at: string | null
+          id: string
+          last_message_at: string | null
+          status: string | null
+        }
+        Insert: {
+          business_id: string
+          contact_phone: string
+          conversation_context?: Json | null
+          created_at?: string | null
+          id?: string
+          last_message_at?: string | null
+          status?: string | null
+        }
+        Update: {
+          business_id?: string
+          contact_phone?: string
+          conversation_context?: Json | null
+          created_at?: string | null
+          id?: string
+          last_message_at?: string | null
+          status?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "conversation_state_business_id_fkey"
+            columns: ["business_id"]
             isOneToOne: false
             referencedRelation: "businesses"
             referencedColumns: ["id"]
