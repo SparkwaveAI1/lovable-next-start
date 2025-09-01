@@ -2,7 +2,7 @@ import { useState, useEffect } from "react"
 import { Activity, AlertCircle, Zap, TrendingUp } from "lucide-react"
 import { DashboardHeader } from "@/components/DashboardHeader"
 import { StatsCard } from "@/components/StatsCard"
-import { WebhookTester } from "@/components/WebhookTester"
+
 import { getDashboardStats } from "@/lib/supabase"
 import { ActivityLog } from "@/components/ActivityLog"
 import { GoHighLevelConfig } from "@/components/GoHighLevelConfig"
@@ -76,24 +76,13 @@ const Index = () => {
           />
         </div>
 
-        {/* Configuration and Testing - Show when business is selected */}
+        {/* Configuration - Show when business is selected */}
         {selectedBusinessId && (
-          <div className="space-y-8 mb-8">
-            <div>
-              <h3 className="text-xl font-semibold text-foreground mb-4">
-                GoHighLevel Configuration
-              </h3>
-              <GoHighLevelConfig businessId={selectedBusinessId} />
-            </div>
-            
-            <div>
-              <h3 className="text-xl font-semibold text-foreground mb-4">
-                Automation Testing
-              </h3>
-              <div className="max-w-md">
-                <WebhookTester businessId={selectedBusinessId} />
-              </div>
-            </div>
+          <div className="mb-8">
+            <h3 className="text-xl font-semibold text-foreground mb-4">
+              GoHighLevel Configuration
+            </h3>
+            <GoHighLevelConfig businessId={selectedBusinessId} />
           </div>
         )}
 
@@ -111,7 +100,7 @@ const Index = () => {
             </h3>
             <p className="text-muted-foreground mb-4">
               {selectedBusinessId 
-                ? "Your automation dashboard will appear here. Test the webhook above to verify the integration."
+                ? "Your automation monitoring dashboard is ready. Configure GoHighLevel above to start processing form submissions."
                 : "Select a business above to start managing your automations."
               }
             </p>
