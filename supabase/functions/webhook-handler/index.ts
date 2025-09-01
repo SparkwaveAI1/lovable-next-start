@@ -116,9 +116,9 @@ async function createLeadInGoHighLevel(leadData: GoHighLevelContact, testMode: b
     };
 
     console.log('Creating opportunity with data:', JSON.stringify(opportunityData, null, 2));
-    console.log('Using API endpoint: https://rest.gohighlevel.com/v1/opportunities/');
+    console.log('Using API endpoint: https://rest.gohighlevel.com/opportunities/');
 
-    const opportunityResponse = await fetch('https://rest.gohighlevel.com/v1/opportunities/', {
+    const opportunityResponse = await fetch('https://rest.gohighlevel.com/opportunities/', {
       method: 'POST',
       headers: {
         'Authorization': `Bearer ${ghlApiKey}`,
