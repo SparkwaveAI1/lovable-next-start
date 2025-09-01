@@ -5,6 +5,7 @@ import { StatsCard } from "@/components/StatsCard"
 
 import { getDashboardStats } from "@/lib/supabase"
 import { ActivityLog } from "@/components/ActivityLog"
+// import { GoHighLevelConfig } from "@/components/GoHighLevelConfig"
 
 const Index = () => {
   const [selectedBusinessId, setSelectedBusinessId] = useState<string>()
@@ -75,6 +76,17 @@ const Index = () => {
           />
         </div>
 
+        {/* Configuration - Show when business is selected */}
+        {/* Temporarily hidden - GoHighLevel Configuration
+        {selectedBusinessId && (
+          <div className="mb-8">
+            <h3 className="text-xl font-semibold text-foreground mb-4">
+              GoHighLevel Configuration
+            </h3>
+            <GoHighLevelConfig businessId={selectedBusinessId} />
+          </div>
+        )}
+        */}
 
         {/* Activity Log */}
         <div className="mb-8">
