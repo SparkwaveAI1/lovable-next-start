@@ -9,6 +9,57 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
 
+// SMS sending function
+async function sendSMSResponse(toPhone: string, message: string, businessId: string, supabase: any) {
+  try {
+    console.log(`Attempting to send SMS to ${toPhone}: "${message}"`);
+    
+    // Get GHL configuration for this business
+    const { data: ghlConfig } = await supabase
+      .from('ghl_configurations')
+      .select('*')
+      .eq('business_id', businessId)
+      .eq('is_active', true)
+      .single();
+
+    if (!ghlConfig) {
+      throw new Error('No active GoHighLevel configuration found for this business');
+    }
+
+    const ghlApiKey = Deno.env.get('GOHIGHLEVEL_API_KEY');
+    if (!ghlApiKey) {
+      throw new Error('GoHighLevel API key not configured');
+    }
+
+    const response = await fetch('https://rest.gohighlevel.com/v1/conversations/messages', {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${ghlApiKey}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        type: 'SMS',
+        contactId: '', // GHL will lookup contact by phone
+        phone: toPhone,
+        message: message,
+        locationId: ghlConfig.location_id
+      })
+    });
+
+    const result = await response.json();
+    
+    if (!response.ok) {
+      throw new Error(`GHL SMS API Error: ${result.message || 'Unknown error'}`);
+    }
+
+    console.log('SMS sent successfully:', result.id);
+    return { success: true, messageId: result.id };
+  } catch (error) {
+    console.error('Failed to send SMS:', error);
+    return { success: false, error: error.message };
+  }
+}
+
 // OpenAI conversation function
 async function processWithOpenAI(messageContent: string, conversationContext: any, fromPhone: string) {
   const systemPrompt = `You are an AI assistant for Fight Flow Academy, a martial arts school and gym in Raleigh, NC. 
@@ -121,6 +172,19 @@ serve(async (req) => {
     console.log('Processing message with AI...');
     const aiResponse = await processWithOpenAI(messageContent, conversationContext, fromPhone);
     
+    // Send AI response via SMS
+    let smsResult = null;
+    if (aiResponse) {
+      console.log('Sending AI response via SMS...');
+      smsResult = await sendSMSResponse(fromPhone, aiResponse, businessId, supabase);
+      
+      if (smsResult.success) {
+        console.log('SMS response sent successfully');
+      } else {
+        console.error('Failed to send SMS response:', smsResult.error);
+      }
+    }
+    
     // Update conversation context with new messages
     const updatedContext = {
       ...conversationContext,
@@ -130,7 +194,8 @@ serve(async (req) => {
         { role: 'assistant', content: aiResponse, timestamp: new Date().toISOString() }
       ],
       last_inbound_message: messageContent,
-      last_ai_response: aiResponse
+      last_ai_response: aiResponse,
+      last_sms_sent: smsResult?.success ? new Date().toISOString() : null
     };
 
     if (existingConversation) {
@@ -154,27 +219,51 @@ serve(async (req) => {
         });
     }
 
-    // Log the SMS in automation_logs
+    // Log the inbound SMS in automation_logs
+    const inboundLogData = {
+      business_id: businessId,
+      automation_type: 'sms_conversation',
+      status: 'success',
+      source_data: smsData,
+      processed_data: {
+        from: fromPhone,
+        to: toPhone,
+        message: messageContent,
+        direction: 'inbound',
+        ai_response: aiResponse,
+        ai_processing: 'completed'
+      },
+      conversation_id: conversationId,
+      sms_from: fromPhone,
+      sms_to: toPhone,
+      sms_direction: 'inbound'
+    };
+
+    // Log outbound SMS if sent
+    const outboundLogData = smsResult ? {
+      business_id: businessId,
+      automation_type: 'sms_conversation',
+      status: smsResult.success ? 'success' : 'failed',
+      source_data: { aiResponse },
+      processed_data: {
+        from: toPhone,
+        to: fromPhone,
+        message: aiResponse,
+        direction: 'outbound',
+        messageId: smsResult.messageId
+      },
+      conversation_id: conversationId,
+      sms_from: toPhone,
+      sms_to: fromPhone,
+      sms_direction: 'outbound',
+      error_message: smsResult.error || null
+    } : null;
+
+    // Insert both logs
+    const logsToInsert = outboundLogData ? [inboundLogData, outboundLogData] : [inboundLogData];
     const { error: logError } = await supabase
       .from('automation_logs')
-      .insert({
-        business_id: businessId,
-        automation_type: 'sms_conversation',
-        status: 'success',
-        source_data: smsData,
-        processed_data: {
-          from: fromPhone,
-          to: toPhone,
-          message: messageContent,
-          direction: 'inbound',
-          ai_response: aiResponse,
-          ai_processing: 'completed'
-        },
-        conversation_id: conversationId,
-        sms_from: fromPhone,
-        sms_to: toPhone,
-        sms_direction: 'inbound'
-      });
+      .insert(logsToInsert);
 
     if (logError) {
       console.error('Failed to log SMS:', logError);
