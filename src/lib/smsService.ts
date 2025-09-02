@@ -20,13 +20,24 @@ export async function sendSMS(smsData: SMSMessage) {
       throw new Error('SMS configuration not found or inactive');
     }
 
-    // For now, just log the SMS (we'll add Twilio later)
-    console.log('SMS would be sent:', {
-      from: config.phone_number,
-      to: smsData.to,
-      message: smsData.message,
-      provider: config.provider
+    // Call the send-sms Edge Function to actually send via Twilio
+    const { data, error } = await supabase.functions.invoke('send-sms', {
+      body: {
+        to: smsData.to,
+        message: smsData.message,
+        businessId: smsData.businessId
+      }
     });
+
+    if (error) {
+      throw new Error(`SMS sending failed: ${error.message}`);
+    }
+
+    if (!data.success) {
+      throw new Error(`Twilio error: ${data.error}`);
+    }
+
+    console.log('SMS sent successfully via Twilio:', data.messageSid);
 
     // Log the SMS attempt to automation_logs
     await supabase
@@ -34,10 +45,11 @@ export async function sendSMS(smsData: SMSMessage) {
       .insert({
         business_id: smsData.businessId,
         automation_type: 'sms',
-        status: 'success'
+        status: 'success',
+        error_message: `SMS sent to ${smsData.to}: ${smsData.message.substring(0, 50)}...`
       });
 
-    return { success: true, message: 'SMS logged successfully' };
+    return { success: true, message: 'SMS sent successfully', messageSid: data.messageSid };
   } catch (error) {
     console.error('SMS sending error:', error);
     
