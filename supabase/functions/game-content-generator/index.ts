@@ -108,6 +108,47 @@ serve(async (req) => {
       }
     }
 
+    // Test 6: Workers array pattern (common SDK pattern)
+    if (!agent) {
+      try {
+        console.log('🔍 Test 6: Workers array - new GameAgent(apiKey, { workers: [] })');
+        agent = new GameAgent(gameApiKey, {
+          name: "PersonaAI Content Creator",
+          goal: "Generate content", 
+          description: "AI content creator",
+          workers: [] // Empty workers array
+        });
+        constructorPattern = 'workers_array_pattern';
+        console.log('✅ Test 6 SUCCESS');
+      } catch (error6) {
+        console.log('❌ Test 6 FAILED:', error6.message);
+      }
+    }
+
+    // Test 7: Correct GAME SDK pattern (from source code analysis)
+    if (!agent) {
+      try {
+        console.log('🔍 Test 7: GAME SDK pattern - new GameAgent(apiKey, { name, goal, description, workers })');
+        agent = new GameAgent(gameApiKey, {
+          name: personaAIConfig.name,
+          goal: personaAIConfig.goal,
+          description: personaAIConfig.description,
+          workers: [], // Required field
+          getAgentState: async () => ({
+            business: business || "PersonaAI",
+            content_type: contentType || "twitter_post",
+            topic: topic || "AI agents",
+            focus_topics: personaAIConfig.focusTopics,
+            brand_voice: personaAIConfig.brandVoice
+          })
+        });
+        constructorPattern = 'correct_game_sdk_pattern';
+        console.log('✅ Test 7 SUCCESS');
+      } catch (error7) {
+        console.log('❌ Test 7 FAILED:', error7.message);
+      }
+    }
+
     if (!agent) {
       throw new Error('ALL CONSTRUCTOR PATTERNS FAILED - SDK may be incompatible with Edge Functions');
     }
