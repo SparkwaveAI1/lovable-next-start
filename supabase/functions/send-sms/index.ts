@@ -78,19 +78,40 @@ serve(async (req) => {
     const { to, message, businessId } = requestBody;
     console.log('Extracted parameters:', { to: to?.substring(0, 3) + '...', messageLength: message?.length });
 
-    console.log('=== CHECKING ENVIRONMENT VARIABLES ===');
+    console.log('=== CHECKING ENVIRONMENT VARIABLES INDIVIDUALLY ===');
     const accountSid = Deno.env.get('TWILIO_ACCOUNT_SID');
     const authToken = Deno.env.get('TWILIO_AUTH_TOKEN');
     const fromNumber = Deno.env.get('TWILIO_PHONE_NUMBER');
-    
-    console.log('Environment check:', {
-      hasAccountSid: !!accountSid,
-      accountSidLength: accountSid?.length || 0,
-      hasAuthToken: !!authToken,
-      authTokenLength: authToken?.length || 0,
-      hasFromNumber: !!fromNumber,
-      fromNumber: fromNumber
+
+    console.log('TWILIO_ACCOUNT_SID check:', {
+      exists: !!accountSid,
+      length: accountSid?.length || 0,
+      startsWithAC: accountSid?.startsWith('AC') || false
     });
+
+    console.log('TWILIO_AUTH_TOKEN check:', {
+      exists: !!authToken,
+      length: authToken?.length || 0
+    });
+
+    console.log('TWILIO_PHONE_NUMBER check:', {
+      exists: !!fromNumber,
+      length: fromNumber?.length || 0,
+      value: fromNumber
+    });
+
+    // Test each credential separately
+    if (!accountSid) {
+      throw new Error('TWILIO_ACCOUNT_SID is missing or null');
+    }
+    if (!authToken) {
+      throw new Error('TWILIO_AUTH_TOKEN is missing or null');
+    }
+    if (!fromNumber) {
+      throw new Error('TWILIO_PHONE_NUMBER is missing or null');
+    }
+
+    console.log('All Twilio credentials verified successfully');
 
     // Normalize phone number to E.164 format
     const normalizedPhone = normalizePhoneNumber(to);
@@ -146,4 +167,4 @@ serve(async (req) => {
   }
 });
 
-// Deployment trigger: Updated with debug logging - v1.1
+// Redeployment trigger v2.0 - Enhanced credential diagnostics
