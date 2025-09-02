@@ -79,11 +79,11 @@ serve(async (req) => {
     console.log('Extracted parameters:', { to: to?.substring(0, 3) + '...', messageLength: message?.length });
 
     console.log('=== CHECKING ENVIRONMENT VARIABLES INDIVIDUALLY ===');
-    const accountSid = Deno.env.get('TWILIO_ACCOUNT_SID');
+    const accountSid = Deno.env.get('TWILIO_SID');
     const authToken = Deno.env.get('TWILIO_AUTH_TOKEN');
     const fromNumber = Deno.env.get('TWILIO_PHONE_NUMBER');
 
-    console.log('TWILIO_ACCOUNT_SID check:', {
+    console.log('TWILIO_SID check:', {
       exists: !!accountSid,
       length: accountSid?.length || 0,
       startsWithAC: accountSid?.startsWith('AC') || false
@@ -102,7 +102,7 @@ serve(async (req) => {
 
     // Test each credential separately
     if (!accountSid) {
-      throw new Error('TWILIO_ACCOUNT_SID is missing or null');
+      throw new Error('TWILIO_SID is missing or null');
     }
     if (!authToken) {
       throw new Error('TWILIO_AUTH_TOKEN is missing or null');
@@ -167,4 +167,4 @@ serve(async (req) => {
   }
 });
 
-// Redeployment trigger v2.0 - Enhanced credential diagnostics
+// Deployment v4.0 - Using TWILIO_SID to bypass secret access issue
