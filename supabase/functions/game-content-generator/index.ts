@@ -1,6 +1,7 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import "https://deno.land/x/xhr@0.1.0/mod.ts";
-import { GameAgent } from "https://esm.sh/@virtuals-protocol/game@0.1.14";
+// TEMPORARILY COMMENTED OUT FOR DEBUGGING
+// import { GameAgent } from "https://esm.sh/@virtuals-protocol/game@0.1.14";
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -23,8 +24,10 @@ serve(async (req) => {
       throw new Error('GAME_API_KEY not configured');
     }
 
-    console.log('GAME API Key available:', !!gameApiKey);
-    console.log('Request parameters:', { business, contentType, topic });
+    // DIAGNOSTIC VERSION - Test without GAME SDK first
+    console.log('DIAGNOSTIC: Edge Function started successfully');
+    console.log('DIAGNOSTIC: GAME API Key available:', !!gameApiKey);
+    console.log('DIAGNOSTIC: Request parameters:', { business, contentType, topic });
     
     // PersonaAI agent configuration
     const personaAIConfig = {
@@ -38,9 +41,10 @@ serve(async (req) => {
       brandVoice: "expert but accessible"
     };
 
-    // Initialize GAME agent with PersonaAI configuration
-    console.log('Initializing GAME agent with config:', personaAIConfig);
+    console.log('DIAGNOSTIC: PersonaAI config created successfully');
     
+    // TEMPORARILY SKIP GAME SDK INITIALIZATION FOR TESTING
+    /*
     const agent = new GameAgent(gameApiKey, {
       name: personaAIConfig.name,
       goal: personaAIConfig.goal,
@@ -62,15 +66,16 @@ serve(async (req) => {
     
     const testResult = await agent.step();
     console.log('GAME agent step executed:', testResult);
+    */
     
     return new Response(JSON.stringify({
       success: true,
-      message: "GAME agent initialized and tested successfully",
+      message: "DIAGNOSTIC: Edge Function running without GAME SDK",
       config: personaAIConfig,
       apiKeyConfigured: true,
-      agentInitialized: true,
-      testResult: testResult,
-      requestId: `game_${Date.now()}`
+      agentInitialized: false, // Not initialized in diagnostic mode
+      testResult: { diagnostic: "GAME SDK temporarily disabled for testing" },
+      requestId: `diagnostic_${Date.now()}`
     }), {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' }
     });
