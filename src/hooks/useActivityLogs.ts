@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { supabase } from '@/lib/supabase';
+import { supabase } from '@/integrations/supabase/client';
 
 interface AutomationLog {
   id: string;
@@ -37,9 +37,11 @@ export function useActivityLogs(businessId?: string) {
         const { data, error: fetchError } = await query;
 
         if (fetchError) {
+          console.error('Supabase query error:', fetchError);
           throw fetchError;
         }
 
+        console.log('Activity logs fetched:', data?.length || 0, 'records');
         setLogs(data || []);
       } catch (err) {
         console.error('Error fetching activity logs:', err);
@@ -50,6 +52,28 @@ export function useActivityLogs(businessId?: string) {
     }
 
     fetchLogs();
+
+    // Set up real-time subscription for activity logs
+    const channel = supabase
+      .channel('activity-logs-changes')
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'automation_logs',
+          filter: businessId ? `business_id=eq.${businessId}` : undefined
+        },
+        (payload) => {
+          console.log('Real-time activity log update:', payload);
+          fetchLogs(); // Refetch logs when changes occur
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
   }, [businessId]);
 
   const refetch = async () => {
@@ -70,12 +94,14 @@ export function useActivityLogs(businessId?: string) {
       const { data, error: fetchError } = await query;
 
       if (fetchError) {
+        console.error('Supabase refetch error:', fetchError);
         throw fetchError;
       }
 
+      console.log('Activity logs refetched:', data?.length || 0, 'records');
       setLogs(data || []);
     } catch (err) {
-      console.error('Error fetching activity logs:', err);
+      console.error('Error refetching activity logs:', err);
       setError(err instanceof Error ? err.message : 'Failed to fetch logs');
     } finally {
       setIsLoading(false);
