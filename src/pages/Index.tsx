@@ -20,13 +20,6 @@ const Index = () => {
     successRate: 0
   })
   const [isLoadingStats, setIsLoadingStats] = useState(true)
-  const [contactForm, setContactForm] = useState({
-    fullName: '',
-    email: '',
-    phone: '',
-    comments: ''
-  })
-
   // Load dashboard stats
   useEffect(() => {
     const loadStats = async () => {
@@ -38,49 +31,6 @@ const Index = () => {
 
     loadStats()
   }, [selectedBusinessId])
-
-  const handleTestContact = async () => {
-    try {
-      const { error } = await supabase
-        .from('contacts')
-        .insert({
-          business_id: selectedBusinessId,
-          first_name: contactForm.fullName.split(' ')[0] || '',
-          last_name: contactForm.fullName.split(' ').slice(1).join(' ') || '',
-          email: contactForm.email,
-          phone: contactForm.phone,
-          comments: contactForm.comments || null,
-          source: 'manual_test',
-          status: 'new_lead'
-        });
-
-      if (error) {
-        console.error('Error storing contact:', error);
-      } else {
-        console.log('Contact stored successfully');
-        
-        // Send welcome SMS if phone number provided
-        if (contactForm.phone && selectedBusinessId) {
-          const smsResult = await sendSMS({
-            to: contactForm.phone,
-            message: 'Welcome to Fight Flow Academy! 🥋 Thanks for your interest. Reply SCHEDULE to book a free trial class, or call us at (555) 123-4567.',
-            businessId: selectedBusinessId
-          });
-          
-          if (smsResult.success) {
-            console.log('Welcome SMS sent successfully');
-          } else {
-            console.error('SMS sending failed:', smsResult.error);
-          }
-        }
-        
-        // Clear form
-        setContactForm({ fullName: '', email: '', phone: '', comments: '' });
-      }
-    } catch (error) {
-      console.error('Failed to store contact:', error);
-    }
-  }
 
   return (
     <div className="min-h-screen bg-background">
@@ -128,50 +78,6 @@ const Index = () => {
           />
         </div>
 
-        {/* Test Contact Storage Form - Show when business is selected */}
-        {selectedBusinessId && (
-          <div className="mb-8">
-            <div className="bg-card p-6 rounded-lg border border-border shadow-card">
-              <h3 className="text-lg font-medium text-foreground mb-4">Test Contact Storage</h3>
-              <div className="space-y-4">
-                <input 
-                  type="text" 
-                  placeholder="Full Name"
-                  value={contactForm.fullName}
-                  onChange={(e) => setContactForm(prev => ({...prev, fullName: e.target.value}))}
-                  className="w-full p-3 border border-border rounded-md bg-background text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary"
-                />
-                <input 
-                  type="email" 
-                  placeholder="Email"
-                  value={contactForm.email}
-                  onChange={(e) => setContactForm(prev => ({...prev, email: e.target.value}))}
-                  className="w-full p-3 border border-border rounded-md bg-background text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary"
-                />
-                <input 
-                  type="tel" 
-                  placeholder="Phone"
-                  value={contactForm.phone}
-                  onChange={(e) => setContactForm(prev => ({...prev, phone: e.target.value}))}
-                  className="w-full p-3 border border-border rounded-md bg-background text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary"
-                />
-                <textarea 
-                  placeholder="Comments (optional)"
-                  value={contactForm.comments}
-                  onChange={(e) => setContactForm(prev => ({...prev, comments: e.target.value}))}
-                  className="w-full p-3 border border-border rounded-md bg-background text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary resize-none"
-                  rows={3}
-                />
-                <button
-                  onClick={handleTestContact}
-                  className="bg-primary text-primary-foreground px-4 py-2 rounded-md hover:bg-primary/90 transition-colors"
-                >
-                  Test Store Contact
-                </button>
-              </div>
-            </div>
-          </div>
-        )}
 
         {/* Contacts Management - Show when business is selected */}
         {selectedBusinessId && (
