@@ -249,6 +249,51 @@ export type Database = {
           },
         ]
       }
+      class_bookings: {
+        Row: {
+          booking_date: string | null
+          class_schedule_id: string | null
+          contact_id: string | null
+          created_at: string | null
+          id: string
+          notes: string | null
+          status: string | null
+        }
+        Insert: {
+          booking_date?: string | null
+          class_schedule_id?: string | null
+          contact_id?: string | null
+          created_at?: string | null
+          id?: string
+          notes?: string | null
+          status?: string | null
+        }
+        Update: {
+          booking_date?: string | null
+          class_schedule_id?: string | null
+          contact_id?: string | null
+          created_at?: string | null
+          id?: string
+          notes?: string | null
+          status?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "class_bookings_class_schedule_id_fkey"
+            columns: ["class_schedule_id"]
+            isOneToOne: false
+            referencedRelation: "class_schedule"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "class_bookings_contact_id_fkey"
+            columns: ["contact_id"]
+            isOneToOne: false
+            referencedRelation: "contacts"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       class_schedule: {
         Row: {
           business_id: string | null
@@ -387,6 +432,51 @@ export type Database = {
           },
         ]
       }
+      conversation_threads: {
+        Row: {
+          business_id: string | null
+          contact_id: string | null
+          context: Json | null
+          created_at: string | null
+          id: string
+          last_activity: string | null
+          status: string | null
+        }
+        Insert: {
+          business_id?: string | null
+          contact_id?: string | null
+          context?: Json | null
+          created_at?: string | null
+          id?: string
+          last_activity?: string | null
+          status?: string | null
+        }
+        Update: {
+          business_id?: string | null
+          contact_id?: string | null
+          context?: Json | null
+          created_at?: string | null
+          id?: string
+          last_activity?: string | null
+          status?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "conversation_threads_business_id_fkey"
+            columns: ["business_id"]
+            isOneToOne: false
+            referencedRelation: "businesses"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "conversation_threads_contact_id_fkey"
+            columns: ["contact_id"]
+            isOneToOne: false
+            referencedRelation: "contacts"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       ghl_configurations: {
         Row: {
           api_key: string | null
@@ -463,6 +553,51 @@ export type Database = {
             columns: ["business_id"]
             isOneToOne: false
             referencedRelation: "businesses"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      sms_messages: {
+        Row: {
+          ai_response: boolean | null
+          contact_id: string | null
+          created_at: string | null
+          direction: string | null
+          id: string
+          message: string | null
+          thread_id: string | null
+        }
+        Insert: {
+          ai_response?: boolean | null
+          contact_id?: string | null
+          created_at?: string | null
+          direction?: string | null
+          id?: string
+          message?: string | null
+          thread_id?: string | null
+        }
+        Update: {
+          ai_response?: boolean | null
+          contact_id?: string | null
+          created_at?: string | null
+          direction?: string | null
+          id?: string
+          message?: string | null
+          thread_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "sms_messages_contact_id_fkey"
+            columns: ["contact_id"]
+            isOneToOne: false
+            referencedRelation: "contacts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "sms_messages_thread_id_fkey"
+            columns: ["thread_id"]
+            isOneToOne: false
+            referencedRelation: "conversation_threads"
             referencedColumns: ["id"]
           },
         ]
