@@ -146,7 +146,51 @@ serve(async (req) => {
     });
 
     const aiResult = await aiResponse.json();
-    const responseMessage = aiResult.message || 'Thanks for your message! Someone will get back to you soon.';
+    let responseMessage = aiResult.message || 'Thanks for your message! Someone will get back to you soon.';
+
+    // Handle class booking if AI detected intent
+    if (aiResult.shouldBook && aiResult.classDetails) {
+      // Find the specific class in schedule
+      const targetClass = classes?.find(cls => 
+        cls.class_name.toLowerCase().includes(aiResult.classDetails.className.toLowerCase())
+      );
+      
+      if (targetClass) {
+        // Calculate next occurrence of this class day
+        const today = new Date();
+        const targetDay = targetClass.day_of_week;
+        const daysUntilClass = (targetDay - today.getDay() + 7) % 7 || 7;
+        const classDate = new Date(today);
+        classDate.setDate(today.getDate() + daysUntilClass);
+        
+        // Book the class
+        const { error: bookingError } = await supabase
+          .from('class_bookings')
+          .insert({
+            contact_id: contact.id,
+            class_schedule_id: targetClass.id,
+            booking_date: classDate.toISOString().split('T')[0], // YYYY-MM-DD format
+            status: 'confirmed',
+            notes: `Booked via AI SMS assistant`
+          });
+        
+        if (bookingError) {
+          console.error('Booking failed:', bookingError);
+          // Update the response message to indicate booking issue
+          responseMessage = `I'd love to book that class for you, but there was a technical issue. Please call us at (555) 123-4567 to complete your booking.`;
+        } else {
+          // Log successful booking
+          await supabase
+            .from('automation_logs')
+            .insert({
+              business_id: contact.business_id,
+              automation_type: 'class_booking',
+              status: 'success',
+              error_message: `Class booked: ${targetClass.class_name} on ${classDate.toDateString()}`
+            });
+        }
+      }
+    }
 
     // Store AI response
     await supabase
