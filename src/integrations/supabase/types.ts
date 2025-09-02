@@ -423,6 +423,50 @@ export type Database = {
         }
         Relationships: []
       }
+      sms_config: {
+        Row: {
+          account_sid: string | null
+          auth_token: string | null
+          business_id: string | null
+          created_at: string | null
+          id: string
+          is_active: boolean | null
+          phone_number: string | null
+          provider: string | null
+          welcome_message: string | null
+        }
+        Insert: {
+          account_sid?: string | null
+          auth_token?: string | null
+          business_id?: string | null
+          created_at?: string | null
+          id?: string
+          is_active?: boolean | null
+          phone_number?: string | null
+          provider?: string | null
+          welcome_message?: string | null
+        }
+        Update: {
+          account_sid?: string | null
+          auth_token?: string | null
+          business_id?: string | null
+          created_at?: string | null
+          id?: string
+          is_active?: boolean | null
+          phone_number?: string | null
+          provider?: string | null
+          welcome_message?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "sms_config_business_id_fkey"
+            columns: ["business_id"]
+            isOneToOne: false
+            referencedRelation: "businesses"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       webhook_endpoints: {
         Row: {
           business_id: string
