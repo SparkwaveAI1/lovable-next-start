@@ -51,7 +51,24 @@ serve(async (req) => {
 
   try {
     console.log('=== PARSING REQUEST BODY ===');
-    const requestBody = await req.json();
+    
+    // Get raw request body first for debugging
+    const rawBody = await req.text();
+    console.log('Raw request body:', rawBody);
+    console.log('Raw body length:', rawBody.length);
+    console.log('Raw body type:', typeof rawBody);
+    
+    // Try to parse as JSON with better error handling
+    let requestBody;
+    try {
+      requestBody = JSON.parse(rawBody);
+      console.log('JSON parsing successful');
+    } catch (parseError) {
+      console.error('JSON parsing failed:', parseError.message);
+      console.error('Raw body content:', JSON.stringify(rawBody));
+      throw new Error(`Invalid JSON in request body: ${parseError.message}`);
+    }
+    
     console.log('Request body received:', { 
       hasTo: !!requestBody.to, 
       hasMessage: !!requestBody.message, 
