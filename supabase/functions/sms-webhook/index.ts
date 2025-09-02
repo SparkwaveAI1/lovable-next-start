@@ -94,10 +94,75 @@ serve(async (req) => {
       throw new Error(`Failed to store message: ${messageError.message}`);
     }
 
-    // For now, just respond with a simple acknowledgment
+    // Get conversation history for context
+    const { data: messageHistory, error: historyError } = await supabase
+      .from('sms_messages')
+      .select('direction, message')
+      .eq('thread_id', thread.id)
+      .order('created_at', { ascending: true })
+      .limit(10);
+
+    if (historyError) {
+      console.error('Failed to get message history:', historyError);
+    }
+
+    // Get business context and class schedule
+    const { data: business, error: businessError } = await supabase
+      .from('businesses')
+      .select('name')
+      .eq('id', contact.business_id)
+      .single();
+
+    const { data: classes, error: classError } = await supabase
+      .from('class_schedule')
+      .select('*')
+      .eq('business_id', contact.business_id)
+      .eq('is_active', true);
+
+    // Prepare conversation for AI
+    const conversationMessages = messageHistory?.map(msg => ({
+      role: msg.direction === 'inbound' ? 'user' : 'assistant',
+      content: msg.message
+    })) || [];
+
+    // Add the new message
+    conversationMessages.push({
+      role: 'user',
+      content: body
+    });
+
+    // Call AI service
+    const aiResponse = await fetch(`${Deno.env.get('SUPABASE_URL')}/functions/v1/ai-response`, {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')}`,
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({
+        messages: conversationMessages,
+        businessContext: business?.name || 'Fight Flow Academy',
+        classSchedule: classes || []
+      })
+    });
+
+    const aiResult = await aiResponse.json();
+    const responseMessage = aiResult.message || 'Thanks for your message! Someone will get back to you soon.';
+
+    // Store AI response
+    await supabase
+      .from('sms_messages')
+      .insert({
+        thread_id: thread.id,
+        contact_id: contact.id,
+        direction: 'outbound',
+        message: responseMessage,
+        ai_response: true
+      });
+
+    // Replace the TwiML response with AI-generated message
     const twimlResponse = `<?xml version="1.0" encoding="UTF-8"?>
       <Response>
-        <Message>Thanks for your message! Our AI assistant will respond shortly.</Message>
+        <Message>${responseMessage}</Message>
       </Response>`;
 
     return new Response(twimlResponse, {
