@@ -4,6 +4,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
+import { ContactDetail } from './ContactDetail';
 import { Search, Users } from 'lucide-react';
 
 interface Contact {
@@ -22,6 +23,7 @@ export function ContactsTable({ businessId }: { businessId: string }) {
   const [contacts, setContacts] = useState<Contact[]>([]);
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState('all');
+  const [selectedContactId, setSelectedContactId] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
@@ -81,6 +83,16 @@ export function ContactsTable({ businessId }: { businessId: string }) {
       word.charAt(0).toUpperCase() + word.slice(1)
     ).join(' ');
   };
+
+  // Show ContactDetail if a contact is selected
+  if (selectedContactId) {
+    return (
+      <ContactDetail 
+        contactId={selectedContactId} 
+        onBack={() => setSelectedContactId(null)} 
+      />
+    );
+  }
 
   return (
     <Card>
@@ -182,7 +194,11 @@ export function ContactsTable({ businessId }: { businessId: string }) {
                       {formatDate(contact.created_at)}
                     </td>
                     <td className="p-4">
-                      <Button variant="outline" size="sm">
+                      <Button 
+                        variant="outline" 
+                        size="sm"
+                        onClick={() => setSelectedContactId(contact.id)}
+                      >
                         View Details
                       </Button>
                     </td>
