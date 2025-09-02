@@ -6,6 +6,7 @@ import { StatsCard } from "@/components/StatsCard"
 import { getDashboardStats } from "@/lib/supabase"
 import { ActivityLog } from "@/components/ActivityLog"
 import { supabase } from "@/integrations/supabase/client"
+import { sendSMS } from '@/lib/smsService'
 // import { GoHighLevelConfig } from "@/components/GoHighLevelConfig"
 
 const Index = () => {
@@ -56,6 +57,22 @@ const Index = () => {
         console.error('Error storing contact:', error);
       } else {
         console.log('Contact stored successfully');
+        
+        // Send welcome SMS if phone number provided
+        if (contactForm.phone && selectedBusinessId) {
+          const smsResult = await sendSMS({
+            to: contactForm.phone,
+            message: 'Welcome to Fight Flow Academy! 🥋 Thanks for your interest. Reply SCHEDULE to book a free trial class, or call us at (555) 123-4567.',
+            businessId: selectedBusinessId
+          });
+          
+          if (smsResult.success) {
+            console.log('Welcome SMS sent successfully');
+          } else {
+            console.error('SMS sending failed:', smsResult.error);
+          }
+        }
+        
         // Clear form
         setContactForm({ fullName: '', email: '', phone: '', comments: '' });
       }
