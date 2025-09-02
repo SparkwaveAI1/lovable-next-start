@@ -38,12 +38,42 @@ function normalizePhoneNumber(phoneNumber: string): string | null {
 }
 
 serve(async (req) => {
+  // Add debug logging immediately at function start
+  console.log('=== SMS FUNCTION STARTED ===');
+  console.log('Request method:', req.method);
+  console.log('Request URL:', req.url);
+  console.log('Timestamp:', new Date().toISOString());
+  
   if (req.method === 'OPTIONS') {
+    console.log('Handling CORS preflight');
     return new Response('ok', { headers: corsHeaders });
   }
 
   try {
-    const { to, message, businessId } = await req.json();
+    console.log('=== PARSING REQUEST BODY ===');
+    const requestBody = await req.json();
+    console.log('Request body received:', { 
+      hasTo: !!requestBody.to, 
+      hasMessage: !!requestBody.message, 
+      hasBusinessId: !!requestBody.businessId 
+    });
+    
+    const { to, message, businessId } = requestBody;
+    console.log('Extracted parameters:', { to: to?.substring(0, 3) + '...', messageLength: message?.length });
+
+    console.log('=== CHECKING ENVIRONMENT VARIABLES ===');
+    const accountSid = Deno.env.get('TWILIO_ACCOUNT_SID');
+    const authToken = Deno.env.get('TWILIO_AUTH_TOKEN');
+    const fromNumber = Deno.env.get('TWILIO_PHONE_NUMBER');
+    
+    console.log('Environment check:', {
+      hasAccountSid: !!accountSid,
+      accountSidLength: accountSid?.length || 0,
+      hasAuthToken: !!authToken,
+      authTokenLength: authToken?.length || 0,
+      hasFromNumber: !!fromNumber,
+      fromNumber: fromNumber
+    });
 
     // Normalize phone number to E.164 format
     const normalizedPhone = normalizePhoneNumber(to);
@@ -55,10 +85,6 @@ serve(async (req) => {
     console.log(`Normalized phone: ${to} -> ${normalizedPhone}`);
 
     // Get Twilio credentials from environment
-    const accountSid = Deno.env.get('TWILIO_ACCOUNT_SID');
-    const authToken = Deno.env.get('TWILIO_AUTH_TOKEN');
-    const fromNumber = Deno.env.get('TWILIO_PHONE_NUMBER');
-
     if (!accountSid || !authToken || !fromNumber) {
       throw new Error('Twilio credentials not configured');
     }
@@ -102,3 +128,5 @@ serve(async (req) => {
     });
   }
 });
+
+// Deployment trigger: Updated with debug logging - v1.1
