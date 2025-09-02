@@ -34,8 +34,7 @@ export async function sendSMS(smsData: SMSMessage) {
       .insert({
         business_id: smsData.businessId,
         automation_type: 'sms',
-        status: 'completed',
-        details: `SMS sent to ${smsData.to}: ${smsData.message.substring(0, 50)}...`
+        status: 'success'
       });
 
     return { success: true, message: 'SMS logged successfully' };
@@ -48,7 +47,7 @@ export async function sendSMS(smsData: SMSMessage) {
       .insert({
         business_id: smsData.businessId,
         automation_type: 'sms',
-        status: 'failed',
+        status: 'error',
         error_message: error instanceof Error ? error.message : 'Unknown SMS error'
       });
 
