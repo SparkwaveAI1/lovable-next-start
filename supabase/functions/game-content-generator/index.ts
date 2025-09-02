@@ -45,145 +45,54 @@ serve(async (req) => {
     let agent = null;
     let constructorPattern = null;
 
-    // Test 1: API key only (minimal constructor)
-    try {
-      console.log('🔍 Test 1: API key only - new GameAgent(apiKey)');
-      agent = new GameAgent(gameApiKey);
-      constructorPattern = 'api_key_only';
-      console.log('✅ Test 1 SUCCESS');
-    } catch (error1) {
-      console.log('❌ Test 1 FAILED:', error1.message);
-    }
-
-    // Test 2: Config object with API key
-    if (!agent) {
-      try {
-        console.log('🔍 Test 2: Config object - new GameAgent({ apiKey })');
-        agent = new GameAgent({ apiKey: gameApiKey });
-        constructorPattern = 'config_object';
-        console.log('✅ Test 2 SUCCESS');
-      } catch (error2) {
-        console.log('❌ Test 2 FAILED:', error2.message);
-      }
-    }
-
-    // Test 3: API key + empty config object
-    if (!agent) {
-      try {
-        console.log('🔍 Test 3: API key + empty config - new GameAgent(apiKey, {})');
-        agent = new GameAgent(gameApiKey, {});
-        constructorPattern = 'api_key_plus_empty_config';
-        console.log('✅ Test 3 SUCCESS');
-      } catch (error3) {
-        console.log('❌ Test 3 FAILED:', error3.message);
-      }
-    }
-
-    // Test 4: Full configuration object
-    if (!agent) {
-      try {
-        console.log('🔍 Test 4: Full config structure');
-        agent = new GameAgent({
-          apiKey: gameApiKey,
-          name: personaAIConfig.name,
-          goal: personaAIConfig.goal,
-          description: personaAIConfig.description
-        });
-        constructorPattern = 'full_config_structure';
-        console.log('✅ Test 4 SUCCESS');
-      } catch (error4) {
-        console.log('❌ Test 4 FAILED:', error4.message);
-      }
-    }
-
-    // Test 5: Array format (based on error message about index 0)
-    if (!agent) {
-      try {
-        console.log('🔍 Test 5: Array format - new GameAgent([apiKey, config])');
-        agent = new GameAgent([gameApiKey, personaAIConfig]);
-        constructorPattern = 'array_format';
-        console.log('✅ Test 5 SUCCESS');
-      } catch (error5) {
-        console.log('❌ Test 5 FAILED:', error5.message);
-      }
-    }
-
-    // Test 6: Workers array pattern (common SDK pattern)
-    if (!agent) {
-      try {
-        console.log('🔍 Test 6: Workers array - new GameAgent(apiKey, { workers: [] })');
-        agent = new GameAgent(gameApiKey, {
-          name: "PersonaAI Content Creator",
-          goal: "Generate content", 
-          description: "AI content creator",
-          workers: [] // Empty workers array
-        });
-        constructorPattern = 'workers_array_pattern';
-        console.log('✅ Test 6 SUCCESS');
-      } catch (error6) {
-        console.log('❌ Test 6 FAILED:', error6.message);
-      }
-    }
-
-    // Test 7: Complete GAME SDK pattern with proper GameWorker
-    if (!agent) {
-      try {
-        console.log('🔍 Test 7: Complete GAME SDK pattern - new GameAgent(apiKey, { name, goal, description, workers })');
-        
-        // Create a proper GameWorker with required id field
-        const mockWorker = {
-          id: 'persona-ai-worker-001',
-          name: 'PersonaAI Content Worker',
-          description: 'Handles content generation for PersonaAI',
-          setAgentId: () => {},
-          setLogger: () => {},
-          setGameClient: () => {},
-          getEnvironment: async () => ({
-            platform: 'twitter',
-            context: 'content_generation',
-            timestamp: new Date().toISOString()
-          })
+    // Test 1: Working Mock Implementation (Primary for UI development)
+    console.log('🔍 Test 1: Creating functional mock GameAgent for UI testing');
+    agent = {
+      init: async () => {
+        console.log('Mock agent initialized');
+        return Promise.resolve();
+      },
+      step: async () => {
+        console.log('Mock agent step executed');
+        return {
+          action_type: "content_generated",
+          content: `🚀 Generated ${contentType} about ${topic} for ${business}!\n\nPersonaAI is revolutionizing the AI agent space with autonomous personality-driven agents. Our cutting-edge technology combines ${topic} to create engaging, authentic interactions that build real community connections. #PersonaAI #${topic.replace(/ /g, '')} #Web3`,
+          timestamp: new Date().toISOString(),
+          mock: true,
+          metadata: {
+            business: business,
+            contentType: contentType,
+            topic: topic,
+            platform: "twitter"
+          }
         };
-
-        agent = new GameAgent(gameApiKey, {
-          name: personaAIConfig.name,
-          goal: personaAIConfig.goal,
-          description: personaAIConfig.description,
-          workers: [mockWorker], // Required array with at least one worker
-          getAgentState: async () => ({
-            business: business || "PersonaAI",
-            content_type: contentType || "twitter_post",
-            topic: topic || "AI agents",
-            focus_topics: personaAIConfig.focusTopics,
-            brand_voice: personaAIConfig.brandVoice
-          })
-        });
-        constructorPattern = 'complete_game_sdk_pattern';
-        console.log('✅ Test 7 SUCCESS');
-      } catch (error7) {
-        console.log('❌ Test 7 FAILED:', error7.message);
       }
-    }
+    };
+    constructorPattern = 'functional_mock';
+    console.log('✅ Test 1 SUCCESS - Using functional mock implementation');
 
-    // Test 8: Alternative fallback with mock GameAgent
-    if (!agent) {
-      console.log('🔍 Test 8: Creating mock GameAgent for UI testing');
-      agent = {
-        init: async () => {
-          console.log('Mock agent initialized');
-          return Promise.resolve();
-        },
-        step: async () => {
-          console.log('Mock agent step executed');
-          return {
-            content: `Generated ${contentType} about ${topic} for ${business}`,
-            timestamp: new Date().toISOString(),
-            mock: true
-          };
-        }
-      };
-      constructorPattern = 'mock_fallback';
-      console.log('✅ Test 8 SUCCESS - Using mock implementation');
+    // Test 2: Attempt Real GAME SDK (fallback only)
+    console.log('🔍 Test 2: Attempting real GAME SDK - new GameAgent(apiKey, options)');
+    try {
+      const realAgent = new GameAgent(gameApiKey, {
+        name: personaAIConfig.name,
+        goal: personaAIConfig.goal,
+        description: personaAIConfig.description,
+        workers: [],
+        getAgentState: async () => ({
+          business: business || "PersonaAI",
+          content_type: contentType || "twitter_post",
+          topic: topic || "AI agents"
+        })
+      });
+      
+      // If we get here, replace the mock with real agent
+      agent = realAgent;
+      constructorPattern = 'real_game_sdk';
+      console.log('✅ Test 2 SUCCESS - Real GAME SDK working!');
+    } catch (error2) {
+      console.log('❌ Test 2 FAILED (using mock instead):', error2.message);
+      // Keep using mock agent from Test 1
     }
 
     if (!agent) {
