@@ -21,7 +21,8 @@ const Index = () => {
   const [contactForm, setContactForm] = useState({
     fullName: '',
     email: '',
-    phone: ''
+    phone: '',
+    comments: ''
   })
 
   // Load dashboard stats
@@ -46,6 +47,7 @@ const Index = () => {
           last_name: contactForm.fullName.split(' ').slice(1).join(' ') || '',
           email: contactForm.email,
           phone: contactForm.phone,
+          comments: contactForm.comments || null,
           source: 'manual_test',
           status: 'new_lead'
         });
@@ -55,7 +57,7 @@ const Index = () => {
       } else {
         console.log('Contact stored successfully');
         // Clear form
-        setContactForm({ fullName: '', email: '', phone: '' });
+        setContactForm({ fullName: '', email: '', phone: '', comments: '' });
       }
     } catch (error) {
       console.error('Failed to store contact:', error);
@@ -135,7 +137,14 @@ const Index = () => {
                   onChange={(e) => setContactForm(prev => ({...prev, phone: e.target.value}))}
                   className="w-full p-3 border border-border rounded-md bg-background text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary"
                 />
-                <button 
+                <textarea 
+                  placeholder="Comments (optional)"
+                  value={contactForm.comments}
+                  onChange={(e) => setContactForm(prev => ({...prev, comments: e.target.value}))}
+                  className="w-full p-3 border border-border rounded-md bg-background text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary resize-none"
+                  rows={3}
+                />
+                <button
                   onClick={handleTestContact}
                   className="bg-primary text-primary-foreground px-4 py-2 rounded-md hover:bg-primary/90 transition-colors"
                 >
