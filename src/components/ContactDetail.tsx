@@ -15,6 +15,7 @@ interface Contact {
   status: string;
   comments: string;
   created_at: string;
+  business_id: string;
 }
 
 interface SMSMessage {
@@ -43,6 +44,8 @@ export function ContactDetail({ contactId, onBack }: { contactId: string; onBack
   const [contact, setContact] = useState<Contact | null>(null);
   const [messages, setMessages] = useState<SMSMessage[]>([]);
   const [bookings, setBookings] = useState<ClassBooking[]>([]);
+  const [newMessage, setNewMessage] = useState('');
+  const [isSending, setIsSending] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
@@ -100,6 +103,54 @@ export function ContactDetail({ contactId, onBack }: { contactId: string; onBack
     }
 
     setIsLoading(false);
+  };
+
+  const sendManualMessage = async () => {
+    if (!newMessage.trim() || !contact?.phone) return;
+    
+    setIsSending(true);
+    
+    try {
+      // Call the send-sms Edge Function
+      const { data, error } = await supabase.functions.invoke('send-sms', {
+        body: {
+          to: contact.phone,
+          message: newMessage,
+          businessId: contact.business_id
+        }
+      });
+
+      if (error || !data.success) {
+        console.error('SMS sending failed:', error || data.error);
+        alert('Failed to send message. Please try again.');
+        return;
+      }
+
+      // Store the outbound message in conversation history
+      const { error: messageError } = await supabase
+        .from('sms_messages')
+        .insert({
+          contact_id: contactId,
+          direction: 'outbound',
+          message: newMessage,
+          ai_response: false
+        });
+
+      if (messageError) {
+        console.error('Failed to log message:', messageError);
+      }
+
+      // Clear the input and reload conversation
+      setNewMessage('');
+      loadContactDetails(); // Refresh to show the new message
+      
+      console.log('Manual SMS sent successfully');
+    } catch (error) {
+      console.error('Error sending SMS:', error);
+      alert('Error sending message. Please check your connection.');
+    } finally {
+      setIsSending(false);
+    }
   };
 
   const formatDate = (dateString: string) => {
@@ -227,7 +278,7 @@ export function ContactDetail({ contactId, onBack }: { contactId: string; onBack
                   >
                     <div className="flex justify-between items-start mb-1">
                       <span className="text-sm font-medium text-foreground">
-                        {msg.direction === 'inbound' ? 'Customer' : 'AI Assistant'}
+                        {msg.direction === 'inbound' ? 'Customer' : msg.ai_response ? 'AI Assistant' : 'Staff'}
                       </span>
                       <span className="text-xs text-muted-foreground">
                         {formatDate(msg.created_at)}
@@ -241,6 +292,34 @@ export function ContactDetail({ contactId, onBack }: { contactId: string; onBack
                     )}
                   </div>
                 ))}
+              </div>
+            )}
+            
+            {/* Manual Message Sending Interface */}
+            {contact.phone && (
+              <div className="mt-4 pt-4 border-t border-border">
+                <div className="space-y-3">
+                  <textarea
+                    placeholder="Type your message..."
+                    value={newMessage}
+                    onChange={(e) => setNewMessage(e.target.value)}
+                    className="w-full p-3 border border-input bg-background text-foreground rounded-md resize-none focus:outline-none focus:ring-2 focus:ring-ring placeholder:text-muted-foreground"
+                    rows={3}
+                    disabled={isSending}
+                  />
+                  <div className="flex justify-between items-center">
+                    <span className="text-sm text-muted-foreground">
+                      {newMessage.length}/160 characters
+                    </span>
+                    <Button
+                      onClick={sendManualMessage}
+                      disabled={!newMessage.trim() || isSending}
+                      className="bg-primary text-primary-foreground hover:bg-primary/90"
+                    >
+                      {isSending ? 'Sending...' : 'Send Message'}
+                    </Button>
+                  </div>
+                </div>
               </div>
             )}
           </CardContent>
