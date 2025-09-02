@@ -6,6 +6,38 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
 
+// Phone normalization function for E.164 format
+function normalizePhoneNumber(phoneNumber: string): string | null {
+  if (!phoneNumber) return null;
+  
+  // Remove all non-numeric characters
+  const digits = phoneNumber.replace(/\D/g, '');
+  
+  // Handle different digit lengths
+  let normalizedDigits = '';
+  
+  if (digits.length === 10) {
+    // 10 digits: assume US number, add country code
+    normalizedDigits = '1' + digits;
+  } else if (digits.length === 11 && digits.startsWith('1')) {
+    // 11 digits starting with 1: already has US country code
+    normalizedDigits = digits;
+  } else {
+    // Invalid length for US phone number
+    console.warn(`Invalid phone number format: ${phoneNumber}`);
+    return null;
+  }
+  
+  // Validate US phone number (must be 11 digits starting with 1)
+  if (normalizedDigits.length !== 11 || !normalizedDigits.startsWith('1')) {
+    console.warn(`Invalid US phone number: ${phoneNumber}`);
+    return null;
+  }
+  
+  // Return E.164 format with + prefix
+  return '+' + normalizedDigits;
+}
+
 // GoHighLevel API Integration
 interface GoHighLevelContact {
   leadName: string;
@@ -256,37 +288,113 @@ serve(async (req: Request) => {
       const contactData = requestBody.data?.contact || {};
       const formData = requestBody.data || requestBody;
       
-      // Get name from contact data or form fields
+      // Check for duplicate submission using submissionId
+      const submissionId = formData.submissionId;
+      if (submissionId) {
+        const { data: existingSubmission } = await supabase
+          .from('automation_logs')
+          .select('id')
+          .eq('business_id', endpoint.business_id)
+          .eq('automation_type', 'wix_to_ghl')
+          .contains('source_data', { data: { submissionId } })
+          .single();
+        
+        if (existingSubmission) {
+          console.log(`Duplicate submission detected: ${submissionId} - skipping processing`);
+          return new Response(
+            JSON.stringify({ 
+              success: true, 
+              message: 'Duplicate submission - already processed',
+              submissionId 
+            }),
+            { 
+              status: 200, 
+              headers: { ...corsHeaders, 'Content-Type': 'application/json' } 
+            }
+          );
+        }
+      }
+      
+      // PRIORITY REVERSAL: Check form fields FIRST, then fall back to contact data
+      
+      // Get name - prioritize form field data over contact data
       let leadName = 'Unknown';
-      if (contactData.name?.first || contactData.name?.last) {
-        leadName = `${contactData.name.first || ''} ${contactData.name.last || ''}`.trim();
+      let nameSource = 'default';
+      
+      // Check form field data first (field:comp-l3j29uvu = first name, field:comp-l3j29uw8 = last name)
+      const formFirstName = formData['field:comp-l3j29uvu'] || '';
+      const formLastName = formData['field:comp-l3j29uw8'] || '';
+      
+      if (formFirstName || formLastName) {
+        leadName = `${formFirstName} ${formLastName}`.trim();
+        nameSource = 'form_fields';
       } else if (formData.name || formData.fullName) {
         leadName = formData.name || formData.fullName;
+        nameSource = 'form_data';
+      } else if (contactData.name?.first || contactData.name?.last) {
+        leadName = `${contactData.name.first || ''} ${contactData.name.last || ''}`.trim();
+        nameSource = 'contact_data';
       }
       
-      // Get email - try contact data first, then form fields
+      // Get email - prioritize form field data over contact data  
       let leadEmail = '';
-      if (contactData.email) {
-        leadEmail = contactData.email;
-      } else if (contactData.emails && contactData.emails.length > 0) {
-        // Use primary email or first email
-        const primaryEmail = contactData.emails.find(e => e.primary) || contactData.emails[0];
-        leadEmail = primaryEmail.email;
+      let emailSource = 'none';
+      
+      // Check form field data first (field:comp-l3j29uwg = email)
+      if (formData['field:comp-l3j29uwg']) {
+        leadEmail = formData['field:comp-l3j29uwg'];
+        emailSource = 'form_field';
       } else if (formData.email) {
         leadEmail = formData.email;
+        emailSource = 'form_data';
+      } else if (contactData.email) {
+        leadEmail = contactData.email;
+        emailSource = 'contact_direct';
+      } else if (contactData.emails && contactData.emails.length > 0) {
+        const primaryEmail = contactData.emails.find(e => e.primary) || contactData.emails[0];
+        leadEmail = primaryEmail.email;
+        emailSource = 'contact_array';
       }
       
-      // Get phone - try contact data first, then form fields
+      // Get phone - prioritize form field data over contact data
       let leadPhone = '';
-      if (contactData.phone) {
-        leadPhone = contactData.phone;
-      } else if (contactData.phones && contactData.phones.length > 0) {
-        // Use primary phone or first phone
-        const primaryPhone = contactData.phones.find(p => p.primary) || contactData.phones[0];
-        leadPhone = primaryPhone.phone || primaryPhone.formattedPhone;
+      let phoneSource = 'none';
+      
+      // Check form field data first (field:comp-l3j29uwo = phone)
+      if (formData['field:comp-l3j29uwo']) {
+        leadPhone = formData['field:comp-l3j29uwo'];
+        phoneSource = 'form_field';
       } else if (formData.phone) {
         leadPhone = formData.phone;
+        phoneSource = 'form_data';
+      } else if (contactData.phone) {
+        leadPhone = contactData.phone;
+        phoneSource = 'contact_direct';
+      } else if (contactData.phones && contactData.phones.length > 0) {
+        const primaryPhone = contactData.phones.find(p => p.primary) || contactData.phones[0];
+        leadPhone = primaryPhone.phone || primaryPhone.formattedPhone;
+        phoneSource = 'contact_array';
       }
+      
+      // Normalize phone number to E.164 format
+      const originalPhone = leadPhone;
+      if (leadPhone) {
+        const normalizedPhone = normalizePhoneNumber(leadPhone);
+        if (normalizedPhone) {
+          leadPhone = normalizedPhone;
+          console.log(`Phone normalized: ${originalPhone} -> ${leadPhone}`);
+        } else {
+          console.warn(`Failed to normalize phone: ${originalPhone} - keeping original`);
+        }
+      }
+
+      // Enhanced logging to show data sources
+      console.log('Data extraction sources:', {
+        name: { value: leadName, source: nameSource },
+        email: { value: leadEmail, source: emailSource },
+        phone: { value: `${originalPhone} -> ${leadPhone}`, source: phoneSource },
+        submissionId: submissionId
+      });
 
       processedData = {
         leadName,
