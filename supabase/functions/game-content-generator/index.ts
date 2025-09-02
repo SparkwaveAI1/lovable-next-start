@@ -1,5 +1,6 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import "https://deno.land/x/xhr@0.1.0/mod.ts";
+import { GameAgent } from "https://esm.sh/@virtuals-protocol/game@0.1.14";
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -37,15 +38,38 @@ serve(async (req) => {
       brandVoice: "expert but accessible"
     };
 
-    // TODO: Initialize GAME agent here when SDK documentation is available
-    // const agent = new GameAgent(gameApiKey, personaAIConfig);
+    // Initialize GAME agent with PersonaAI configuration
+    console.log('Initializing GAME agent with config:', personaAIConfig);
     
-    // For now, return configuration verification
+    const agent = new GameAgent(gameApiKey, {
+      name: personaAIConfig.name,
+      goal: personaAIConfig.goal,
+      description: personaAIConfig.description,
+      getAgentState: async () => ({
+        business: business || "PersonaAI",
+        content_type: contentType || "twitter_post",
+        topic: topic || "AI agents",
+        focus_topics: personaAIConfig.focusTopics,
+        brand_voice: personaAIConfig.brandVoice
+      })
+    });
+
+    console.log('GAME agent created, initializing...');
+    
+    // Initialize and test the agent
+    await agent.init();
+    console.log('GAME agent initialized successfully');
+    
+    const testResult = await agent.step();
+    console.log('GAME agent step executed:', testResult);
+    
     return new Response(JSON.stringify({
       success: true,
-      message: "GAME client configured successfully",
+      message: "GAME agent initialized and tested successfully",
       config: personaAIConfig,
       apiKeyConfigured: true,
+      agentInitialized: true,
+      testResult: testResult,
       requestId: `game_${Date.now()}`
     }), {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' }

@@ -12,6 +12,8 @@ export interface GameContentResponse {
   message: string;
   config?: any;
   apiKeyConfigured?: boolean;
+  agentInitialized?: boolean;
+  testResult?: any;
   requestId?: string;
   error?: string;
 }
