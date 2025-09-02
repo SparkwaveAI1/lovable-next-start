@@ -5,6 +5,38 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
 
+// Phone normalization function for E.164 format
+function normalizePhoneNumber(phoneNumber: string): string | null {
+  if (!phoneNumber) return null;
+  
+  // Remove all non-numeric characters
+  const digits = phoneNumber.replace(/\D/g, '');
+  
+  // Handle different digit lengths
+  let normalizedDigits = '';
+  
+  if (digits.length === 10) {
+    // 10 digits: assume US number, add country code
+    normalizedDigits = '1' + digits;
+  } else if (digits.length === 11 && digits.startsWith('1')) {
+    // 11 digits starting with 1: already has US country code
+    normalizedDigits = digits;
+  } else {
+    // Invalid length for US phone number
+    console.warn(`Invalid phone number format: ${phoneNumber}`);
+    return null;
+  }
+  
+  // Validate US phone number (must be 11 digits starting with 1)
+  if (normalizedDigits.length !== 11 || !normalizedDigits.startsWith('1')) {
+    console.warn(`Invalid US phone number: ${phoneNumber}`);
+    return null;
+  }
+  
+  // Return E.164 format with + prefix
+  return '+' + normalizedDigits;
+}
+
 serve(async (req) => {
   if (req.method === 'OPTIONS') {
     return new Response('ok', { headers: corsHeaders });
@@ -12,6 +44,15 @@ serve(async (req) => {
 
   try {
     const { to, message, businessId } = await req.json();
+
+    // Normalize phone number to E.164 format
+    const normalizedPhone = normalizePhoneNumber(to);
+    
+    if (!normalizedPhone) {
+      throw new Error(`Invalid phone number format: ${to}`);
+    }
+    
+    console.log(`Normalized phone: ${to} -> ${normalizedPhone}`);
 
     // Get Twilio credentials from environment
     const accountSid = Deno.env.get('TWILIO_ACCOUNT_SID');
@@ -31,7 +72,7 @@ serve(async (req) => {
       },
       body: new URLSearchParams({
         From: fromNumber,
-        To: to,
+        To: normalizedPhone,
         Body: message
       })
     });
