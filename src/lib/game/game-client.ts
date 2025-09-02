@@ -1,16 +1,44 @@
-// GAME SDK client configuration
-// Note: API structure will be updated based on actual SDK documentation
+// GAME SDK client configuration - Secure Edge Function approach
+import { supabase } from '@/integrations/supabase/client';
 
-const GAME_API_KEY = process.env.GAME_API_KEY;
-
-if (!GAME_API_KEY) {
-  throw new Error("GAME_API_KEY environment variable is required");
+export interface GameContentRequest {
+  business: string;
+  contentType: string;
+  topic: string;
 }
 
-// Basic configuration for GAME SDK integration
-export const gameConfig = {
-  apiKey: GAME_API_KEY,
-  environment: "production"
-};
+export interface GameContentResponse {
+  success: boolean;
+  message: string;
+  config?: any;
+  apiKeyConfigured?: boolean;
+  requestId?: string;
+  error?: string;
+}
 
-export { GAME_API_KEY };
+export async function generateContent(
+  business: string, 
+  contentType: string, 
+  topic: string
+): Promise<GameContentResponse> {
+  try {
+    const { data, error } = await supabase.functions.invoke('game-content-generator', {
+      body: { business, contentType, topic }
+    });
+    
+    if (error) {
+      throw new Error(error.message);
+    }
+    
+    return data;
+  } catch (error) {
+    console.error('GAME client error:', error);
+    throw error;
+  }
+}
+
+// Basic configuration for frontend reference
+export const gameConfig = {
+  environment: "production",
+  edgeFunction: "game-content-generator"
+};

@@ -1,0 +1,64 @@
+import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
+import "https://deno.land/x/xhr@0.1.0/mod.ts";
+
+const corsHeaders = {
+  'Access-Control-Allow-Origin': '*',
+  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
+};
+
+serve(async (req) => {
+  // Handle CORS preflight requests
+  if (req.method === 'OPTIONS') {
+    return new Response(null, { headers: corsHeaders });
+  }
+
+  try {
+    const { business, contentType, topic } = await req.json();
+    
+    // Access API key securely in Edge Function
+    const gameApiKey = Deno.env.get('GAME_API_KEY');
+    
+    if (!gameApiKey) {
+      throw new Error('GAME_API_KEY not configured');
+    }
+
+    console.log('GAME API Key available:', !!gameApiKey);
+    console.log('Request parameters:', { business, contentType, topic });
+    
+    // PersonaAI agent configuration
+    const personaAIConfig = {
+      name: "PersonaAI Content Creator",
+      goal: "Generate engaging AI and crypto content that builds PersonaAI brand awareness and community engagement",
+      description: `Expert in AI technology, crypto markets, and personality-driven content. 
+      Focuses on PersonaAI's unique value proposition in the AI agent space. 
+      Creates content that educates about AI personas while building community trust.
+      Voice: Professional but approachable, technically accurate, community-focused.`,
+      focusTopics: ["AI agents", "crypto", "personality AI", "Virtuals Protocol"],
+      brandVoice: "expert but accessible"
+    };
+
+    // TODO: Initialize GAME agent here when SDK documentation is available
+    // const agent = new GameAgent(gameApiKey, personaAIConfig);
+    
+    // For now, return configuration verification
+    return new Response(JSON.stringify({
+      success: true,
+      message: "GAME client configured successfully",
+      config: personaAIConfig,
+      apiKeyConfigured: true,
+      requestId: `game_${Date.now()}`
+    }), {
+      headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+    });
+
+  } catch (error) {
+    console.error('GAME integration error:', error);
+    return new Response(JSON.stringify({
+      success: false,
+      error: error.message
+    }), {
+      status: 500,
+      headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+    });
+  }
+});
