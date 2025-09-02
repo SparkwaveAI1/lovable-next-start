@@ -6,6 +6,7 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { ContactDetail } from './ContactDetail';
 import { Search, Users } from 'lucide-react';
+import { formatToEasternCompact } from '@/lib/dateUtils';
 
 interface Contact {
   id: string;
@@ -69,13 +70,7 @@ export function ContactsTable({ businessId }: { businessId: string }) {
   };
 
   const formatDate = (dateString: string) => {
-    return new Date(dateString).toLocaleDateString('en-US', {
-      month: 'short',
-      day: 'numeric',
-      year: 'numeric',
-      hour: '2-digit',
-      minute: '2-digit'
-    });
+    return formatToEasternCompact(dateString);
   };
 
   const formatStatusLabel = (status: string) => {

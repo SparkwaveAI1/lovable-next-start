@@ -4,6 +4,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { ArrowLeft, MessageSquare, Calendar, User } from 'lucide-react';
+import { formatToEasternDateTime, formatToEasternDate } from '@/lib/dateUtils';
 
 interface Contact {
   id: string;
@@ -154,13 +155,7 @@ export function ContactDetail({ contactId, onBack }: { contactId: string; onBack
   };
 
   const formatDate = (dateString: string) => {
-    return new Date(dateString).toLocaleDateString('en-US', {
-      month: 'short',
-      day: 'numeric',
-      year: 'numeric',
-      hour: '2-digit',
-      minute: '2-digit'
-    });
+    return formatToEasternDateTime(dateString);
   };
 
   const formatStatusLabel = (status: string) => {
@@ -351,7 +346,7 @@ export function ContactDetail({ contactId, onBack }: { contactId: string; onBack
                       Instructor: {booking.class_schedule?.instructor}
                     </div>
                     <div className="text-sm text-muted-foreground">
-                      Date: {new Date(booking.booking_date).toLocaleDateString()}
+                      Date: {formatToEasternDate(booking.booking_date)}
                     </div>
                     <div className="text-sm text-muted-foreground">
                       Time: {booking.class_schedule?.start_time} - {booking.class_schedule?.end_time}

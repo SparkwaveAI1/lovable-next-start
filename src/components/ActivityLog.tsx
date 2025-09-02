@@ -4,6 +4,7 @@ import { Badge } from '@/components/ui/badge';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Skeleton } from '@/components/ui/skeleton';
 import { AlertCircle, CheckCircle, Clock } from 'lucide-react';
+import { formatToEasternCompact } from '@/lib/dateUtils';
 
 interface ActivityLogProps {
   businessId?: string;
@@ -30,7 +31,7 @@ export function ActivityLog({ businessId }: ActivityLogProps) {
   };
 
   const formatTimestamp = (timestamp: string) => {
-    return new Date(timestamp).toLocaleString();
+    return formatToEasternCompact(timestamp);
   };
 
   const getSourceDataSummary = (sourceData: any) => {
