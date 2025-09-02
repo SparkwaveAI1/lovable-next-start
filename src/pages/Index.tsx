@@ -7,6 +7,7 @@ import { getDashboardStats } from "@/lib/supabase"
 import { ActivityLog } from "@/components/ActivityLog"
 import { supabase } from "@/integrations/supabase/client"
 import { sendSMS } from '@/lib/smsService'
+import { ContactsTable } from '@/components/ContactsTable'
 // import { GoHighLevelConfig } from "@/components/GoHighLevelConfig"
 
 const Index = () => {
@@ -169,6 +170,13 @@ const Index = () => {
                 </button>
               </div>
             </div>
+          </div>
+        )}
+
+        {/* Contacts Management - Show when business is selected */}
+        {selectedBusinessId && (
+          <div className="mb-8">
+            <ContactsTable businessId={selectedBusinessId} />
           </div>
         )}
 
