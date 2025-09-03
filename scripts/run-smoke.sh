@@ -1,0 +1,19 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+# Ensure we're at repo root (where package.json lives)
+if [ ! -f "package.json" ]; then
+  echo "✖ Run this from the project root (where package.json is)."
+  exit 1
+fi
+
+# Require GAME_API_KEY
+if [ "${GAME_API_KEY:-}" = "" ]; then
+  echo "✖ GAME_API_KEY is not set. Export it or use: GAME_API_KEY=gam_xxx scripts/run-smoke.sh"
+  exit 1
+fi
+
+# Run the smoke test via tsx without needing package.json scripts
+# -y auto-installs tsx to a temp cache if not already present
+echo "▶ Running GAME SDK smoke test..."
+npx -y tsx scripts/game/smoke.ts
