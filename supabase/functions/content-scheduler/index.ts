@@ -111,25 +111,42 @@ Deno.serve(async (req) => {
 
           // Validate minimal inputs to avoid noisy logs
           if (!platform || !["twitter", "discord", "telegram"].includes(platform)) {
-            console.log(JSON.stringify({ level: "warn", op: "hash", id: item.id, msg: "invalid platform", platform: item.platform }));
+            console.error("hash-check error", {
+              businessId: item.business_id,
+              platform: item.platform,
+              err: "invalid platform"
+            });
           } else if (!whenISO) {
-            console.log(JSON.stringify({ level: "warn", op: "hash", id: item.id, msg: "missing when/scheduled_for" }));
+            console.error("hash-check error", {
+              businessId: item.business_id,
+              platform,
+              err: "missing when/scheduled_for"
+            });
           } else if (!text) {
-            console.log(JSON.stringify({ level: "warn", op: "hash", id: item.id, msg: "empty content" }));
+            console.error("hash-check error", {
+              businessId: item.business_id,
+              platform,
+              err: "empty content"
+            });
           } else {
             const hash = await contentHash(platform, text, whenISO);
-            console.log(JSON.stringify({
-              level: "info",
-              op: "hash",
-              id: item.id,
-              platform,
-              contentLength: text.length,
-              when: whenISO,
-              hash
-            }));
+            console.log(
+              JSON.stringify({
+                tag: "hash-check",
+                businessId: item.business_id,
+                platform,
+                scheduledFor: item.scheduled_for,
+                contentLength: item.content.length,
+                hash,
+              })
+            );
           }
         } catch (e) {
-          console.log(JSON.stringify({ level: "error", op: "hash", id: item?.id, err: String((e as Error)?.message || e) }));
+          console.error("hash-check error", {
+            businessId: item.business_id,
+            platform: item.platform,
+            err: e?.message || String(e),
+          });
         }
         // ─────────────────────────────────────────────────────────────────────────────
         
