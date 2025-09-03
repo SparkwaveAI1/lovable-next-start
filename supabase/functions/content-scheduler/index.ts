@@ -65,10 +65,14 @@ Deno.serve(async (req) => {
     }
   }
 
-  // GET /debug/next-hash
-  // Returns the next due scheduled_content row + its hash
+  // GET /debug/next-hash[?when=ISO][&content=...]
+  // Returns the next due scheduled_content row + its hash, and optionally an override-hash
   if (req.method === "GET" && new URL(req.url).pathname.endsWith("/debug/next-hash")) {
     try {
+      const url = new URL(req.url);
+      const whenOverride = url.searchParams.get("when") || "";
+      const contentOverride = url.searchParams.get("content") || "";
+
       const { data, error } = await supabase
         .from("scheduled_content")
         .select("*")
@@ -85,10 +89,34 @@ Deno.serve(async (req) => {
       }
 
       const row = data[0];
-      const hash = await contentHash(row.platform, row.content, row.scheduled_for);
+
+      // Base inputs from DB
+      const platform = (row.platform || "").toLowerCase();
+      const whenDb: string = String(row.scheduled_for ?? "");
+      const contentDb: string = String(row.content ?? "");
+
+      // Compute DB hash
+      const hashDb = await contentHash(platform as any, contentDb, whenDb);
+
+      // Optionally compute override hash
+      const effectiveWhen = whenOverride || whenDb;
+      const effectiveContent = contentOverride || contentDb;
+      const hasOverride = Boolean(whenOverride || contentOverride);
+
+      const hashOverride = hasOverride
+        ? await contentHash(platform as any, effectiveContent, effectiveWhen)
+        : null;
 
       return new Response(
-        JSON.stringify({ ok: true, rowId: row.id, platform: row.platform, when: row.scheduled_for, hash }),
+        JSON.stringify({
+          ok: true,
+          rowId: row.id,
+          platform,
+          db: { when: whenDb, contentLength: contentDb.length, hash: hashDb },
+          override: hasOverride
+            ? { when: effectiveWhen, contentLength: effectiveContent.length, hash: hashOverride }
+            : null,
+        }),
         { status: 200, headers: { "Content-Type": "application/json" } }
       );
     } catch (e: any) {
