@@ -513,6 +513,59 @@ export type Database = {
         }
         Relationships: []
       }
+      scheduled_content: {
+        Row: {
+          business_id: string | null
+          content: string
+          content_type: string
+          created_at: string | null
+          error_message: string | null
+          id: string
+          metadata: Json | null
+          platform: string
+          posted_at: string | null
+          scheduled_for: string
+          status: string | null
+          topic: string | null
+        }
+        Insert: {
+          business_id?: string | null
+          content: string
+          content_type: string
+          created_at?: string | null
+          error_message?: string | null
+          id?: string
+          metadata?: Json | null
+          platform: string
+          posted_at?: string | null
+          scheduled_for: string
+          status?: string | null
+          topic?: string | null
+        }
+        Update: {
+          business_id?: string | null
+          content?: string
+          content_type?: string
+          created_at?: string | null
+          error_message?: string | null
+          id?: string
+          metadata?: Json | null
+          platform?: string
+          posted_at?: string | null
+          scheduled_for?: string
+          status?: string | null
+          topic?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "scheduled_content_business_id_fkey"
+            columns: ["business_id"]
+            isOneToOne: false
+            referencedRelation: "businesses"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       sms_config: {
         Row: {
           account_sid: string | null
