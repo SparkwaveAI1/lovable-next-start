@@ -71,27 +71,35 @@ serve(async (req) => {
     constructorPattern = 'functional_mock';
     console.log('✅ Test 1 SUCCESS - Using functional mock implementation');
 
-    // Test 2: Attempt Real GAME SDK (fallback only)
-    console.log('🔍 Test 2: Attempting real GAME SDK - new GameAgent(apiKey, options)');
+    // Test 2: Official GAME SDK Constructor Pattern
+    console.log('=== OFFICIAL GAME SDK CONSTRUCTOR PATTERN ===');
+    console.log('Creating GameAgent with official pattern...');
     try {
       const realAgent = new GameAgent(gameApiKey, {
-        name: personaAIConfig.name,
-        goal: personaAIConfig.goal,
-        description: personaAIConfig.description,
-        workers: [],
+        name: "PersonaAI Content Creator",
+        goal: "Generate engaging AI and crypto content that builds PersonaAI brand awareness and community engagement", 
+        description: `Expert in AI technology, crypto markets, and personality-driven content. 
+        Focuses on PersonaAI's unique value proposition in the AI agent space. 
+        Creates content that educates about AI personas while building community trust.
+        Voice: Professional but approachable, technically accurate, community-focused.`,
         getAgentState: async () => ({
           business: business || "PersonaAI",
-          content_type: contentType || "twitter_post",
-          topic: topic || "AI agents"
-        })
+          content_type: contentType || "twitter_post", 
+          topic: topic || "AI agents",
+          focus_topics: ["AI agents", "crypto", "personality AI", "Virtuals Protocol"],
+          brand_voice: "expert but accessible"
+        }),
+        workers: [] // Start with empty workers array
       });
+
+      console.log('✅ GameAgent created successfully with official pattern');
       
       // If we get here, replace the mock with real agent
       agent = realAgent;
-      constructorPattern = 'real_game_sdk';
-      console.log('✅ Test 2 SUCCESS - Real GAME SDK working!');
+      constructorPattern = 'official_sdk_pattern';
+      console.log('✅ Test 2 SUCCESS - Official GAME SDK pattern working!');
     } catch (error2) {
-      console.log('❌ Test 2 FAILED (using mock instead):', error2.message);
+      console.log('❌ Official constructor failed:', error2.message);
       // Keep using mock agent from Test 1
     }
 
