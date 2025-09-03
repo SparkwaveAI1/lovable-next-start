@@ -38,7 +38,10 @@ async function main() {
 export default main;
 
 // Allow running via `tsx scripts/game/smoke.ts`
-if (require.main === undefined) {
-  // ESM under tsx has no require.main; still call main to keep behavior consistent.
-  main().catch((e) => { console.error(e); process.exit(1); });
+const isDirectRun = typeof require === "undefined" ? true : require.main === module;
+if (isDirectRun) {
+  main().catch((e) => {
+    console.error(e);
+    process.exit(1);
+  });
 }
