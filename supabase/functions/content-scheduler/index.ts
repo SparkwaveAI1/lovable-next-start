@@ -65,6 +65,40 @@ Deno.serve(async (req) => {
     }
   }
 
+  // GET /debug/next-hash
+  // Returns the next due scheduled_content row + its hash
+  if (req.method === "GET" && new URL(req.url).pathname.endsWith("/debug/next-hash")) {
+    try {
+      const { data, error } = await supabase
+        .from("scheduled_content")
+        .select("*")
+        .eq("status", "scheduled")
+        .order("scheduled_for", { ascending: true })
+        .limit(1);
+
+      if (error) throw error;
+      if (!data || data.length === 0) {
+        return new Response(JSON.stringify({ ok: false, msg: "no scheduled items" }), {
+          status: 200,
+          headers: { "Content-Type": "application/json" },
+        });
+      }
+
+      const row = data[0];
+      const hash = await contentHash(row.platform, row.content, row.scheduled_for);
+
+      return new Response(
+        JSON.stringify({ ok: true, rowId: row.id, platform: row.platform, when: row.scheduled_for, hash }),
+        { status: 200, headers: { "Content-Type": "application/json" } }
+      );
+    } catch (e: any) {
+      return new Response(JSON.stringify({ ok: false, error: e?.message || String(e) }), {
+        status: 500,
+        headers: { "Content-Type": "application/json" },
+      });
+    }
+  }
+
   try {
     console.log('=== Content Scheduler Job Starting ===');
     
