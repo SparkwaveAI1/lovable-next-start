@@ -1,4 +1,5 @@
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.56.0';
+import { contentHash } from "../_shared/crypto.ts";
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -28,6 +29,40 @@ Deno.serve(async (req) => {
   // Handle CORS preflight requests
   if (req.method === 'OPTIONS') {
     return new Response(null, { headers: corsHeaders });
+  }
+
+  // DEBUG: compute content hash without any side effects
+  // GET /debug/hash?platform=twitter&content=Hello%20World&when=2025-09-03T12:00:00.000Z
+  if (req.method === "GET" && new URL(req.url).pathname.endsWith("/debug/hash")) {
+    const url = new URL(req.url);
+    const platform = (url.searchParams.get("platform") || "").toLowerCase() as
+      | "twitter"
+      | "discord"
+      | "telegram";
+    const content = url.searchParams.get("content") || "";
+    const when = url.searchParams.get("when") || "";
+
+    const bad = (msg: string, code = 400) =>
+      new Response(JSON.stringify({ ok: false, error: msg }), {
+        status: code,
+        headers: { "Content-Type": "application/json" },
+      });
+
+    if (!platform || !["twitter", "discord", "telegram"].includes(platform)) {
+      return bad("platform must be one of twitter|discord|telegram");
+    }
+    if (!content) return bad("content is required");
+    if (!when) return bad("when (ISO date) is required");
+
+    try {
+      const hash = await contentHash(platform, content, when);
+      return new Response(
+        JSON.stringify({ ok: true, platform, contentLength: content.length, when, hash }),
+        { status: 200, headers: { "Content-Type": "application/json" } }
+      );
+    } catch (e: any) {
+      return bad(`hash error: ${e?.message || String(e)}`, 500);
+    }
   }
 
   try {
