@@ -103,6 +103,36 @@ Deno.serve(async (req) => {
       for (const item of dueContent) {
         console.log(`Processing content item: ${item.id}`);
         
+        // ─── DRY RUN: compute and log idempotency hash only ──────────────────────────
+        try {
+          const platform = (item.platform || "").toLowerCase() as "twitter" | "discord" | "telegram";
+          const whenISO = (item.scheduled_for ?? item.scheduledFor ?? item.when ?? "").toString();
+          const text = String(item.content ?? "");
+
+          // Validate minimal inputs to avoid noisy logs
+          if (!platform || !["twitter", "discord", "telegram"].includes(platform)) {
+            console.log(JSON.stringify({ level: "warn", op: "hash", id: item.id, msg: "invalid platform", platform: item.platform }));
+          } else if (!whenISO) {
+            console.log(JSON.stringify({ level: "warn", op: "hash", id: item.id, msg: "missing when/scheduled_for" }));
+          } else if (!text) {
+            console.log(JSON.stringify({ level: "warn", op: "hash", id: item.id, msg: "empty content" }));
+          } else {
+            const hash = await contentHash(platform, text, whenISO);
+            console.log(JSON.stringify({
+              level: "info",
+              op: "hash",
+              id: item.id,
+              platform,
+              contentLength: text.length,
+              when: whenISO,
+              hash
+            }));
+          }
+        } catch (e) {
+          console.log(JSON.stringify({ level: "error", op: "hash", id: item?.id, err: String((e as Error)?.message || e) }));
+        }
+        // ─────────────────────────────────────────────────────────────────────────────
+        
         try {
           // Get business configuration for GAME posting
           const businessConfig = getBusinessConfigById(item.business_id);
