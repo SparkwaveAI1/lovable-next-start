@@ -477,6 +477,60 @@ export type Database = {
           },
         ]
       }
+      generated_tweets: {
+        Row: {
+          business_id: string | null
+          content: string
+          created_at: string | null
+          engagement_data: Json | null
+          id: string
+          image_urls: string[] | null
+          posted_at: string | null
+          scheduled_for: string | null
+          session_id: string | null
+          status: string | null
+        }
+        Insert: {
+          business_id?: string | null
+          content: string
+          created_at?: string | null
+          engagement_data?: Json | null
+          id?: string
+          image_urls?: string[] | null
+          posted_at?: string | null
+          scheduled_for?: string | null
+          session_id?: string | null
+          status?: string | null
+        }
+        Update: {
+          business_id?: string | null
+          content?: string
+          created_at?: string | null
+          engagement_data?: Json | null
+          id?: string
+          image_urls?: string[] | null
+          posted_at?: string | null
+          scheduled_for?: string | null
+          session_id?: string | null
+          status?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "generated_tweets_business_id_fkey"
+            columns: ["business_id"]
+            isOneToOne: false
+            referencedRelation: "businesses"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "generated_tweets_session_id_fkey"
+            columns: ["session_id"]
+            isOneToOne: false
+            referencedRelation: "twitter_content_sessions"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       ghl_configurations: {
         Row: {
           api_key: string | null
@@ -651,6 +705,79 @@ export type Database = {
             columns: ["thread_id"]
             isOneToOne: false
             referencedRelation: "conversation_threads"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      twitter_chat_messages: {
+        Row: {
+          content: string
+          created_at: string | null
+          id: string
+          image_url: string | null
+          message_type: string | null
+          metadata: Json | null
+          session_id: string | null
+        }
+        Insert: {
+          content: string
+          created_at?: string | null
+          id?: string
+          image_url?: string | null
+          message_type?: string | null
+          metadata?: Json | null
+          session_id?: string | null
+        }
+        Update: {
+          content?: string
+          created_at?: string | null
+          id?: string
+          image_url?: string | null
+          message_type?: string | null
+          metadata?: Json | null
+          session_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "twitter_chat_messages_session_id_fkey"
+            columns: ["session_id"]
+            isOneToOne: false
+            referencedRelation: "twitter_content_sessions"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      twitter_content_sessions: {
+        Row: {
+          business_id: string | null
+          created_at: string | null
+          id: string
+          session_name: string | null
+          status: string | null
+          updated_at: string | null
+        }
+        Insert: {
+          business_id?: string | null
+          created_at?: string | null
+          id?: string
+          session_name?: string | null
+          status?: string | null
+          updated_at?: string | null
+        }
+        Update: {
+          business_id?: string | null
+          created_at?: string | null
+          id?: string
+          session_name?: string | null
+          status?: string | null
+          updated_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "twitter_content_sessions_business_id_fkey"
+            columns: ["business_id"]
+            isOneToOne: false
+            referencedRelation: "businesses"
             referencedColumns: ["id"]
           },
         ]
