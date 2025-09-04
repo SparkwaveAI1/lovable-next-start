@@ -6,6 +6,7 @@ import { BrowserRouter, Routes, Route } from "react-router-dom";
 import Index from "./pages/Index";
 import NotFound from "./pages/NotFound";
 import ContentCenter from "./pages/ContentCenter";
+import CharXTwitter from "./pages/CharXTwitter";
 import GameTestInterface from "./components/GameTestInterface";
 
 const queryClient = new QueryClient();
@@ -19,6 +20,7 @@ const App = () => (
         <Routes>
           <Route path="/" element={<Index />} />
           <Route path="/content-center" element={<ContentCenter />} />
+          <Route path="/charx-twitter" element={<CharXTwitter />} />
           <Route path="/game-test" element={<GameTestInterface />} />
           {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
           <Route path="*" element={<NotFound />} />

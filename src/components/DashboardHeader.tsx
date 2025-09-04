@@ -32,14 +32,24 @@ export function DashboardHeader({ selectedBusinessId, onBusinessChange }: Dashbo
             />
           </div>
 
-          {/* Right side - Actions */}
-          <div className="flex items-center gap-2">
-            <Button variant="ghost" size="sm">
-              <Bell className="h-4 w-4" />
-            </Button>
-            <Button variant="ghost" size="sm">
-              <Settings className="h-4 w-4" />
-            </Button>
+          {/* Right side - Navigation & Actions */}
+          <div className="flex items-center gap-4">
+            <nav className="flex items-center gap-4">
+              <a
+                href="/charx-twitter"
+                className="text-sm font-medium text-muted-foreground hover:text-foreground transition-colors"
+              >
+                CharX Twitter
+              </a>
+            </nav>
+            <div className="flex items-center gap-2">
+              <Button variant="ghost" size="sm">
+                <Bell className="h-4 w-4" />
+              </Button>
+              <Button variant="ghost" size="sm">
+                <Settings className="h-4 w-4" />
+              </Button>
+            </div>
           </div>
         </div>
       </div>
