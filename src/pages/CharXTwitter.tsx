@@ -127,6 +127,153 @@ export default function CharXTwitter() {
     }
   };
 
+  // CharX-specific system prompt
+  const CHARX_SYSTEM_PROMPT = `You are a social media expert creating Twitter content for CharX World, an AI-powered platform for creating intelligent characters and immersive worlds.
+
+CharX World Features:
+- AI-powered character creation with psychological depth
+- Immersive world building capabilities  
+- Characters can reason, improvise, and co-create narratives
+- Applications: storytelling, creative media, historical education, role-playing
+- Built on advanced behavioral modeling technology
+- Optional crypto integration with ERC-6551 character ownership in Virtuals Protocol
+
+Your role:
+- Create engaging, informative tweets about CharX World
+- Focus on AI creativity, character development, storytelling, and world building
+- Use relevant hashtags: #CharXWorld #AICharacters #Storytelling #WorldBuilding #AICreativity #VirtualsProtocol
+- Keep tweets under 280 characters
+- Make content accessible to creators, educators, and AI enthusiasts
+- Highlight the creative potential and practical applications
+
+Tone: Innovative, creative, inspiring, tech-forward but approachable.
+
+When given images, describe how they relate to character creation, storytelling, or world building for tweet context.`;
+
+  // Upload image to Supabase storage
+  const uploadImage = async (file: File): Promise<string | null> => {
+    try {
+      const fileExt = file.name.split('.').pop();
+      const fileName = `${Date.now()}-${Math.random().toString(36).substring(2)}.${fileExt}`;
+      const filePath = `charx-twitter/${fileName}`;
+
+      const { error: uploadError } = await supabase.storage
+        .from('twitter-content')
+        .upload(filePath, file);
+
+      if (uploadError) throw uploadError;
+
+      const { data } = supabase.storage
+        .from('twitter-content')
+        .getPublicUrl(filePath);
+
+      return data.publicUrl;
+    } catch (error) {
+      console.error('Error uploading image:', error);
+      toast.error('Failed to upload image');
+      return null;
+    }
+  };
+
+  // Save message to database
+  const saveMessage = async (
+    sessionId: string,
+    messageType: 'user' | 'assistant',
+    content: string,
+    imageUrl?: string
+  ) => {
+    try {
+      const { data, error } = await supabase
+        .from('twitter_chat_messages')
+        .insert({
+          session_id: sessionId,
+          message_type: messageType,
+          content,
+          image_url: imageUrl || null
+        })
+        .select()
+        .single();
+
+      if (error) throw error;
+      return data;
+    } catch (error) {
+      console.error('Error saving message:', error);
+      toast.error('Failed to save message');
+      return null;
+    }
+  };
+
+  // Generate AI response using OpenAI
+  const generateAIResponse = async (userMessage: string, imageUrl?: string) => {
+    try {
+      const response = await supabase.functions.invoke('generate-tweet-content', {
+        body: {
+          userMessage,
+          imageUrl,
+          systemPrompt: CHARX_SYSTEM_PROMPT
+        }
+      });
+
+      if (response.error) throw response.error;
+      return response.data.content;
+    } catch (error) {
+      console.error('Error generating AI response:', error);
+      toast.error('Failed to generate AI response');
+      return 'Sorry, I encountered an error generating content. Please try again.';
+    }
+  };
+
+  // Main message sending function
+  const handleSendMessage = async () => {
+    if (!currentSession || (!currentMessage.trim() && !selectedImage)) return;
+
+    setIsLoading(true);
+    let imageUrl: string | null = null;
+
+    try {
+      // Upload image if selected
+      if (selectedImage) {
+        imageUrl = await uploadImage(selectedImage);
+        if (!imageUrl) {
+          setIsLoading(false);
+          return;
+        }
+      }
+
+      // Save user message
+      const userMessage = await saveMessage(
+        currentSession,
+        'user',
+        currentMessage,
+        imageUrl || undefined
+      );
+
+      if (userMessage) {
+        setMessages(prev => [...prev, userMessage as ChatMessage]);
+      }
+
+      // Clear input
+      setCurrentMessage('');
+      clearImage();
+
+      // Generate AI response
+      const aiContent = await generateAIResponse(currentMessage, imageUrl || undefined);
+
+      // Save AI response
+      const aiMessage = await saveMessage(currentSession, 'assistant', aiContent);
+
+      if (aiMessage) {
+        setMessages(prev => [...prev, aiMessage as ChatMessage]);
+      }
+
+    } catch (error) {
+      console.error('Error sending message:', error);
+      toast.error('Failed to send message');
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
   return (
     <div className="container mx-auto p-6 max-w-6xl">
       <div className="mb-6">
@@ -256,17 +403,15 @@ export default function CharXTwitter() {
                       onKeyPress={(e) => {
                         if (e.key === 'Enter' && !e.shiftKey) {
                           e.preventDefault();
-                          // handleSendMessage(); // We'll implement this next
+                          handleSendMessage();
                         }
                       }}
                       className="flex-1"
                     />
 
                     <Button
-                      onClick={() => {
-                        // handleSendMessage(); // We'll implement this next
-                      }}
-                      disabled={isLoading || !currentMessage.trim()}
+                      onClick={handleSendMessage}
+                      disabled={isLoading || (!currentMessage.trim() && !selectedImage)}
                     >
                       <Send className="h-4 w-4" />
                     </Button>
