@@ -14,4 +14,5 @@ if [ "${GAME_API_KEY:-}" = "" ]; then
 fi
 
 echo "▶ Running GAME SDK smoke test..."
+# -y auto-installs tsx to a temp cache if not present
 npx -y tsx scripts/game/smoke.ts
