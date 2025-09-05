@@ -6,7 +6,7 @@ async function main() {
 
   const echoWorker = new GameWorker({
     id: "echo",
-    name: "Echo Worker", 
+    name: "Echo Worker",
     description: "Returns your message",
     functions: [
       new GameFunction({
@@ -31,14 +31,18 @@ async function main() {
   });
 
   await agent.init();
-  const res = await agent.step({ workerId: "echo", fn: "echo", args: { message: "hello-game" } });
+  const res = await agent.step({
+    workerId: "echo",
+    fn: "echo",
+    args: { message: "hello-game" },
+  });
   console.log("SMOKE RESULT:", JSON.stringify(res));
 }
 
 export default main;
 
 // Allow running via `tsx scripts/game/smoke.ts`
-const isDirectRun = typeof require === "undefined" ? true : require.main === module;
+const isDirectRun = typeof require === "undefined" ? true : (require as any).main === module;
 if (isDirectRun) {
   main().catch((e) => {
     console.error(e);
