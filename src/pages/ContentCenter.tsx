@@ -25,6 +25,10 @@ const ContentCenter = () => {
   const [activeTab, setActiveTab] = useState('preview');
   const [scheduledContent, setScheduledContent] = useState<any[]>([]);
   const [loadingScheduled, setLoadingScheduled] = useState(false);
+  const [editingTweet, setEditingTweet] = useState<{id: string, content: string, scheduled_for: string} | null>(null);
+  const [editContent, setEditContent] = useState('');
+  const [editDate, setEditDate] = useState('');
+  const [editTime, setEditTime] = useState('');
   const { toast } = useToast();
 
   const businesses = [
@@ -180,6 +184,85 @@ const ContentCenter = () => {
     }
   };
 
+  const handleDeleteScheduledTweet = async (tweetId: string) => {
+    try {
+      const { error } = await supabase
+        .from('scheduled_content')
+        .delete()
+        .eq('id', tweetId);
+
+      if (error) throw error;
+
+      toast({
+        title: "Tweet Deleted",
+        description: "Scheduled tweet has been removed"
+      });
+
+      // Reload scheduled content
+      loadScheduledContent();
+    } catch (error) {
+      toast({
+        title: "Delete Failed",
+        description: "Failed to delete scheduled tweet",
+        variant: "destructive"
+      });
+    }
+  };
+
+  const startEditingTweet = (tweet: any) => {
+    const scheduledDate = new Date(tweet.scheduled_for);
+    setEditingTweet({
+      id: tweet.id,
+      content: tweet.content,
+      scheduled_for: tweet.scheduled_for
+    });
+    setEditContent(tweet.content);
+    setEditDate(scheduledDate.toISOString().split('T')[0]);
+    setEditTime(scheduledDate.toTimeString().slice(0, 5));
+  };
+
+  const handleUpdateScheduledTweet = async () => {
+    if (!editingTweet || !editContent.trim() || !editDate || !editTime) {
+      toast({
+        title: "Missing Information",
+        description: "Please fill in all fields",
+        variant: "destructive"
+      });
+      return;
+    }
+
+    const updatedDateTime = new Date(`${editDate}T${editTime}`);
+
+    try {
+      const { error } = await supabase
+        .from('scheduled_content')
+        .update({
+          content: editContent,
+          scheduled_for: updatedDateTime.toISOString()
+        })
+        .eq('id', editingTweet.id);
+
+      if (error) throw error;
+
+      toast({
+        title: "Tweet Updated",
+        description: "Scheduled tweet has been updated"
+      });
+
+      setEditingTweet(null);
+      setEditContent('');
+      setEditDate('');
+      setEditTime('');
+      loadScheduledContent();
+    } catch (error) {
+      toast({
+        title: "Update Failed",
+        description: "Failed to update scheduled tweet",
+        variant: "destructive"
+      });
+    }
+  };
+
   // Load scheduled content when Schedule tab is opened
   useEffect(() => {
     if (activeTab === 'schedule') {
@@ -188,6 +271,54 @@ const ContentCenter = () => {
   }, [activeTab]);
 
   const selectedBusinessConfig = businesses.find(b => b.id === selectedBusiness);
+
+  const EditModal = () => (
+    <Dialog open={!!editingTweet} onOpenChange={() => setEditingTweet(null)}>
+      <DialogContent>
+        <DialogHeader>
+          <DialogTitle>Edit Scheduled Tweet</DialogTitle>
+        </DialogHeader>
+        <div className="space-y-4">
+          <div>
+            <label className="text-sm font-medium">Tweet Content</label>
+            <Textarea
+              value={editContent}
+              onChange={(e) => setEditContent(e.target.value)}
+              rows={4}
+              className="mt-1"
+            />
+            <div className="text-xs text-muted-foreground mt-1">
+              {editContent.length}/280 characters
+            </div>
+          </div>
+          <div className="grid grid-cols-2 gap-4">
+            <div>
+              <label className="text-sm font-medium">Date</label>
+              <Input
+                type="date"
+                value={editDate}
+                onChange={(e) => setEditDate(e.target.value)}
+                className="mt-1"
+              />
+            </div>
+            <div>
+              <label className="text-sm font-medium">Time</label>
+              <Input
+                type="time"
+                value={editTime}
+                onChange={(e) => setEditTime(e.target.value)}
+                className="mt-1"
+              />
+            </div>
+          </div>
+          <div className="flex gap-2">
+            <Button onClick={handleUpdateScheduledTweet}>Update Tweet</Button>
+            <Button variant="outline" onClick={() => setEditingTweet(null)}>Cancel</Button>
+          </div>
+        </div>
+      </DialogContent>
+    </Dialog>
+  );
 
   const ScheduleModal = () => (
     <Dialog open={!!schedulingTweet} onOpenChange={() => setSchedulingTweet(null)}>
@@ -263,11 +394,19 @@ const ContentCenter = () => {
                     {item.topic && ` • Topic: ${item.topic}`}
                   </div>
                 </div>
-                <div className="flex gap-2 ml-4">
-                  <Button variant="outline" size="sm">
+                 <div className="flex gap-2 ml-4">
+                  <Button 
+                    variant="outline" 
+                    size="sm"
+                    onClick={() => startEditingTweet(item)}
+                  >
                     <Edit className="h-3 w-3" />
                   </Button>
-                  <Button variant="outline" size="sm">
+                  <Button 
+                    variant="outline" 
+                    size="sm"
+                    onClick={() => handleDeleteScheduledTweet(item.id)}
+                  >
                     <Trash2 className="h-3 w-3" />
                   </Button>
                 </div>
@@ -514,6 +653,9 @@ const ContentCenter = () => {
       
       {/* Schedule Modal */}
       <ScheduleModal />
+      
+      {/* Edit Modal */}
+      <EditModal />
     </div>
   );
 };
