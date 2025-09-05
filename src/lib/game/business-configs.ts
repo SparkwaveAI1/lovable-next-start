@@ -8,8 +8,20 @@ export interface BusinessConfig {
 }
 
 export const businessConfigs: Record<string, BusinessConfig> = {
-  personaai: {
-    name: "PersonaAI",
+  "fight-flow-academy": {
+    name: "Fight Flow Academy",
+    focus: ["martial arts", "fitness", "training", "personal development"],
+    voice: "Motivational, community-focused, expertise-driven",
+    platforms: ["twitter", "instagram", "youtube"],
+    description: `Martial arts and fitness expert focused on personal development and community building. 
+    Promotes physical training, mental discipline, and personal growth through martial arts.
+    Creates content that motivates and educates about fitness, training, and lifestyle.
+    Voice: Motivational, inspiring, community-focused, expertise-driven.`,
+    goal: "Generate motivational fitness and martial arts content that builds community and promotes personal growth"
+  },
+  
+  "persona-ai": {
+    name: "PersonaAI", 
     focus: ["AI agents", "behavioral research", "qualitative insights", "personality AI"],
     voice: "Expert but accessible, technically accurate, community-focused",
     platforms: ["twitter", "discord", "telegram"],
@@ -20,7 +32,7 @@ export const businessConfigs: Record<string, BusinessConfig> = {
     goal: "Generate engaging AI and crypto content that builds PersonaAI brand awareness and community engagement"
   },
   
-  charx: {
+  "charx-world": {
     name: "CharX World",
     focus: ["character creation", "storytelling", "world building", "digital personas"],
     voice: "Creative, imaginative, community-driven",
@@ -32,10 +44,10 @@ export const businessConfigs: Record<string, BusinessConfig> = {
     goal: "Create compelling character-driven content that inspires creativity and builds engaged storytelling communities"
   },
   
-  sparkwave: {
+  "sparkwave-ai": {
     name: "Sparkwave AI",
     focus: ["AI automation", "business solutions", "technical innovation", "productivity tools"],
-    voice: "Professional, authoritative, solution-oriented",
+    voice: "Professional, authoritative, solution-oriented", 
     platforms: ["twitter", "linkedin", "discord"],
     description: `Business AI automation and productivity expert. 
     Focuses on practical AI solutions that drive business value and operational efficiency.
