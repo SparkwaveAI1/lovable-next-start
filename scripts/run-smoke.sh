@@ -9,10 +9,9 @@ fi
 
 # Require GAME_API_KEY
 if [ "${GAME_API_KEY:-}" = "" ]; then
-  echo "✖ GAME_API_KEY is not set. Export it or use: GAME_API_KEY=gam_xxx bash scripts/run-smoke.sh"
+  echo "✖ GAME_API_KEY is not set. Use: GAME_API_KEY=gam_xxx bash scripts/run-smoke.sh"
   exit 1
 fi
 
 echo "▶ Running GAME SDK smoke test..."
-# -y auto-installs tsx to a temp cache if not present
 npx -y tsx scripts/game/smoke.ts
