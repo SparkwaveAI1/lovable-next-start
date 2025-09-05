@@ -1,4 +1,5 @@
 import { GameAgent, GameWorker, GameFunction } from "@virtuals-protocol/game";
+import { ensureGameResponse } from "../src/lib/game/response";
 
 async function main() {
   const apiKey = process.env.GAME_API_KEY;
@@ -13,10 +14,10 @@ async function main() {
         name: "echo",
         description: "Echo a message",
         args: [{ name: "message", type: "string", description: "Text" }] as const,
-        executable: async ({ message }) => ({
-          ok: true,
-          result: { echoed: message, ts: Date.now(), platform: "game-sdk-test" },
-        }),
+        executable: async ({ message }: { message: string }) => {
+          const payload = { echoed: message, ts: Date.now(), platform: "game-sdk-test" };
+          return ensureGameResponse({ ok: true as const, result: payload });
+        },
       }),
     ],
     getEnvironment: async () => ({ env: "local-smoke" }),

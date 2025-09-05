@@ -1,4 +1,5 @@
 import { GameWorker, GameFunction } from "@virtuals-protocol/game";
+import { ensureGameResponse } from "../response";
 
 /**
  * Real Twitter worker skeleton using GAME SDK types.
@@ -18,7 +19,7 @@ export function createTwitterWorker() {
           { name: "text", type: "string", description: "Tweet body (<= 280 chars)" },
           // Future: media attachments, reply-to, etc.
         ] as const,
-        executable: async ({ text }) => {
+        executable: async ({ text }: { text: string }) => {
           // Guardrails: length check up front (kept here to avoid platform surprises)
           if (typeof text !== "string" || text.length === 0) {
             throw new Error("text is required");
