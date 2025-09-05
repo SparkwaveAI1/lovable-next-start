@@ -1,5 +1,5 @@
-import { useState } from "react";
-import { Sparkles, FileText, Send, Calendar, TrendingUp } from "lucide-react";
+import { useState, useEffect } from "react";
+import { Sparkles, FileText, Send, Calendar, TrendingUp, RefreshCw, Edit, Trash2 } from "lucide-react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -22,6 +22,9 @@ const ContentCenter = () => {
   const [schedulingTweet, setSchedulingTweet] = useState<{tweet: string, index: number} | null>(null);
   const [scheduleDate, setScheduleDate] = useState('');
   const [scheduleTime, setScheduleTime] = useState('');
+  const [activeTab, setActiveTab] = useState('preview');
+  const [scheduledContent, setScheduledContent] = useState<any[]>([]);
+  const [loadingScheduled, setLoadingScheduled] = useState(false);
   const { toast } = useToast();
 
   const businesses = [
@@ -155,6 +158,35 @@ const ContentCenter = () => {
     }
   };
 
+  const loadScheduledContent = async () => {
+    setLoadingScheduled(true);
+    try {
+      const { data, error } = await supabase
+        .from('scheduled_content')
+        .select('*')
+        .eq('status', 'scheduled')
+        .order('scheduled_for', { ascending: true });
+
+      if (error) throw error;
+      setScheduledContent(data || []);
+    } catch (error) {
+      toast({
+        title: "Loading Failed",
+        description: "Failed to load scheduled content",
+        variant: "destructive"
+      });
+    } finally {
+      setLoadingScheduled(false);
+    }
+  };
+
+  // Load scheduled content when Schedule tab is opened
+  useEffect(() => {
+    if (activeTab === 'schedule') {
+      loadScheduledContent();
+    }
+  }, [activeTab]);
+
   const selectedBusinessConfig = businesses.find(b => b.id === selectedBusiness);
 
   const ScheduleModal = () => (
@@ -195,6 +227,56 @@ const ContentCenter = () => {
         </div>
       </DialogContent>
     </Dialog>
+  );
+
+  const ScheduleTabContent = () => (
+    <div className="space-y-4">
+      <div className="flex justify-between items-center">
+        <h3 className="text-lg font-semibold">Scheduled Content</h3>
+        <Button onClick={loadScheduledContent} variant="outline" size="sm">
+          <RefreshCw className="h-4 w-4 mr-2" />
+          Refresh
+        </Button>
+      </div>
+      
+      {loadingScheduled ? (
+        <div className="text-center py-8">Loading scheduled content...</div>
+      ) : scheduledContent.length === 0 ? (
+        <div className="text-center py-8 text-muted-foreground">
+          No scheduled content found. Create and schedule some tweets to see them here.
+        </div>
+      ) : (
+        <div className="space-y-3">
+          {scheduledContent.map((item) => (
+            <Card key={item.id} className="p-4">
+              <div className="flex justify-between items-start">
+                <div className="flex-1">
+                  <div className="flex items-center gap-2 mb-2">
+                    <Badge variant="outline">
+                      {businesses.find(b => getBusinessId(b.id) === item.business_id)?.name || 'Unknown Business'}
+                    </Badge>
+                    <Badge variant="secondary">{item.platform}</Badge>
+                  </div>
+                  <p className="text-sm mb-2">{item.content}</p>
+                  <div className="text-xs text-muted-foreground">
+                    Scheduled: {new Date(item.scheduled_for).toLocaleString()}
+                    {item.topic && ` • Topic: ${item.topic}`}
+                  </div>
+                </div>
+                <div className="flex gap-2 ml-4">
+                  <Button variant="outline" size="sm">
+                    <Edit className="h-3 w-3" />
+                  </Button>
+                  <Button variant="outline" size="sm">
+                    <Trash2 className="h-3 w-3" />
+                  </Button>
+                </div>
+              </div>
+            </Card>
+          ))}
+        </div>
+      )}
+    </div>
   );
 
   return (
@@ -320,7 +402,7 @@ const ContentCenter = () => {
 
           {/* Content Preview and Management */}
           <div className="lg:col-span-2">
-            <Tabs defaultValue="preview" className="space-y-4">
+            <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-4">
               <TabsList className="grid w-full grid-cols-3">
                 <TabsTrigger value="preview">Preview</TabsTrigger>
                 <TabsTrigger value="schedule">Schedule</TabsTrigger>
@@ -395,16 +477,14 @@ const ContentCenter = () => {
                   <CardHeader>
                     <CardTitle className="flex items-center gap-2">
                       <Calendar className="h-5 w-5" />
-                      Content Scheduling
+                      Scheduled Content
                     </CardTitle>
                     <CardDescription>
-                      Schedule your content for optimal engagement
+                      View and manage your scheduled content
                     </CardDescription>
                   </CardHeader>
-                  <CardContent className="text-center py-12 text-muted-foreground">
-                    <Calendar className="h-12 w-12 mx-auto mb-4 opacity-50" />
-                    <p>Scheduling features coming soon</p>
-                    <p className="text-sm">Set optimal posting times for each platform</p>
+                  <CardContent>
+                    <ScheduleTabContent />
                   </CardContent>
                 </Card>
               </TabsContent>
