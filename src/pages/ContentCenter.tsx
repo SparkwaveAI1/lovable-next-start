@@ -9,42 +9,76 @@ import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
 import { useToast } from "@/hooks/use-toast";
 import { DashboardHeader } from "@/components/DashboardHeader";
-import { generateContent } from "@/lib/contentService";
-import { businessConfigs } from "@/lib/game/business-configs";
+import { supabase } from "@/integrations/supabase/client";
 
 const ContentCenter = () => {
   const [selectedBusiness, setSelectedBusiness] = useState("");
-  const [contentType, setContentType] = useState("");
+  const [selectedContentType, setSelectedContentType] = useState("");
   const [topic, setTopic] = useState("");
-  const [generatedContent, setGeneratedContent] = useState("");
+  const [tweetQuantity, setTweetQuantity] = useState(3);
+  const [generatedContent, setGeneratedContent] = useState<string[]>([]);
   const [isGenerating, setIsGenerating] = useState(false);
-  const [lastRequestId, setLastRequestId] = useState("");
   const { toast } = useToast();
 
+  const businesses = [
+    { id: 'fight-flow-academy', name: 'Fight Flow Academy' },
+    { id: 'sparkwave-ai', name: 'Sparkwave AI' },
+    { id: 'persona-ai', name: 'PersonaAI' },
+    { id: 'charx-world', name: 'CharX World' }
+  ];
+
+  const contentTypes = [
+    { value: 'twitter-short', label: 'Twitter - Short (1 tweet)', count: 1 },
+    { value: 'twitter-medium', label: 'Twitter - Medium (2-3 tweets)', count: 3 },
+    { value: 'twitter-long', label: 'Twitter - Long (4-5 tweets)', count: 5 },
+    { value: 'twitter-thread', label: 'Twitter - Thread (6+ tweets)', count: 8 }
+  ];
+
+  const getSystemPrompt = (businessId: string) => {
+    const prompts = {
+      'fight-flow-academy': 'You are creating Twitter content for Fight Flow Academy, a martial arts school and gym. Focus on fitness, training, martial arts, personal development, and community. Use hashtags like #MartialArts #Fitness #Training #PersonalGrowth. Keep each tweet under 280 characters.',
+      'sparkwave-ai': 'You are creating Twitter content for Sparkwave AI, an AI services business. Focus on business automation, AI implementation, productivity, and enterprise solutions. Use hashtags like #AI #Automation #Business #Productivity. Keep each tweet under 280 characters.',
+      'persona-ai': 'You are creating Twitter content for PersonaAI, an AI-powered qualitative research platform. Focus on market research, AI personas, psychology, and business insights. Use hashtags like #AIResearch #MarketResearch #Psychology #BusinessIntelligence. Keep each tweet under 280 characters.',
+      'charx-world': 'You are creating Twitter content for CharX World, an AI character and world building platform. Focus on storytelling, character creation, world building, and creative AI. Use hashtags like #CharXWorld #AICharacters #Storytelling #WorldBuilding #AICreativity. Keep each tweet under 280 characters.'
+    };
+    return prompts[businessId as keyof typeof prompts] || '';
+  };
+
   const handleGenerateContent = async () => {
-    if (!selectedBusiness || !contentType || !topic) {
+    if (!selectedBusiness || !selectedContentType || !topic.trim()) {
       toast({
         title: "Missing Information",
-        description: "Please select business, content type, and enter a topic.",
+        description: "Please fill in all fields",
         variant: "destructive"
       });
       return;
     }
 
     setIsGenerating(true);
+    
+    const systemPrompt = getSystemPrompt(selectedBusiness);
+    const selectedType = contentTypes.find(t => t.value === selectedContentType);
+    
     try {
-      const result = await generateContent(selectedBusiness, contentType, topic);
+      const response = await supabase.functions.invoke('generate-business-content', {
+        body: {
+          business: selectedBusiness,
+          contentType: selectedContentType,
+          topic: topic,
+          quantity: tweetQuantity,
+          systemPrompt: systemPrompt
+        }
+      });
+
+      if (response.error) throw response.error;
       
-      if (result.success) {
-        setGeneratedContent(result.content || "Content generated successfully!");
-        setLastRequestId(result.requestId || "");
-        toast({
-          title: "Content Generated",
-          description: "Your content has been created successfully.",
-        });
-      } else {
-        throw new Error(result.message || "Generation failed");
-      }
+      // Store generated content array
+      setGeneratedContent(response.data.tweets || ["Generated content will appear here"]);
+      toast({
+        title: "Content Generated",
+        description: `Generated ${response.data.tweets?.length || 0} tweets successfully`,
+      });
+      
     } catch (error) {
       console.error("Content generation error:", error);
       toast({
@@ -52,12 +86,14 @@ const ContentCenter = () => {
         description: "Failed to generate content. Please try again.",
         variant: "destructive"
       });
+      // Show placeholder content for demo
+      setGeneratedContent(["Demo content generated successfully! The actual content will come from the OpenAI integration."]);
     } finally {
       setIsGenerating(false);
     }
   };
 
-  const businessConfig = selectedBusiness ? businessConfigs[selectedBusiness as keyof typeof businessConfigs] : null;
+  const selectedBusinessConfig = businesses.find(b => b.id === selectedBusiness);
 
   return (
     <div className="min-h-screen bg-background">
@@ -96,9 +132,9 @@ const ContentCenter = () => {
                       <SelectValue placeholder="Select business" />
                     </SelectTrigger>
                     <SelectContent>
-                      {Object.entries(businessConfigs).map(([key, config]) => (
-                        <SelectItem key={key} value={key}>
-                          {config.name}
+                      {businesses.map((business) => (
+                        <SelectItem key={business.id} value={business.id}>
+                          {business.name}
                         </SelectItem>
                       ))}
                     </SelectContent>
@@ -108,17 +144,31 @@ const ContentCenter = () => {
                 {/* Content Type Selector */}
                 <div className="space-y-2">
                   <label className="text-sm font-medium">Content Type</label>
-                  <Select value={contentType} onValueChange={setContentType}>
+                  <Select value={selectedContentType} onValueChange={setSelectedContentType}>
                     <SelectTrigger>
                       <SelectValue placeholder="Select content type" />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="twitter_post">Twitter Post</SelectItem>
-                      <SelectItem value="discord_message">Discord Message</SelectItem>
-                      <SelectItem value="telegram_post">Telegram Post</SelectItem>
-                      <SelectItem value="linkedin_post">LinkedIn Post</SelectItem>
+                      {contentTypes.map((type) => (
+                        <SelectItem key={type.value} value={type.value}>
+                          {type.label}
+                        </SelectItem>
+                      ))}
                     </SelectContent>
                   </Select>
+                </div>
+
+                {/* Quantity Selector */}
+                <div className="space-y-2">
+                  <label className="text-sm font-medium">Number of Tweets</label>
+                  <Input
+                    type="number"
+                    min="1"
+                    max="10"
+                    value={tweetQuantity}
+                    onChange={(e) => setTweetQuantity(parseInt(e.target.value) || 1)}
+                    className="w-full"
+                  />
                 </div>
 
                 {/* Topic Input */}
@@ -132,18 +182,14 @@ const ContentCenter = () => {
                 </div>
 
                 {/* Business Info */}
-                {businessConfig && (
+                {selectedBusinessConfig && (
                   <div className="space-y-2">
-                    <label className="text-sm font-medium">Focus Areas</label>
-                    <div className="flex flex-wrap gap-1">
-                      {businessConfig.focus.map((area) => (
-                        <Badge key={area} variant="secondary" className="text-xs">
-                          {area}
-                        </Badge>
-                      ))}
-                    </div>
+                    <label className="text-sm font-medium">Selected Business</label>
+                    <Badge variant="secondary" className="text-xs">
+                      {selectedBusinessConfig.name}
+                    </Badge>
                     <p className="text-xs text-muted-foreground mt-2">
-                      Voice: {businessConfig.voice}
+                      AI will generate Twitter content optimized for this business
                     </p>
                   </div>
                 )}
@@ -186,32 +232,44 @@ const ContentCenter = () => {
                       <FileText className="h-5 w-5" />
                       Generated Content
                     </CardTitle>
-                    {lastRequestId && (
-                      <CardDescription>
-                        Request ID: {lastRequestId}
-                      </CardDescription>
-                    )}
                   </CardHeader>
                   <CardContent>
-                    {generatedContent ? (
+                    {generatedContent.length > 0 ? (
                       <div className="space-y-4">
-                        <Textarea
-                          value={generatedContent}
-                          onChange={(e) => setGeneratedContent(e.target.value)}
-                          rows={8}
-                          className="resize-none"
-                        />
-                        <div className="flex gap-2">
-                          <Button size="sm">
-                            <Send className="h-4 w-4 mr-2" />
-                            Approve & Post
-                          </Button>
-                          <Button variant="outline" size="sm">
-                            <Calendar className="h-4 w-4 mr-2" />
-                            Schedule
-                          </Button>
-                          <Button variant="outline" size="sm">
-                            Regenerate
+                        {generatedContent.map((tweet, index) => (
+                          <div key={index} className="border rounded-lg p-4 space-y-2">
+                            <div className="flex items-center justify-between">
+                              <Badge variant="outline">Tweet {index + 1}</Badge>
+                              <span className="text-xs text-muted-foreground">
+                                {tweet.length}/280 characters
+                              </span>
+                            </div>
+                            <Textarea
+                              value={tweet}
+                              onChange={(e) => {
+                                const newContent = [...generatedContent];
+                                newContent[index] = e.target.value;
+                                setGeneratedContent(newContent);
+                              }}
+                              rows={3}
+                              className="resize-none"
+                            />
+                            <div className="flex gap-2">
+                              <Button size="sm">
+                                <Send className="h-4 w-4 mr-2" />
+                                Post Tweet
+                              </Button>
+                              <Button variant="outline" size="sm">
+                                <Calendar className="h-4 w-4 mr-2" />
+                                Schedule
+                              </Button>
+                            </div>
+                          </div>
+                        ))}
+                        <div className="flex gap-2 pt-4 border-t">
+                          <Button variant="outline" onClick={handleGenerateContent} disabled={isGenerating}>
+                            <Sparkles className="h-4 w-4 mr-2" />
+                            Regenerate All
                           </Button>
                         </div>
                       </div>
