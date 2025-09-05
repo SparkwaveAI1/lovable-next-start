@@ -7,6 +7,7 @@ import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { useToast } from "@/hooks/use-toast";
 import { DashboardHeader } from "@/components/DashboardHeader";
 import { supabase } from "@/integrations/supabase/client";
@@ -18,6 +19,9 @@ const ContentCenter = () => {
   const [tweetQuantity, setTweetQuantity] = useState(3);
   const [generatedContent, setGeneratedContent] = useState<string[]>([]);
   const [isGenerating, setIsGenerating] = useState(false);
+  const [schedulingTweet, setSchedulingTweet] = useState<{tweet: string, index: number} | null>(null);
+  const [scheduleDate, setScheduleDate] = useState('');
+  const [scheduleTime, setScheduleTime] = useState('');
   const { toast } = useToast();
 
   const businesses = [
@@ -93,7 +97,105 @@ const ContentCenter = () => {
     }
   };
 
+  const getBusinessId = (businessSlug: string) => {
+    // Generate a consistent UUID for each business - in real app this would come from database
+    const businessIds = {
+      'fight-flow-academy': 'a1b2c3d4-e5f6-7890-abcd-123456789abc',
+      'sparkwave-ai': 'b2c3d4e5-f6g7-8901-bcde-234567890def',
+      'persona-ai': 'c3d4e5f6-g7h8-9012-cdef-345678901efg',
+      'charx-world': 'd4e5f6g7-h8i9-0123-defg-456789012fgh'
+    };
+    return businessIds[businessSlug as keyof typeof businessIds] || businessSlug;
+  };
+
+  const handleScheduleTweet = async () => {
+    if (!schedulingTweet || !scheduleDate || !scheduleTime) {
+      toast({
+        title: "Missing Information",
+        description: "Please select date and time",
+        variant: "destructive"
+      });
+      return;
+    }
+
+    const scheduledDateTime = new Date(`${scheduleDate}T${scheduleTime}`);
+    
+    try {
+      // Save to existing scheduled_content table
+      const { error } = await supabase
+        .from('scheduled_content')
+        .insert({
+          business_id: getBusinessId(selectedBusiness),
+          content: schedulingTweet.tweet,
+          content_type: selectedContentType,
+          topic: topic,
+          platform: 'twitter',
+          scheduled_for: scheduledDateTime.toISOString(),
+          status: 'scheduled'
+        });
+
+      if (error) throw error;
+
+      toast({
+        title: "Tweet Scheduled",
+        description: `Tweet scheduled for ${scheduledDateTime.toLocaleString()}`
+      });
+
+      setSchedulingTweet(null);
+      setScheduleDate('');
+      setScheduleTime('');
+      
+    } catch (error) {
+      console.error("Scheduling error:", error);
+      toast({
+        title: "Scheduling Failed", 
+        description: "Failed to schedule tweet",
+        variant: "destructive"
+      });
+    }
+  };
+
   const selectedBusinessConfig = businesses.find(b => b.id === selectedBusiness);
+
+  const ScheduleModal = () => (
+    <Dialog open={!!schedulingTweet} onOpenChange={() => setSchedulingTweet(null)}>
+      <DialogContent>
+        <DialogHeader>
+          <DialogTitle>Schedule Tweet</DialogTitle>
+        </DialogHeader>
+        <div className="space-y-4">
+          <div>
+            <label className="text-sm font-medium">Tweet Content</label>
+            <Textarea value={schedulingTweet?.tweet || ''} readOnly rows={3} className="mt-1" />
+          </div>
+          <div className="grid grid-cols-2 gap-4">
+            <div>
+              <label className="text-sm font-medium">Date</label>
+              <Input 
+                type="date" 
+                value={scheduleDate}
+                onChange={(e) => setScheduleDate(e.target.value)}
+                className="mt-1"
+              />
+            </div>
+            <div>
+              <label className="text-sm font-medium">Time</label>
+              <Input 
+                type="time" 
+                value={scheduleTime}
+                onChange={(e) => setScheduleTime(e.target.value)}
+                className="mt-1"
+              />
+            </div>
+          </div>
+          <div className="flex gap-2">
+            <Button onClick={handleScheduleTweet}>Schedule Tweet</Button>
+            <Button variant="outline" onClick={() => setSchedulingTweet(null)}>Cancel</Button>
+          </div>
+        </div>
+      </DialogContent>
+    </Dialog>
+  );
 
   return (
     <div className="min-h-screen bg-background">
@@ -259,7 +361,11 @@ const ContentCenter = () => {
                                 <Send className="h-4 w-4 mr-2" />
                                 Post Tweet
                               </Button>
-                              <Button variant="outline" size="sm">
+                              <Button 
+                                variant="outline" 
+                                size="sm"
+                                onClick={() => setSchedulingTweet({tweet: tweet, index: index})}
+                              >
                                 <Calendar className="h-4 w-4 mr-2" />
                                 Schedule
                               </Button>
@@ -325,6 +431,9 @@ const ContentCenter = () => {
           </div>
         </div>
       </main>
+      
+      {/* Schedule Modal */}
+      <ScheduleModal />
     </div>
   );
 };
