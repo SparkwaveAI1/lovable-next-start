@@ -1,0 +1,4 @@
+SMOKE READY
+path: /Users/scottjohnson/character-genesis-temp
+date: 2025-01-05T21:30:00.000Z
+commit-will-follow: true
