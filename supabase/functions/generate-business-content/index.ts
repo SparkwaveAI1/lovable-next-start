@@ -22,18 +22,21 @@ serve(async (req) => {
     console.log(`Generating ${quantity} tweets for ${business} about: ${topic}`)
 
     // Create the prompt for generating multiple tweets
-    const userPrompt = `Generate exactly ${quantity} tweets about "${topic}". 
+    const userPrompt = `Generate exactly ${quantity} tweets about "${topic}".
+
+IMPORTANT: Return ONLY a clean JSON array of strings with no markdown formatting, no line numbers, no code blocks.
 
 Format requirements:
-- Return as a JSON array of strings
+- Return as: ["tweet 1", "tweet 2", "tweet 3"]
 - Each tweet must be under 280 characters
 - Include relevant hashtags for ${business}
 - Make each tweet unique and engaging
 - ${contentType.includes('thread') ? 'Structure as a cohesive thread with numbered tweets' : 'Each tweet should be standalone'}
+- NO markdown formatting (no \`\`\`json)
+- NO line numbers
+- Just the pure JSON array
 
-Topic: ${topic}
-
-Return format: ["tweet 1", "tweet 2", "tweet 3"]`
+Topic: ${topic}`
 
     const messages = [
       {
@@ -68,24 +71,72 @@ Return format: ["tweet 1", "tweet 2", "tweet 3"]`
     }
 
     const content = data.choices[0]?.message?.content || '[]'
-    console.log('Generated content:', content)
+    console.log('Raw OpenAI content:', content)
+
+    // Clean up the content first
+    let cleanedContent = content
+      // Remove markdown code blocks
+      .replace(/```json\s*/g, '')
+      .replace(/```\s*/g, '')
+      // Remove line numbers (like "1 ", "2 ", etc.)
+      .replace(/^\d+\s+/gm, '')
+      // Remove leading/trailing whitespace
+      .trim()
+
+    console.log('Cleaned content:', cleanedContent)
 
     // Try to parse as JSON array, fallback to splitting if needed
     let tweets
     try {
-      tweets = JSON.parse(content)
+      tweets = JSON.parse(cleanedContent)
       if (!Array.isArray(tweets)) {
         throw new Error('Not an array')
       }
-    } catch {
-      // Fallback: split by lines and clean up
-      tweets = content
-        .split('\n')
-        .filter(line => line.trim().length > 0)
-        .map(line => line.replace(/^\d+\.\s*/, '').replace(/^["']|["']$/g, '').trim())
-        .filter(tweet => tweet.length > 0)
-        .slice(0, quantity)
+    } catch (parseError) {
+      console.log('JSON parse failed, trying fallback parsing:', parseError)
+      
+      // Fallback: extract content between [ and ] first
+      const arrayMatch = cleanedContent.match(/\[(.*)\]/s)
+      if (arrayMatch) {
+        cleanedContent = '[' + arrayMatch[1] + ']'
+        try {
+          tweets = JSON.parse(cleanedContent)
+        } catch {
+          // Final fallback: split by lines and clean up
+          tweets = cleanedContent
+            .split('\n')
+            .filter(line => line.trim().length > 0)
+            .map(line => {
+              // Remove quotes, commas, brackets, and line numbers
+              return line
+                .replace(/^\d+\s*/, '') // Remove line numbers
+                .replace(/^["'\[\],-\s]+|["'\[\],-\s]+$/g, '') // Remove quotes, brackets, commas
+                .trim()
+            })
+            .filter(tweet => tweet.length > 20) // Only keep substantial tweets
+            .slice(0, quantity)
+        }
+      } else {
+        // Last resort: split by lines
+        tweets = cleanedContent
+          .split('\n')
+          .filter(line => line.trim().length > 20)
+          .slice(0, quantity)
+      }
     }
+
+    // Clean up individual tweets to remove any remaining quotes
+    tweets = tweets.map(tweet => {
+      if (typeof tweet === 'string') {
+        return tweet
+          .replace(/^["']+|["']+$/g, '') // Remove surrounding quotes
+          .replace(/^,\s*|,\s*$/g, '') // Remove leading/trailing commas
+          .trim()
+      }
+      return tweet
+    })
+
+    console.log('Final parsed tweets:', tweets)
 
     // Ensure we have the requested number of tweets
     if (tweets.length < quantity) {
