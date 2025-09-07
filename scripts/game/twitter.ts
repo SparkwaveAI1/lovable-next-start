@@ -1,36 +1,45 @@
+// scripts/game/twitter.ts
 import { GameAgent } from "@virtuals-protocol/game";
-import { createTwitterWorker } from "../../src/lib/game/workers/twitter";
+import { TWITTER_WORKER_ID, POST_TWEET_FN } from "../../src/lib/game/config";
+
+// NOTE: This script calls a *platform worker* on GAME.
+// No Twitter API keys are required. Only GAME_API_KEY is used.
 
 async function main() {
   const apiKey = process.env.GAME_API_KEY;
   if (!apiKey) throw new Error("Missing GAME_API_KEY");
 
-  const twitterWorker = createTwitterWorker();
-
   const agent = new GameAgent(apiKey, {
     name: "PersonaAI Twitter Agent",
-    goal: "Twitter smoke test",
-    description: "Verifies Twitter worker in Node",
-    getAgentState: async () => ({ mode: "twitter-smoke" }),
-    workers: [twitterWorker],
+    goal: "Post tweets through GAME platform",
+    description: "Calls the Virtuals (GAME) Twitter poster worker",
+    // No local workers here on purpose — we want the platform worker.
+    workers: [],
+    getAgentState: async () => ({ mode: "twitter-platform" }),
   });
 
   await agent.init();
-  const res = await agent.step({
-    workerId: "twitter-poster",
-    fn: "post_tweet",
-    args: { text: "hello from Twitter smoke test" },
+
+  // Example tweet text; in CI this is just a smoke. You can swap this
+  // to pull from a queue or scheduler later.
+  const text = "hello from GAME platform twitter smoke test";
+
+  // Call the platform worker function directly
+  const step = await agent.step({
+    workerId: TWITTER_WORKER_ID,   // <- platform worker id
+    fn: POST_TWEET_FN,            // <- platform function name
+    args: { text },               // <- GAME will handle Twitter posting
   });
-  console.log("RAW STEP RESULT:", JSON.stringify(res));
+
+  // Show whatever the platform returns so CI logs are useful
+  try {
+    console.log("TWITTER RESULT:", JSON.stringify(step));
+  } catch {
+    console.log("TWITTER RESULT (non-JSON):", String(step));
+  }
 }
 
-export default main;
-
-// Allow running via `tsx scripts/game/twitter.ts`
-const isDirectRun = typeof require === "undefined" ? true : (require as any).main === module;
-if (isDirectRun) {
-  main().catch((e) => {
-    console.error(e);
-    process.exit(1);
-  });
-}
+main().catch((e) => {
+  console.error(e);
+  process.exit(1);
+});
