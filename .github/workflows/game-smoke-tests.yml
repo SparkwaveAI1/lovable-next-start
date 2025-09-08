@@ -46,8 +46,8 @@ jobs:
       - name: Run twitter smoke
         env:
           GAME_API_KEY: ${{ secrets.GAME_API_KEY }}
-          TWITTER_WORKER_ID: twitter-poster   # replace with your real GAME worker id if different
-          POST_TWEET_FN: post_tweet           # replace if your function name differs
+          TWITTER_WORKER_ID: ${{ secrets.TWITTER_WORKER_ID }}
+          POST_TWEET_FN: ${{ secrets.POST_TWEET_FN }}
         run: |
           set -e
           echo "== Twitter Smoke =="
