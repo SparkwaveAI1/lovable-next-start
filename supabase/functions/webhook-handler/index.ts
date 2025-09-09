@@ -38,8 +38,24 @@ function normalizePhoneNumber(phoneNumber: string): string | null {
   return '+' + normalizedDigits;
 }
 
+// Welcome message helper function
+function getWelcomeMessage(businessName: string): string {
+  switch (businessName) {
+    case 'Fight Flow Academy':
+      return 'Welcome to Fight Flow Academy! Thanks for your interest in martial arts training. We\'ll be in touch soon to discuss your fitness goals. Reply STOP to opt-out.';
+    case 'Sparkwave AI':
+      return 'Welcome to Sparkwave AI! Thanks for reaching out about our automation services. We\'ll contact you soon to discuss your business needs. Reply STOP to opt-out.';
+    case 'PersonaAI':
+      return 'Welcome to PersonaAI! Thanks for your interest in AI market research. We\'ll be in touch about how we can help your business. Reply STOP to opt-out.';
+    case 'CharX World':
+      return 'Welcome to CharX World! Thanks for your interest in AI character building. We\'ll contact you soon to explore possibilities. Reply STOP to opt-out.';
+    default:
+      return 'Thank you for contacting us! We\'ll be in touch soon. Reply STOP to opt-out.';
+  }
+}
+
 // Direct contact creation function
-async function createContactDirectly(formData: any, businessId: string, supabase: any) {
+async function createContactDirectly(formData: any, businessId: string, businessData: any, supabase: any) {
   console.log('Creating contact directly in database...');
   
   const { data: contact, error: contactError } = await supabase
@@ -63,6 +79,85 @@ async function createContactDirectly(formData: any, businessId: string, supabase
   }
 
   console.log('Contact created successfully:', contact);
+
+  // Send welcome SMS if contact has phone number
+  if (contact.phone) {
+    try {
+      console.log('Attempting to send welcome SMS...');
+      
+      // Get SMS configuration for this business
+      const { data: smsConfig } = await supabase
+        .from('sms_config')
+        .select('*')
+        .eq('business_id', businessId)
+        .eq('is_active', true)
+        .single();
+
+      if (smsConfig && smsConfig.phone_number) {
+        // Create welcome message based on business
+        const welcomeMessage = getWelcomeMessage(businessData.name);
+        
+        console.log('Sending welcome SMS to:', contact.phone);
+        
+        // Send SMS using existing send-sms Edge Function
+        const smsResponse = await fetch(`${Deno.env.get('SUPABASE_URL')}/functions/v1/send-sms`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')}`
+          },
+          body: JSON.stringify({
+            to: contact.phone,
+            message: welcomeMessage,
+            businessId: businessId
+          })
+        });
+
+        const smsResult = await smsResponse.json();
+        console.log('SMS response:', smsResult);
+        
+        // Log SMS sending attempt
+        await supabase.from('automation_logs').insert({
+          business_id: businessId,
+          automation_type: 'sms_welcome_sent',
+          status: smsResponse.ok ? 'success' : 'error',
+          source_data: { contact_phone: contact.phone },
+          processed_data: { 
+            contact_id: contact.id,
+            phone: contact.phone,
+            message: welcomeMessage,
+            sms_result: smsResult
+          },
+          error_message: smsResponse.ok ? null : `SMS sending failed: ${smsResult.error || 'Unknown error'}`
+        });
+
+        console.log(`Welcome SMS ${smsResponse.ok ? 'sent successfully' : 'failed'} to ${contact.phone}`);
+      } else {
+        console.log('No SMS configuration found for business, skipping welcome SMS');
+      }
+    } catch (smsError) {
+      console.error('SMS sending failed:', smsError);
+      // Log SMS failure but don't fail the entire webhook
+      try {
+        await supabase.from('automation_logs').insert({
+          business_id: businessId,
+          automation_type: 'sms_welcome_sent',
+          status: 'error',
+          source_data: { contact_phone: contact.phone },
+          processed_data: { 
+            contact_id: contact.id,
+            error: smsError.message
+          },
+          error_message: `SMS sending failed: ${smsError.message}`
+        });
+      } catch (logError) {
+        console.error('Failed to log SMS error:', logError);
+      }
+    }
+  } else {
+    console.log('Contact has no phone number, skipping welcome SMS');
+  }
+
   return contact;
 }
 
@@ -266,7 +361,7 @@ serve(async (req: Request) => {
 
       // Create contact directly in database
       try {
-        const contact = await createContactDirectly(processedData, endpoint.business_id, supabase);
+        const contact = await createContactDirectly(processedData, endpoint.business_id, endpoint.businesses, supabase);
         console.log('Contact created successfully:', contact);
         processedData.contact_id = contact.id;
       } catch (error) {
