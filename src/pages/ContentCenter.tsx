@@ -40,10 +40,10 @@ const ContentCenter = () => {
   ];
 
   const contentTypes = [
-    { value: 'twitter-short', label: 'Twitter - Short (1 tweet)', count: 1 },
-    { value: 'twitter-medium', label: 'Twitter - Medium (2-3 tweets)', count: 3 },
-    { value: 'twitter-long', label: 'Twitter - Long (4-5 tweets)', count: 5 },
-    { value: 'twitter-thread', label: 'Twitter - Thread (6+ tweets)', count: 8 }
+    { value: 'short', label: 'Short (80-120 chars)', description: 'Concise and punchy' },
+    { value: 'medium', label: 'Medium (140-200 chars)', description: 'Standard tweet length' },
+    { value: 'long', label: 'Long (220-280 chars)', description: 'Near character limit' },
+    { value: 'thread', label: 'Thread', description: 'Multi-tweet story' }
   ];
 
   const getSystemPrompt = (businessId: string) => {
@@ -76,7 +76,8 @@ const ContentCenter = () => {
         body: {
           businessId: selectedBusiness,
           platform: 'twitter',
-          contentType: selectedContentType,
+          lengthPreset: selectedContentType,
+          quantity: tweetQuantity,
           topic: topic || undefined,
           keywords: [],
           tone: undefined
@@ -92,13 +93,11 @@ const ContentCenter = () => {
         return;
       }
 
-      if (data && data.success) {
-        // Store generated content - for now just the main content
-        // Later can enhance to include hashtags and CTA
-        setGeneratedContent([data.content]);
+      if (data && data.success && data.tweets) {
+        setGeneratedContent(data.tweets); // Now an array of actual tweets
         toast({
           title: "Content Generated",
-          description: "Content generated successfully!",
+          description: `Generated ${data.tweets.length} tweet(s) successfully!`,
         });
       } else {
         toast({
@@ -510,12 +509,12 @@ const ContentCenter = () => {
                   </Select>
                 </div>
 
-                {/* Content Type Selector */}
+                {/* Tweet Length Selector */}
                 <div className="space-y-2">
-                  <label className="text-sm font-medium">Content Type</label>
+                  <label className="text-sm font-medium">Tweet Length</label>
                   <Select value={selectedContentType} onValueChange={setSelectedContentType}>
                     <SelectTrigger>
-                      <SelectValue placeholder="Select content type" />
+                      <SelectValue placeholder="Select tweet length" />
                     </SelectTrigger>
                     <SelectContent>
                       {contentTypes.map((type) => (
@@ -525,6 +524,9 @@ const ContentCenter = () => {
                       ))}
                     </SelectContent>
                   </Select>
+                  <p className="text-xs text-muted-foreground">
+                    Controls the character length per tweet, not the number of tweets
+                  </p>
                 </div>
 
                 {/* Quantity Selector */}

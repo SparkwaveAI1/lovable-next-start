@@ -10,7 +10,9 @@ const corsHeaders = {
 interface ContentRequest {
   businessId: string;
   platform: string;
-  contentType: string;
+  contentType?: string; // Keep for backwards compatibility
+  lengthPreset?: 'short' | 'medium' | 'long' | 'thread';
+  quantity?: number;
   topic?: string;
   keywords?: string[];
   tone?: string;
@@ -31,11 +33,11 @@ serve(async (req) => {
     const request: ContentRequest = await req.json();
     
     // Validate required fields
-    if (!request.businessId || !request.platform || !request.contentType) {
+    if (!request.businessId || !request.platform) {
       return new Response(
         JSON.stringify({ 
           success: false, 
-          error: 'Missing required fields: businessId, platform, contentType' 
+          error: 'Missing required fields: businessId, platform' 
         }),
         { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 400 }
       );
@@ -71,8 +73,55 @@ serve(async (req) => {
       );
     }
 
-    // Build the prompt
-    const prompt = buildContentPrompt(request, agentConfig);
+    // Build length-specific prompt
+    const lengthConstraints = {
+      short: { min: 80, max: 120, description: 'concise and punchy' },
+      medium: { min: 140, max: 200, description: 'standard length' },
+      long: { min: 220, max: 280, description: 'near character limit' },
+      thread: { min: 150, max: 280, description: 'thread-appropriate' }
+    };
+
+    const lengthPreset = request.lengthPreset || 'medium';
+    const quantity = request.quantity || 1;
+    const constraint = lengthConstraints[lengthPreset] || lengthConstraints.medium;
+
+    // Build the generation prompt
+    let generationPrompt = '';
+
+    if (lengthPreset === 'thread') {
+      generationPrompt = `Generate a cohesive Twitter thread with exactly ${quantity} tweets.
+
+Requirements:
+- Each tweet must be ${constraint.min}-${constraint.max} characters
+- Number each tweet as "1/${quantity}", "2/${quantity}", etc.
+- Thread should tell a complete story or make a complete argument
+- Each tweet should work standalone but flow together
+- Include appropriate hashtags in the final tweet only
+- Topic: ${request.topic || 'engaging content for our audience'}
+
+Format: Return ONLY the tweets, one per line, numbered. No preamble, no explanations.
+
+Example format:
+1/${quantity} [First tweet content]
+2/${quantity} [Second tweet content]
+...`;
+    } else {
+      generationPrompt = `Generate exactly ${quantity} distinct tweets.
+
+Requirements:
+- Each tweet: ${constraint.min}-${constraint.max} characters (${constraint.description})
+- Each tweet must be complete and standalone
+- Include relevant hashtags (max ${agentConfig.contentGuidelines.hashtags.max})
+- Topic: ${request.topic || 'engaging content for our audience'}
+- Vary the approach (tips, questions, stories, insights)
+
+Format: Return ONLY the tweets, one per line, numbered. No preamble, no explanations.
+
+Example format:
+1. [First tweet content]
+2. [Second tweet content]
+...`;
+    }
 
     // Call OpenAI API
     const openaiApiKey = Deno.env.get('OPENAI_API_KEY');
@@ -97,9 +146,9 @@ serve(async (req) => {
         model: 'gpt-4o-mini',
         messages: [
           { role: 'system', content: agentConfig.systemPrompt },
-          { role: 'user', content: prompt }
+          { role: 'user', content: generationPrompt }
         ],
-        max_tokens: getMaxTokensForPlatform(request.platform),
+        max_tokens: 1000,
         temperature: 0.7
       })
     });
@@ -117,16 +166,44 @@ serve(async (req) => {
     }
 
     const data = await response.json();
-    const generatedContent = data.choices?.[0]?.message?.content || '';
+    const rawContent = data.choices?.[0]?.message?.content || '';
     
+    // Parse the numbered tweets
+    const tweetLines = rawContent.split('\n').filter(line => line.trim());
+    const tweets: string[] = [];
+
+    for (const line of tweetLines) {
+      // Remove numbering patterns like "1.", "1/5", "Tweet 1:", etc.
+      const cleaned = line
+        .replace(/^\d+[\.)]\s*/, '')           // Remove "1. " or "1) "
+        .replace(/^\d+\/\d+\s*/, '')           // Remove "1/5 "
+        .replace(/^Tweet\s+\d+:\s*/i, '')      // Remove "Tweet 1: "
+        .trim();
+      
+      if (cleaned && cleaned.length > 0) {
+        tweets.push(cleaned);
+      }
+    }
+
+    // Validate we got tweets
+    if (tweets.length === 0) {
+      return new Response(
+        JSON.stringify({ 
+          success: false, 
+          error: 'Failed to parse generated tweets' 
+        }),
+        { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 500 }
+      );
+    }
+
     // Structure the response
     const result = {
-      content: generatedContent,
-      hashtags: extractHashtags(generatedContent, agentConfig),
-      callToAction: selectCallToAction(agentConfig),
+      tweets: tweets.slice(0, quantity), // Ensure we only return requested quantity
       success: true,
       businessName: business.name,
-      platform: request.platform
+      platform: request.platform,
+      lengthPreset: lengthPreset,
+      quantity: tweets.length
     };
 
     return new Response(
