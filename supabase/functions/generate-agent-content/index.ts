@@ -1,3 +1,4 @@
+import "https://deno.land/x/xhr@0.1.0/mod.ts";
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
@@ -73,51 +74,55 @@ serve(async (req) => {
     // Build the prompt
     const prompt = buildContentPrompt(request, agentConfig);
 
-    // Call GAME API
-    const gameApiKey = Deno.env.get('GAME_API_KEY');
+    // Call OpenAI API
+    const openaiApiKey = Deno.env.get('OPENAI_API_KEY');
     
-    if (!gameApiKey) {
+    if (!openaiApiKey) {
       return new Response(
         JSON.stringify({ 
           success: false, 
-          error: 'GAME_API_KEY not configured' 
+          error: 'OPENAI_API_KEY not configured' 
         }),
         { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 500 }
       );
     }
 
-    const response = await fetch('https://api.game.io/v1/generate', {
+    const response = await fetch('https://api.openai.com/v1/chat/completions', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        'Authorization': `Bearer ${gameApiKey}`
+        'Authorization': `Bearer ${openaiApiKey}`
       },
       body: JSON.stringify({
-        agentId: agentConfig.businessId,
-        systemPrompt: agentConfig.systemPrompt,
-        prompt: prompt,
-        maxTokens: getMaxTokensForPlatform(request.platform),
+        model: 'gpt-4o-mini',
+        messages: [
+          { role: 'system', content: agentConfig.systemPrompt },
+          { role: 'user', content: prompt }
+        ],
+        max_tokens: getMaxTokensForPlatform(request.platform),
         temperature: 0.7
       })
     });
 
     if (!response.ok) {
       const errorText = await response.text();
+      console.error('OpenAI API error:', response.status, errorText);
       return new Response(
         JSON.stringify({ 
           success: false, 
-          error: `GAME API error: ${response.status} - ${errorText}` 
+          error: `OpenAI API error: ${response.status} - ${errorText}` 
         }),
         { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 500 }
       );
     }
 
     const data = await response.json();
+    const generatedContent = data.choices?.[0]?.message?.content || '';
     
     // Structure the response
     const result = {
-      content: data.content || data.text || '',
-      hashtags: extractHashtags(data.content || '', agentConfig),
+      content: generatedContent,
+      hashtags: extractHashtags(generatedContent, agentConfig),
       callToAction: selectCallToAction(agentConfig),
       success: true,
       businessName: business.name,

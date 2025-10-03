@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { Sparkles, FileText, Send, Calendar, TrendingUp, RefreshCw, Edit, Trash2 } from "lucide-react";
+import { Sparkles, FileText, Send, Calendar, TrendingUp, RefreshCw, Edit, Trash2, Rocket } from "lucide-react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -29,6 +29,7 @@ const ContentCenter = () => {
   const [editContent, setEditContent] = useState('');
   const [editDate, setEditDate] = useState('');
   const [editTime, setEditTime] = useState('');
+  const [postingTweet, setPostingTweet] = useState<number | null>(null);
   const { toast } = useToast();
 
   const businesses = [
@@ -275,6 +276,36 @@ const ContentCenter = () => {
         description: "Failed to update scheduled tweet",
         variant: "destructive"
       });
+    }
+  };
+
+  const handlePostNow = async (content: string, index: number) => {
+    setPostingTweet(index);
+
+    try {
+      const { data, error } = await supabase.functions.invoke('post-tweet', {
+        body: { content }
+      });
+
+      if (error) throw error;
+
+      if (data && data.success) {
+        toast({
+          title: "Tweet Posted!",
+          description: "Your tweet has been posted via GAME"
+        });
+      } else {
+        throw new Error(data?.error || 'Failed to post tweet');
+      }
+    } catch (error) {
+      console.error('Post error:', error);
+      toast({
+        title: "Post Failed",
+        description: error instanceof Error ? error.message : "Failed to post tweet",
+        variant: "destructive"
+      });
+    } finally {
+      setPostingTweet(null);
     }
   };
 
@@ -593,14 +624,28 @@ const ContentCenter = () => {
                               className="resize-none"
                             />
                             <div className="flex gap-2">
-                              <Button size="sm">
-                                <Send className="h-4 w-4 mr-2" />
-                                Post Tweet
+                              <Button 
+                                size="sm"
+                                onClick={() => handlePostNow(tweet, index)}
+                                disabled={postingTweet === index}
+                              >
+                                {postingTweet === index ? (
+                                  <>
+                                    <RefreshCw className="h-4 w-4 mr-2 animate-spin" />
+                                    Posting...
+                                  </>
+                                ) : (
+                                  <>
+                                    <Rocket className="h-4 w-4 mr-2" />
+                                    Post Now
+                                  </>
+                                )}
                               </Button>
                               <Button 
                                 variant="outline" 
                                 size="sm"
                                 onClick={() => setSchedulingTweet({tweet: tweet, index: index})}
+                                disabled={postingTweet === index}
                               >
                                 <Calendar className="h-4 w-4 mr-2" />
                                 Schedule
