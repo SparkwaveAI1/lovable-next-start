@@ -71,24 +71,41 @@ const ContentCenter = () => {
     const selectedType = contentTypes.find(t => t.value === selectedContentType);
     
     try {
-      const response = await supabase.functions.invoke('generate-business-content', {
+      const { data, error } = await supabase.functions.invoke('generate-agent-content', {
         body: {
-          business: selectedBusiness,
+          businessId: selectedBusiness,
+          platform: 'twitter',
           contentType: selectedContentType,
-          topic: topic,
-          quantity: tweetQuantity,
-          systemPrompt: systemPrompt
+          topic: topic || undefined,
+          keywords: [],
+          tone: undefined
         }
       });
 
-      if (response.error) throw response.error;
-      
-      // Store generated content array
-      setGeneratedContent(response.data.tweets || ["Generated content will appear here"]);
-      toast({
-        title: "Content Generated",
-        description: `Generated ${response.data.tweets?.length || 0} tweets successfully`,
-      });
+      if (error) {
+        toast({
+          title: "Generation Failed",
+          description: "Failed to generate content",
+          variant: "destructive"
+        });
+        return;
+      }
+
+      if (data && data.success) {
+        // Store generated content - for now just the main content
+        // Later can enhance to include hashtags and CTA
+        setGeneratedContent([data.content]);
+        toast({
+          title: "Content Generated",
+          description: "Content generated successfully!",
+        });
+      } else {
+        toast({
+          title: "Generation Failed",
+          description: data?.error || "Content generation failed",
+          variant: "destructive"
+        });
+      }
       
     } catch (error) {
       console.error("Content generation error:", error);
@@ -97,8 +114,6 @@ const ContentCenter = () => {
         description: "Failed to generate content. Please try again.",
         variant: "destructive"
       });
-      // Show placeholder content for demo
-      setGeneratedContent(["Demo content generated successfully! The actual content will come from the OpenAI integration."]);
     } finally {
       setIsGenerating(false);
     }
