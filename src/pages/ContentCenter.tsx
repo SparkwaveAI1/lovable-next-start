@@ -431,8 +431,8 @@ const ContentCenter = () => {
   const availableContentTypes = currentPlatform?.contentTypes || [];
 
   const EditModal = () => (
-    <Dialog open={!!editingTweet} onOpenChange={() => setEditingTweet(null)}>
-      <DialogContent>
+    <Dialog open={!!editingTweet} onOpenChange={(open) => { if (!open) setEditingTweet(null); }}>
+      <DialogContent onInteractOutside={(e) => e.preventDefault()} onPointerDownOutside={(e) => e.preventDefault()}>
         <DialogHeader>
           <DialogTitle>Edit Scheduled Tweet</DialogTitle>
         </DialogHeader>
@@ -481,8 +481,8 @@ const ContentCenter = () => {
   );
 
   const ScheduleModal = () => (
-    <Dialog open={!!schedulingTweet} onOpenChange={() => setSchedulingTweet(null)}>
-      <DialogContent>
+    <Dialog open={!!schedulingTweet} onOpenChange={(open) => { if (!open) setSchedulingTweet(null); }}>
+      <DialogContent onInteractOutside={(e) => e.preventDefault()} onPointerDownOutside={(e) => e.preventDefault()}>
         <DialogHeader>
           <DialogTitle>Schedule Tweet</DialogTitle>
         </DialogHeader>
