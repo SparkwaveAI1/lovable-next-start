@@ -1,4 +1,5 @@
 import { Zap, Settings, Bell } from "lucide-react"
+import { Link } from "react-router-dom"
 import { Button } from "@/components/ui/button"
 import { BusinessSwitcher } from "./BusinessSwitcher"
 
@@ -35,12 +36,12 @@ export function DashboardHeader({ selectedBusinessId, onBusinessChange }: Dashbo
           {/* Right side - Navigation & Actions */}
           <div className="flex items-center gap-4">
             <nav className="flex items-center gap-4">
-              <a
-                href="/charx-twitter"
+              <Link
+                to="/charx-twitter"
                 className="text-sm font-medium text-muted-foreground hover:text-foreground transition-colors"
               >
                 CharX Twitter
-              </a>
+              </Link>
             </nav>
             <div className="flex items-center gap-2">
               <Button variant="ghost" size="sm">

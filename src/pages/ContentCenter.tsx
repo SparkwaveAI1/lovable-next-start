@@ -456,6 +456,7 @@ const ContentCenter = () => {
                 type="date"
                 value={editDate}
                 onChange={(e) => setEditDate(e.target.value)}
+                onKeyDown={(e) => e.key === 'Enter' && e.preventDefault()}
                 className="mt-1"
               />
             </div>
@@ -465,13 +466,14 @@ const ContentCenter = () => {
                 type="time"
                 value={editTime}
                 onChange={(e) => setEditTime(e.target.value)}
+                onKeyDown={(e) => e.key === 'Enter' && e.preventDefault()}
                 className="mt-1"
               />
             </div>
           </div>
           <div className="flex gap-2">
-            <Button onClick={handleUpdateScheduledTweet}>Update Tweet</Button>
-            <Button variant="outline" onClick={() => setEditingTweet(null)}>Cancel</Button>
+            <Button type="button" onClick={handleUpdateScheduledTweet}>Update Tweet</Button>
+            <Button type="button" variant="outline" onClick={() => setEditingTweet(null)}>Cancel</Button>
           </div>
         </div>
       </DialogContent>
@@ -496,6 +498,7 @@ const ContentCenter = () => {
                 type="date" 
                 value={scheduleDate}
                 onChange={(e) => setScheduleDate(e.target.value)}
+                onKeyDown={(e) => e.key === 'Enter' && e.preventDefault()}
                 className="mt-1"
               />
             </div>
@@ -505,13 +508,14 @@ const ContentCenter = () => {
                 type="time" 
                 value={scheduleTime}
                 onChange={(e) => setScheduleTime(e.target.value)}
+                onKeyDown={(e) => e.key === 'Enter' && e.preventDefault()}
                 className="mt-1"
               />
             </div>
           </div>
           <div className="flex gap-2">
-            <Button onClick={handleScheduleTweet}>Schedule Tweet</Button>
-            <Button variant="outline" onClick={() => setSchedulingTweet(null)}>Cancel</Button>
+            <Button type="button" onClick={handleScheduleTweet}>Schedule Tweet</Button>
+            <Button type="button" variant="outline" onClick={() => setSchedulingTweet(null)}>Cancel</Button>
           </div>
         </div>
       </DialogContent>

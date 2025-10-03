@@ -1,5 +1,6 @@
 import { useState, useEffect } from "react"
 import { Activity, AlertCircle, Zap, TrendingUp, Sparkles } from "lucide-react"
+import { Link } from "react-router-dom"
 import { DashboardHeader } from "@/components/DashboardHeader"
 import { StatsCard } from "@/components/StatsCard"
 
@@ -49,13 +50,13 @@ const Index = () => {
             Manage your business automations across all your companies
           </p>
           <div className="mt-4">
-            <a 
-              href="/content-center" 
+            <Link 
+              to="/content-center" 
               className="inline-flex items-center px-4 py-2 bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 transition-colors"
             >
               <Sparkles className="h-4 w-4 mr-2" />
               Content Creation Center
-            </a>
+            </Link>
           </div>
         </div>
 
