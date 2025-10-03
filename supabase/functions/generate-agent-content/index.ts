@@ -441,7 +441,7 @@ serve(async (req) => {
     const { data: business, error: businessError } = await supabaseClient
       .from('businesses')
       .select('*')
-      .eq('slug', request.businessId)
+      .eq('id', request.businessId)
       .single();
 
     if (businessError || !business) {
