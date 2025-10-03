@@ -7,6 +7,7 @@ import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
+import { Label } from "@/components/ui/label";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { useToast } from "@/hooks/use-toast";
 import { DashboardHeader } from "@/components/DashboardHeader";
@@ -186,7 +187,7 @@ const ContentCenter = () => {
         body: {
           businessId: selectedBusiness,
           platform: selectedPlatform,
-          lengthPreset: selectedContentType,
+          contentType: selectedContentType,
           quantity: quantity,
           topic: topic || undefined,
           keywords: [],
@@ -607,42 +608,38 @@ const ContentCenter = () => {
                 </CardDescription>
               </CardHeader>
               <CardContent className="space-y-4">
-                {/* Platform Selector */}
+                {/* Platform Selection */}
                 <div className="space-y-2">
-                  <label className="text-sm font-medium">Platform</label>
+                  <Label>Platform</Label>
                   <Select value={selectedPlatform} onValueChange={(value) => {
                     setSelectedPlatform(value);
-                    const newPlatform = platforms.find(p => p.id === value);
-                    if (newPlatform) {
-                      setSelectedContentType(newPlatform.contentTypes[0].value);
-                      setQuantity(Math.min(quantity, newPlatform.maxQuantity));
-                    }
+                    // Reset content type to first option when platform changes
+                    const platform = platforms.find(p => p.id === value);
+                    setSelectedContentType(platform?.contentTypes[0].value || 'short');
+                    setQuantity(Math.min(quantity, platform?.maxQuantity || 10));
                   }}>
                     <SelectTrigger>
-                      <SelectValue placeholder="Select platform" />
+                      <SelectValue />
                     </SelectTrigger>
                     <SelectContent>
-                      {platforms.map((platform) => (
+                      {platforms.map(platform => (
                         <SelectItem key={platform.id} value={platform.id}>
-                          <span className="flex items-center gap-2">
-                            <span>{platform.icon}</span>
-                            <span>{platform.name}</span>
-                          </span>
+                          {platform.icon} {platform.name}
                         </SelectItem>
                       ))}
                     </SelectContent>
                   </Select>
                 </div>
 
-                {/* Content Type Selector */}
+                {/* Content Type (filtered by selected platform) */}
                 <div className="space-y-2">
-                  <label className="text-sm font-medium">Content Type</label>
+                  <Label>Content Type</Label>
                   <Select value={selectedContentType} onValueChange={setSelectedContentType}>
                     <SelectTrigger>
-                      <SelectValue placeholder="Select content type" />
+                      <SelectValue />
                     </SelectTrigger>
                     <SelectContent>
-                      {availableContentTypes.map((type) => (
+                      {platforms.find(p => p.id === selectedPlatform)?.contentTypes.map(type => (
                         <SelectItem key={type.value} value={type.value}>
                           {type.label}
                         </SelectItem>
@@ -651,22 +648,23 @@ const ContentCenter = () => {
                   </Select>
                 </div>
 
-                {/* Quantity Selector */}
+                {/* Quantity (with dynamic label) */}
                 <div className="space-y-2">
-                  <label className="text-sm font-medium">{currentPlatform?.quantityLabel || 'Quantity'}</label>
+                  <Label>
+                    {platforms.find(p => p.id === selectedPlatform)?.quantityLabel || 'Quantity'}
+                  </Label>
                   <Input
                     type="number"
                     min="1"
-                    max={currentPlatform?.maxQuantity || 10}
+                    max={platforms.find(p => p.id === selectedPlatform)?.maxQuantity || 10}
                     value={quantity}
-                    onChange={(e) => setQuantity(Math.min(parseInt(e.target.value) || 1, currentPlatform?.maxQuantity || 10))}
-                    className="w-full"
+                    onChange={(e) => setQuantity(parseInt(e.target.value) || 1)}
                   />
                 </div>
 
                 {/* Topic Input */}
                 <div className="space-y-2">
-                  <label className="text-sm font-medium">Topic</label>
+                  <Label>Topic</Label>
                   <Input
                     placeholder="Enter content topic..."
                     value={topic}
