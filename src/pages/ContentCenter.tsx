@@ -465,7 +465,10 @@ const ContentCenter = () => {
 
   return (
     <div className="min-h-screen bg-background">
-      <DashboardHeader />
+      <DashboardHeader 
+        selectedBusinessId={selectedBusiness}
+        onBusinessChange={setSelectedBusiness}
+      />
       
       <main className="container mx-auto px-6 py-8">
         {/* Header */}
@@ -492,23 +495,6 @@ const ContentCenter = () => {
                 </CardDescription>
               </CardHeader>
               <CardContent className="space-y-4">
-                {/* Business Selector */}
-                <div className="space-y-2">
-                  <label className="text-sm font-medium">Business</label>
-                  <Select value={selectedBusiness} onValueChange={setSelectedBusiness}>
-                    <SelectTrigger>
-                      <SelectValue placeholder="Select business" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {businesses.map((business) => (
-                        <SelectItem key={business.id} value={business.id}>
-                          {business.name}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-
                 {/* Tweet Length Selector */}
                 <div className="space-y-2">
                   <label className="text-sm font-medium">Tweet Length</label>
@@ -551,19 +537,6 @@ const ContentCenter = () => {
                     onChange={(e) => setTopic(e.target.value)}
                   />
                 </div>
-
-                {/* Business Info */}
-                {selectedBusinessConfig && (
-                  <div className="space-y-2">
-                    <label className="text-sm font-medium">Selected Business</label>
-                    <Badge variant="secondary" className="text-xs">
-                      {selectedBusinessConfig.name}
-                    </Badge>
-                    <p className="text-xs text-muted-foreground mt-2">
-                      AI will generate Twitter content optimized for this business
-                    </p>
-                  </div>
-                )}
 
                 {/* Generate Button */}
                 <Button 
