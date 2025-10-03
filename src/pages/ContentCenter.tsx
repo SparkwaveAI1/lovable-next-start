@@ -14,9 +14,10 @@ import { supabase } from "@/integrations/supabase/client";
 
 const ContentCenter = () => {
   const [selectedBusiness, setSelectedBusiness] = useState("");
-  const [selectedContentType, setSelectedContentType] = useState("");
+  const [selectedPlatform, setSelectedPlatform] = useState("twitter");
+  const [selectedContentType, setSelectedContentType] = useState("medium");
   const [topic, setTopic] = useState("");
-  const [tweetQuantity, setTweetQuantity] = useState(3);
+  const [quantity, setQuantity] = useState(3);
   const [generatedContent, setGeneratedContent] = useState<string[]>([]);
   const [isGenerating, setIsGenerating] = useState(false);
   const [schedulingTweet, setSchedulingTweet] = useState<{tweet: string, index: number} | null>(null);
@@ -39,11 +40,120 @@ const ContentCenter = () => {
     { id: 'charx-world', name: 'CharX World' }
   ];
 
-  const contentTypes = [
-    { value: 'short', label: 'Short (80-120 chars)', description: 'Concise and punchy' },
-    { value: 'medium', label: 'Medium (140-200 chars)', description: 'Standard tweet length' },
-    { value: 'long', label: 'Long (220-280 chars)', description: 'Near character limit' },
-    { value: 'thread', label: 'Thread', description: 'Multi-tweet story' }
+  const platforms = [
+    {
+      id: 'twitter',
+      name: 'Twitter/X',
+      icon: '𝕏',
+      contentTypes: [
+        { value: 'short', label: 'Short Tweet (80-120 chars)' },
+        { value: 'medium', label: 'Standard Tweet (140-200 chars)' },
+        { value: 'long', label: 'Long Tweet (220-280 chars)' },
+        { value: 'thread', label: 'Thread (multiple tweets)' }
+      ],
+      quantityLabel: 'Number of Tweets',
+      maxQuantity: 10
+    },
+    {
+      id: 'instagram',
+      name: 'Instagram',
+      icon: '📷',
+      contentTypes: [
+        { value: 'caption', label: 'Post Caption (with hashtags)' },
+        { value: 'story', label: 'Story Text (short & punchy)' },
+        { value: 'reel', label: 'Reel Caption (hook + CTA)' },
+        { value: 'carousel', label: 'Carousel Post (multiple slides)' }
+      ],
+      quantityLabel: 'Number of Posts',
+      maxQuantity: 7
+    },
+    {
+      id: 'tiktok',
+      name: 'TikTok',
+      icon: '🎵',
+      contentTypes: [
+        { value: 'caption', label: 'Video Caption (short & catchy)' },
+        { value: 'script', label: 'Video Script (with hooks)' },
+        { value: 'hooks', label: 'Scroll-Stopping Hooks' }
+      ],
+      quantityLabel: 'Number of Captions/Scripts',
+      maxQuantity: 10
+    },
+    {
+      id: 'linkedin',
+      name: 'LinkedIn',
+      icon: '💼',
+      contentTypes: [
+        { value: 'post', label: 'Standard Post (professional)' },
+        { value: 'long', label: 'Long-Form Post (thought leadership)' },
+        { value: 'article', label: 'Article (1000+ words)' },
+        { value: 'carousel', label: 'Carousel Post' }
+      ],
+      quantityLabel: 'Number of Posts',
+      maxQuantity: 5
+    },
+    {
+      id: 'facebook',
+      name: 'Facebook',
+      icon: '👥',
+      contentTypes: [
+        { value: 'post', label: 'Standard Post' },
+        { value: 'story', label: 'Story Text' },
+        { value: 'community', label: 'Community Post (engaging)' }
+      ],
+      quantityLabel: 'Number of Posts',
+      maxQuantity: 7
+    },
+    {
+      id: 'reddit',
+      name: 'Reddit',
+      icon: '🤖',
+      contentTypes: [
+        { value: 'post', label: 'Post (title + body)' },
+        { value: 'comment', label: 'Comment Response' }
+      ],
+      quantityLabel: 'Number of Posts',
+      maxQuantity: 5
+    },
+    {
+      id: 'nextdoor',
+      name: 'Nextdoor',
+      icon: '🏘️',
+      contentTypes: [
+        { value: 'post', label: 'Community Post' },
+        { value: 'announcement', label: 'Local Announcement' },
+        { value: 'recommendation', label: 'Recommendation Request' }
+      ],
+      quantityLabel: 'Number of Posts',
+      maxQuantity: 3
+    },
+    {
+      id: 'email',
+      name: 'Email',
+      icon: '📧',
+      contentTypes: [
+        { value: 'newsletter', label: 'Newsletter' },
+        { value: 'promotional', label: 'Promotional Email' },
+        { value: 'welcome', label: 'Welcome Email' },
+        { value: 'nurture', label: 'Nurture Sequence Email' }
+      ],
+      quantityLabel: 'Number of Emails',
+      maxQuantity: 5
+    },
+    {
+      id: 'blog',
+      name: 'Blog',
+      icon: '📝',
+      contentTypes: [
+        { value: 'short', label: 'Short Article (500-800 words)' },
+        { value: 'medium', label: 'Medium Article (1000-1500 words)' },
+        { value: 'long', label: 'Long Article (2000+ words)' },
+        { value: 'listicle', label: 'Listicle' },
+        { value: 'howto', label: 'How-To Guide' }
+      ],
+      quantityLabel: 'Number of Articles',
+      maxQuantity: 3
+    }
   ];
 
   const getSystemPrompt = (businessId: string) => {
@@ -69,15 +179,15 @@ const ContentCenter = () => {
     setIsGenerating(true);
     
     const systemPrompt = getSystemPrompt(selectedBusiness);
-    const selectedType = contentTypes.find(t => t.value === selectedContentType);
+    const currentPlatform = platforms.find(p => p.id === selectedPlatform);
     
     try {
       const { data, error } = await supabase.functions.invoke('generate-agent-content', {
         body: {
           businessId: selectedBusiness,
-          platform: 'twitter',
+          platform: selectedPlatform,
           lengthPreset: selectedContentType,
-          quantity: tweetQuantity,
+          quantity: quantity,
           topic: topic || undefined,
           keywords: [],
           tone: undefined
@@ -316,6 +426,8 @@ const ContentCenter = () => {
   }, [activeTab]);
 
   const selectedBusinessConfig = businesses.find(b => b.id === selectedBusiness);
+  const currentPlatform = platforms.find(p => p.id === selectedPlatform);
+  const availableContentTypes = currentPlatform?.contentTypes || [];
 
   const EditModal = () => (
     <Dialog open={!!editingTweet} onOpenChange={() => setEditingTweet(null)}>
@@ -495,35 +607,59 @@ const ContentCenter = () => {
                 </CardDescription>
               </CardHeader>
               <CardContent className="space-y-4">
-                {/* Tweet Length Selector */}
+                {/* Platform Selector */}
                 <div className="space-y-2">
-                  <label className="text-sm font-medium">Tweet Length</label>
-                  <Select value={selectedContentType} onValueChange={setSelectedContentType}>
+                  <label className="text-sm font-medium">Platform</label>
+                  <Select value={selectedPlatform} onValueChange={(value) => {
+                    setSelectedPlatform(value);
+                    const newPlatform = platforms.find(p => p.id === value);
+                    if (newPlatform) {
+                      setSelectedContentType(newPlatform.contentTypes[0].value);
+                      setQuantity(Math.min(quantity, newPlatform.maxQuantity));
+                    }
+                  }}>
                     <SelectTrigger>
-                      <SelectValue placeholder="Select tweet length" />
+                      <SelectValue placeholder="Select platform" />
                     </SelectTrigger>
                     <SelectContent>
-                      {contentTypes.map((type) => (
+                      {platforms.map((platform) => (
+                        <SelectItem key={platform.id} value={platform.id}>
+                          <span className="flex items-center gap-2">
+                            <span>{platform.icon}</span>
+                            <span>{platform.name}</span>
+                          </span>
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                {/* Content Type Selector */}
+                <div className="space-y-2">
+                  <label className="text-sm font-medium">Content Type</label>
+                  <Select value={selectedContentType} onValueChange={setSelectedContentType}>
+                    <SelectTrigger>
+                      <SelectValue placeholder="Select content type" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {availableContentTypes.map((type) => (
                         <SelectItem key={type.value} value={type.value}>
                           {type.label}
                         </SelectItem>
                       ))}
                     </SelectContent>
                   </Select>
-                  <p className="text-xs text-muted-foreground">
-                    Controls the character length per tweet, not the number of tweets
-                  </p>
                 </div>
 
                 {/* Quantity Selector */}
                 <div className="space-y-2">
-                  <label className="text-sm font-medium">Number of Tweets</label>
+                  <label className="text-sm font-medium">{currentPlatform?.quantityLabel || 'Quantity'}</label>
                   <Input
                     type="number"
                     min="1"
-                    max="10"
-                    value={tweetQuantity}
-                    onChange={(e) => setTweetQuantity(parseInt(e.target.value) || 1)}
+                    max={currentPlatform?.maxQuantity || 10}
+                    value={quantity}
+                    onChange={(e) => setQuantity(Math.min(parseInt(e.target.value) || 1, currentPlatform?.maxQuantity || 10))}
                     className="w-full"
                   />
                 </div>
