@@ -432,7 +432,7 @@ const ContentCenter = () => {
 
   const EditModal = () => (
     <Dialog open={!!editingTweet} onOpenChange={(open) => { if (!open) setEditingTweet(null); }}>
-      <DialogContent onInteractOutside={(e) => e.preventDefault()} onPointerDownOutside={(e) => e.preventDefault()}>
+      <DialogContent onInteractOutside={(e) => e.preventDefault()} onPointerDownOutside={(e) => e.preventDefault()} onFocusOutside={(e) => e.preventDefault()}>
         <DialogHeader>
           <DialogTitle>Edit Scheduled Tweet</DialogTitle>
         </DialogHeader>
@@ -482,7 +482,7 @@ const ContentCenter = () => {
 
   const ScheduleModal = () => (
     <Dialog open={!!schedulingTweet} onOpenChange={(open) => { if (!open) setSchedulingTweet(null); }}>
-      <DialogContent onInteractOutside={(e) => e.preventDefault()} onPointerDownOutside={(e) => e.preventDefault()}>
+      <DialogContent onInteractOutside={(e) => e.preventDefault()} onPointerDownOutside={(e) => e.preventDefault()} onFocusOutside={(e) => e.preventDefault()}>
         <DialogHeader>
           <DialogTitle>Schedule Tweet</DialogTitle>
         </DialogHeader>
