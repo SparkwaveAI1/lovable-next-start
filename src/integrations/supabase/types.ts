@@ -341,6 +341,41 @@ export type Database = {
           },
         ]
       }
+      contact_activities: {
+        Row: {
+          activity_data: Json | null
+          activity_type: string
+          contact_id: string
+          created_at: string | null
+          id: string
+          notes: string | null
+        }
+        Insert: {
+          activity_data?: Json | null
+          activity_type: string
+          contact_id: string
+          created_at?: string | null
+          id?: string
+          notes?: string | null
+        }
+        Update: {
+          activity_data?: Json | null
+          activity_type?: string
+          contact_id?: string
+          created_at?: string | null
+          id?: string
+          notes?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "contact_activities_contact_id_fkey"
+            columns: ["contact_id"]
+            isOneToOne: false
+            referencedRelation: "contacts"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       contacts: {
         Row: {
           business_id: string | null
