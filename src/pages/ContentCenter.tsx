@@ -4,6 +4,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Input } from "@/components/ui/input";
+import SimpleTimeInput from "@/components/SimpleTimeInput";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
@@ -12,6 +13,8 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/u
 import { useToast } from "@/hooks/use-toast";
 import { DashboardHeader } from "@/components/DashboardHeader";
 import { supabase } from "@/integrations/supabase/client";
+
+const TIME_RE = /^([01]\d|2[0-3]):([0-5]\d)$/;
 
 const ContentCenter = () => {
   const [selectedBusiness, setSelectedBusiness] = useState("");
@@ -251,6 +254,15 @@ const ContentCenter = () => {
       return;
     }
 
+    if (!TIME_RE.test(scheduleTime)) {
+      toast({
+        title: "Invalid Time",
+        description: "Enter a valid time (HH:MM).",
+        variant: "destructive",
+      });
+      return;
+    }
+
     const scheduledDateTime = new Date(`${scheduleDate}T${scheduleTime}`);
     
     try {
@@ -353,6 +365,15 @@ const ContentCenter = () => {
         title: "Missing Information",
         description: "Please fill in all fields",
         variant: "destructive"
+      });
+      return;
+    }
+
+    if (!TIME_RE.test(editTime)) {
+      toast({
+        title: "Invalid Time",
+        description: "Enter a valid time (HH:MM).",
+        variant: "destructive",
       });
       return;
     }
@@ -462,11 +483,9 @@ const ContentCenter = () => {
             </div>
             <div>
               <label className="text-sm font-medium">Time</label>
-              <Input
-                type="time"
+              <SimpleTimeInput
                 value={editTime}
-                onChange={(e) => setEditTime(e.target.value)}
-                onKeyDown={(e) => e.key === 'Enter' && e.preventDefault()}
+                onChange={setEditTime}
                 className="mt-1"
               />
             </div>
@@ -504,11 +523,9 @@ const ContentCenter = () => {
             </div>
             <div>
               <label className="text-sm font-medium">Time</label>
-              <Input 
-                type="time" 
+              <SimpleTimeInput
                 value={scheduleTime}
-                onChange={(e) => setScheduleTime(e.target.value)}
-                onKeyDown={(e) => e.key === 'Enter' && e.preventDefault()}
+                onChange={setScheduleTime}
                 className="mt-1"
               />
             </div>
