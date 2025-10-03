@@ -11,3 +11,6 @@ verify_jwt = false
 
 [functions.game-content-generator]
 verify_jwt = false
+
+[functions.generate-agent-content]
+verify_jwt = false
