@@ -3,7 +3,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { ArrowLeft, MessageSquare, Calendar, User } from 'lucide-react';
+import { ArrowLeft, MessageSquare, Calendar, User, Activity } from 'lucide-react';
 import { formatToEasternDateTime, formatToEasternDate } from '@/lib/dateUtils';
 
 interface Contact {
@@ -45,6 +45,7 @@ export function ContactDetail({ contactId, onBack }: { contactId: string; onBack
   const [contact, setContact] = useState<Contact | null>(null);
   const [messages, setMessages] = useState<SMSMessage[]>([]);
   const [bookings, setBookings] = useState<ClassBooking[]>([]);
+  const [interactions, setInteractions] = useState<any[]>([]);
   const [newMessage, setNewMessage] = useState('');
   const [isSending, setIsSending] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
@@ -101,6 +102,19 @@ export function ContactDetail({ contactId, onBack }: { contactId: string; onBack
       console.error('Error loading bookings:', bookingsError);
     } else {
       setBookings(bookingsData || []);
+    }
+
+    // Load automation logs (interaction history)
+    const { data: logsData, error: logsError } = await supabase
+      .from('automation_logs')
+      .select('*')
+      .contains('processed_data', { contact_id: contactId })
+      .order('created_at', { ascending: false });
+
+    if (logsError) {
+      console.error('Error loading interactions:', logsError);
+    } else {
+      setInteractions(logsData || []);
     }
 
     setIsLoading(false);
@@ -211,6 +225,64 @@ export function ContactDetail({ contactId, onBack }: { contactId: string; onBack
           {formatStatusLabel(contact.status)}
         </Badge>
       </div>
+
+      {/* Interaction Timeline */}
+      {interactions.length > 0 && (
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <Activity className="h-5 w-5" />
+              Interaction Timeline ({interactions.length})
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="space-y-3 max-h-96 overflow-y-auto">
+              {interactions.map((interaction) => {
+                const contact = interaction.source_data?.data?.contact || {};
+                const formName = interaction.source_data?.data?.formName || '';
+                const message = interaction.processed_data?.message || '';
+                
+                return (
+                  <div
+                    key={interaction.id}
+                    className="p-3 rounded-lg border border-border bg-card/50"
+                  >
+                    <div className="flex justify-between items-start mb-2">
+                      <Badge variant="outline">
+                        {interaction.automation_type.replace(/_/g, ' ')}
+                      </Badge>
+                      <span className="text-xs text-muted-foreground">
+                        {formatDate(interaction.created_at)}
+                      </span>
+                    </div>
+                    
+                    {interaction.automation_type === 'contact_created' && (
+                      <div className="text-sm space-y-1">
+                        <div className="font-medium text-foreground">Form Submitted: {formName}</div>
+                        {contact.email && <div className="text-muted-foreground">Email: {contact.email}</div>}
+                        {contact.phone && <div className="text-muted-foreground">Phone: {contact.phone}</div>}
+                      </div>
+                    )}
+                    
+                    {interaction.automation_type === 'sms_welcome_sent' && message && (
+                      <div className="text-sm">
+                        <div className="font-medium text-foreground mb-1">Welcome SMS Sent</div>
+                        <div className="text-muted-foreground italic">"{message}"</div>
+                      </div>
+                    )}
+                    
+                    {interaction.status === 'error' && interaction.error_message && (
+                      <div className="text-xs text-destructive mt-2">
+                        Error: {interaction.error_message}
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          </CardContent>
+        </Card>
+      )}
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         {/* Contact Information */}

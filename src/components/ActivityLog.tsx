@@ -1,9 +1,11 @@
+import { useState } from 'react';
 import { useActivityLogs } from '@/hooks/useActivityLogs';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Skeleton } from '@/components/ui/skeleton';
-import { AlertCircle, CheckCircle, Clock } from 'lucide-react';
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
+import { AlertCircle, CheckCircle, Clock, ChevronDown } from 'lucide-react';
 import { formatToEasternCompact } from '@/lib/dateUtils';
 
 interface ActivityLogProps {
@@ -34,14 +36,45 @@ export function ActivityLog({ businessId }: ActivityLogProps) {
     return formatToEasternCompact(timestamp);
   };
 
-  const getSourceDataSummary = (sourceData: any) => {
-    if (!sourceData) return 'No data';
+  const getSourceDataSummary = (log: any) => {
+    if (!log.source_data) return 'No data';
     
-    const name = sourceData.name || sourceData.leadName || '';
-    const email = sourceData.email || sourceData.leadEmail || '';
-    const phone = sourceData.phone || sourceData.leadPhone || '';
+    // Extract contact info from nested structure (GHL form submissions)
+    const contact = log.source_data?.data?.contact || {};
+    const firstName = contact.first_name || contact.name?.first || '';
+    const lastName = contact.last_name || contact.name?.last || '';
+    const email = contact.email || '';
+    const phone = contact.phone || '';
     
-    return [name, email, phone].filter(Boolean).join(' • ') || 'Unknown';
+    // Extract form name
+    const formName = log.source_data?.data?.formName || '';
+    
+    // Extract SMS message from processed_data
+    const smsMessage = log.processed_data?.message || log.source_data?.message || '';
+    
+    // Build display string
+    const parts = [];
+    if (firstName || lastName) parts.push(`${firstName} ${lastName}`.trim());
+    if (email) parts.push(email);
+    if (phone) parts.push(phone);
+    if (formName) parts.push(`Form: ${formName}`);
+    if (smsMessage && log.automation_type === 'sms_welcome_sent') {
+      parts.push(`"${smsMessage.substring(0, 50)}${smsMessage.length > 50 ? '...' : ''}"`);
+    }
+    
+    return parts.length > 0 ? parts.join(' • ') : 'Unknown';
+  };
+
+  const [expandedRows, setExpandedRows] = useState<Set<string>>(new Set());
+
+  const toggleRow = (id: string) => {
+    const newExpanded = new Set(expandedRows);
+    if (newExpanded.has(id)) {
+      newExpanded.delete(id);
+    } else {
+      newExpanded.add(id);
+    }
+    setExpandedRows(newExpanded);
   };
 
   if (error) {
@@ -89,37 +122,87 @@ export function ActivityLog({ businessId }: ActivityLogProps) {
             <TableHeader>
               <TableRow>
                 <TableHead className="w-12"></TableHead>
+                <TableHead className="w-12"></TableHead>
                 <TableHead>Timestamp</TableHead>
                 <TableHead>Type</TableHead>
                 <TableHead>Status</TableHead>
-                <TableHead>Lead Data</TableHead>
-                <TableHead>Processing Time</TableHead>
+                <TableHead>Details</TableHead>
+                <TableHead>Time</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
               {logs.map((log) => (
-                <TableRow key={log.id}>
-                  <TableCell>
-                    {getStatusIcon(log.status)}
-                  </TableCell>
-                  <TableCell className="font-mono text-sm">
-                    {formatTimestamp(log.created_at)}
-                  </TableCell>
-                  <TableCell>
-                    <Badge variant="outline">
-                      {log.automation_type.replace(/_/g, ' ')}
-                    </Badge>
-                  </TableCell>
-                  <TableCell>
-                    {getStatusBadge(log.status)}
-                  </TableCell>
-                  <TableCell className="max-w-xs truncate">
-                    {getSourceDataSummary(log.source_data)}
-                  </TableCell>
-                  <TableCell className="font-mono text-sm">
-                    {log.execution_time_ms ? `${log.execution_time_ms}ms` : '-'}
-                  </TableCell>
-                </TableRow>
+                <Collapsible key={log.id} open={expandedRows.has(log.id)}>
+                  <TableRow className="cursor-pointer hover:bg-accent/50">
+                    <CollapsibleTrigger asChild>
+                      <TableCell onClick={() => toggleRow(log.id)}>
+                        <ChevronDown className={`h-4 w-4 transition-transform ${expandedRows.has(log.id) ? 'rotate-180' : ''}`} />
+                      </TableCell>
+                    </CollapsibleTrigger>
+                    <CollapsibleTrigger asChild>
+                      <TableCell onClick={() => toggleRow(log.id)}>
+                        {getStatusIcon(log.status)}
+                      </TableCell>
+                    </CollapsibleTrigger>
+                    <CollapsibleTrigger asChild>
+                      <TableCell className="font-mono text-sm" onClick={() => toggleRow(log.id)}>
+                        {formatTimestamp(log.created_at)}
+                      </TableCell>
+                    </CollapsibleTrigger>
+                    <CollapsibleTrigger asChild>
+                      <TableCell onClick={() => toggleRow(log.id)}>
+                        <Badge variant="outline">
+                          {log.automation_type.replace(/_/g, ' ')}
+                        </Badge>
+                      </TableCell>
+                    </CollapsibleTrigger>
+                    <CollapsibleTrigger asChild>
+                      <TableCell onClick={() => toggleRow(log.id)}>
+                        {getStatusBadge(log.status)}
+                      </TableCell>
+                    </CollapsibleTrigger>
+                    <CollapsibleTrigger asChild>
+                      <TableCell className="max-w-md" onClick={() => toggleRow(log.id)}>
+                        {getSourceDataSummary(log)}
+                      </TableCell>
+                    </CollapsibleTrigger>
+                    <CollapsibleTrigger asChild>
+                      <TableCell className="font-mono text-sm" onClick={() => toggleRow(log.id)}>
+                        {log.execution_time_ms ? `${log.execution_time_ms}ms` : '-'}
+                      </TableCell>
+                    </CollapsibleTrigger>
+                  </TableRow>
+                  <CollapsibleContent asChild>
+                    <TableRow>
+                      <TableCell colSpan={7} className="bg-muted/30 p-4">
+                        <div className="space-y-3 text-sm">
+                          {log.source_data && (
+                            <div>
+                              <h4 className="font-semibold mb-2">Source Data:</h4>
+                              <pre className="bg-background p-3 rounded border overflow-x-auto text-xs">
+                                {JSON.stringify(log.source_data, null, 2)}
+                              </pre>
+                            </div>
+                          )}
+                          {log.processed_data && (
+                            <div>
+                              <h4 className="font-semibold mb-2">Processed Data:</h4>
+                              <pre className="bg-background p-3 rounded border overflow-x-auto text-xs">
+                                {JSON.stringify(log.processed_data, null, 2)}
+                              </pre>
+                            </div>
+                          )}
+                          {log.error_message && (
+                            <div>
+                              <h4 className="font-semibold mb-2 text-destructive">Error Message:</h4>
+                              <p className="text-destructive">{log.error_message}</p>
+                            </div>
+                          )}
+                        </div>
+                      </TableCell>
+                    </TableRow>
+                  </CollapsibleContent>
+                </Collapsible>
               ))}
             </TableBody>
           </Table>
