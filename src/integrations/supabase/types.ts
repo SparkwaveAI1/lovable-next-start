@@ -349,8 +349,13 @@ export type Database = {
           email: string | null
           first_name: string | null
           id: string
+          interested_programs: string[] | null
+          last_activity_date: string | null
           last_name: string | null
+          lead_type: string | null
+          next_follow_up_date: string | null
           phone: string | null
+          pipeline_stage: string | null
           source: string | null
           status: string | null
           status_notes: string | null
@@ -363,8 +368,13 @@ export type Database = {
           email?: string | null
           first_name?: string | null
           id?: string
+          interested_programs?: string[] | null
+          last_activity_date?: string | null
           last_name?: string | null
+          lead_type?: string | null
+          next_follow_up_date?: string | null
           phone?: string | null
+          pipeline_stage?: string | null
           source?: string | null
           status?: string | null
           status_notes?: string | null
@@ -377,8 +387,13 @@ export type Database = {
           email?: string | null
           first_name?: string | null
           id?: string
+          interested_programs?: string[] | null
+          last_activity_date?: string | null
           last_name?: string | null
+          lead_type?: string | null
+          next_follow_up_date?: string | null
           phone?: string | null
+          pipeline_stage?: string | null
           source?: string | null
           status?: string | null
           status_notes?: string | null
