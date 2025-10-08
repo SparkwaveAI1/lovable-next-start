@@ -617,47 +617,118 @@ export type Database = {
         }
         Relationships: []
       }
+      rejected_content: {
+        Row: {
+          business_id: string
+          content: string
+          created_at: string | null
+          generation_params: Json | null
+          id: string
+          keywords: string[] | null
+          platform: string
+          rejected_at: string | null
+          rejected_by: string | null
+          rejection_reason: string
+          tags: string[] | null
+          topic: string | null
+        }
+        Insert: {
+          business_id: string
+          content: string
+          created_at?: string | null
+          generation_params?: Json | null
+          id?: string
+          keywords?: string[] | null
+          platform: string
+          rejected_at?: string | null
+          rejected_by?: string | null
+          rejection_reason: string
+          tags?: string[] | null
+          topic?: string | null
+        }
+        Update: {
+          business_id?: string
+          content?: string
+          created_at?: string | null
+          generation_params?: Json | null
+          id?: string
+          keywords?: string[] | null
+          platform?: string
+          rejected_at?: string | null
+          rejected_by?: string | null
+          rejection_reason?: string
+          tags?: string[] | null
+          topic?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "rejected_content_business_id_fkey"
+            columns: ["business_id"]
+            isOneToOne: false
+            referencedRelation: "businesses"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       scheduled_content: {
         Row: {
+          approval_status: string | null
+          approved_at: string | null
+          approved_by: string | null
           business_id: string | null
           content: string
           content_type: string
           created_at: string | null
           error_message: string | null
           id: string
+          keywords: string[] | null
           metadata: Json | null
           platform: string
           posted_at: string | null
+          rejection_reason: string | null
           scheduled_for: string
           status: string | null
+          tags: string[] | null
           topic: string | null
         }
         Insert: {
+          approval_status?: string | null
+          approved_at?: string | null
+          approved_by?: string | null
           business_id?: string | null
           content: string
           content_type: string
           created_at?: string | null
           error_message?: string | null
           id?: string
+          keywords?: string[] | null
           metadata?: Json | null
           platform: string
           posted_at?: string | null
+          rejection_reason?: string | null
           scheduled_for: string
           status?: string | null
+          tags?: string[] | null
           topic?: string | null
         }
         Update: {
+          approval_status?: string | null
+          approved_at?: string | null
+          approved_by?: string | null
           business_id?: string | null
           content?: string
           content_type?: string
           created_at?: string | null
           error_message?: string | null
           id?: string
+          keywords?: string[] | null
           metadata?: Json | null
           platform?: string
           posted_at?: string | null
+          rejection_reason?: string | null
           scheduled_for?: string
           status?: string | null
+          tags?: string[] | null
           topic?: string | null
         }
         Relationships: [
