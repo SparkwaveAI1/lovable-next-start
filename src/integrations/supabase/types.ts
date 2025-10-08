@@ -444,6 +444,45 @@ export type Database = {
           },
         ]
       }
+      content_media: {
+        Row: {
+          content_id: string
+          created_at: string | null
+          display_order: number | null
+          id: string
+          media_id: string
+        }
+        Insert: {
+          content_id: string
+          created_at?: string | null
+          display_order?: number | null
+          id?: string
+          media_id: string
+        }
+        Update: {
+          content_id?: string
+          created_at?: string | null
+          display_order?: number | null
+          id?: string
+          media_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "content_media_content_id_fkey"
+            columns: ["content_id"]
+            isOneToOne: false
+            referencedRelation: "scheduled_content"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "content_media_media_id_fkey"
+            columns: ["media_id"]
+            isOneToOne: false
+            referencedRelation: "media_assets"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       conversation_state: {
         Row: {
           business_id: string
@@ -616,6 +655,68 @@ export type Database = {
           updated_at?: string
         }
         Relationships: []
+      }
+      media_assets: {
+        Row: {
+          business_id: string
+          created_at: string | null
+          description: string | null
+          duration: number | null
+          file_name: string
+          file_path: string
+          file_size: number | null
+          file_type: string
+          height: number | null
+          id: string
+          mime_type: string | null
+          tags: string[] | null
+          thumbnail_path: string | null
+          uploaded_at: string | null
+          width: number | null
+        }
+        Insert: {
+          business_id: string
+          created_at?: string | null
+          description?: string | null
+          duration?: number | null
+          file_name: string
+          file_path: string
+          file_size?: number | null
+          file_type: string
+          height?: number | null
+          id?: string
+          mime_type?: string | null
+          tags?: string[] | null
+          thumbnail_path?: string | null
+          uploaded_at?: string | null
+          width?: number | null
+        }
+        Update: {
+          business_id?: string
+          created_at?: string | null
+          description?: string | null
+          duration?: number | null
+          file_name?: string
+          file_path?: string
+          file_size?: number | null
+          file_type?: string
+          height?: number | null
+          id?: string
+          mime_type?: string | null
+          tags?: string[] | null
+          thumbnail_path?: string | null
+          uploaded_at?: string | null
+          width?: number | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "media_assets_business_id_fkey"
+            columns: ["business_id"]
+            isOneToOne: false
+            referencedRelation: "businesses"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       rejected_content: {
         Row: {

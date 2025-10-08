@@ -14,6 +14,7 @@ import { useToast } from "@/hooks/use-toast";
 import { DashboardHeader } from "@/components/DashboardHeader";
 import { supabase } from "@/integrations/supabase/client";
 import { ContentReviewDialog } from "@/components/ContentReviewDialog";
+import { ContentLibrary } from "@/components/ContentLibrary";
 
 const TIME_RE = /^([01]\d|2[0-3]):([0-5]\d)$/;
 
@@ -724,8 +725,9 @@ const ContentCenter = () => {
           {/* Content Preview and Management */}
           <div className="lg:col-span-2">
             <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-4">
-              <TabsList className="grid w-full grid-cols-3">
+              <TabsList className="grid w-full grid-cols-4">
                 <TabsTrigger value="preview">Preview</TabsTrigger>
+                <TabsTrigger value="library">Library</TabsTrigger>
                 <TabsTrigger value="schedule">Schedule</TabsTrigger>
                 <TabsTrigger value="history">History</TabsTrigger>
               </TabsList>
@@ -784,6 +786,37 @@ const ContentCenter = () => {
                         <p className="text-sm">Configure and generate to see AI-created content</p>
                       </div>
                     )}
+                  </CardContent>
+                </Card>
+              </TabsContent>
+
+              <TabsContent value="library">
+                <Card>
+                  <CardHeader>
+                    <CardTitle className="flex items-center gap-2">
+                      <FileText className="h-5 w-5" />
+                      Content Library
+                    </CardTitle>
+                    <CardDescription>
+                      Browse and manage your approved content
+                    </CardDescription>
+                  </CardHeader>
+                  <CardContent>
+                    <ContentLibrary
+                      businessId={selectedBusiness}
+                      onSchedule={(content) => {
+                        setSchedulingTweet({ tweet: content.content, index: 0 });
+                        setActiveTab('schedule');
+                      }}
+                      onEdit={(content) => {
+                        setEditingTweet({
+                          id: content.id,
+                          content: content.content,
+                          scheduled_for: ''
+                        });
+                        setEditContent(content.content);
+                      }}
+                    />
                   </CardContent>
                 </Card>
               </TabsContent>
