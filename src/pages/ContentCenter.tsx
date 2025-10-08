@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { Sparkles, FileText, Send, Calendar, TrendingUp, RefreshCw, Edit, Trash2, Rocket } from "lucide-react";
+import { Sparkles, FileText, Send, Calendar, TrendingUp, RefreshCw, Edit, Trash2, Rocket, CheckCircle } from "lucide-react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -13,6 +13,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/u
 import { useToast } from "@/hooks/use-toast";
 import { DashboardHeader } from "@/components/DashboardHeader";
 import { supabase } from "@/integrations/supabase/client";
+import { ContentReviewDialog } from "@/components/ContentReviewDialog";
 
 const TIME_RE = /^([01]\d|2[0-3]):([0-5]\d)$/;
 
@@ -21,9 +22,11 @@ const ContentCenter = () => {
   const [selectedPlatform, setSelectedPlatform] = useState("twitter");
   const [selectedContentType, setSelectedContentType] = useState("medium");
   const [topic, setTopic] = useState("");
-  const [quantity, setQuantity] = useState(3);
+  const [quantity, setQuantity] = useState(10);
   const [generatedContent, setGeneratedContent] = useState<string[]>([]);
   const [isGenerating, setIsGenerating] = useState(false);
+  const [reviewMode, setReviewMode] = useState(false);
+  const [reviewingContent, setReviewingContent] = useState<string[]>([]);
   const [schedulingTweet, setSchedulingTweet] = useState<{tweet: string, index: number} | null>(null);
   const [scheduleDate, setScheduleDate] = useState('');
   const [scheduleTime, setScheduleTime] = useState('');
@@ -208,10 +211,12 @@ const ContentCenter = () => {
       }
 
       if (data && data.success && data.tweets) {
-        setGeneratedContent(data.tweets); // Now an array of actual tweets
+        setGeneratedContent(data.tweets);
+        setReviewingContent(data.tweets);
+        setReviewMode(true);
         toast({
           title: "Content Generated",
-          description: `Generated ${data.tweets.length} tweet(s) successfully!`,
+          description: `Generated ${data.tweets.length} tweet(s) - Review to approve or reject`,
         });
       } else {
         toast({
@@ -671,9 +676,7 @@ const ContentCenter = () => {
 
                 {/* Quantity (with dynamic label) */}
                 <div className="space-y-2">
-                  <Label>
-                    {platforms.find(p => p.id === selectedPlatform)?.quantityLabel || 'Quantity'}
-                  </Label>
+                  <Label>Number of tweets to generate</Label>
                   <Input
                     type="number"
                     min="1"
@@ -681,6 +684,9 @@ const ContentCenter = () => {
                     value={quantity}
                     onChange={(e) => setQuantity(parseInt(e.target.value) || 1)}
                   />
+                  <p className="text-xs text-muted-foreground">
+                    Generate multiple options to review and select
+                  </p>
                 </div>
 
                 {/* Topic Input */}
@@ -735,6 +741,21 @@ const ContentCenter = () => {
                   <CardContent>
                     {generatedContent.length > 0 ? (
                       <div className="space-y-4">
+                        <div className="flex items-center justify-between p-4 border rounded-lg bg-muted/50">
+                          <div>
+                            <p className="font-medium">
+                              {generatedContent.length} tweets generated
+                            </p>
+                            <p className="text-sm text-muted-foreground">
+                              Review and approve your content to add it to your library
+                            </p>
+                          </div>
+                          <Button onClick={() => setReviewMode(true)}>
+                            <CheckCircle className="h-4 w-4 mr-2" />
+                            Review & Approve All
+                          </Button>
+                        </div>
+
                         {generatedContent.map((tweet, index) => (
                           <div key={index} className="border rounded-lg p-4 space-y-2">
                             <div className="flex items-center justify-between">
@@ -743,46 +764,12 @@ const ContentCenter = () => {
                                 {tweet.length}/280 characters
                               </span>
                             </div>
-                            <Textarea
-                              value={tweet}
-                              onChange={(e) => {
-                                const newContent = [...generatedContent];
-                                newContent[index] = e.target.value;
-                                setGeneratedContent(newContent);
-                              }}
-                              rows={3}
-                              className="resize-none"
-                            />
-                            <div className="flex gap-2">
-                              <Button 
-                                size="sm"
-                                onClick={() => handlePostNow(tweet, index)}
-                                disabled={postingTweet === index}
-                              >
-                                {postingTweet === index ? (
-                                  <>
-                                    <RefreshCw className="h-4 w-4 mr-2 animate-spin" />
-                                    Posting...
-                                  </>
-                                ) : (
-                                  <>
-                                    <Rocket className="h-4 w-4 mr-2" />
-                                    Post Now
-                                  </>
-                                )}
-                              </Button>
-                              <Button 
-                                variant="outline" 
-                                size="sm"
-                                onClick={() => setSchedulingTweet({tweet: tweet, index: index})}
-                                disabled={postingTweet === index}
-                              >
-                                <Calendar className="h-4 w-4 mr-2" />
-                                Schedule
-                              </Button>
+                            <div className="p-3 bg-muted/50 rounded border">
+                              <p className="text-sm whitespace-pre-wrap">{tweet}</p>
                             </div>
                           </div>
                         ))}
+
                         <div className="flex gap-2 pt-4 border-t">
                           <Button variant="outline" onClick={handleGenerateContent} disabled={isGenerating}>
                             <Sparkles className="h-4 w-4 mr-2" />
@@ -846,6 +833,18 @@ const ContentCenter = () => {
       
       {/* Edit Modal */}
       <EditModal />
+      
+      {/* Review Dialog */}
+      <ContentReviewDialog
+        open={reviewMode}
+        onOpenChange={setReviewMode}
+        content={reviewingContent}
+        businessId={selectedBusiness}
+        platform={selectedPlatform}
+        contentType={selectedContentType}
+        topic={topic}
+        keywords={topic ? topic.split(',').map(k => k.trim()) : []}
+      />
     </div>
   );
 };
