@@ -368,25 +368,40 @@ async function postContentViaGame(
   }
 }
 
-// Platform posting functions imported from workers
+// Platform posting functions - calls real GAME API integration
 async function postToTwitter(args: any) {
   try {
-    console.log('🐦 Executing Twitter Worker...');
+    console.log('🐦 Calling real Twitter post-tweet Edge Function...');
     
     if (args.content.length > 280) {
       throw new Error(`Tweet too long: ${args.content.length} characters (max 280)`);
     }
     
-    await new Promise(resolve => setTimeout(resolve, 1000 + Math.random() * 2000));
+    const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
+    const supabaseKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
+    const supabase = createClient(supabaseUrl, supabaseKey);
+    
+    // Call the real post-tweet Edge Function which uses GAME API
+    const { data, error } = await supabase.functions.invoke('post-tweet', {
+      body: { content: args.content }
+    });
+    
+    if (error) {
+      throw new Error(error.message || 'Tweet posting failed');
+    }
+    
+    console.log('✅ Tweet posted successfully via GAME API:', data);
     
     return {
       success: true,
-      post_id: `tw_${Date.now()}_${Math.random().toString(36).substr(2, 8)}`,
+      post_id: data?.tweet?.data?.id || `tw_${Date.now()}`,
       platform: 'twitter',
       content: args.content,
-      posted_at: new Date().toISOString()
+      posted_at: new Date().toISOString(),
+      game_response: data
     };
   } catch (error) {
+    console.error('❌ Twitter posting error:', error);
     return {
       success: false,
       platform: 'twitter',
