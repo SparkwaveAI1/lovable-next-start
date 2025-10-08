@@ -686,7 +686,7 @@ export type Database = {
           platform: string
           posted_at: string | null
           rejection_reason: string | null
-          scheduled_for: string
+          scheduled_for: string | null
           status: string | null
           tags: string[] | null
           topic: string | null
@@ -706,7 +706,7 @@ export type Database = {
           platform: string
           posted_at?: string | null
           rejection_reason?: string | null
-          scheduled_for: string
+          scheduled_for?: string | null
           status?: string | null
           tags?: string[] | null
           topic?: string | null
@@ -726,7 +726,7 @@ export type Database = {
           platform?: string
           posted_at?: string | null
           rejection_reason?: string | null
-          scheduled_for?: string
+          scheduled_for?: string | null
           status?: string | null
           tags?: string[] | null
           topic?: string | null
