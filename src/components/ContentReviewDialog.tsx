@@ -66,15 +66,6 @@ export function ContentReviewDialog({
         .filter(([_, status]) => status === 'rejected')
         .map(([index]) => parseInt(index));
 
-      // Check all rejections have reasons
-      for (const index of rejectedIndexes) {
-        if (!rejectionReasons[index]?.trim()) {
-          toast.error(`Please provide rejection reason for tweet #${index + 1}`);
-          setProcessing(false);
-          return;
-        }
-      }
-
       // Process approved content
       for (const index of approvedIndexes) {
         const tagArray = tags[index] 
@@ -110,7 +101,7 @@ export function ContentReviewDialog({
             content: content[index],
             topic: topic,
             keywords: keywords || [],
-            rejection_reason: rejectionReasons[index],
+            rejection_reason: rejectionReasons[index] || 'No reason provided',
             generation_params: {
               topic,
               keywords,
@@ -214,7 +205,7 @@ export function ContentReviewDialog({
 
                   {decision === 'rejected' && (
                     <div className="space-y-2">
-                      <Label className="text-xs">Rejection Reason *</Label>
+                      <Label className="text-xs">Rejection Reason (optional)</Label>
                       <Textarea
                         placeholder="Why is this being rejected? (e.g., too generic, wrong tone, factually incorrect)"
                         value={rejectionReasons[index] || ''}
