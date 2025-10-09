@@ -149,7 +149,7 @@ export default function MediaLibraryPage() {
           height = dimensions.height;
         }
 
-        const { error: dbError } = await supabase
+        const { data: insertedMedia, error: dbError } = await supabase
           .from('media_assets')
           .insert({
             business_id: selectedBusiness,
@@ -160,9 +160,31 @@ export default function MediaLibraryPage() {
             mime_type: file.type,
             width,
             height
-          });
+          })
+          .select()
+          .single();
 
         if (dbError) throw dbError;
+
+        // Trigger AI analysis asynchronously (don't wait for it)
+        if (insertedMedia) {
+          supabase.functions.invoke('analyze-media', {
+            body: {
+              mediaId: insertedMedia.id,
+              fileType: isImage ? 'image' : 'video',
+              filePath: publicUrl,
+              businessId: selectedBusiness
+            }
+          }).then(({ data, error }) => {
+            if (error) {
+              console.error('AI analysis error:', error);
+            } else {
+              console.log('AI analysis triggered for:', file.name);
+              // Reload media to show updated descriptions/tags
+              setTimeout(() => loadMedia(), 2000);
+            }
+          });
+        }
       }
 
       toast.success(`Uploaded ${files.length} file(s)`);
@@ -418,7 +440,11 @@ export default function MediaLibraryPage() {
                       </div>
                       <div className="p-3 space-y-2">
                         <p className="text-xs font-medium truncate">{item.file_name}</p>
-                        {item.description && (
+                        {!item.description ? (
+                          <Badge variant="outline" className="text-xs">
+                            🤖 AI analyzing...
+                          </Badge>
+                        ) : (
                           <p className="text-xs text-muted-foreground line-clamp-2">
                             {item.description}
                           </p>
