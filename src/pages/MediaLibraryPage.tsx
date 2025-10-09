@@ -9,7 +9,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
-import { Upload, Image as ImageIcon, Video, Trash2, Edit2, Search } from "lucide-react";
+import { Upload, Image as ImageIcon, Video, Trash2, Edit2, Search, Download } from "lucide-react";
 import { toast } from "sonner";
 
 interface MediaAsset {
@@ -255,6 +255,25 @@ export default function MediaLibraryPage() {
     }
   };
 
+  const handleDownload = async (item: MediaAsset) => {
+    try {
+      const response = await fetch(item.file_path);
+      const blob = await response.blob();
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = item.file_name;
+      document.body.appendChild(a);
+      a.click();
+      window.URL.revokeObjectURL(url);
+      document.body.removeChild(a);
+      toast.success('Download started');
+    } catch (error) {
+      console.error('Error downloading file:', error);
+      toast.error('Failed to download file');
+    }
+  };
+
   const filteredMedia = media.filter(item => {
     const matchesSearch = !searchTerm || 
       item.file_name.toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -416,6 +435,14 @@ export default function MediaLibraryPage() {
                           </div>
                         )}
                         <div className="absolute top-2 right-2 flex gap-1">
+                          <Button
+                            size="sm"
+                            variant="secondary"
+                            className="h-8 w-8 p-0"
+                            onClick={() => handleDownload(item)}
+                          >
+                            <Download className="w-4 h-4" />
+                          </Button>
                           <Button
                             size="sm"
                             variant="secondary"
