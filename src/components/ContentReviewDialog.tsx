@@ -39,6 +39,9 @@ export function ContentReviewDialog({
   const [decisions, setDecisions] = useState<Record<number, 'pending' | 'approved' | 'rejected'>>({});
   const [rejectionReasons, setRejectionReasons] = useState<Record<number, string>>({});
   const [tags, setTags] = useState<Record<number, string>>({});
+  const [scheduleOptions, setScheduleOptions] = useState<Record<number, 'now' | 'later'>>({});
+  const [scheduleDates, setScheduleDates] = useState<Record<number, string>>({});
+  const [scheduleTimes, setScheduleTimes] = useState<Record<number, string>>({});
   const [processing, setProcessing] = useState(false);
 
   // Normalize content to always be ContentItem[]
@@ -57,6 +60,10 @@ export function ContentReviewDialog({
 
   const handleApprove = (index: number) => {
     setDecisions({ ...decisions, [index]: 'approved' });
+    // Set default to "now" if not already set
+    if (!scheduleOptions[index]) {
+      setScheduleOptions({ ...scheduleOptions, [index]: 'now' });
+    }
   };
 
   const handleReject = (index: number) => {
@@ -91,6 +98,20 @@ export function ContentReviewDialog({
           ? tags[index].split(',').map(t => t.trim()).filter(Boolean)
           : [];
 
+        // Determine status and scheduled_for based on schedule options
+        let status: 'draft' | 'scheduled' = 'draft';
+        let scheduledFor: string | null = null;
+
+        if (scheduleOptions[index] === 'later') {
+          if (!scheduleDates[index] || !scheduleTimes[index]) {
+            toast.error(`Tweet #${index + 1}: Please set both date and time for scheduled post`);
+            setProcessing(false);
+            return;
+          }
+          status = 'scheduled';
+          scheduledFor = `${scheduleDates[index]}T${scheduleTimes[index]}:00`;
+        }
+
         const item = normalizedContent[index];
         const fullContent = item.content;
         const hashtags = item.hashtags || [];
@@ -107,8 +128,8 @@ export function ContentReviewDialog({
             tags: tagArray,
             approval_status: 'approved',
             approved_at: new Date().toISOString(),
-            status: 'draft',
-            scheduled_for: null
+            status: status,
+            scheduled_for: scheduledFor
           });
 
         if (approveError) throw approveError;
@@ -140,13 +161,20 @@ export function ContentReviewDialog({
       }
 
       toast.success(
-        `Approved ${approvedIndexes.length} tweets, rejected ${rejectedIndexes.length}`
+        `Approved ${approvedIndexes.length} tweets${
+          approvedIndexes.some(i => scheduleOptions[i] === 'later') 
+            ? ' (some scheduled for later)' 
+            : ''
+        }, rejected ${rejectedIndexes.length}`
       );
       
       // Reset state
       setDecisions({});
       setRejectionReasons({});
       setTags({});
+      setScheduleOptions({});
+      setScheduleDates({});
+      setScheduleTimes({});
       onOpenChange(false);
       
     } catch (error) {
@@ -258,15 +286,65 @@ export function ContentReviewDialog({
                   </div>
 
                   {decision === 'approved' && (
-                    <div className="space-y-2">
-                      <Label className="text-xs">Tags (comma-separated, optional)</Label>
-                      <Input
-                        placeholder="motivation, training, technique"
-                        value={tags[index] || ''}
-                        onChange={(e) => setTags({ ...tags, [index]: e.target.value })}
-                        className="text-sm"
-                      />
-                    </div>
+                    <>
+                      <div className="space-y-2">
+                        <Label className="text-xs">Tags (comma-separated, optional)</Label>
+                        <Input
+                          placeholder="motivation, training, technique"
+                          value={tags[index] || ''}
+                          onChange={(e) => setTags({ ...tags, [index]: e.target.value })}
+                          className="text-sm"
+                        />
+                      </div>
+                      
+                      {/* Scheduling Options */}
+                      <div className="space-y-3 mt-3 p-3 border rounded-lg bg-muted/30">
+                        <Label className="text-sm font-medium">When to post?</Label>
+                        
+                        <div className="flex gap-2">
+                          <Button
+                            type="button"
+                            size="sm"
+                            variant={scheduleOptions[index] === 'now' ? 'default' : 'outline'}
+                            className="flex-1"
+                            onClick={() => setScheduleOptions({ ...scheduleOptions, [index]: 'now' })}
+                          >
+                            Post Immediately
+                          </Button>
+                          <Button
+                            type="button"
+                            size="sm"
+                            variant={scheduleOptions[index] === 'later' ? 'default' : 'outline'}
+                            className="flex-1"
+                            onClick={() => setScheduleOptions({ ...scheduleOptions, [index]: 'later' })}
+                          >
+                            Schedule for Later
+                          </Button>
+                        </div>
+
+                        {scheduleOptions[index] === 'later' && (
+                          <div className="grid grid-cols-2 gap-2">
+                            <div>
+                              <Label className="text-xs">Date</Label>
+                              <Input
+                                type="date"
+                                value={scheduleDates[index] || ''}
+                                onChange={(e) => setScheduleDates({ ...scheduleDates, [index]: e.target.value })}
+                                min={new Date().toISOString().split('T')[0]}
+                              />
+                            </div>
+                            <div>
+                              <Label className="text-xs">Time</Label>
+                              <Input
+                                type="time"
+                                value={scheduleTimes[index] || ''}
+                                onChange={(e) => setScheduleTimes({ ...scheduleTimes, [index]: e.target.value })}
+                              />
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    </>
                   )}
 
                   {decision === 'rejected' && (
