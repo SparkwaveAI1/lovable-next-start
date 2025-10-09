@@ -53,51 +53,60 @@ serve(async (req) => {
       return new Response(
         JSON.stringify({ 
           success: false, 
-          error: `No Twitter token configured for ${business.name}. Please authenticate this business's Twitter account.` 
+          error: `No Twitter token configured for ${business.name}` 
         }),
         { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 400 }
       );
     }
 
-    console.log(`Posting tweet for ${business.name} (${business.slug})`);
+    // Get GAME API key
+    const gameApiKey = Deno.env.get('GAME_API_KEY');
+    
+    if (!gameApiKey) {
+      return new Response(
+        JSON.stringify({ success: false, error: 'GAME_API_KEY not configured' }),
+        { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 500 }
+      );
+    }
 
-    // Post to Twitter using GAME's virtualized Twitter API
-    const twitterResponse = await fetch('https://api.twitter.com/2/tweets', {
+    console.log(`Posting tweet for ${business.name} via GAME platform...`);
+
+    // Call GAME's virtualized Twitter API
+    // This is the correct endpoint that works with GAME tokens
+    const gameResponse = await fetch('https://api.virtuals.io/api/virtuals-twitter/tweet', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        'Authorization': `Bearer ${business.game_twitter_token}`,
+        'x-api-key': gameApiKey,
       },
       body: JSON.stringify({
+        accessToken: business.game_twitter_token,
         text: content
       })
     });
 
-    const responseText = await twitterResponse.text();
-    console.log('Twitter API response:', responseText);
-
-    if (!twitterResponse.ok) {
-      console.error('Twitter API error:', twitterResponse.status, responseText);
+    if (!gameResponse.ok) {
+      const errorText = await gameResponse.text();
+      console.error('GAME API error:', errorText);
       return new Response(
         JSON.stringify({ 
           success: false, 
-          error: `Twitter API error: ${twitterResponse.status} - ${responseText}` 
+          error: `GAME API error: ${gameResponse.status} - ${errorText}` 
         }),
         { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 500 }
       );
     }
 
-    const twitterData = JSON.parse(responseText);
-    const tweetId = twitterData.data?.id;
-
-    console.log(`Successfully posted tweet for ${business.name}:`, tweetId);
+    const gameData = await gameResponse.json();
+    
+    console.log(`Successfully posted tweet for ${business.name}:`, gameData);
 
     return new Response(
       JSON.stringify({
         success: true,
-        tweetId: tweetId,
+        tweetId: gameData.data?.id || 'posted',
         message: `Posted to ${business.name} Twitter account`,
-        business: business.name
+        data: gameData
       }),
       { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     );
