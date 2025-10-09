@@ -8,6 +8,7 @@ import NotFound from "./pages/NotFound";
 import ContentCenter from "./pages/ContentCenter";
 import GameTestInterface from "./components/GameTestInterface";
 import MediaLibraryPage from "./pages/MediaLibraryPage";
+import EmployeeUpload from "./pages/EmployeeUpload";
 
 const queryClient = new QueryClient();
 
@@ -22,6 +23,7 @@ const App = () => (
           <Route path="/content-center" element={<ContentCenter />} />
           <Route path="/game-test" element={<GameTestInterface />} />
           <Route path="/media-library" element={<MediaLibraryPage />} />
+          <Route path="/employee-upload" element={<EmployeeUpload />} />
           {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
           <Route path="*" element={<NotFound />} />
         </Routes>
