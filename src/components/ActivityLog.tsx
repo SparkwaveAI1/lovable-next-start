@@ -4,7 +4,6 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Skeleton } from '@/components/ui/skeleton';
-import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 import { AlertCircle, CheckCircle, Clock, ChevronDown } from 'lucide-react';
 import { formatToEasternCompact } from '@/lib/dateUtils';
 
@@ -132,48 +131,38 @@ export function ActivityLog({ businessId }: ActivityLogProps) {
             </TableHeader>
             <TableBody>
               {logs.map((log) => (
-                <Collapsible key={log.id} open={expandedRows.has(log.id)}>
-                  <TableRow className="cursor-pointer hover:bg-accent/50">
-                    <CollapsibleTrigger asChild>
-                      <TableCell onClick={() => toggleRow(log.id)}>
-                        <ChevronDown className={`h-4 w-4 transition-transform ${expandedRows.has(log.id) ? 'rotate-180' : ''}`} />
-                      </TableCell>
-                    </CollapsibleTrigger>
-                    <CollapsibleTrigger asChild>
-                      <TableCell onClick={() => toggleRow(log.id)}>
-                        {getStatusIcon(log.status)}
-                      </TableCell>
-                    </CollapsibleTrigger>
-                    <CollapsibleTrigger asChild>
-                      <TableCell className="font-mono text-sm" onClick={() => toggleRow(log.id)}>
-                        {formatTimestamp(log.created_at)}
-                      </TableCell>
-                    </CollapsibleTrigger>
-                    <CollapsibleTrigger asChild>
-                      <TableCell onClick={() => toggleRow(log.id)}>
-                        <Badge variant="outline">
-                          {log.automation_type.replace(/_/g, ' ')}
-                        </Badge>
-                      </TableCell>
-                    </CollapsibleTrigger>
-                    <CollapsibleTrigger asChild>
-                      <TableCell onClick={() => toggleRow(log.id)}>
-                        {getStatusBadge(log.status)}
-                      </TableCell>
-                    </CollapsibleTrigger>
-                    <CollapsibleTrigger asChild>
-                      <TableCell className="max-w-md" onClick={() => toggleRow(log.id)}>
-                        {getSourceDataSummary(log)}
-                      </TableCell>
-                    </CollapsibleTrigger>
-                    <CollapsibleTrigger asChild>
-                      <TableCell className="font-mono text-sm" onClick={() => toggleRow(log.id)}>
-                        {log.execution_time_ms ? `${log.execution_time_ms}ms` : '-'}
-                      </TableCell>
-                    </CollapsibleTrigger>
+                <>
+                  <TableRow 
+                    key={log.id}
+                    className="cursor-pointer hover:bg-accent/50"
+                    onClick={() => toggleRow(log.id)}
+                  >
+                    <TableCell>
+                      <ChevronDown className={`h-4 w-4 transition-transform ${expandedRows.has(log.id) ? 'rotate-180' : ''}`} />
+                    </TableCell>
+                    <TableCell>
+                      {getStatusIcon(log.status)}
+                    </TableCell>
+                    <TableCell className="font-mono text-sm">
+                      {formatTimestamp(log.created_at)}
+                    </TableCell>
+                    <TableCell>
+                      <Badge variant="outline">
+                        {log.automation_type.replace(/_/g, ' ')}
+                      </Badge>
+                    </TableCell>
+                    <TableCell>
+                      {getStatusBadge(log.status)}
+                    </TableCell>
+                    <TableCell className="max-w-md">
+                      {getSourceDataSummary(log)}
+                    </TableCell>
+                    <TableCell className="font-mono text-sm">
+                      {log.execution_time_ms ? `${log.execution_time_ms}ms` : '-'}
+                    </TableCell>
                   </TableRow>
-                  <CollapsibleContent asChild>
-                    <TableRow>
+                  {expandedRows.has(log.id) && (
+                    <TableRow key={`${log.id}-details`}>
                       <TableCell colSpan={7} className="bg-muted/30 p-4">
                         <div className="space-y-3 text-sm">
                           {log.source_data && (
@@ -201,8 +190,8 @@ export function ActivityLog({ businessId }: ActivityLogProps) {
                         </div>
                       </TableCell>
                     </TableRow>
-                  </CollapsibleContent>
-                </Collapsible>
+                  )}
+                </>
               ))}
             </TableBody>
           </Table>
