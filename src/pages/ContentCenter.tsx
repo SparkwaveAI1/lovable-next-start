@@ -440,7 +440,7 @@ const ContentCenter = () => {
 
     try {
       const { data, error } = await supabase.functions.invoke('post-tweet', {
-        body: { content }
+        body: { content, businessId: getBusinessId(selectedBusiness) }
       });
 
       if (error) throw error;

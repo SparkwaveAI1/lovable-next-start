@@ -383,7 +383,7 @@ async function postToTwitter(args: any) {
     
     // Call the real post-tweet Edge Function which uses GAME API
     const { data, error } = await supabase.functions.invoke('post-tweet', {
-      body: { content: args.content }
+      body: { content: args.content, businessId: args.businessId }
     });
     
     if (error) {
