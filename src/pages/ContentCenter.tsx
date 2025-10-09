@@ -240,14 +240,13 @@ const ContentCenter = () => {
   };
 
   const getBusinessId = (businessSlug: string) => {
-    // Generate a consistent UUID for each business - in real app this would come from database
-    const businessIds = {
-      'fight-flow-academy': 'a1b2c3d4-e5f6-7890-abcd-123456789abc',
-      'sparkwave-ai': 'b2c3d4e5-f6g7-8901-bcde-234567890def',
-      'persona-ai': 'c3d4e5f6-g7h8-9012-cdef-345678901efg',
-      'charx-world': 'd4e5f6g7-h8i9-0123-defg-456789012fgh'
+    const businessIds: Record<string, string> = {
+      'fight-flow-academy': '456dc53b-d9d9-41b0-bc33-4f4c4a791eff',
+      'sparkwave-ai': '5a9bbfcf-fae5-4063-9780-bcbe366bae88',
+      'persona-ai': '18d0dbb1-a82d-4477-a9f8-816a1fa2ee08',
+      'charx-world': '350b8fcb-9bfe-4b53-9548-c6ffdb1d3cb5'
     };
-    return businessIds[businessSlug as keyof typeof businessIds] || businessSlug;
+    return businessIds[businessSlug] || businessSlug;
   };
 
   const handleScheduleTweet = async () => {
