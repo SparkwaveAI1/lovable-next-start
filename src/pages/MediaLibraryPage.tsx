@@ -430,9 +430,13 @@ export default function MediaLibraryPage() {
                             className="w-full h-full object-cover"
                           />
                         ) : (
-                          <div className="w-full h-full bg-gray-900 flex items-center justify-center">
-                            <Video className="w-12 h-12 text-white" />
-                          </div>
+                          <video
+                            src={item.file_path}
+                            className="w-full h-full object-cover"
+                            preload="metadata"
+                            muted
+                            playsInline
+                          />
                         )}
                         <div className="absolute top-2 right-2 flex gap-1">
                           <Button

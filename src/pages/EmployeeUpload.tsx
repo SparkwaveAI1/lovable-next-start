@@ -63,7 +63,7 @@ export default function EmployeeUpload() {
     const fileStatuses: UploadedFile[] = Array.from(files).map(file => ({
       name: file.name,
       status: 'uploading',
-      preview: file.type.startsWith('image/') ? URL.createObjectURL(file) : undefined
+      preview: URL.createObjectURL(file)
     }));
     setUploadedFiles(prev => [...prev, ...fileStatuses]);
 
@@ -108,12 +108,33 @@ export default function EmployeeUpload() {
           .from('content-media')
           .getPublicUrl(fileName);
 
-        // Get image dimensions if applicable
-        let width, height;
+        // Get dimensions and thumbnail
+        let width, height, thumbnailUrl;
         if (isImage) {
           const dimensions = await getImageDimensions(file);
           width = dimensions.width;
           height = dimensions.height;
+        } else if (isVideo) {
+          try {
+            const { blob, width: vWidth, height: vHeight } = await generateVideoThumbnail(file);
+            width = vWidth;
+            height = vHeight;
+            
+            // Upload thumbnail
+            const thumbnailFileName = `${businessSlug}/thumbnails/${timestamp}_${Math.random().toString(36).substring(7)}.jpg`;
+            const { error: thumbError } = await supabase.storage
+              .from('content-media')
+              .upload(thumbnailFileName, blob);
+            
+            if (!thumbError) {
+              const { data: { publicUrl: thumbUrl } } = supabase.storage
+                .from('content-media')
+                .getPublicUrl(thumbnailFileName);
+              thumbnailUrl = thumbUrl;
+            }
+          } catch (error) {
+            console.error('Error generating video thumbnail:', error);
+          }
         }
 
         // Save to database
@@ -127,7 +148,8 @@ export default function EmployeeUpload() {
             file_size: file.size,
             mime_type: file.type,
             width,
-            height
+            height,
+            thumbnail_path: thumbnailUrl
           })
           .select()
           .single();
@@ -180,6 +202,53 @@ export default function EmployeeUpload() {
         resolve({ width: img.width, height: img.height });
       };
       img.src = URL.createObjectURL(file);
+    });
+  };
+
+  const generateVideoThumbnail = (file: File): Promise<{ blob: Blob; width: number; height: number }> => {
+    return new Promise((resolve, reject) => {
+      const video = document.createElement('video');
+      video.preload = 'metadata';
+      video.muted = true;
+      video.playsInline = true;
+      
+      video.onloadedmetadata = () => {
+        video.currentTime = 1; // Capture frame at 1 second
+      };
+      
+      video.onseeked = () => {
+        const canvas = document.createElement('canvas');
+        canvas.width = video.videoWidth;
+        canvas.height = video.videoHeight;
+        
+        const ctx = canvas.getContext('2d');
+        if (!ctx) {
+          reject(new Error('Could not get canvas context'));
+          return;
+        }
+        
+        ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+        
+        canvas.toBlob((blob) => {
+          if (blob) {
+            resolve({ 
+              blob, 
+              width: video.videoWidth, 
+              height: video.videoHeight 
+            });
+          } else {
+            reject(new Error('Failed to create thumbnail'));
+          }
+        }, 'image/jpeg', 0.8);
+        
+        URL.revokeObjectURL(video.src);
+      };
+      
+      video.onerror = () => {
+        reject(new Error('Failed to load video'));
+      };
+      
+      video.src = URL.createObjectURL(file);
     });
   };
 
@@ -293,11 +362,21 @@ export default function EmployeeUpload() {
                   className="flex items-center gap-4 p-3 border rounded-lg"
                 >
                   {file.preview ? (
-                    <img
-                      src={file.preview}
-                      alt={file.name}
-                      className="w-16 h-16 object-cover rounded"
-                    />
+                    file.name.match(/\.(mp4|mov|avi|webm)$/i) ? (
+                      <video
+                        src={file.preview}
+                        className="w-16 h-16 object-cover rounded"
+                        preload="metadata"
+                        muted
+                        playsInline
+                      />
+                    ) : (
+                      <img
+                        src={file.preview}
+                        alt={file.name}
+                        className="w-16 h-16 object-cover rounded"
+                      />
+                    )
                   ) : (
                     <div className="w-16 h-16 bg-gray-900 rounded flex items-center justify-center">
                       <Video className="w-8 h-8 text-white" />
