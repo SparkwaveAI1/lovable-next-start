@@ -210,6 +210,44 @@ export async function getDueContent(): Promise<{
 }
 
 /**
+ * Mark content as posted manually
+ */
+export async function markAsPosted(contentId: string): Promise<{
+  success: boolean;
+  message: string;
+}> {
+  try {
+    const { error } = await supabase
+      .from('scheduled_content')
+      .update({ 
+        status: 'posted',
+        posted_at: new Date().toISOString()
+      })
+      .eq('id', contentId);
+
+    if (error) {
+      console.error('Error marking content as posted:', error);
+      return {
+        success: false,
+        message: `Failed to mark as posted: ${error.message}`
+      };
+    }
+
+    return {
+      success: true,
+      message: 'Content marked as posted'
+    };
+
+  } catch (error) {
+    console.error('Error in markAsPosted:', error);
+    return {
+      success: false,
+      message: error instanceof Error ? error.message : 'Unknown error occurred'
+    };
+  }
+}
+
+/**
  * Mark content as posted or failed
  */
 export async function updateContentStatus(

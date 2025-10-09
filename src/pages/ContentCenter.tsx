@@ -15,6 +15,7 @@ import { DashboardHeader } from "@/components/DashboardHeader";
 import { supabase } from "@/integrations/supabase/client";
 import { ContentReviewDialog } from "@/components/ContentReviewDialog";
 import { ContentLibrary } from "@/components/ContentLibrary";
+import { PostedContentLibrary } from "@/components/PostedContentLibrary";
 
 const TIME_RE = /^([01]\d|2[0-3]):([0-5]\d)$/;
 
@@ -742,10 +743,11 @@ const ContentCenter = () => {
           {/* Content Preview and Management */}
           <div className="lg:col-span-2">
             <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-4">
-              <TabsList className="grid w-full grid-cols-4">
+              <TabsList className="grid w-full grid-cols-5">
                 <TabsTrigger value="preview">Preview</TabsTrigger>
                 <TabsTrigger value="library">Library</TabsTrigger>
                 <TabsTrigger value="schedule">Schedule</TabsTrigger>
+                <TabsTrigger value="posted">Posted</TabsTrigger>
                 <TabsTrigger value="history">History</TabsTrigger>
               </TabsList>
               
@@ -894,6 +896,32 @@ const ContentCenter = () => {
                   </CardHeader>
                   <CardContent>
                     <ScheduleTabContent />
+                  </CardContent>
+                </Card>
+              </TabsContent>
+
+              <TabsContent value="posted">
+                <Card>
+                  <CardHeader>
+                    <CardTitle className="flex items-center gap-2">
+                      <CheckCircle className="h-5 w-5" />
+                      Posted Content
+                    </CardTitle>
+                    <CardDescription>
+                      View content that has been posted
+                    </CardDescription>
+                  </CardHeader>
+                  <CardContent>
+                    {selectedBusiness ? (
+                      <PostedContentLibrary 
+                        businessId={getBusinessId(selectedBusiness)}
+                      />
+                    ) : (
+                      <div className="text-center py-12 text-muted-foreground">
+                        <CheckCircle className="h-12 w-12 mx-auto mb-4 opacity-50" />
+                        <p>Select a business to view posted content</p>
+                      </div>
+                    )}
                   </CardContent>
                 </Card>
               </TabsContent>

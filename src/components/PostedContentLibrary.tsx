@@ -6,11 +6,10 @@ import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardFooter, CardHeader } from "@/components/ui/card";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Calendar, Clock, Edit2, Trash2, Image as ImageIcon, Video, CheckCircle } from "lucide-react";
+import { Clock, Trash2, Image as ImageIcon, Video, CheckCircle } from "lucide-react";
 import { toast } from "sonner";
-import { markAsPosted } from "@/lib/schedulingService";
 
-interface LibraryContent {
+interface PostedContent {
   id: string;
   business_id: string;
   platform: string;
@@ -19,7 +18,7 @@ interface LibraryContent {
   topic?: string;
   keywords?: string[];
   tags?: string[];
-  approved_at?: string;
+  posted_at?: string;
   created_at: string;
   media?: Array<{
     id: string;
@@ -29,14 +28,12 @@ interface LibraryContent {
   }>;
 }
 
-interface ContentLibraryProps {
+interface PostedContentLibraryProps {
   businessId: string;
-  onSchedule: (content: LibraryContent) => void;
-  onEdit: (content: LibraryContent) => void;
 }
 
-export function ContentLibrary({ businessId, onSchedule, onEdit }: ContentLibraryProps) {
-  const [content, setContent] = useState<LibraryContent[]>([]);
+export function PostedContentLibrary({ businessId }: PostedContentLibraryProps) {
+  const [content, setContent] = useState<PostedContent[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState("");
   const [platformFilter, setPlatformFilter] = useState("all");
@@ -50,7 +47,6 @@ export function ContentLibrary({ businessId, onSchedule, onEdit }: ContentLibrar
   const loadContent = async () => {
     setLoading(true);
     try {
-      // Use businessId directly as UUID
       const { data, error } = await supabase
         .from('scheduled_content')
         .select(`
@@ -67,9 +63,8 @@ export function ContentLibrary({ businessId, onSchedule, onEdit }: ContentLibrar
           )
         `)
         .eq('business_id', businessId)
-        .eq('approval_status', 'approved')
-        .eq('status', 'draft')
-        .order('approved_at', { ascending: false });
+        .eq('status', 'posted')
+        .order('posted_at', { ascending: false });
 
       if (error) throw error;
 
@@ -82,15 +77,15 @@ export function ContentLibrary({ businessId, onSchedule, onEdit }: ContentLibrar
 
       setContent(data || []);
     } catch (error) {
-      console.error('Error loading content:', error);
-      toast.error('Failed to load content library');
+      console.error('Error loading posted content:', error);
+      toast.error('Failed to load posted content');
     } finally {
       setLoading(false);
     }
   };
 
   const handleDelete = async (id: string) => {
-    if (!confirm('Delete this content from your library?')) return;
+    if (!confirm('Delete this posted content from history?')) return;
 
     try {
       const { error } = await supabase
@@ -105,24 +100,6 @@ export function ContentLibrary({ businessId, onSchedule, onEdit }: ContentLibrar
     } catch (error) {
       console.error('Error deleting:', error);
       toast.error('Failed to delete content');
-    }
-  };
-
-  const handleMarkAsPosted = async (id: string) => {
-    if (!confirm('Mark this content as posted?')) return;
-
-    try {
-      const result = await markAsPosted(id);
-      
-      if (result.success) {
-        toast.success('Content marked as posted');
-        loadContent();
-      } else {
-        toast.error(result.message);
-      }
-    } catch (error) {
-      console.error('Error marking as posted:', error);
-      toast.error('Failed to mark as posted');
     }
   };
 
@@ -160,7 +137,7 @@ export function ContentLibrary({ businessId, onSchedule, onEdit }: ContentLibrar
       <div className="flex items-center justify-center p-12">
         <div className="text-center">
           <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary mx-auto mb-4"></div>
-          <p className="text-sm text-muted-foreground">Loading your content library...</p>
+          <p className="text-sm text-muted-foreground">Loading posted content...</p>
         </div>
       </div>
     );
@@ -209,7 +186,7 @@ export function ContentLibrary({ businessId, onSchedule, onEdit }: ContentLibrar
       {/* Stats */}
       <div className="flex gap-4 text-sm">
         <Badge variant="secondary">
-          Total: {filteredContent.length}
+          Total Posted: {filteredContent.length}
         </Badge>
         {platformFilter !== 'all' && (
           <Badge variant="outline">
@@ -222,12 +199,12 @@ export function ContentLibrary({ businessId, onSchedule, onEdit }: ContentLibrar
       {filteredContent.length === 0 ? (
         <Card>
           <CardContent className="flex flex-col items-center justify-center p-12 text-center">
-            <div className="text-4xl mb-4">📚</div>
-            <h3 className="text-lg font-semibold mb-2">No content in library</h3>
+            <div className="text-4xl mb-4">✅</div>
+            <h3 className="text-lg font-semibold mb-2">No posted content</h3>
             <p className="text-sm text-muted-foreground mb-4">
               {searchTerm || platformFilter !== 'all' || tagFilter !== 'all'
-                ? "No content matches your filters"
-                : "Generate and approve content to build your library"}
+                ? "No posted content matches your filters"
+                : "Posted content will appear here"}
             </p>
           </CardContent>
         </Card>
@@ -244,15 +221,20 @@ export function ContentLibrary({ businessId, onSchedule, onEdit }: ContentLibrar
                         {item.platform}
                       </Badge>
                     </div>
-                    {item.media && item.media.length > 0 && (
-                      <Badge variant="secondary" className="text-xs">
-                        {item.media[0].file_type === 'image' ? (
-                          <><ImageIcon className="w-3 h-3 mr-1" /> {item.media.length}</>
-                        ) : (
-                          <><Video className="w-3 h-3 mr-1" /> {item.media.length}</>
-                        )}
+                    <div className="flex items-center gap-2">
+                      {item.media && item.media.length > 0 && (
+                        <Badge variant="secondary" className="text-xs">
+                          {item.media[0].file_type === 'image' ? (
+                            <><ImageIcon className="w-3 h-3 mr-1" /> {item.media.length}</>
+                          ) : (
+                            <><Video className="w-3 h-3 mr-1" /> {item.media.length}</>
+                          )}
+                        </Badge>
+                      )}
+                      <Badge variant="default" className="text-xs">
+                        <CheckCircle className="w-3 h-3 mr-1" /> Posted
                       </Badge>
-                    )}
+                    </div>
                   </div>
                 </CardHeader>
 
@@ -277,41 +259,19 @@ export function ContentLibrary({ businessId, onSchedule, onEdit }: ContentLibrar
 
                   <div className="flex items-center gap-2 text-xs text-muted-foreground mt-3">
                     <Clock className="w-3 h-3" />
-                    {new Date(item.approved_at || item.created_at).toLocaleDateString()}
+                    Posted: {item.posted_at ? new Date(item.posted_at).toLocaleDateString() : 'Unknown'}
                   </div>
                 </CardContent>
 
                 <CardFooter className="pt-3 border-t flex gap-2">
                   <Button
                     size="sm"
-                    variant="default"
+                    variant="outline"
                     className="flex-1"
-                    onClick={() => onSchedule(item)}
-                  >
-                    <Calendar className="w-4 h-4 mr-1" />
-                    Schedule
-                  </Button>
-                  <Button
-                    size="sm"
-                    variant="secondary"
-                    onClick={() => handleMarkAsPosted(item.id)}
-                    title="Mark as Posted"
-                  >
-                    <CheckCircle className="w-4 h-4" />
-                  </Button>
-                  <Button
-                    size="sm"
-                    variant="outline"
-                    onClick={() => onEdit(item)}
-                  >
-                    <Edit2 className="w-4 h-4" />
-                  </Button>
-                  <Button
-                    size="sm"
-                    variant="outline"
                     onClick={() => handleDelete(item.id)}
                   >
-                    <Trash2 className="w-4 h-4" />
+                    <Trash2 className="w-4 h-4 mr-1" />
+                    Delete
                   </Button>
                 </CardFooter>
               </Card>
