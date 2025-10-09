@@ -528,13 +528,13 @@ serve(async (req) => {
     
     console.log('Raw AI response:', rawContent);
     
-    // Parse the numbered content
+    // Parse the numbered content and extract hashtags
     const contentLines = rawContent.split('\n').filter(line => line.trim());
-    const content: string[] = [];
+    const contentItems: Array<{ content: string; hashtags: string[] }> = [];
 
     for (const line of contentLines) {
       // Remove numbering patterns like "1.", "1/5", "Tweet 1:", etc.
-      const cleaned = line
+      let cleaned = line
         .replace(/^\d+[\.)]\s*/, '')           // Remove "1. " or "1) "
         .replace(/^\d+\/\d+\s*/, '')           // Remove "1/5 "
         .replace(/^Tweet\s+\d+:\s*/i, '')      // Remove "Tweet 1: "
@@ -542,12 +542,22 @@ serve(async (req) => {
         .trim();
       
       if (cleaned && cleaned.length > 0) {
-        content.push(cleaned);
+        // Extract hashtags (anything starting with #)
+        const hashtagMatches = cleaned.match(/#\w+/g) || [];
+        const hashtags = hashtagMatches.map(tag => tag.substring(1)); // Remove # prefix for storage
+        
+        // Remove hashtags from content
+        const contentWithoutHashtags = cleaned.replace(/#\w+/g, '').trim().replace(/\s+/g, ' ');
+        
+        contentItems.push({
+          content: contentWithoutHashtags,
+          hashtags: hashtags
+        });
       }
     }
 
     // Validate we got content
-    if (content.length === 0) {
+    if (contentItems.length === 0) {
       return new Response(
         JSON.stringify({ 
           success: false, 
@@ -558,14 +568,15 @@ serve(async (req) => {
       );
     }
 
-    // Structure the response
+    // Structure the response with separated content and hashtags
     const result = {
-      tweets: content.slice(0, quantity), // Keep 'tweets' key for backwards compatibility
+      content: contentItems.slice(0, quantity),
+      tweets: contentItems.slice(0, quantity).map(item => item.content), // Keep for backwards compatibility
       success: true,
       businessName: business.name,
       platform: request.platform,
       contentType: request.contentType,
-      quantity: content.length
+      quantity: contentItems.length
     };
 
     console.log('Returning result:', result);

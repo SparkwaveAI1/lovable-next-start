@@ -10,10 +10,15 @@ import { CheckCircle, XCircle } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 
+interface ContentItem {
+  content: string;
+  hashtags?: string[];
+}
+
 interface ContentReviewDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  content: string[];
+  content: ContentItem[] | string[]; // Support both old and new format
   businessId: string;
   platform: string;
   contentType: string;
@@ -35,6 +40,20 @@ export function ContentReviewDialog({
   const [rejectionReasons, setRejectionReasons] = useState<Record<number, string>>({});
   const [tags, setTags] = useState<Record<number, string>>({});
   const [processing, setProcessing] = useState(false);
+
+  // Normalize content to always be ContentItem[]
+  const normalizedContent: ContentItem[] = content.map(item => 
+    typeof item === 'string' ? { content: item, hashtags: [] } : item
+  );
+
+  const copyToClipboard = async (text: string, label: string) => {
+    try {
+      await navigator.clipboard.writeText(text);
+      toast.success(`${label} copied to clipboard`);
+    } catch (err) {
+      toast.error('Failed to copy to clipboard');
+    }
+  };
 
   const handleApprove = (index: number) => {
     setDecisions({ ...decisions, [index]: 'approved' });
@@ -72,15 +91,19 @@ export function ContentReviewDialog({
           ? tags[index].split(',').map(t => t.trim()).filter(Boolean)
           : [];
 
+        const item = normalizedContent[index];
+        const fullContent = item.content;
+        const hashtags = item.hashtags || [];
+
         const { error: approveError } = await supabase
           .from('scheduled_content')
           .insert({
             business_id: getBusinessIdFromSlug(businessId),
             platform: platform,
-            content: content[index],
+            content: fullContent,
             content_type: contentType,
             topic: topic,
-            keywords: keywords || [],
+            keywords: [...(keywords || []), ...hashtags], // Store hashtags in keywords
             tags: tagArray,
             approval_status: 'approved',
             approved_at: new Date().toISOString(),
@@ -93,14 +116,17 @@ export function ContentReviewDialog({
 
       // Process rejected content
       for (const index of rejectedIndexes) {
+        const item = normalizedContent[index];
+        const hashtags = item.hashtags || [];
+
         const { error: rejectError } = await supabase
           .from('rejected_content')
           .insert({
             business_id: getBusinessIdFromSlug(businessId),
             platform: platform,
-            content: content[index],
+            content: item.content,
             topic: topic,
-            keywords: keywords || [],
+            keywords: [...(keywords || []), ...hashtags],
             rejection_reason: rejectionReasons[index] || 'No reason provided',
             generation_params: {
               topic,
@@ -131,7 +157,7 @@ export function ContentReviewDialog({
     }
   };
 
-  const pendingCount = content.length - Object.keys(decisions).filter(k => decisions[parseInt(k)] !== 'pending').length;
+  const pendingCount = normalizedContent.length - Object.keys(decisions).filter(k => decisions[parseInt(k)] !== 'pending').length;
   const approvedCount = Object.values(decisions).filter(d => d === 'approved').length;
   const rejectedCount = Object.values(decisions).filter(d => d === 'rejected').length;
 
@@ -149,8 +175,9 @@ export function ContentReviewDialog({
 
         <ScrollArea className="h-[60vh] pr-4">
           <div className="space-y-6">
-            {content.map((tweet, index) => {
+            {normalizedContent.map((item, index) => {
               const decision = decisions[index] || 'pending';
+              const hasHashtags = item.hashtags && item.hashtags.length > 0;
               
               return (
                 <div
@@ -184,11 +211,50 @@ export function ContentReviewDialog({
                     </div>
                   </div>
 
-                  <div className="mb-3 p-3 bg-background rounded border border-border">
-                    <p className="text-sm whitespace-pre-wrap">{tweet}</p>
-                    <p className="text-xs text-muted-foreground mt-2">
-                      {tweet.length} characters
-                    </p>
+                  <div className="space-y-3">
+                    <div>
+                      <div className="flex justify-between items-center mb-1">
+                        <Label className="text-xs font-medium">Post Content</Label>
+                        <Button
+                          size="sm"
+                          variant="ghost"
+                          onClick={() => copyToClipboard(item.content, 'Post')}
+                          className="h-7 text-xs"
+                        >
+                          📋 Copy Post
+                        </Button>
+                      </div>
+                      <div className="p-3 bg-background rounded border border-border">
+                        <p className="text-sm whitespace-pre-wrap">{item.content}</p>
+                        <p className="text-xs text-muted-foreground mt-2">
+                          {item.content.length} characters
+                        </p>
+                      </div>
+                    </div>
+
+                    {hasHashtags && (
+                      <div>
+                        <div className="flex justify-between items-center mb-1">
+                          <Label className="text-xs font-medium">Suggested Hashtags</Label>
+                          <Button
+                            size="sm"
+                            variant="ghost"
+                            onClick={() => copyToClipboard(
+                              item.hashtags!.map(tag => `#${tag}`).join(' '),
+                              'Hashtags'
+                            )}
+                            className="h-7 text-xs"
+                          >
+                            📋 Copy Hashtags
+                          </Button>
+                        </div>
+                        <div className="p-3 bg-muted/50 rounded border border-border">
+                          <p className="text-sm">
+                            {item.hashtags!.map(tag => `#${tag}`).join(' ')}
+                          </p>
+                        </div>
+                      </div>
+                    )}
                   </div>
 
                   {decision === 'approved' && (
@@ -227,9 +293,9 @@ export function ContentReviewDialog({
           </Button>
           <Button 
             onClick={handleSaveDecisions}
-            disabled={processing || pendingCount === content.length}
+            disabled={processing || pendingCount === normalizedContent.length}
           >
-            {processing ? 'Saving...' : `Save Decisions (${approvedCount + rejectedCount}/${content.length})`}
+            {processing ? 'Saving...' : `Save Decisions (${approvedCount + rejectedCount}/${normalizedContent.length})`}
           </Button>
         </div>
       </DialogContent>

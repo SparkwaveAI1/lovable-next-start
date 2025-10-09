@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { Sparkles, FileText, Send, Calendar, TrendingUp, RefreshCw, Edit, Trash2, Rocket, CheckCircle } from "lucide-react";
+import { Sparkles, FileText, Send, Calendar, TrendingUp, RefreshCw, Edit, Trash2, Rocket, CheckCircle, Copy } from "lucide-react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -24,10 +24,10 @@ const ContentCenter = () => {
   const [selectedContentType, setSelectedContentType] = useState("medium");
   const [topic, setTopic] = useState("");
   const [quantity, setQuantity] = useState(10);
-  const [generatedContent, setGeneratedContent] = useState<string[]>([]);
+  const [generatedContent, setGeneratedContent] = useState<Array<{content: string, hashtags?: string[]}>>([]);
   const [isGenerating, setIsGenerating] = useState(false);
   const [reviewMode, setReviewMode] = useState(false);
-  const [reviewingContent, setReviewingContent] = useState<string[]>([]);
+  const [reviewingContent, setReviewingContent] = useState<Array<{content: string, hashtags?: string[]}>>([]);
   const [schedulingTweet, setSchedulingTweet] = useState<{tweet: string, index: number} | null>(null);
   const [scheduleDate, setScheduleDate] = useState('');
   const [scheduleTime, setScheduleTime] = useState('');
@@ -40,6 +40,22 @@ const ContentCenter = () => {
   const [editTime, setEditTime] = useState('');
   const [postingTweet, setPostingTweet] = useState<number | null>(null);
   const { toast } = useToast();
+
+  const copyToClipboard = async (text: string, label: string) => {
+    try {
+      await navigator.clipboard.writeText(text);
+      toast({
+        title: "Copied!",
+        description: `${label} copied to clipboard`,
+      });
+    } catch (err) {
+      toast({
+        title: "Copy Failed",
+        description: "Failed to copy to clipboard",
+        variant: "destructive"
+      });
+    }
+  };
 
   const businesses = [
     { id: 'fight-flow-academy', name: 'Fight Flow Academy' },
@@ -211,13 +227,15 @@ const ContentCenter = () => {
         return;
       }
 
-      if (data && data.success && data.tweets) {
-        setGeneratedContent(data.tweets);
-        setReviewingContent(data.tweets);
+      if (data && data.success) {
+        // Support both old and new format
+        const contentItems = data.content || data.tweets.map((t: string) => ({ content: t, hashtags: [] }));
+        setGeneratedContent(contentItems);
+        setReviewingContent(contentItems);
         setReviewMode(true);
         toast({
           title: "Content Generated",
-          description: `Generated ${data.tweets.length} tweet(s) - Review to approve or reject`,
+          description: `Generated ${contentItems.length} tweet(s) - Review to approve or reject`,
         });
       } else {
         toast({
@@ -757,19 +775,62 @@ const ContentCenter = () => {
                           </Button>
                         </div>
 
-                        {generatedContent.map((tweet, index) => (
-                          <div key={index} className="border rounded-lg p-4 space-y-2">
-                            <div className="flex items-center justify-between">
-                              <Badge variant="outline">Tweet {index + 1}</Badge>
-                              <span className="text-xs text-muted-foreground">
-                                {tweet.length}/280 characters
-                              </span>
+                        {generatedContent.map((item, index) => {
+                          const hasHashtags = item.hashtags && item.hashtags.length > 0;
+                          return (
+                            <div key={index} className="border rounded-lg p-4 space-y-3">
+                              <div className="flex items-center justify-between">
+                                <Badge variant="outline">Tweet {index + 1}</Badge>
+                                <span className="text-xs text-muted-foreground">
+                                  {item.content.length}/280 characters
+                                </span>
+                              </div>
+                              
+                              <div>
+                                <div className="flex justify-between items-center mb-2">
+                                  <Label className="text-xs font-medium">Post Content</Label>
+                                  <Button
+                                    size="sm"
+                                    variant="ghost"
+                                    onClick={() => copyToClipboard(item.content, 'Post')}
+                                    className="h-7 text-xs"
+                                  >
+                                    <Copy className="h-3 w-3 mr-1" />
+                                    Copy Post
+                                  </Button>
+                                </div>
+                                <div className="p-3 bg-muted/50 rounded border">
+                                  <p className="text-sm whitespace-pre-wrap">{item.content}</p>
+                                </div>
+                              </div>
+
+                              {hasHashtags && (
+                                <div>
+                                  <div className="flex justify-between items-center mb-2">
+                                    <Label className="text-xs font-medium">Suggested Hashtags</Label>
+                                    <Button
+                                      size="sm"
+                                      variant="ghost"
+                                      onClick={() => copyToClipboard(
+                                        item.hashtags!.map(tag => `#${tag}`).join(' '),
+                                        'Hashtags'
+                                      )}
+                                      className="h-7 text-xs"
+                                    >
+                                      <Copy className="h-3 w-3 mr-1" />
+                                      Copy Hashtags
+                                    </Button>
+                                  </div>
+                                  <div className="p-3 bg-background rounded border border-muted">
+                                    <p className="text-sm text-muted-foreground">
+                                      {item.hashtags!.map(tag => `#${tag}`).join(' ')}
+                                    </p>
+                                  </div>
+                                </div>
+                              )}
                             </div>
-                            <div className="p-3 bg-muted/50 rounded border">
-                              <p className="text-sm whitespace-pre-wrap">{tweet}</p>
-                            </div>
-                          </div>
-                        ))}
+                          );
+                        })}
 
                         <div className="flex gap-2 pt-4 border-t">
                           <Button variant="outline" onClick={handleGenerateContent} disabled={isGenerating}>
