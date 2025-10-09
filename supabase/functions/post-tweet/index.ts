@@ -1,83 +1,113 @@
-import "https://deno.land/x/xhr@0.1.0/mod.ts";
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
-import { GameAgent } from "npm:@virtuals-protocol/game@0.1.14";
+import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
 
-const TWITTER_WORKER_ID = Deno.env.get('TWITTER_WORKER_ID') || 'twitter-poster';
-const POST_TWEET_FN = Deno.env.get('POST_TWEET_FN') || 'post_tweet';
-
 serve(async (req) => {
-  // Handle CORS preflight
   if (req.method === 'OPTIONS') {
     return new Response(null, { headers: corsHeaders });
   }
 
   try {
-    const { content } = await req.json();
-    
-    if (!content) {
+    const supabaseClient = createClient(
+      Deno.env.get('SUPABASE_URL') ?? '',
+      Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
+    );
+
+    const { content, businessId } = await req.json();
+
+    if (!content || !businessId) {
+      return new Response(
+        JSON.stringify({ success: false, error: 'Missing content or businessId' }),
+        { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 400 }
+      );
+    }
+
+    // Validate tweet length
+    if (content.length > 280) {
+      return new Response(
+        JSON.stringify({ success: false, error: 'Tweet exceeds 280 characters' }),
+        { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 400 }
+      );
+    }
+
+    // Get business and its GAME Twitter token
+    const { data: business, error: businessError } = await supabaseClient
+      .from('businesses')
+      .select('name, slug, game_twitter_token')
+      .eq('id', businessId)
+      .single();
+
+    if (businessError || !business) {
+      console.error('Business lookup error:', businessError);
+      return new Response(
+        JSON.stringify({ success: false, error: 'Business not found' }),
+        { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 404 }
+      );
+    }
+
+    if (!business.game_twitter_token) {
       return new Response(
         JSON.stringify({ 
           success: false, 
-          error: 'Missing required field: content' 
+          error: `No Twitter token configured for ${business.name}. Please authenticate this business's Twitter account.` 
         }),
         { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 400 }
       );
     }
 
-    // Get GAME API key
-    const gameApiKey = Deno.env.get('GAME_API_KEY');
-    
-    if (!gameApiKey) {
+    console.log(`Posting tweet for ${business.name} (${business.slug})`);
+
+    // Post to Twitter using GAME's virtualized Twitter API
+    const twitterResponse = await fetch('https://api.twitter.com/2/tweets', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${business.game_twitter_token}`,
+      },
+      body: JSON.stringify({
+        text: content
+      })
+    });
+
+    const responseText = await twitterResponse.text();
+    console.log('Twitter API response:', responseText);
+
+    if (!twitterResponse.ok) {
+      console.error('Twitter API error:', twitterResponse.status, responseText);
       return new Response(
         JSON.stringify({ 
           success: false, 
-          error: 'GAME_API_KEY not configured' 
+          error: `Twitter API error: ${twitterResponse.status} - ${responseText}` 
         }),
         { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 500 }
       );
     }
 
-    // Initialize GAME agent
-    const agent = new GameAgent(gameApiKey, {
-      name: "PersonaAI Twitter Agent",
-      goal: "Post tweets through GAME platform",
-      description: "Posts tweets via GAME Twitter worker",
-      workers: [],
-      getAgentState: async () => ({ mode: "twitter-platform" }),
-    });
+    const twitterData = JSON.parse(responseText);
+    const tweetId = twitterData.data?.id;
 
-    await agent.init();
-
-    // Post tweet using GAME platform worker
-    console.log('Posting tweet via GAME:', content);
-    const result = await agent.step({
-      workerId: TWITTER_WORKER_ID,
-      fn: POST_TWEET_FN,
-      args: { text: content },
-    });
-
-    console.log('GAME Twitter result:', JSON.stringify(result));
+    console.log(`Successfully posted tweet for ${business.name}:`, tweetId);
 
     return new Response(
-      JSON.stringify({ 
+      JSON.stringify({
         success: true,
-        result: result,
-        message: 'Tweet posted successfully'
+        tweetId: tweetId,
+        message: `Posted to ${business.name} Twitter account`,
+        business: business.name
       }),
       { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     );
 
   } catch (error) {
-    console.error('Post tweet error:', error);
+    console.error('Error posting tweet:', error);
     return new Response(
       JSON.stringify({ 
         success: false, 
-        error: error instanceof Error ? error.message : 'Unknown error occurred' 
+        error: error instanceof Error ? error.message : 'Unknown error' 
       }),
       { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 500 }
     );

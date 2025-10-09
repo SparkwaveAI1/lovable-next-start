@@ -210,6 +210,7 @@ export type Database = {
           business_type: string
           created_at: string
           description: string | null
+          game_twitter_token: string | null
           id: string
           name: string
           parent_business_id: string | null
@@ -221,6 +222,7 @@ export type Database = {
           business_type: string
           created_at?: string
           description?: string | null
+          game_twitter_token?: string | null
           id?: string
           name: string
           parent_business_id?: string | null
@@ -232,6 +234,7 @@ export type Database = {
           business_type?: string
           created_at?: string
           description?: string | null
+          game_twitter_token?: string | null
           id?: string
           name?: string
           parent_business_id?: string | null
