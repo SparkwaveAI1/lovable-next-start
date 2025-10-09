@@ -40,7 +40,8 @@ export default function EmployeeUpload() {
       setBusinesses(data || []);
       
       if (data && data.length > 0) {
-        setSelectedBusiness(data[0].id);
+        const fightFlow = data.find(b => b.name === 'Fight Flow Academy');
+        setSelectedBusiness(fightFlow?.id || data[0].id);
       }
     } catch (error) {
       console.error('Error loading businesses:', error);
