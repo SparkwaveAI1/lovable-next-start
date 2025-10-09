@@ -49,19 +49,7 @@ export function ContentLibrary({ businessId, onSchedule, onEdit }: ContentLibrar
   const loadContent = async () => {
     setLoading(true);
     try {
-      // Get business UUID from slug
-      const { data: businesses } = await supabase
-        .from('businesses')
-        .select('id')
-        .eq('slug', businessId)
-        .single();
-
-      if (!businesses) {
-        toast.error('Business not found');
-        return;
-      }
-
-      // Load approved content
+      // Use businessId directly as UUID
       const { data, error } = await supabase
         .from('scheduled_content')
         .select(`
@@ -77,7 +65,7 @@ export function ContentLibrary({ businessId, onSchedule, onEdit }: ContentLibrar
             )
           )
         `)
-        .eq('business_id', businesses.id)
+        .eq('business_id', businessId)
         .eq('approval_status', 'approved')
         .eq('status', 'draft')
         .order('approved_at', { ascending: false });
