@@ -214,8 +214,8 @@ STYLE GUIDELINES:
 Generate content that helps business owners understand how automation can solve their specific problems.`
   },
 
-  'personaai': {
-    businessId: 'personaai',
+  'persona-ai': {
+    businessId: 'persona-ai',
     businessName: 'PersonaAI',
     agentName: 'PersonaAI_SocialAgent',
     personality: {
