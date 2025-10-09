@@ -49,12 +49,6 @@ export function DashboardHeader({ selectedBusinessId, onBusinessChange }: Dashbo
               >
                 Media Library
               </Link>
-              <Link
-                to="/charx-twitter"
-                className="text-sm font-medium text-muted-foreground hover:text-foreground transition-colors"
-              >
-                CharX Twitter
-              </Link>
             </nav>
             <div className="flex items-center gap-2">
               <Button variant="ghost" size="sm">
