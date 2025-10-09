@@ -1,4 +1,4 @@
-import { Zap, Settings, Bell } from "lucide-react"
+import { Zap, Settings, Bell, Image as ImageIcon } from "lucide-react"
 import { Link } from "react-router-dom"
 import { Button } from "@/components/ui/button"
 import { BusinessSwitcher } from "./BusinessSwitcher"
@@ -36,6 +36,18 @@ export function DashboardHeader({ selectedBusinessId, onBusinessChange }: Dashbo
           {/* Right side - Navigation & Actions */}
           <div className="flex items-center gap-4">
             <nav className="flex items-center gap-4">
+              <Link
+                to="/content-center"
+                className="text-sm font-medium text-muted-foreground hover:text-foreground transition-colors"
+              >
+                Content Center
+              </Link>
+              <Link
+                to="/media-library"
+                className="text-sm font-medium text-muted-foreground hover:text-foreground transition-colors"
+              >
+                Media Library
+              </Link>
               <Link
                 to="/charx-twitter"
                 className="text-sm font-medium text-muted-foreground hover:text-foreground transition-colors"
