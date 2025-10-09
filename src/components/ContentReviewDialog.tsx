@@ -323,24 +323,29 @@ export function ContentReviewDialog({
                         </div>
 
                         {scheduleOptions[index] === 'later' && (
-                          <div className="grid grid-cols-2 gap-2">
-                            <div>
-                              <Label className="text-xs">Date</Label>
-                              <Input
-                                type="date"
-                                value={scheduleDates[index] || ''}
-                                onChange={(e) => setScheduleDates({ ...scheduleDates, [index]: e.target.value })}
-                                min={new Date().toISOString().split('T')[0]}
-                              />
+                          <div className="space-y-2">
+                            <div className="grid grid-cols-2 gap-2">
+                              <div>
+                                <Label className="text-xs">Date</Label>
+                                <Input
+                                  type="date"
+                                  value={scheduleDates[index] || ''}
+                                  onChange={(e) => setScheduleDates({ ...scheduleDates, [index]: e.target.value })}
+                                  min={new Date().toISOString().split('T')[0]}
+                                />
+                              </div>
+                              <div>
+                                <Label className="text-xs">Time (Eastern)</Label>
+                                <Input
+                                  type="time"
+                                  value={scheduleTimes[index] || ''}
+                                  onChange={(e) => setScheduleTimes({ ...scheduleTimes, [index]: e.target.value })}
+                                />
+                              </div>
                             </div>
-                            <div>
-                              <Label className="text-xs">Time</Label>
-                              <Input
-                                type="time"
-                                value={scheduleTimes[index] || ''}
-                                onChange={(e) => setScheduleTimes({ ...scheduleTimes, [index]: e.target.value })}
-                              />
-                            </div>
+                            <p className="text-xs text-muted-foreground">
+                              All times are in Eastern Time (ET)
+                            </p>
                           </div>
                         )}
                       </div>

@@ -16,6 +16,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { ContentReviewDialog } from "@/components/ContentReviewDialog";
 import { ContentLibrary } from "@/components/ContentLibrary";
 import { PostedContentLibrary } from "@/components/PostedContentLibrary";
+import { formatToEasternDateTime } from "@/lib/dateUtils";
 
 const TIME_RE = /^([01]\d|2[0-3]):([0-5]\d)$/;
 
@@ -494,25 +495,28 @@ const ContentCenter = () => {
               {editContent.length}/280 characters
             </div>
           </div>
-          <div className="grid grid-cols-2 gap-4">
-            <div>
-              <label className="text-sm font-medium">Date</label>
-              <Input
-                type="date"
-                value={editDate}
-                onChange={(e) => setEditDate(e.target.value)}
-                onKeyDown={(e) => e.key === 'Enter' && e.preventDefault()}
-                className="mt-1"
-              />
+          <div className="space-y-2">
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <label className="text-sm font-medium">Date</label>
+                <Input
+                  type="date"
+                  value={editDate}
+                  onChange={(e) => setEditDate(e.target.value)}
+                  onKeyDown={(e) => e.key === 'Enter' && e.preventDefault()}
+                  className="mt-1"
+                />
+              </div>
+              <div>
+                <label className="text-sm font-medium">Time (Eastern)</label>
+                <SimpleTimeInput
+                  value={editTime}
+                  onChange={setEditTime}
+                  className="mt-1"
+                />
+              </div>
             </div>
-            <div>
-              <label className="text-sm font-medium">Time</label>
-              <SimpleTimeInput
-                value={editTime}
-                onChange={setEditTime}
-                className="mt-1"
-              />
-            </div>
+            <p className="text-xs text-muted-foreground">All times are in Eastern Time (ET)</p>
           </div>
           <div className="flex gap-2">
             <Button type="button" onClick={handleUpdateScheduledTweet}>Update Tweet</Button>
@@ -534,25 +538,28 @@ const ContentCenter = () => {
             <label className="text-sm font-medium">Tweet Content</label>
             <Textarea value={schedulingTweet?.tweet || ''} readOnly rows={3} className="mt-1" />
           </div>
-          <div className="grid grid-cols-2 gap-4">
-            <div>
-              <label className="text-sm font-medium">Date</label>
-              <Input 
-                type="date" 
-                value={scheduleDate}
-                onChange={(e) => setScheduleDate(e.target.value)}
-                onKeyDown={(e) => e.key === 'Enter' && e.preventDefault()}
-                className="mt-1"
-              />
+          <div className="space-y-2">
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <label className="text-sm font-medium">Date</label>
+                <Input 
+                  type="date" 
+                  value={scheduleDate}
+                  onChange={(e) => setScheduleDate(e.target.value)}
+                  onKeyDown={(e) => e.key === 'Enter' && e.preventDefault()}
+                  className="mt-1"
+                />
+              </div>
+              <div>
+                <label className="text-sm font-medium">Time (Eastern)</label>
+                <SimpleTimeInput
+                  value={scheduleTime}
+                  onChange={setScheduleTime}
+                  className="mt-1"
+                />
+              </div>
             </div>
-            <div>
-              <label className="text-sm font-medium">Time</label>
-              <SimpleTimeInput
-                value={scheduleTime}
-                onChange={setScheduleTime}
-                className="mt-1"
-              />
-            </div>
+            <p className="text-xs text-muted-foreground">All times are in Eastern Time (ET)</p>
           </div>
           <div className="flex gap-2">
             <Button type="button" onClick={handleScheduleTweet}>Schedule Tweet</Button>
@@ -593,7 +600,7 @@ const ContentCenter = () => {
                   </div>
                   <p className="text-sm mb-2">{item.content}</p>
                   <div className="text-xs text-muted-foreground">
-                    Scheduled: {new Date(item.scheduled_for).toLocaleString()}
+                    Scheduled: {formatToEasternDateTime(item.scheduled_for)}
                     {item.topic && ` • Topic: ${item.topic}`}
                   </div>
                 </div>
