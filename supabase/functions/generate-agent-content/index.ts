@@ -475,7 +475,7 @@ serve(async (req) => {
     const { data: business, error: businessError } = await supabaseClient
       .from('businesses')
       .select('*')
-      .eq('slug', request.businessId)
+      .eq('id', request.businessId)
       .single();
 
     if (businessError || !business) {
@@ -489,7 +489,7 @@ serve(async (req) => {
     }
 
     // Get agent configuration using slug
-    const agentConfig = getAgentConfig(request.businessId);
+    const agentConfig = getAgentConfig(business.slug);
     
     if (!agentConfig) {
       console.error(`No agent config found for business: ${request.businessId}`);
