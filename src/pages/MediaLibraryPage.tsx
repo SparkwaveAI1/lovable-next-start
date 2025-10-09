@@ -142,11 +142,34 @@ export default function MediaLibraryPage() {
           .from('content-media')
           .getPublicUrl(fileName);
 
-        let width, height;
+        let width, height, thumbnailPath;
+
         if (isImage) {
           const dimensions = await getImageDimensions(file);
           width = dimensions.width;
           height = dimensions.height;
+        } else if (isVideo) {
+          try {
+            const thumbnail = await generateVideoThumbnail(file);
+            width = thumbnail.width;
+            height = thumbnail.height;
+            
+            const thumbFileName = `${businessSlug}/${timestamp}_thumb_${Math.random().toString(36).substring(7)}.jpg`;
+            const { error: thumbError } = await supabase.storage
+              .from('content-media')
+              .upload(thumbFileName, thumbnail.blob);
+            
+            if (thumbError) {
+              console.error('Thumbnail upload error:', thumbError);
+            } else {
+              const { data: { publicUrl: thumbUrl } } = supabase.storage
+                .from('content-media')
+                .getPublicUrl(thumbFileName);
+              thumbnailPath = thumbUrl;
+            }
+          } catch (thumbError) {
+            console.error('Thumbnail generation error:', thumbError);
+          }
         }
 
         const { data: insertedMedia, error: dbError } = await supabase
@@ -158,6 +181,7 @@ export default function MediaLibraryPage() {
             file_type: isImage ? 'image' : 'video',
             file_size: file.size,
             mime_type: file.type,
+            thumbnail_path: thumbnailPath,
             width,
             height
           })
@@ -205,6 +229,53 @@ export default function MediaLibraryPage() {
         resolve({ width: img.width, height: img.height });
       };
       img.src = URL.createObjectURL(file);
+    });
+  };
+
+  const generateVideoThumbnail = (file: File): Promise<{ blob: Blob; width: number; height: number }> => {
+    return new Promise((resolve, reject) => {
+      const video = document.createElement('video');
+      video.preload = 'metadata';
+      video.muted = true;
+      video.playsInline = true;
+      
+      video.onloadedmetadata = () => {
+        video.currentTime = 1;
+      };
+      
+      video.onseeked = () => {
+        const canvas = document.createElement('canvas');
+        canvas.width = video.videoWidth;
+        canvas.height = video.videoHeight;
+        
+        const ctx = canvas.getContext('2d');
+        if (!ctx) {
+          reject(new Error('Could not get canvas context'));
+          return;
+        }
+        
+        ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+        
+        canvas.toBlob((blob) => {
+          if (blob) {
+            resolve({ 
+              blob, 
+              width: video.videoWidth, 
+              height: video.videoHeight 
+            });
+          } else {
+            reject(new Error('Failed to create thumbnail'));
+          }
+        }, 'image/jpeg', 0.8);
+        
+        URL.revokeObjectURL(video.src);
+      };
+      
+      video.onerror = () => {
+        reject(new Error('Failed to load video'));
+      };
+      
+      video.src = URL.createObjectURL(file);
     });
   };
 
@@ -429,14 +500,38 @@ export default function MediaLibraryPage() {
                             alt={item.file_name}
                             className="w-full h-full object-cover"
                           />
+                        ) : item.thumbnail_path ? (
+                          <div className="relative w-full h-full">
+                            <img
+                              src={item.thumbnail_path}
+                              alt={item.file_name}
+                              className="w-full h-full object-cover"
+                            />
+                            <div className="absolute inset-0 flex items-center justify-center bg-black/20">
+                              <div className="w-12 h-12 rounded-full bg-white/90 flex items-center justify-center shadow-lg">
+                                <svg className="w-6 h-6 text-gray-900 ml-1" fill="currentColor" viewBox="0 0 24 24">
+                                  <path d="M8 5v14l11-7z"/>
+                                </svg>
+                              </div>
+                            </div>
+                          </div>
                         ) : (
-                          <video
-                            src={item.file_path}
-                            className="w-full h-full object-cover"
-                            preload="metadata"
-                            muted
-                            playsInline
-                          />
+                          <div className="relative w-full h-full bg-gray-100 flex items-center justify-center">
+                            <video
+                              src={item.file_path}
+                              className="w-full h-full object-cover"
+                              preload="metadata"
+                              muted
+                              playsInline
+                            />
+                            <div className="absolute inset-0 flex items-center justify-center">
+                              <div className="w-12 h-12 rounded-full bg-white/90 flex items-center justify-center shadow-lg">
+                                <svg className="w-6 h-6 text-gray-900 ml-1" fill="currentColor" viewBox="0 0 24 24">
+                                  <path d="M8 5v14l11-7z"/>
+                                </svg>
+                              </div>
+                            </div>
+                          </div>
                         )}
                         <div className="absolute top-2 right-2 flex gap-1">
                           <Button
