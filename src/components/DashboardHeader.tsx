@@ -2,6 +2,7 @@ import { Zap, Settings, Bell, Image as ImageIcon } from "lucide-react"
 import { Link } from "react-router-dom"
 import { Button } from "@/components/ui/button"
 import { BusinessSwitcher } from "./BusinessSwitcher"
+import LogoutButton from "./LogoutButton"
 
 interface DashboardHeaderProps {
   selectedBusinessId?: string
@@ -62,6 +63,7 @@ export function DashboardHeader({ selectedBusinessId, onBusinessChange }: Dashbo
               <Button variant="ghost" size="sm">
                 <Settings className="h-4 w-4" />
               </Button>
+              <LogoutButton />
             </div>
           </div>
         </div>

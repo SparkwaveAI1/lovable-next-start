@@ -9,6 +9,8 @@ import ContentCenter from "./pages/ContentCenter";
 import GameTestInterface from "./components/GameTestInterface";
 import MediaLibraryPage from "./pages/MediaLibraryPage";
 import EmployeeUpload from "./pages/EmployeeUpload";
+import Auth from "./pages/Auth";
+import ProtectedRoute from "./components/ProtectedRoute";
 
 const queryClient = new QueryClient();
 
@@ -19,11 +21,12 @@ const App = () => (
       <Sonner />
       <BrowserRouter>
         <Routes>
-          <Route path="/" element={<Index />} />
-          <Route path="/content-center" element={<ContentCenter />} />
-          <Route path="/game-test" element={<GameTestInterface />} />
-          <Route path="/media-library" element={<MediaLibraryPage />} />
+          <Route path="/auth" element={<Auth />} />
           <Route path="/employee-upload" element={<EmployeeUpload />} />
+          <Route path="/" element={<ProtectedRoute><Index /></ProtectedRoute>} />
+          <Route path="/content-center" element={<ProtectedRoute><ContentCenter /></ProtectedRoute>} />
+          <Route path="/game-test" element={<ProtectedRoute><GameTestInterface /></ProtectedRoute>} />
+          <Route path="/media-library" element={<ProtectedRoute><MediaLibraryPage /></ProtectedRoute>} />
           {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
           <Route path="*" element={<NotFound />} />
         </Routes>
