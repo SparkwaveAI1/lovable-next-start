@@ -752,14 +752,14 @@ const ContentCenter = () => {
           {/* Content Preview and Management */}
           <div className="lg:col-span-2">
             <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-4">
-              {/* Mobile: Scrollable horizontal tabs */}
-              <div className="overflow-x-auto md:hidden mb-2">
-                <TabsList className="inline-flex w-auto min-w-full">
-                  <TabsTrigger value="preview" className="flex-shrink-0">Preview</TabsTrigger>
-                  <TabsTrigger value="library" className="flex-shrink-0">Library</TabsTrigger>
-                  <TabsTrigger value="schedule" className="flex-shrink-0">Schedule</TabsTrigger>
-                  <TabsTrigger value="posted" className="flex-shrink-0">Posted</TabsTrigger>
-                  <TabsTrigger value="history" className="flex-shrink-0">History</TabsTrigger>
+              {/* Mobile: Wrapped multi-row tabs */}
+              <div className="md:hidden mb-2">
+                <TabsList className="flex h-auto w-full flex-wrap justify-start gap-2">
+                  <TabsTrigger value="preview" className="h-9 shrink-0">Preview</TabsTrigger>
+                  <TabsTrigger value="library" className="h-9 shrink-0">Library</TabsTrigger>
+                  <TabsTrigger value="schedule" className="h-9 shrink-0">Schedule</TabsTrigger>
+                  <TabsTrigger value="posted" className="h-9 shrink-0">Posted</TabsTrigger>
+                  <TabsTrigger value="history" className="h-9 shrink-0">History</TabsTrigger>
                 </TabsList>
               </div>
 
