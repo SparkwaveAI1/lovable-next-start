@@ -7,7 +7,7 @@ import { Card, CardContent, CardFooter, CardHeader } from "@/components/ui/card"
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Calendar, Clock, Edit2, Trash2, Image as ImageIcon, Video, CheckCircle } from "lucide-react";
+import { Calendar, Clock, Edit2, Trash2, Image as ImageIcon, Video, CheckCircle, Copy } from "lucide-react";
 import { toast } from "sonner";
 import { markAsPosted } from "@/lib/schedulingService";
 
@@ -137,6 +137,16 @@ export function ContentLibrary({ businessId, onSchedule, onEdit }: ContentLibrar
   const handleCloseDialog = () => {
     setDialogOpen(false);
     setTimeout(() => setSelectedContent(null), 200);
+  };
+
+  const handleCopyContent = async (content: string) => {
+    try {
+      await navigator.clipboard.writeText(content);
+      toast.success("Content copied to clipboard");
+    } catch (error) {
+      console.error('Error copying to clipboard:', error);
+      toast.error("Failed to copy content");
+    }
   };
 
   // Filter content
@@ -396,7 +406,17 @@ export function ContentLibrary({ businessId, onSchedule, onEdit }: ContentLibrar
               <ScrollArea className="flex-1 pr-4">
                 <div className="space-y-4">
                   <div>
-                    <h4 className="text-sm font-semibold mb-2 text-muted-foreground">Content</h4>
+                    <div className="flex items-center justify-between mb-2">
+                      <h4 className="text-sm font-semibold text-muted-foreground">Content</h4>
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        onClick={() => handleCopyContent(selectedContent.content)}
+                      >
+                        <Copy className="w-4 h-4 mr-1" />
+                        Copy
+                      </Button>
+                    </div>
                     <p className="text-sm whitespace-pre-wrap leading-relaxed">
                       {selectedContent.content}
                     </p>
