@@ -33,7 +33,7 @@ interface MediaAsset {
 }
 
 export default function MediaLibraryPage() {
-  const { selectedBusinessId: selectedBusiness, setSelectedBusinessId: setSelectedBusiness } = useBusinessContext();
+  const { selectedBusiness, setSelectedBusiness } = useBusinessContext();
   const [media, setMedia] = useState<MediaAsset[]>([]);
   const [loading, setLoading] = useState(false);
   const [uploading, setUploading] = useState(false);
@@ -58,7 +58,7 @@ export default function MediaLibraryPage() {
       const { data, error } = await supabase
         .from('media_assets')
         .select('*')
-        .eq('business_id', selectedBusiness)
+        .eq('business_id', selectedBusiness?.id)
         .order('created_at', { ascending: false });
 
       if (error) throw error;
@@ -90,7 +90,7 @@ export default function MediaLibraryPage() {
       const { data: businessData } = await supabase
         .from('businesses')
         .select('slug')
-        .eq('id', selectedBusiness)
+        .eq('id', selectedBusiness?.id)
         .single();
       
       const businessSlug = businessData?.slug || 'default';
@@ -156,7 +156,7 @@ export default function MediaLibraryPage() {
         const { data: insertedMedia, error: dbError } = await supabase
           .from('media_assets')
           .insert({
-            business_id: selectedBusiness,
+            business_id: selectedBusiness?.id,
             file_name: file.name,
             file_path: publicUrl,
             file_type: isImage ? 'image' : 'video',
@@ -178,7 +178,7 @@ export default function MediaLibraryPage() {
               mediaId: insertedMedia.id,
               fileType: isImage ? 'image' : 'video',
               filePath: publicUrl,
-              businessId: selectedBusiness
+              businessId: selectedBusiness?.id
             }
           }).then(({ data, error }) => {
             if (error) {
@@ -347,8 +347,17 @@ export default function MediaLibraryPage() {
   return (
     <div className="min-h-screen bg-background">
       <DashboardHeader 
-        selectedBusinessId={selectedBusiness}
-        onBusinessChange={setSelectedBusiness}
+        selectedBusinessId={selectedBusiness?.id}
+        onBusinessChange={(id) => {
+          const businesses = [
+            { id: '456dc53b-d9d9-41b0-bc33-4f4c4a791eff', slug: 'fight-flow-academy', name: 'Fight Flow Academy' },
+            { id: '5a9bbfcf-fae5-4063-9780-bcbe366bae88', slug: 'sparkwave-ai', name: 'Sparkwave AI' },
+            { id: '18d0dbb1-a82d-4477-a9f8-816a1fa2ee08', slug: 'persona-ai', name: 'PersonaAI' },
+            { id: '350b8fcb-9bfe-4b53-9548-c6ffdb1d3cb5', slug: 'charx-world', name: 'CharX World' }
+          ];
+          const business = businesses.find(b => b.id === id);
+          if (business) setSelectedBusiness(business);
+        }}
       />
       
       <main className="container mx-auto px-4 sm:px-6 py-4 sm:py-8 pt-2 sm:pt-4 md:pt-28">

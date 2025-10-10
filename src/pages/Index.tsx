@@ -13,7 +13,7 @@ import { useBusinessContext } from "@/contexts/BusinessContext"
 // import { GoHighLevelConfig } from "@/components/GoHighLevelConfig"
 
 const Index = () => {
-  const { selectedBusinessId, setSelectedBusinessId } = useBusinessContext()
+  const { selectedBusiness, setSelectedBusiness } = useBusinessContext();
   const [stats, setStats] = useState({
     activeAutomations: 0,
     todayActivity: 0,
@@ -26,19 +26,28 @@ const Index = () => {
   useEffect(() => {
     const loadStats = async () => {
       setIsLoadingStats(true)
-      const dashboardStats = await getDashboardStats(selectedBusinessId)
+      const dashboardStats = await getDashboardStats(selectedBusiness?.id)
       setStats(dashboardStats)
       setIsLoadingStats(false)
     }
 
     loadStats()
-  }, [selectedBusinessId])
+  }, [selectedBusiness])
 
   return (
     <div className="min-h-screen bg-background">
       <DashboardHeader 
-        selectedBusinessId={selectedBusinessId}
-        onBusinessChange={setSelectedBusinessId}
+        selectedBusinessId={selectedBusiness?.id}
+        onBusinessChange={(id) => {
+          const businesses = [
+            { id: '456dc53b-d9d9-41b0-bc33-4f4c4a791eff', slug: 'fight-flow-academy', name: 'Fight Flow Academy' },
+            { id: '5a9bbfcf-fae5-4063-9780-bcbe366bae88', slug: 'sparkwave-ai', name: 'Sparkwave AI' },
+            { id: '18d0dbb1-a82d-4477-a9f8-816a1fa2ee08', slug: 'persona-ai', name: 'PersonaAI' },
+            { id: '350b8fcb-9bfe-4b53-9548-c6ffdb1d3cb5', slug: 'charx-world', name: 'CharX World' }
+          ];
+          const business = businesses.find(b => b.id === id);
+          if (business) setSelectedBusiness(business);
+        }}
       />
       
       <main className="container mx-auto px-4 sm:px-6 py-4 md:py-8 pt-2 md:pt-28">
@@ -91,9 +100,9 @@ const Index = () => {
 
 
         {/* Contacts Management - Show when business is selected */}
-        {selectedBusinessId && (
+        {selectedBusiness && (
           <div className="mb-8">
-            <ContactsTable businessId={selectedBusinessId} />
+            <ContactsTable businessId={selectedBusiness.id} />
           </div>
         )}
 
@@ -111,7 +120,7 @@ const Index = () => {
 
         {/* Activity Log */}
         <div className="mb-8">
-          <ActivityLog businessId={selectedBusinessId} />
+          <ActivityLog businessId={selectedBusiness?.id} />
         </div>
 
         {/* Placeholder for future content */}
@@ -122,7 +131,7 @@ const Index = () => {
               Ready to automate?
             </h3>
             <p className="text-muted-foreground mb-4">
-              {selectedBusinessId 
+              {selectedBusiness 
                 ? "Your automation monitoring dashboard is ready. Your CRM system is active and processing form submissions."
                 : "Select a business above to start managing your automations."
               }

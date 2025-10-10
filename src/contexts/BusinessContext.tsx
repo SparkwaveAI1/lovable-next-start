@@ -1,27 +1,40 @@
 import { createContext, useContext, useState, useEffect, ReactNode } from 'react';
 
+interface Business {
+  id: string;
+  slug: string;
+  name: string;
+}
+
 interface BusinessContextType {
-  selectedBusinessId: string | undefined;
-  setSelectedBusinessId: (id: string) => void;
+  selectedBusiness: Business | undefined;
+  setSelectedBusiness: (business: Business) => void;
 }
 
 const BusinessContext = createContext<BusinessContextType | undefined>(undefined);
 
 export function BusinessProvider({ children }: { children: ReactNode }) {
   // Initialize from localStorage if available
-  const [selectedBusinessId, setSelectedBusinessIdState] = useState<string | undefined>(() => {
-    const saved = localStorage.getItem('selectedBusinessId');
-    return saved || undefined;
+  const [selectedBusiness, setSelectedBusinessState] = useState<Business | undefined>(() => {
+    const saved = localStorage.getItem('selectedBusiness');
+    if (saved) {
+      try {
+        return JSON.parse(saved) as Business;
+      } catch {
+        return undefined;
+      }
+    }
+    return undefined;
   });
 
   // Persist to localStorage whenever it changes
-  const setSelectedBusinessId = (id: string) => {
-    setSelectedBusinessIdState(id);
-    localStorage.setItem('selectedBusinessId', id);
+  const setSelectedBusiness = (business: Business) => {
+    setSelectedBusinessState(business);
+    localStorage.setItem('selectedBusiness', JSON.stringify(business));
   };
 
   return (
-    <BusinessContext.Provider value={{ selectedBusinessId, setSelectedBusinessId }}>
+    <BusinessContext.Provider value={{ selectedBusiness, setSelectedBusiness }}>
       {children}
     </BusinessContext.Provider>
   );

@@ -23,7 +23,7 @@ import { useBusinessContext } from "@/contexts/BusinessContext";
 const TIME_RE = /^([01]\d|2[0-3]):([0-5]\d)$/;
 
 const ContentCenter = () => {
-  const { selectedBusinessId: selectedBusiness, setSelectedBusinessId: setSelectedBusiness } = useBusinessContext();
+  const { selectedBusiness, setSelectedBusiness } = useBusinessContext();
   const [selectedPlatform, setSelectedPlatform] = useState("twitter");
   const [selectedContentType, setSelectedContentType] = useState("medium");
   const [topic, setTopic] = useState("");
@@ -62,10 +62,10 @@ const ContentCenter = () => {
   };
 
   const businesses = [
-    { id: 'fight-flow-academy', name: 'Fight Flow Academy' },
-    { id: 'sparkwave-ai', name: 'Sparkwave AI' },
-    { id: 'persona-ai', name: 'PersonaAI' },
-    { id: 'charx-world', name: 'CharX World' }
+    { id: '456dc53b-d9d9-41b0-bc33-4f4c4a791eff', slug: 'fight-flow-academy', name: 'Fight Flow Academy' },
+    { id: '5a9bbfcf-fae5-4063-9780-bcbe366bae88', slug: 'sparkwave-ai', name: 'Sparkwave AI' },
+    { id: '18d0dbb1-a82d-4477-a9f8-816a1fa2ee08', slug: 'persona-ai', name: 'PersonaAI' },
+    { id: '350b8fcb-9bfe-4b53-9548-c6ffdb1d3cb5', slug: 'charx-world', name: 'CharX World' }
   ];
 
   const platforms = [
@@ -184,15 +184,6 @@ const ContentCenter = () => {
     }
   ];
 
-  const getSystemPrompt = (businessId: string) => {
-    const prompts = {
-      'fight-flow-academy': 'You are creating Twitter content for Fight Flow Academy, a martial arts school and gym. Focus on fitness, training, martial arts, personal development, and community. Use hashtags like #MartialArts #Fitness #Training #PersonalGrowth. Keep each tweet under 280 characters.',
-      'sparkwave-ai': 'You are creating Twitter content for Sparkwave AI, an AI services business. Focus on business automation, AI implementation, productivity, and enterprise solutions. Use hashtags like #AI #Automation #Business #Productivity. Keep each tweet under 280 characters.',
-      'persona-ai': 'You are creating Twitter content for PersonaAI, an AI-powered qualitative research platform. Focus on market research, AI personas, psychology, and business insights. Use hashtags like #AIResearch #MarketResearch #Psychology #BusinessIntelligence. Keep each tweet under 280 characters.',
-      'charx-world': 'You are creating Twitter content for CharX World, an AI character and world building platform. Focus on storytelling, character creation, world building, and creative AI. Use hashtags like #CharXWorld #AICharacters #Storytelling #WorldBuilding #AICreativity. Keep each tweet under 280 characters.'
-    };
-    return prompts[businessId as keyof typeof prompts] || '';
-  };
 
   const handleGenerateContent = async () => {
     if (!selectedBusiness || !selectedContentType || !topic.trim()) {
@@ -206,13 +197,10 @@ const ContentCenter = () => {
 
     setIsGenerating(true);
     
-    const systemPrompt = getSystemPrompt(selectedBusiness);
-    const currentPlatform = platforms.find(p => p.id === selectedPlatform);
-    
     try {
       const { data, error } = await supabase.functions.invoke('generate-agent-content', {
         body: {
-          businessId: selectedBusiness,
+          businessId: selectedBusiness.id,
           platform: selectedPlatform,
           contentType: selectedContentType,
           quantity: quantity,
@@ -261,15 +249,6 @@ const ContentCenter = () => {
     }
   };
 
-  const getBusinessId = (businessSlug: string) => {
-    const businessIds: Record<string, string> = {
-      'fight-flow-academy': '456dc53b-d9d9-41b0-bc33-4f4c4a791eff',
-      'sparkwave-ai': '5a9bbfcf-fae5-4063-9780-bcbe366bae88',
-      'persona-ai': '18d0dbb1-a82d-4477-a9f8-816a1fa2ee08',
-      'charx-world': '350b8fcb-9bfe-4b53-9548-c6ffdb1d3cb5'
-    };
-    return businessIds[businessSlug] || businessSlug;
-  };
 
   const handleScheduleTweet = async () => {
     if (!schedulingTweet || !scheduleDate || !scheduleTime) {
@@ -297,7 +276,7 @@ const ContentCenter = () => {
       const { error } = await supabase
         .from('scheduled_content')
         .insert({
-          business_id: getBusinessId(selectedBusiness),
+          business_id: selectedBusiness.id,
           content: schedulingTweet.tweet,
           content_type: selectedContentType,
           topic: topic,
@@ -442,7 +421,7 @@ const ContentCenter = () => {
 
     try {
       const { data, error } = await supabase.functions.invoke('post-tweet', {
-        body: { content, businessId: getBusinessId(selectedBusiness) }
+        body: { content, businessId: selectedBusiness.id }
       });
 
       if (error) throw error;
@@ -474,7 +453,7 @@ const ContentCenter = () => {
     }
   }, [activeTab]);
 
-  const selectedBusinessConfig = businesses.find(b => b.id === selectedBusiness);
+  const selectedBusinessConfig = selectedBusiness;
   const currentPlatform = platforms.find(p => p.id === selectedPlatform);
   const availableContentTypes = currentPlatform?.contentTypes || [];
 
@@ -596,7 +575,7 @@ const ContentCenter = () => {
                 <div className="flex-1">
                   <div className="flex items-center gap-2 mb-2">
                     <Badge variant="outline">
-                      {businesses.find(b => getBusinessId(b.id) === item.business_id)?.name || 'Unknown Business'}
+                      {businesses.find(b => b.id === item.business_id)?.name || 'Unknown Business'}
                     </Badge>
                     <Badge variant="secondary">{item.platform}</Badge>
                   </div>
@@ -633,8 +612,11 @@ const ContentCenter = () => {
   return (
     <div className="min-h-screen bg-background">
       <DashboardHeader 
-        selectedBusinessId={selectedBusiness}
-        onBusinessChange={setSelectedBusiness}
+        selectedBusinessId={selectedBusiness?.id}
+        onBusinessChange={(id) => {
+          const business = businesses.find(b => b.id === id);
+          if (business) setSelectedBusiness(business);
+        }}
       />
       
       <main className="container mx-auto px-4 md:px-6 py-4 md:py-8 pt-2 md:pt-28">
@@ -888,7 +870,7 @@ const ContentCenter = () => {
                   </CardHeader>
                   <CardContent>
                     <ContentLibrary
-                      businessId={selectedBusiness}
+                      businessId={selectedBusiness?.id}
                       onSchedule={(content) => {
                         setSchedulingTweet({ tweet: content.content, index: 0 });
                         setActiveTab('schedule');
@@ -937,7 +919,7 @@ const ContentCenter = () => {
                   <CardContent>
                     {selectedBusiness ? (
                       <PostedContentLibrary 
-                        businessId={getBusinessId(selectedBusiness)}
+                        businessId={selectedBusiness.id}
                       />
                     ) : (
                       <div className="text-center py-12 text-muted-foreground">
@@ -983,7 +965,7 @@ const ContentCenter = () => {
         open={reviewMode}
         onOpenChange={setReviewMode}
         content={reviewingContent}
-        businessId={selectedBusiness}
+        businessId={selectedBusiness?.id || ''}
         platform={selectedPlatform}
         contentType={selectedContentType}
         topic={topic}
