@@ -10,6 +10,7 @@ import { useToast } from "@/hooks/use-toast";
 import { formatToEasternCompact } from "@/lib/dateUtils";
 import { AlertCircle, CheckCircle2, Clock, XCircle } from "lucide-react";
 import { DashboardHeader } from "@/components/DashboardHeader";
+import { useBusinessContext } from "@/contexts/BusinessContext";
 
 interface ServiceRequest {
   id: string;
@@ -26,7 +27,7 @@ interface ServiceRequest {
 
 export default function ServiceRequests() {
   const [requests, setRequests] = useState<ServiceRequest[]>([]);
-  const [selectedBusinessId, setSelectedBusinessId] = useState<string>("");
+  const { selectedBusinessId, setSelectedBusinessId } = useBusinessContext();
   const [statusFilter, setStatusFilter] = useState<string>("all");
   const [isLoading, setIsLoading] = useState(true);
   const [expandedRequest, setExpandedRequest] = useState<string | null>(null);

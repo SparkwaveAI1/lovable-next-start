@@ -18,11 +18,12 @@ import { ContentReviewDialog } from "@/components/ContentReviewDialog";
 import { ContentLibrary } from "@/components/ContentLibrary";
 import { PostedContentLibrary } from "@/components/PostedContentLibrary";
 import { formatToEasternDateTime } from "@/lib/dateUtils";
+import { useBusinessContext } from "@/contexts/BusinessContext";
 
 const TIME_RE = /^([01]\d|2[0-3]):([0-5]\d)$/;
 
 const ContentCenter = () => {
-  const [selectedBusiness, setSelectedBusiness] = useState("");
+  const { selectedBusinessId: selectedBusiness, setSelectedBusinessId: setSelectedBusiness } = useBusinessContext();
   const [selectedPlatform, setSelectedPlatform] = useState("twitter");
   const [selectedContentType, setSelectedContentType] = useState("medium");
   const [topic, setTopic] = useState("");

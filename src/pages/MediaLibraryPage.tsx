@@ -11,6 +11,7 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Upload, Image as ImageIcon, Video, Trash2, Edit2, Search, Download } from "lucide-react";
 import { toast } from "sonner";
+import { useBusinessContext } from "@/contexts/BusinessContext";
 
 interface MediaAsset {
   id: string;
@@ -38,7 +39,7 @@ interface Business {
 
 export default function MediaLibraryPage() {
   const [businesses, setBusinesses] = useState<Business[]>([]);
-  const [selectedBusiness, setSelectedBusiness] = useState<string>("");
+  const { selectedBusinessId: selectedBusiness, setSelectedBusinessId: setSelectedBusiness } = useBusinessContext();
   const [media, setMedia] = useState<MediaAsset[]>([]);
   const [loading, setLoading] = useState(false);
   const [uploading, setUploading] = useState(false);

@@ -9,10 +9,11 @@ import { ActivityLog } from "@/components/ActivityLog"
 import { supabase } from "@/integrations/supabase/client"
 import { sendSMS } from '@/lib/smsService'
 import { ContactsTable } from '@/components/ContactsTable'
+import { useBusinessContext } from "@/contexts/BusinessContext"
 // import { GoHighLevelConfig } from "@/components/GoHighLevelConfig"
 
 const Index = () => {
-  const [selectedBusinessId, setSelectedBusinessId] = useState<string>()
+  const { selectedBusinessId, setSelectedBusinessId } = useBusinessContext()
   const [stats, setStats] = useState({
     activeAutomations: 0,
     todayActivity: 0,
