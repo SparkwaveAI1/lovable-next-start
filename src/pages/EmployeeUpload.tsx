@@ -23,11 +23,22 @@ export default function EmployeeUpload() {
   const [businesses, setBusinesses] = useState<Business[]>([]);
   const [selectedBusiness, setSelectedBusiness] = useState<string>("");
   const [uploading, setUploading] = useState(false);
+  const [preparing, setPreparing] = useState(false);
   const [uploadedFiles, setUploadedFiles] = useState<UploadedFile[]>([]);
 
   useEffect(() => {
     loadBusinesses();
   }, []);
+
+  useEffect(() => {
+    const handleFocus = () => {
+      if (preparing) {
+        setTimeout(() => setPreparing(false), 300);
+      }
+    };
+    window.addEventListener('focus', handleFocus);
+    return () => window.removeEventListener('focus', handleFocus);
+  }, [preparing]);
 
   const loadBusinesses = async () => {
     try {
@@ -50,6 +61,7 @@ export default function EmployeeUpload() {
   };
 
   const handleFileSelect = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    setPreparing(false);
     const files = event.target.files;
     if (!files || files.length === 0) return;
 
@@ -330,8 +342,12 @@ export default function EmployeeUpload() {
               <p className="text-sm text-muted-foreground mb-4">
                 Images and videos (max 50MB each)
               </p>
-              <Button type="button" disabled={uploading || !selectedBusiness}>
-                {uploading ? 'Uploading...' : 'Select Files'}
+              <Button 
+                type="button" 
+                disabled={uploading || !selectedBusiness || preparing}
+                onClick={() => setPreparing(true)}
+              >
+                {preparing ? 'Opening file picker...' : uploading ? 'Uploading...' : 'Select Files'}
               </Button>
             </label>
           </div>
