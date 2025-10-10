@@ -1,5 +1,6 @@
 import { useState, useEffect } from "react";
-import { Sparkles, FileText, Send, Calendar, TrendingUp, RefreshCw, Edit, Trash2, Rocket, CheckCircle, Copy } from "lucide-react";
+import { Link } from "react-router-dom";
+import { Sparkles, FileText, Send, Calendar, TrendingUp, RefreshCw, Edit, Trash2, Rocket, CheckCircle, Copy, ImageIcon } from "lucide-react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -750,13 +751,21 @@ const ContentCenter = () => {
           {/* Content Preview and Management */}
           <div className="lg:col-span-2">
             <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-4">
-              <TabsList className="grid w-full grid-cols-5">
-                <TabsTrigger value="preview">Preview</TabsTrigger>
-                <TabsTrigger value="library">Library</TabsTrigger>
-                <TabsTrigger value="schedule">Schedule</TabsTrigger>
-                <TabsTrigger value="posted">Posted</TabsTrigger>
-                <TabsTrigger value="history">History</TabsTrigger>
-              </TabsList>
+              <div className="flex items-center justify-between gap-4 mb-2">
+                <TabsList className="grid flex-1 grid-cols-5">
+                  <TabsTrigger value="preview">Preview</TabsTrigger>
+                  <TabsTrigger value="library">Library</TabsTrigger>
+                  <TabsTrigger value="schedule">Schedule</TabsTrigger>
+                  <TabsTrigger value="posted">Posted</TabsTrigger>
+                  <TabsTrigger value="history">History</TabsTrigger>
+                </TabsList>
+                <Link to="/media-library">
+                  <Button variant="outline" size="sm">
+                    <ImageIcon className="h-4 w-4 mr-2" />
+                    Media Library
+                  </Button>
+                </Link>
+              </div>
               
               <TabsContent value="preview">
                 <Card>
