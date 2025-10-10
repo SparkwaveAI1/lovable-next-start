@@ -207,10 +207,10 @@ export default function EmployeeUpload() {
           continue;
         }
 
-        // Update status to processing (AI analysis)
-        updateFileStatus(fileIndex, 'processing');
+        // Mark as complete immediately
+        updateFileStatus(fileIndex, 'complete');
 
-        // Trigger AI analysis
+        // Trigger AI analysis in background (fire-and-forget)
         supabase.functions.invoke('analyze-media', {
           body: {
             mediaId: insertedMedia.id,
@@ -218,11 +218,8 @@ export default function EmployeeUpload() {
             filePath: publicUrl,
             businessId: selectedBusiness
           }
-        }).then(({ error }) => {
-          if (error) {
-            console.error('AI analysis error:', error);
-          }
-          updateFileStatus(fileIndex, 'complete');
+        }).catch(error => {
+          console.error('AI analysis error:', error);
         });
       }
 
