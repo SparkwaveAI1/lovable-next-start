@@ -351,7 +351,7 @@ export default function MediaLibraryPage() {
         onBusinessChange={setSelectedBusiness}
       />
       
-      <main className="container mx-auto px-4 sm:px-6 py-4 sm:py-8 pt-20 sm:pt-24 md:pt-28">
+      <main className="container mx-auto px-4 sm:px-6 py-4 sm:py-8 pt-28 sm:pt-32 md:pt-28">
         <div className="mb-6 sm:mb-8">
           <h1 className="text-2xl sm:text-3xl font-bold text-foreground mb-2">Media Library</h1>
           <p className="text-sm sm:text-base text-muted-foreground">Manage images and videos for your content</p>

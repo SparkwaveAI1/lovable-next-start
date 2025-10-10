@@ -47,7 +47,7 @@ export function BusinessSwitcher({ selectedBusinessId, onBusinessChange }: Busin
           variant="outline"
           role="combobox"
           aria-expanded={open}
-          className="w-[280px] justify-between bg-card shadow-card hover:shadow-card-hover transition-smooth"
+          className="w-full sm:w-[280px] justify-between bg-card shadow-card hover:shadow-card-hover transition-smooth"
           disabled={loading}
         >
           <div className="flex items-center gap-2">
@@ -64,7 +64,7 @@ export function BusinessSwitcher({ selectedBusinessId, onBusinessChange }: Busin
           <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
         </Button>
       </PopoverTrigger>
-      <PopoverContent className="w-[280px] p-0 bg-popover border-border shadow-card-hover">
+      <PopoverContent className="w-full sm:w-[280px] p-0 bg-popover border-border shadow-card-hover z-[60]">
         <Command>
           <CommandInput placeholder="Search businesses..." />
           <CommandEmpty>No business found.</CommandEmpty>
