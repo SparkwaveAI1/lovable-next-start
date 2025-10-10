@@ -257,16 +257,8 @@ export function ContentLibrary({ businessId, onSchedule, onEdit }: ContentLibrar
                 </CardHeader>
 
                 <CardContent className="flex-1">
-                  <p className="text-sm mb-3 line-clamp-4">{item.content}</p>
-                  
-                  {item.topic && (
-                    <p className="text-xs text-muted-foreground mb-2">
-                      Topic: {item.topic}
-                    </p>
-                  )}
-
                   {item.tags && item.tags.length > 0 && (
-                    <div className="flex flex-wrap gap-1 mb-2">
+                    <div className="flex flex-wrap gap-1 mb-3">
                       {item.tags.map((tag, idx) => (
                         <Badge key={idx} variant="secondary" className="text-xs">
                           {tag}
@@ -274,6 +266,8 @@ export function ContentLibrary({ businessId, onSchedule, onEdit }: ContentLibrar
                       ))}
                     </div>
                   )}
+
+                  <p className="text-sm mb-3 whitespace-pre-wrap">{item.content}</p>
 
                   <div className="flex items-center gap-2 text-xs text-muted-foreground mt-3">
                     <Clock className="w-3 h-3" />
