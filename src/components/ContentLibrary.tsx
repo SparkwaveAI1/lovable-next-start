@@ -5,6 +5,7 @@ import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardFooter, CardHeader } from "@/components/ui/card";
 import { ScrollArea } from "@/components/ui/scroll-area";
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Calendar, Clock, Edit2, Trash2, Image as ImageIcon, Video, CheckCircle } from "lucide-react";
 import { toast } from "sonner";
@@ -42,6 +43,8 @@ export function ContentLibrary({ businessId, onSchedule, onEdit }: ContentLibrar
   const [platformFilter, setPlatformFilter] = useState("all");
   const [tagFilter, setTagFilter] = useState("all");
   const [allTags, setAllTags] = useState<string[]>([]);
+  const [selectedContent, setSelectedContent] = useState<LibraryContent | null>(null);
+  const [dialogOpen, setDialogOpen] = useState(false);
 
   useEffect(() => {
     loadContent();
@@ -124,6 +127,16 @@ export function ContentLibrary({ businessId, onSchedule, onEdit }: ContentLibrar
       console.error('Error marking as posted:', error);
       toast.error('Failed to mark as posted');
     }
+  };
+
+  const handleCardClick = (item: LibraryContent) => {
+    setSelectedContent(item);
+    setDialogOpen(true);
+  };
+
+  const handleCloseDialog = () => {
+    setDialogOpen(false);
+    setTimeout(() => setSelectedContent(null), 200);
   };
 
   // Filter content
@@ -257,17 +270,24 @@ export function ContentLibrary({ businessId, onSchedule, onEdit }: ContentLibrar
                 </CardHeader>
 
                 <CardContent className="flex-1">
-                  {item.tags && item.tags.length > 0 && (
-                    <div className="flex flex-wrap gap-1 mb-3">
-                      {item.tags.map((tag, idx) => (
-                        <Badge key={idx} variant="secondary" className="text-xs">
-                          {tag}
-                        </Badge>
-                      ))}
-                    </div>
-                  )}
+                  <div 
+                    className="cursor-pointer hover:bg-accent/5 -m-2 p-2 rounded transition-colors"
+                    onClick={() => handleCardClick(item)}
+                  >
+                    {item.tags && item.tags.length > 0 && (
+                      <div className="flex flex-wrap gap-1 mb-3">
+                        {item.tags.map((tag, idx) => (
+                          <Badge key={idx} variant="secondary" className="text-xs">
+                            {tag}
+                          </Badge>
+                        ))}
+                      </div>
+                    )}
 
-                  <p className="text-sm mb-3 whitespace-pre-wrap">{item.content}</p>
+                    <p className="text-sm mb-3 line-clamp-3">{item.content}</p>
+                    
+                    <p className="text-xs text-primary font-medium">Click to view full content →</p>
+                  </div>
 
                   <div className="flex items-center gap-2 text-xs text-muted-foreground mt-3">
                     <Clock className="w-3 h-3" />
@@ -313,6 +333,144 @@ export function ContentLibrary({ businessId, onSchedule, onEdit }: ContentLibrar
           </div>
         </ScrollArea>
       )}
+
+      {/* Full Content Dialog */}
+      <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
+        <DialogContent className="max-w-3xl max-h-[85vh] overflow-hidden flex flex-col">
+          {selectedContent && (
+            <>
+              <DialogHeader>
+                <div className="flex items-center gap-2 mb-2">
+                  <span className="text-2xl">{getPlatformIcon(selectedContent.platform)}</span>
+                  <Badge variant="outline">{selectedContent.platform}</Badge>
+                  {selectedContent.media && selectedContent.media.length > 0 && (
+                    <Badge variant="secondary" className="text-xs">
+                      {selectedContent.media[0].file_type === 'image' ? (
+                        <><ImageIcon className="w-3 h-3 mr-1" /> {selectedContent.media.length}</>
+                      ) : (
+                        <><Video className="w-3 h-3 mr-1" /> {selectedContent.media.length}</>
+                      )}
+                    </Badge>
+                  )}
+                </div>
+                
+                <DialogTitle className="sr-only">Content Details</DialogTitle>
+                <DialogDescription className="sr-only">
+                  View full content for {selectedContent.platform}
+                </DialogDescription>
+              </DialogHeader>
+
+              {/* Tags */}
+              {selectedContent.tags && selectedContent.tags.length > 0 && (
+                <div className="flex flex-wrap gap-1 mb-4">
+                  {selectedContent.tags.map((tag, idx) => (
+                    <Badge key={idx} variant="secondary" className="text-xs">
+                      {tag}
+                    </Badge>
+                  ))}
+                </div>
+              )}
+
+              {/* Media Preview */}
+              {selectedContent.media && selectedContent.media.length > 0 && (
+                <div className="mb-4 flex gap-2 flex-wrap">
+                  {selectedContent.media.map((media) => (
+                    <div key={media.id} className="relative w-24 h-24 rounded border overflow-hidden">
+                      {media.file_type === 'image' ? (
+                        <img 
+                          src={media.thumbnail_path || media.file_path} 
+                          alt="Media" 
+                          className="w-full h-full object-cover"
+                        />
+                      ) : (
+                        <div className="w-full h-full bg-muted flex items-center justify-center">
+                          <Video className="w-8 h-8 text-muted-foreground" />
+                        </div>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              {/* Scrollable Content */}
+              <ScrollArea className="flex-1 pr-4">
+                <div className="space-y-4">
+                  <div>
+                    <h4 className="text-sm font-semibold mb-2 text-muted-foreground">Content</h4>
+                    <p className="text-sm whitespace-pre-wrap leading-relaxed">
+                      {selectedContent.content}
+                    </p>
+                  </div>
+
+                  {/* Metadata */}
+                  <div className="pt-4 border-t space-y-2">
+                    <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                      <Clock className="w-3 h-3" />
+                      Approved: {new Date(selectedContent.approved_at || selectedContent.created_at).toLocaleDateString()}
+                    </div>
+                    
+                    {selectedContent.keywords && selectedContent.keywords.length > 0 && (
+                      <div className="text-xs">
+                        <span className="text-muted-foreground">Keywords: </span>
+                        <span>{selectedContent.keywords.join(', ')}</span>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              </ScrollArea>
+
+              {/* Action Buttons */}
+              <div className="pt-4 border-t flex flex-col sm:flex-row gap-2">
+                <Button
+                  size="sm"
+                  variant="default"
+                  className="flex-1"
+                  onClick={() => {
+                    handleCloseDialog();
+                    onSchedule(selectedContent);
+                  }}
+                >
+                  <Calendar className="w-4 h-4 mr-1" />
+                  Schedule
+                </Button>
+                <Button
+                  size="sm"
+                  variant="secondary"
+                  onClick={() => {
+                    handleCloseDialog();
+                    handleMarkAsPosted(selectedContent.id);
+                  }}
+                >
+                  <CheckCircle className="w-4 h-4 mr-1" />
+                  Mark Posted
+                </Button>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={() => {
+                    handleCloseDialog();
+                    onEdit(selectedContent);
+                  }}
+                >
+                  <Edit2 className="w-4 h-4 mr-1" />
+                  Edit
+                </Button>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={() => {
+                    handleCloseDialog();
+                    handleDelete(selectedContent.id);
+                  }}
+                >
+                  <Trash2 className="w-4 h-4 mr-1" />
+                  Delete
+                </Button>
+              </div>
+            </>
+          )}
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
