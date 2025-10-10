@@ -51,6 +51,17 @@ interface ContentRequest {
   tone?: string;
 }
 
+// Helper function to determine if content should be treated as long-form
+function isLongFormContent(platform: string, contentType: string): boolean {
+  const longFormTypes: Record<string, string[]> = {
+    'blog': ['short', 'medium', 'long', 'listicle', 'howto'],
+    'email': ['newsletter', 'promotional', 'welcome', 'followup'],
+    'linkedin': ['article', 'long']
+  };
+  
+  return longFormTypes[platform]?.includes(contentType) ?? false;
+}
+
 // Platform-specific prompt builders
 function buildTwitterPrompt(contentType: string, quantity: number, topic: string, agentConfig: any): string {
   const lengthConstraints: Record<string, any> = {
@@ -543,7 +554,7 @@ serve(async (req) => {
           { role: 'system', content: agentConfig.systemPrompt },
           { role: 'user', content: generationPrompt }
         ],
-        max_tokens: 2000,
+        max_tokens: isLongFormContent(request.platform, request.contentType) ? 4000 : 2000,
         temperature: 0.7
       })
     });
@@ -565,31 +576,47 @@ serve(async (req) => {
     
     console.log('Raw AI response:', rawContent);
     
-    // Parse the numbered content and extract hashtags
-    const contentLines = rawContent.split('\n').filter(line => line.trim());
     const contentItems: Array<{ content: string; hashtags: string[] }> = [];
 
-    for (const line of contentLines) {
-      // Remove numbering patterns like "1.", "1/5", "Tweet 1:", etc.
-      let cleaned = line
-        .replace(/^\d+[\.)]\s*/, '')           // Remove "1. " or "1) "
-        .replace(/^\d+\/\d+\s*/, '')           // Remove "1/5 "
-        .replace(/^Tweet\s+\d+:\s*/i, '')      // Remove "Tweet 1: "
-        .replace(/^Post\s+\d+:\s*/i, '')       // Remove "Post 1: "
-        .trim();
+    // Check if this is long-form content that should stay as one piece
+    if (isLongFormContent(request.platform, request.contentType)) {
+      // For blog posts, articles, emails - keep entire content together
+      const hashtagMatches = rawContent.match(/#\w+/g) || [];
+      const hashtags = hashtagMatches
+        .filter(tag => !tag.match(/^#[A-Z]/)) // Exclude markdown headers like #Title
+        .map(tag => tag.substring(1));
       
-      if (cleaned && cleaned.length > 0) {
-        // Extract hashtags (anything starting with #)
-        const hashtagMatches = cleaned.match(/#\w+/g) || [];
-        const hashtags = hashtagMatches.map(tag => tag.substring(1)); // Remove # prefix for storage
+      contentItems.push({
+        content: rawContent.trim(),
+        hashtags: hashtags
+      });
+      
+    } else {
+      // For short-form (tweets, captions) - parse line by line
+      const contentLines = rawContent.split('\n').filter(line => line.trim());
+      
+      for (const line of contentLines) {
+        // Remove numbering patterns like "1.", "1/5", "Tweet 1:", etc.
+        let cleaned = line
+          .replace(/^\d+[\.)]\s*/, '')           // Remove "1. " or "1) "
+          .replace(/^\d+\/\d+\s*/, '')           // Remove "1/5 "
+          .replace(/^Tweet\s+\d+:\s*/i, '')      // Remove "Tweet 1: "
+          .replace(/^Post\s+\d+:\s*/i, '')       // Remove "Post 1: "
+          .trim();
         
-        // Remove hashtags from content
-        const contentWithoutHashtags = cleaned.replace(/#\w+/g, '').trim().replace(/\s+/g, ' ');
-        
-        contentItems.push({
-          content: contentWithoutHashtags,
-          hashtags: hashtags
-        });
+        if (cleaned && cleaned.length > 0) {
+          // Extract hashtags (anything starting with #)
+          const hashtagMatches = cleaned.match(/#\w+/g) || [];
+          const hashtags = hashtagMatches.map(tag => tag.substring(1));
+          
+          // Remove hashtags from content
+          const contentWithoutHashtags = cleaned.replace(/#\w+/g, '').trim().replace(/\s+/g, ' ');
+          
+          contentItems.push({
+            content: contentWithoutHashtags,
+            hashtags: hashtags
+          });
+        }
       }
     }
 
