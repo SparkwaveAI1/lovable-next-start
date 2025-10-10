@@ -50,6 +50,7 @@ export default function MediaLibraryPage() {
   const [editingMedia, setEditingMedia] = useState<MediaAsset | null>(null);
   const [editDescription, setEditDescription] = useState("");
   const [editTags, setEditTags] = useState("");
+  const [playingVideoId, setPlayingVideoId] = useState<string | null>(null);
 
   useEffect(() => {
     loadBusinesses();
@@ -501,39 +502,45 @@ export default function MediaLibraryPage() {
                             alt={item.file_name}
                             className="w-full h-full object-cover"
                           />
-                        ) : item.thumbnail_path ? (
-                          <div className="relative w-full h-full">
-                            <img
-                              src={item.thumbnail_path}
-                              alt={item.file_name}
-                              className="w-full h-full object-cover"
-                            />
-                            <div className="absolute inset-0 flex items-center justify-center bg-black/20">
-                              <div className="w-12 h-12 rounded-full bg-white/90 flex items-center justify-center shadow-lg">
-                                <svg className="w-6 h-6 text-gray-900 ml-1" fill="currentColor" viewBox="0 0 24 24">
+                        ) : item.file_type === 'video' && playingVideoId === item.id ? (
+                          <video
+                            src={item.file_path}
+                            className="w-full h-full object-cover"
+                            controls
+                            autoPlay
+                            playsInline
+                            onEnded={() => setPlayingVideoId(null)}
+                            onPause={() => setPlayingVideoId(null)}
+                          />
+                        ) : item.file_type === 'video' ? (
+                          <div 
+                            className="relative w-full h-full cursor-pointer"
+                            onClick={() => setPlayingVideoId(item.id)}
+                          >
+                            {item.thumbnail_path ? (
+                              <img
+                                src={item.thumbnail_path}
+                                alt={item.file_name}
+                                className="w-full h-full object-cover"
+                              />
+                            ) : (
+                              <video
+                                src={item.file_path}
+                                className="w-full h-full object-cover"
+                                preload="metadata"
+                                muted
+                                playsInline
+                              />
+                            )}
+                            <div className="absolute inset-0 flex items-center justify-center bg-black/20 hover:bg-black/30 transition-colors">
+                              <div className="w-16 h-16 rounded-full bg-white/90 flex items-center justify-center shadow-lg">
+                                <svg className="w-8 h-8 text-gray-900 ml-1" fill="currentColor" viewBox="0 0 24 24">
                                   <path d="M8 5v14l11-7z"/>
                                 </svg>
                               </div>
                             </div>
                           </div>
-                        ) : (
-                          <div className="relative w-full h-full bg-gray-100 flex items-center justify-center">
-                            <video
-                              src={item.file_path}
-                              className="w-full h-full object-cover"
-                              preload="metadata"
-                              muted
-                              playsInline
-                            />
-                            <div className="absolute inset-0 flex items-center justify-center">
-                              <div className="w-12 h-12 rounded-full bg-white/90 flex items-center justify-center shadow-lg">
-                                <svg className="w-6 h-6 text-gray-900 ml-1" fill="currentColor" viewBox="0 0 24 24">
-                                  <path d="M8 5v14l11-7z"/>
-                                </svg>
-                              </div>
-                            </div>
-                          </div>
-                        )}
+                        ) : null}
                         <div className="absolute top-2 right-2 flex gap-1">
                           <Button
                             size="sm"
