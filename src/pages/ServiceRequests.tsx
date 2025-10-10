@@ -137,7 +137,7 @@ export default function ServiceRequests() {
         onBusinessChange={setSelectedBusinessId}
       />
 
-      <main className="container mx-auto p-6 space-y-6">
+      <main className="container mx-auto p-6 space-y-6 pt-2 md:pt-28">
         <div>
           <h1 className="text-3xl font-bold mb-2">Service Requests</h1>
           <p className="text-muted-foreground">

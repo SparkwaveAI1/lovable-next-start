@@ -41,7 +41,7 @@ const Index = () => {
         onBusinessChange={setSelectedBusinessId}
       />
       
-      <main className="container mx-auto px-6 py-8 pt-28 md:pt-28">
+      <main className="container mx-auto px-4 sm:px-6 py-4 md:py-8 pt-2 md:pt-28">
         {/* Welcome Section */}
         <div className="mb-8">
           <h2 className="text-3xl font-bold text-foreground mb-2">

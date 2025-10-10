@@ -637,7 +637,7 @@ const ContentCenter = () => {
         onBusinessChange={setSelectedBusiness}
       />
       
-      <main className="container mx-auto px-4 md:px-6 py-8 pt-28 md:pt-28">
+      <main className="container mx-auto px-4 md:px-6 py-4 md:py-8 pt-2 md:pt-28">
         {/* Header */}
         <div className="mb-8">
           <h1 className="text-3xl font-bold text-foreground mb-2">
