@@ -24,6 +24,7 @@ interface ContentReviewDialogProps {
   contentType: string;
   topic?: string;
   keywords?: string[];
+  onSuccess?: () => void; // Callback after successful save
 }
 
 export function ContentReviewDialog({
@@ -34,7 +35,8 @@ export function ContentReviewDialog({
   platform,
   contentType,
   topic,
-  keywords
+  keywords,
+  onSuccess
 }: ContentReviewDialogProps) {
   const [decisions, setDecisions] = useState<Record<number, 'pending' | 'approved' | 'rejected'>>({});
   const [rejectionReasons, setRejectionReasons] = useState<Record<number, string>>({});
@@ -176,6 +178,9 @@ export function ContentReviewDialog({
       setScheduleDates({});
       setScheduleTimes({});
       onOpenChange(false);
+      
+      // Call success callback to clear parent state
+      onSuccess?.();
       
     } catch (error) {
       console.error('Error saving decisions:', error);

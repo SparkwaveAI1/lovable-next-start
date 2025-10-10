@@ -792,7 +792,10 @@ const ContentCenter = () => {
                               Review and approve your content to add it to your library
                             </p>
                           </div>
-                          <Button onClick={() => setReviewMode(true)}>
+                          <Button onClick={() => {
+                            setReviewingContent(generatedContent);
+                            setReviewMode(true);
+                          }}>
                             <CheckCircle className="h-4 w-4 mr-2" />
                             Review & Approve All
                           </Button>
@@ -986,6 +989,11 @@ const ContentCenter = () => {
         contentType={selectedContentType}
         topic={topic}
         keywords={topic ? topic.split(',').map(k => k.trim()) : []}
+        onSuccess={() => {
+          // Clear both content states after successful review
+          setGeneratedContent([]);
+          setReviewingContent([]);
+        }}
       />
     </div>
   );
