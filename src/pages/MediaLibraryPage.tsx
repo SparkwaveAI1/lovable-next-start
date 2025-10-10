@@ -9,6 +9,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Upload, Image as ImageIcon, Video, Trash2, Edit2, Search, Download } from "lucide-react";
 import { toast } from "sonner";
 import { useBusinessContext } from "@/contexts/BusinessContext";
@@ -440,16 +441,17 @@ export default function MediaLibraryPage() {
               </div>
 
               {allTags.length > 0 && (
-                <select
-                  value={tagFilter}
-                  onChange={(e) => setTagFilter(e.target.value)}
-                  className="border rounded-md px-3 py-2"
-                >
-                  <option value="all">All Tags</option>
-                  {allTags.map(tag => (
-                    <option key={tag} value={tag}>{tag}</option>
-                  ))}
-                </select>
+                <Select value={tagFilter} onValueChange={setTagFilter}>
+                  <SelectTrigger className="w-[180px] bg-background">
+                    <SelectValue placeholder="All Tags" />
+                  </SelectTrigger>
+                  <SelectContent className="bg-background z-50">
+                    <SelectItem value="all">All Tags</SelectItem>
+                    {allTags.map(tag => (
+                      <SelectItem key={tag} value={tag}>{tag}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
               )}
             </div>
 
