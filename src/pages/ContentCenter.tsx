@@ -686,14 +686,30 @@ const ContentCenter = () => {
 
                 {/* Quantity (with dynamic label) */}
                 <div className="space-y-2">
-                  <Label>Number of tweets to generate</Label>
-                  <Input
-                    type="number"
-                    min="1"
-                    max={platforms.find(p => p.id === selectedPlatform)?.maxQuantity || 10}
-                    value={quantity}
-                    onChange={(e) => setQuantity(parseInt(e.target.value) || 1)}
-                  />
+              <Label>{platforms.find(p => p.id === selectedPlatform)?.quantityLabel || 'Number of Posts'} to generate</Label>
+              <Input
+                type="number"
+                min="1"
+                max={platforms.find(p => p.id === selectedPlatform)?.maxQuantity || 10}
+                value={quantity}
+                onChange={(e) => {
+                  const val = e.target.value;
+                  if (val === '') {
+                    setQuantity(1);
+                  } else {
+                    const num = parseInt(val, 10);
+                    if (!isNaN(num) && num >= 1) {
+                      const max = platforms.find(p => p.id === selectedPlatform)?.maxQuantity || 10;
+                      setQuantity(Math.min(num, max));
+                    }
+                  }
+                }}
+                onBlur={(e) => {
+                  if (!e.target.value || parseInt(e.target.value) < 1) {
+                    setQuantity(1);
+                  }
+                }}
+              />
                   <p className="text-xs text-muted-foreground">
                     Generate multiple options to review and select
                   </p>
