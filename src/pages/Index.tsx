@@ -35,7 +35,7 @@ const Index = () => {
   }, [selectedBusiness])
 
   return (
-    <div className="min-h-screen bg-background">
+    <div className="min-h-screen bg-background overflow-x-hidden w-full">
       <DashboardHeader 
         selectedBusinessId={selectedBusiness?.id}
         onBusinessChange={(id) => {
