@@ -752,20 +752,26 @@ const ContentCenter = () => {
           {/* Content Preview and Management */}
           <div className="lg:col-span-2">
             <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-4">
-              <div className="flex items-center justify-between gap-4 mb-2">
-                <TabsList className="grid flex-1 grid-cols-5">
+              {/* Mobile: Scrollable horizontal tabs */}
+              <div className="overflow-x-auto md:hidden mb-2">
+                <TabsList className="inline-flex w-auto min-w-full">
+                  <TabsTrigger value="preview" className="flex-shrink-0">Preview</TabsTrigger>
+                  <TabsTrigger value="library" className="flex-shrink-0">Library</TabsTrigger>
+                  <TabsTrigger value="schedule" className="flex-shrink-0">Schedule</TabsTrigger>
+                  <TabsTrigger value="posted" className="flex-shrink-0">Posted</TabsTrigger>
+                  <TabsTrigger value="history" className="flex-shrink-0">History</TabsTrigger>
+                </TabsList>
+              </div>
+
+              {/* Desktop: Grid layout */}
+              <div className="hidden md:block mb-2">
+                <TabsList className="grid grid-cols-5">
                   <TabsTrigger value="preview">Preview</TabsTrigger>
                   <TabsTrigger value="library">Library</TabsTrigger>
                   <TabsTrigger value="schedule">Schedule</TabsTrigger>
                   <TabsTrigger value="posted">Posted</TabsTrigger>
                   <TabsTrigger value="history">History</TabsTrigger>
                 </TabsList>
-                <Link to="/media-library">
-                  <Button variant="outline" size="sm">
-                    <ImageIcon className="h-4 w-4 mr-2" />
-                    Media Library
-                  </Button>
-                </Link>
               </div>
               
               <TabsContent value="preview">
