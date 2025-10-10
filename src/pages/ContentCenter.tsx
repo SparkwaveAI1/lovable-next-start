@@ -27,7 +27,7 @@ const ContentCenter = () => {
   const [selectedPlatform, setSelectedPlatform] = useState("twitter");
   const [selectedContentType, setSelectedContentType] = useState("medium");
   const [topic, setTopic] = useState("");
-  const [quantity, setQuantity] = useState(10);
+  const [quantity, setQuantity] = useState<number | ''>(10);
   const [generatedContent, setGeneratedContent] = useState<Array<{content: string, hashtags?: string[]}>>([]);
   const [isGenerating, setIsGenerating] = useState(false);
   const [reviewMode, setReviewMode] = useState(false);
@@ -203,7 +203,7 @@ const ContentCenter = () => {
           businessId: selectedBusiness.id,
           platform: selectedPlatform,
           contentType: selectedContentType,
-          quantity: quantity,
+          quantity: quantity || 1,
           topic: topic || undefined,
           keywords: [],
           tone: undefined
@@ -652,7 +652,7 @@ const ContentCenter = () => {
                     // Reset content type to first option when platform changes
                     const platform = platforms.find(p => p.id === value);
                     setSelectedContentType(platform?.contentTypes[0].value || 'short');
-                    setQuantity(Math.min(quantity, platform?.maxQuantity || 10));
+                    setQuantity(Math.min(quantity || 1, platform?.maxQuantity || 10));
                   }}>
                     <SelectTrigger>
                       <SelectValue />
@@ -695,7 +695,7 @@ const ContentCenter = () => {
                 onChange={(e) => {
                   const val = e.target.value;
                   if (val === '') {
-                    setQuantity(1);
+                    setQuantity(''); // Allow empty during typing
                   } else {
                     const num = parseInt(val, 10);
                     if (!isNaN(num) && num >= 1) {
