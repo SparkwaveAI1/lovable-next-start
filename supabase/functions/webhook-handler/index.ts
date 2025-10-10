@@ -68,7 +68,9 @@ async function createContactDirectly(formData: any, businessId: string, business
       phone: formData.phone,
       source: 'wix_form',
       status: 'new_lead',
-      comments: formData.comments || ''
+      comments: formData.comments || '',
+      lead_type: formData.leadType || 'sales_lead',
+      pipeline_stage: formData.pipelineStage || 'new'
     })
     .select()
     .single();
@@ -339,12 +341,37 @@ serve(async (req: Request) => {
         }
       }
 
+      // Detect if this is a freeze or cancellation request
+      let leadType = 'sales_lead';
+      let pipelineStage = 'new';
+
+      // Check for service request labels
+      const labels = contactData.labelKeys?.items || [];
+      const isServiceRequest = labels.some((label: string) => 
+        label.includes('freeze-or-cancellation-request') || 
+        label.includes('freeze') || 
+        label.includes('cancellation')
+      );
+
+      if (isServiceRequest) {
+        // For now, categorize as cancellation_request
+        // In the future, we could check form fields to determine freeze vs cancellation
+        leadType = 'cancellation_request';
+        pipelineStage = 'pending_review';
+        
+        console.log('Detected service request - setting lead_type to cancellation_request');
+      }
+
       // Enhanced logging to show data sources
       console.log('Data extraction sources:', {
         name: { value: leadName, source: nameSource },
         email: { value: leadEmail, source: emailSource },
         phone: { value: `${originalPhone} -> ${leadPhone}`, source: phoneSource },
-        submissionId: submissionId
+        submissionId: submissionId,
+        leadType: leadType,
+        pipelineStage: pipelineStage,
+        isServiceRequest: isServiceRequest,
+        labels: labels
       });
 
       processedData = {
@@ -354,7 +381,9 @@ serve(async (req: Request) => {
         formType: formData.formType || formData.formName || 'contact',
         comments: formData.comments || formData.message || '',
         source: 'wix_form',
-        timestamp: new Date().toISOString()
+        timestamp: new Date().toISOString(),
+        leadType: leadType,
+        pipelineStage: pipelineStage
       };
 
       console.log('Processed form data:', processedData);
