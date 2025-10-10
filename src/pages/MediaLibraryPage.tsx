@@ -351,16 +351,16 @@ export default function MediaLibraryPage() {
         onBusinessChange={setSelectedBusiness}
       />
       
-      <main className="container mx-auto px-6 py-8 pt-24 md:pt-28">
-        <div className="mb-8">
-          <h1 className="text-3xl font-bold text-foreground mb-2">Media Library</h1>
-          <p className="text-muted-foreground">Manage images and videos for your content</p>
+      <main className="container mx-auto px-4 sm:px-6 py-4 sm:py-8 pt-20 sm:pt-24 md:pt-28">
+        <div className="mb-6 sm:mb-8">
+          <h1 className="text-2xl sm:text-3xl font-bold text-foreground mb-2">Media Library</h1>
+          <p className="text-sm sm:text-base text-muted-foreground">Manage images and videos for your content</p>
         </div>
 
         {selectedBusiness ? (
-          <div className="space-y-4">
-            {/* Upload and Filters */}
-            <div className="flex flex-col sm:flex-row gap-4">
+          <div className="space-y-3 sm:space-y-4">
+            {/* Upload Button */}
+            <div>
               <Input
                 type="file"
                 accept="image/*,video/*"
@@ -373,26 +373,32 @@ export default function MediaLibraryPage() {
               <Button
                 onClick={() => document.getElementById('media-upload')?.click()}
                 disabled={uploading}
+                className="w-full sm:w-auto"
               >
                 <Upload className="w-4 h-4 mr-2" />
                 {uploading ? 'Uploading...' : 'Upload Media'}
               </Button>
+            </div>
 
-              <div className="flex-1 flex gap-2">
-                <div className="relative flex-1">
-                  <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-                  <Input
-                    placeholder="Search by filename, description, or tags..."
-                    value={searchTerm}
-                    onChange={(e) => setSearchTerm(e.target.value)}
-                    className="pl-10"
-                  />
-                </div>
+            {/* Search */}
+            <div className="relative">
+              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+              <Input
+                placeholder="Search by filename, description, or tags..."
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+                className="pl-10"
+              />
+            </div>
 
+            {/* Filters */}
+            <div className="flex flex-col sm:flex-row gap-3">
+              <div className="flex gap-2">
                 <Button
                   variant={typeFilter === 'all' ? 'default' : 'outline'}
                   size="sm"
                   onClick={() => setTypeFilter('all')}
+                  className="flex-1 sm:flex-none"
                 >
                   All
                 </Button>
@@ -400,21 +406,25 @@ export default function MediaLibraryPage() {
                   variant={typeFilter === 'image' ? 'default' : 'outline'}
                   size="sm"
                   onClick={() => setTypeFilter('image')}
+                  className="flex-1 sm:flex-none"
                 >
-                  <ImageIcon className="w-4 h-4" />
+                  <ImageIcon className="w-4 h-4 sm:mr-0" />
+                  <span className="sm:hidden ml-2">Images</span>
                 </Button>
                 <Button
                   variant={typeFilter === 'video' ? 'default' : 'outline'}
                   size="sm"
                   onClick={() => setTypeFilter('video')}
+                  className="flex-1 sm:flex-none"
                 >
-                  <Video className="w-4 h-4" />
+                  <Video className="w-4 h-4 sm:mr-0" />
+                  <span className="sm:hidden ml-2">Videos</span>
                 </Button>
               </div>
 
               {allTags.length > 0 && (
                 <Select value={tagFilter} onValueChange={setTagFilter}>
-                  <SelectTrigger className="w-[180px] bg-background">
+                  <SelectTrigger className="w-full sm:w-[180px] bg-background">
                     <SelectValue placeholder="All Tags" />
                   </SelectTrigger>
                   <SelectContent className="bg-background z-50">
@@ -428,7 +438,7 @@ export default function MediaLibraryPage() {
             </div>
 
             {/* Stats */}
-            <div className="flex gap-4 text-sm">
+            <div className="flex flex-wrap gap-2 text-sm">
               <Badge variant="secondary">
                 Total: {filteredMedia.length}
               </Badge>
@@ -465,8 +475,8 @@ export default function MediaLibraryPage() {
                 </CardContent>
               </Card>
             ) : (
-              <ScrollArea className="h-[600px]">
-                <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-4 pr-4">
+              <ScrollArea className="h-[calc(100vh-400px)] sm:h-[600px]">
+                <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-3 sm:gap-4 pr-2 sm:pr-4">
                   {filteredMedia.map((item) => (
                     <Card key={item.id} className="overflow-hidden">
                       <div className="aspect-square relative">
