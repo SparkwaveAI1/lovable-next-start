@@ -311,6 +311,22 @@ export default function MediaLibraryPage() {
     try {
       const response = await fetch(item.file_path);
       const blob = await response.blob();
+      
+      // Try Web Share API first (works on mobile and some desktop browsers)
+      if (navigator.share && navigator.canShare) {
+        const file = new File([blob], item.file_name, { type: blob.type });
+        
+        if (navigator.canShare({ files: [file] })) {
+          await navigator.share({
+            title: item.file_name,
+            files: [file]
+          });
+          toast.success('Shared successfully');
+          return;
+        }
+      }
+      
+      // Fallback: traditional blob download
       const url = window.URL.createObjectURL(blob);
       const a = document.createElement('a');
       a.href = url;
