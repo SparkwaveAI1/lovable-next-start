@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import React from 'react';
 import { useActivityLogs } from '@/hooks/useActivityLogs';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -131,9 +132,8 @@ export function ActivityLog({ businessId }: ActivityLogProps) {
             </TableHeader>
             <TableBody>
               {logs.map((log) => (
-                <>
+                <React.Fragment key={log.id}>
                   <TableRow 
-                    key={log.id}
                     className="cursor-pointer hover:bg-accent/50"
                     onClick={() => toggleRow(log.id)}
                   >
@@ -191,7 +191,7 @@ export function ActivityLog({ businessId }: ActivityLogProps) {
                       </TableCell>
                     </TableRow>
                   )}
-                </>
+                </React.Fragment>
               ))}
             </TableBody>
           </Table>

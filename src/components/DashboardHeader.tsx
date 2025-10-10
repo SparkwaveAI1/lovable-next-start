@@ -36,7 +36,13 @@ export function DashboardHeader({ selectedBusinessId, onBusinessChange }: Dashbo
 
           {/* Right side - Navigation & Actions */}
           <div className="flex items-center gap-2 md:gap-4 w-full md:w-auto justify-end">
-            <nav className="flex items-center gap-2 md:gap-4">
+          <nav className="flex items-center gap-2 md:gap-4">
+              <Link
+                to="/"
+                className="text-sm font-medium text-muted-foreground hover:text-foreground transition-colors"
+              >
+                Dashboard
+              </Link>
               <Link
                 to="/content-center"
                 className="text-sm font-medium text-muted-foreground hover:text-foreground transition-colors"
@@ -48,6 +54,12 @@ export function DashboardHeader({ selectedBusinessId, onBusinessChange }: Dashbo
                 className="text-sm font-medium text-muted-foreground hover:text-foreground transition-colors"
               >
                 Media Library
+              </Link>
+              <Link
+                to="/service-requests"
+                className="text-sm font-medium text-muted-foreground hover:text-foreground transition-colors"
+              >
+                Service Requests
               </Link>
             </nav>
             <div className="flex items-center gap-1 md:gap-2">

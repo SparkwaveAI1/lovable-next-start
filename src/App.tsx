@@ -9,6 +9,7 @@ import ContentCenter from "./pages/ContentCenter";
 import GameTestInterface from "./components/GameTestInterface";
 import MediaLibraryPage from "./pages/MediaLibraryPage";
 import EmployeeUpload from "./pages/EmployeeUpload";
+import ServiceRequests from "./pages/ServiceRequests";
 import Auth from "./pages/Auth";
 import ProtectedRoute from "./components/ProtectedRoute";
 
@@ -27,6 +28,7 @@ const App = () => (
           <Route path="/content-center" element={<ProtectedRoute><ContentCenter /></ProtectedRoute>} />
           <Route path="/game-test" element={<ProtectedRoute><GameTestInterface /></ProtectedRoute>} />
           <Route path="/media-library" element={<ProtectedRoute><MediaLibraryPage /></ProtectedRoute>} />
+          <Route path="/service-requests" element={<ProtectedRoute><ServiceRequests /></ProtectedRoute>} />
           {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
           <Route path="*" element={<NotFound />} />
         </Routes>
