@@ -24,6 +24,7 @@ export default function EmployeeUpload() {
   const [selectedBusiness, setSelectedBusiness] = useState<string>("");
   const [uploading, setUploading] = useState(false);
   const [preparing, setPreparing] = useState(false);
+  const [isDragging, setIsDragging] = useState(false);
   const [uploadedFiles, setUploadedFiles] = useState<UploadedFile[]>([]);
 
   useEffect(() => {
@@ -57,6 +58,39 @@ export default function EmployeeUpload() {
     } catch (error) {
       console.error('Error loading businesses:', error);
       toast.error('Failed to load businesses');
+    }
+  };
+
+  const handleDragEnter = (e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setIsDragging(true);
+  };
+
+  const handleDragLeave = (e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setIsDragging(false);
+  };
+
+  const handleDragOver = (e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+  };
+
+  const handleDrop = async (e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setIsDragging(false);
+    
+    const files = e.dataTransfer.files;
+    if (files && files.length > 0) {
+      // Create a synthetic event to reuse handleFileSelect
+      const syntheticEvent = {
+        target: { files, value: '' }
+      } as React.ChangeEvent<HTMLInputElement>;
+      
+      await handleFileSelect(syntheticEvent);
     }
   };
 
@@ -321,7 +355,17 @@ export default function EmployeeUpload() {
             </Select>
           </div>
 
-          <div className="border-2 border-dashed border-gray-300 rounded-lg p-8 text-center hover:border-primary transition-colors">
+          <div 
+            className={`border-2 border-dashed rounded-lg p-8 text-center transition-colors ${
+              isDragging 
+                ? 'border-primary bg-primary/5' 
+                : 'border-gray-300 hover:border-primary'
+            }`}
+            onDragEnter={handleDragEnter}
+            onDragOver={handleDragOver}
+            onDragLeave={handleDragLeave}
+            onDrop={handleDrop}
+          >
             <input
               type="file"
               accept="image/*,video/*"
@@ -337,7 +381,7 @@ export default function EmployeeUpload() {
             >
               <Upload className="w-12 h-12 text-muted-foreground mb-4" />
               <p className="text-lg font-medium mb-2">
-                Click to select files or drag and drop
+                {isDragging ? '📂 Drop files here' : 'Drag files here or click to browse'}
               </p>
               <p className="text-sm text-muted-foreground mb-4">
                 Images and videos (max 50MB each)
@@ -361,6 +405,7 @@ export default function EmployeeUpload() {
               <li>Action shots work best for social media</li>
               <li>Photos will be automatically analyzed and tagged by AI</li>
               <li>You can upload multiple files at once</li>
+              <li><strong>💡 Pro tip:</strong> Drag files directly from your file manager for instant upload (no waiting for file picker!)</li>
             </ul>
           </div>
         </CardContent>
