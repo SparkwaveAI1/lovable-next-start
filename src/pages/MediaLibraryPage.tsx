@@ -5,7 +5,6 @@ import { Input } from "@/components/ui/input";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
@@ -13,6 +12,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Upload, Image as ImageIcon, Video, Trash2, Edit2, Search, Download } from "lucide-react";
 import { toast } from "sonner";
 import { useBusinessContext } from "@/contexts/BusinessContext";
+import { DashboardHeader } from "@/components/DashboardHeader";
 
 interface MediaAsset {
   id: string;
@@ -32,14 +32,7 @@ interface MediaAsset {
   created_at: string;
 }
 
-interface Business {
-  id: string;
-  name: string;
-  slug: string;
-}
-
 export default function MediaLibraryPage() {
-  const [businesses, setBusinesses] = useState<Business[]>([]);
   const { selectedBusinessId: selectedBusiness, setSelectedBusinessId: setSelectedBusiness } = useBusinessContext();
   const [media, setMedia] = useState<MediaAsset[]>([]);
   const [loading, setLoading] = useState(false);
@@ -54,33 +47,10 @@ export default function MediaLibraryPage() {
   const [playingVideoId, setPlayingVideoId] = useState<string | null>(null);
 
   useEffect(() => {
-    loadBusinesses();
-  }, []);
-
-  useEffect(() => {
     if (selectedBusiness) {
       loadMedia();
     }
   }, [selectedBusiness]);
-
-  const loadBusinesses = async () => {
-    try {
-      const { data, error } = await supabase
-        .from('businesses')
-        .select('id, name, slug')
-        .order('name');
-
-      if (error) throw error;
-      setBusinesses(data || []);
-      
-      if (data && data.length > 0) {
-        setSelectedBusiness(data[0].id);
-      }
-    } catch (error) {
-      console.error('Error loading businesses:', error);
-      toast.error('Failed to load businesses');
-    }
-  };
 
   const loadMedia = async () => {
     setLoading(true);
@@ -116,6 +86,15 @@ export default function MediaLibraryPage() {
     setUploading(true);
 
     try {
+      // Get business slug for file organization
+      const { data: businessData } = await supabase
+        .from('businesses')
+        .select('slug')
+        .eq('id', selectedBusiness)
+        .single();
+      
+      const businessSlug = businessData?.slug || 'default';
+
       for (const file of Array.from(files)) {
         const isImage = file.type.startsWith('image/');
         const isVideo = file.type.startsWith('video/');
@@ -130,7 +109,6 @@ export default function MediaLibraryPage() {
           continue;
         }
 
-        const businessSlug = businesses.find(b => b.id === selectedBusiness)?.slug;
         const timestamp = Date.now();
         const fileExt = file.name.split('.').pop();
         const fileName = `${businessSlug}/${timestamp}_${Math.random().toString(36).substring(7)}.${fileExt}`;
@@ -367,26 +345,20 @@ export default function MediaLibraryPage() {
   };
 
   return (
-    <div className="container mx-auto p-6 space-y-6">
-      <div className="flex justify-between items-center">
-        <div>
-          <h1 className="text-3xl font-bold">Media Library</h1>
+    <div className="min-h-screen bg-background">
+      <DashboardHeader 
+        selectedBusinessId={selectedBusiness}
+        onBusinessChange={setSelectedBusiness}
+      />
+      
+      <main className="container mx-auto px-6 py-8 pt-24 md:pt-28">
+        <div className="mb-8">
+          <h1 className="text-3xl font-bold text-foreground mb-2">Media Library</h1>
           <p className="text-muted-foreground">Manage images and videos for your content</p>
         </div>
-      </div>
 
-      {/* Business Selector */}
-      <Tabs value={selectedBusiness} onValueChange={setSelectedBusiness}>
-        <TabsList>
-          {businesses.map(business => (
-            <TabsTrigger key={business.id} value={business.id}>
-              {business.name}
-            </TabsTrigger>
-          ))}
-        </TabsList>
-
-        {businesses.map(business => (
-          <TabsContent key={business.id} value={business.id} className="space-y-4">
+        {selectedBusiness ? (
+          <div className="space-y-4">
             {/* Upload and Filters */}
             <div className="flex flex-col sm:flex-row gap-4">
               <Input
@@ -611,9 +583,17 @@ export default function MediaLibraryPage() {
                 </div>
               </ScrollArea>
             )}
-          </TabsContent>
-        ))}
-      </Tabs>
+          </div>
+        ) : (
+          <Card>
+            <CardContent className="flex flex-col items-center justify-center p-12 text-center">
+              <p className="text-lg text-muted-foreground">
+                Select a business from the dropdown above to view media
+              </p>
+            </CardContent>
+          </Card>
+        )}
+      </main>
 
       {/* Edit Media Dialog */}
       <Dialog open={editingMedia !== null} onOpenChange={(open) => !open && setEditingMedia(null)}>
