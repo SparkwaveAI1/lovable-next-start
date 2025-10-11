@@ -9,7 +9,8 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/u
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Upload, Image as ImageIcon, Video, Trash2, Edit2, Search, Download } from "lucide-react";
+import { Upload, Image as ImageIcon, Video, Trash2, Edit2, Search, Download, Play } from "lucide-react";
+import { MediaViewerDialog } from "@/components/MediaViewerDialog";
 import { toast } from "sonner";
 import { useBusinessContext } from "@/contexts/BusinessContext";
 import { DashboardHeader } from "@/components/DashboardHeader";
@@ -44,7 +45,7 @@ export default function MediaLibraryPage() {
   const [editingMedia, setEditingMedia] = useState<MediaAsset | null>(null);
   const [editDescription, setEditDescription] = useState("");
   const [editTags, setEditTags] = useState("");
-  const [playingVideoId, setPlayingVideoId] = useState<string | null>(null);
+  const [selectedMedia, setSelectedMedia] = useState<MediaAsset | null>(null);
 
   useEffect(() => {
     if (selectedBusiness) {
@@ -503,7 +504,7 @@ export default function MediaLibraryPage() {
               <ScrollArea className="h-[calc(100vh-400px)] sm:h-[600px]">
                 <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-3 sm:gap-4 pr-2 sm:pr-4">
                   {filteredMedia.map((item) => (
-                    <Card key={item.id} className="overflow-hidden">
+                    <Card key={item.id} className="overflow-hidden cursor-pointer" onClick={() => setSelectedMedia(item)}>
                       <div className="aspect-square relative">
                         {item.file_type === 'image' ? (
                           <img
@@ -511,21 +512,8 @@ export default function MediaLibraryPage() {
                             alt={item.file_name}
                             className="w-full h-full object-cover"
                           />
-                        ) : item.file_type === 'video' && playingVideoId === item.id ? (
-                          <video
-                            src={item.file_path}
-                            className="w-full h-full object-cover"
-                            controls
-                            autoPlay
-                            playsInline
-                            onEnded={() => setPlayingVideoId(null)}
-                            onPause={() => setPlayingVideoId(null)}
-                          />
                         ) : item.file_type === 'video' ? (
-                          <div 
-                            className="relative w-full h-full cursor-pointer"
-                            onClick={() => setPlayingVideoId(item.id)}
-                          >
+                          <div className="relative w-full h-full">
                             {item.thumbnail_path ? (
                               <img
                                 src={item.thumbnail_path}
@@ -543,9 +531,7 @@ export default function MediaLibraryPage() {
                             )}
                             <div className="absolute inset-0 flex items-center justify-center bg-black/20 hover:bg-black/30 transition-colors">
                               <div className="w-16 h-16 rounded-full bg-white/90 flex items-center justify-center shadow-lg">
-                                <svg className="w-8 h-8 text-gray-900 ml-1" fill="currentColor" viewBox="0 0 24 24">
-                                  <path d="M8 5v14l11-7z"/>
-                                </svg>
+                                <Play className="w-8 h-8 text-gray-900 ml-1" fill="currentColor" />
                               </div>
                             </div>
                           </div>
@@ -555,7 +541,10 @@ export default function MediaLibraryPage() {
                             size="sm"
                             variant="secondary"
                             className="h-8 w-8 p-0"
-                            onClick={() => handleDownload(item)}
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleDownload(item);
+                            }}
                           >
                             <Download className="w-4 h-4" />
                           </Button>
@@ -563,7 +552,8 @@ export default function MediaLibraryPage() {
                             size="sm"
                             variant="secondary"
                             className="h-8 w-8 p-0"
-                            onClick={() => {
+                            onClick={(e) => {
+                              e.stopPropagation();
                               setEditingMedia(item);
                               setEditDescription(item.description || '');
                               setEditTags(item.tags?.join(', ') || '');
@@ -575,7 +565,10 @@ export default function MediaLibraryPage() {
                             size="sm"
                             variant="destructive"
                             className="h-8 w-8 p-0"
-                            onClick={() => handleDelete(item.id)}
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleDelete(item.id);
+                            }}
                           >
                             <Trash2 className="w-4 h-4" />
                           </Button>
@@ -629,6 +622,28 @@ export default function MediaLibraryPage() {
           </Card>
         )}
       </main>
+
+      {/* Media Viewer Dialog */}
+      <MediaViewerDialog
+        media={selectedMedia}
+        open={!!selectedMedia}
+        onOpenChange={(open) => !open && setSelectedMedia(null)}
+        onDownload={() => selectedMedia && handleDownload(selectedMedia)}
+        onDelete={() => {
+          if (selectedMedia) {
+            setSelectedMedia(null);
+            handleDelete(selectedMedia.id);
+          }
+        }}
+        onEdit={() => {
+          if (selectedMedia) {
+            setEditingMedia(selectedMedia);
+            setEditDescription(selectedMedia.description || '');
+            setEditTags(selectedMedia.tags?.join(', ') || '');
+            setSelectedMedia(null);
+          }
+        }}
+      />
 
       {/* Edit Media Dialog */}
       <Dialog open={editingMedia !== null} onOpenChange={(open) => !open && setEditingMedia(null)}>
