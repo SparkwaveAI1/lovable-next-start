@@ -14,6 +14,7 @@ import { MediaViewerDialog } from "@/components/MediaViewerDialog";
 import { toast } from "sonner";
 import { useBusinessContext } from "@/contexts/BusinessContext";
 import { DashboardHeader } from "@/components/DashboardHeader";
+import { Progress } from "@/components/ui/progress";
 
 interface MediaAsset {
   id: string;
@@ -46,6 +47,7 @@ export default function MediaLibraryPage() {
   const [editDescription, setEditDescription] = useState("");
   const [editTags, setEditTags] = useState("");
   const [selectedMedia, setSelectedMedia] = useState<MediaAsset | null>(null);
+  const [uploadProgress, setUploadProgress] = useState({ current: 0, total: 0, fileName: '' });
 
   useEffect(() => {
     if (selectedBusiness) {
@@ -85,6 +87,7 @@ export default function MediaLibraryPage() {
     if (!files || files.length === 0) return;
 
     setUploading(true);
+    setUploadProgress({ current: 0, total: files.length, fileName: '' });
 
     try {
       // Get business slug for file organization
@@ -96,7 +99,11 @@ export default function MediaLibraryPage() {
       
       const businessSlug = businessData?.slug || 'default';
 
-      for (const file of Array.from(files)) {
+      const fileArray = Array.from(files);
+      for (let i = 0; i < fileArray.length; i++) {
+        const file = fileArray[i];
+        setUploadProgress({ current: i + 1, total: fileArray.length, fileName: file.name });
+        
         const isImage = file.type.startsWith('image/');
         const isVideo = file.type.startsWith('video/');
         
@@ -228,6 +235,7 @@ export default function MediaLibraryPage() {
       toast.error('Failed to upload media');
     } finally {
       setUploading(false);
+      setUploadProgress({ current: 0, total: 0, fileName: '' });
       event.target.value = '';
     }
   };
@@ -414,7 +422,7 @@ export default function MediaLibraryPage() {
         {selectedBusiness ? (
           <div className="space-y-3 sm:space-y-4">
             {/* Upload Button */}
-            <div>
+            <div className="space-y-3">
               <Input
                 type="file"
                 accept="image/*,video/*"
@@ -432,6 +440,27 @@ export default function MediaLibraryPage() {
                 <Upload className="w-4 h-4 mr-2" />
                 {uploading ? 'Uploading...' : 'Upload Media'}
               </Button>
+              
+              {uploading && uploadProgress.total > 0 && (
+                <Card className="p-4">
+                  <div className="space-y-2">
+                    <div className="flex justify-between text-sm">
+                      <span className="text-muted-foreground">
+                        Uploading {uploadProgress.current} of {uploadProgress.total}
+                      </span>
+                      <span className="text-muted-foreground">
+                        {Math.round((uploadProgress.current / uploadProgress.total) * 100)}%
+                      </span>
+                    </div>
+                    <Progress value={(uploadProgress.current / uploadProgress.total) * 100} />
+                    {uploadProgress.fileName && (
+                      <p className="text-xs text-muted-foreground truncate">
+                        {uploadProgress.fileName}
+                      </p>
+                    )}
+                  </div>
+                </Card>
+              )}
             </div>
 
             {/* Search */}

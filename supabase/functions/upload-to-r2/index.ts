@@ -1,4 +1,5 @@
 import { S3Client, PutObjectCommand } from "npm:@aws-sdk/client-s3@3.651.1";
+import { Upload } from "npm:@aws-sdk/lib-storage@3.651.1";
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -43,15 +44,24 @@ Deno.serve(async (req) => {
 
     console.log(`Uploading file: ${fileName}, size: ${file.size} bytes, type: ${file.type}`);
 
-    // Upload to R2 using streaming (no memory buffering)
-    const command = new PutObjectCommand({
-      Bucket: R2_BUCKET,
-      Key: fileName,
-      Body: file.stream(),
-      ContentType: file.type,
+    // Upload to R2 using streaming with proper Upload class
+    const upload = new Upload({
+      client: s3Client,
+      params: {
+        Bucket: R2_BUCKET,
+        Key: fileName,
+        Body: file.stream(),
+        ContentType: file.type,
+      },
     });
 
-    await s3Client.send(command);
+    try {
+      await upload.done();
+      console.log(`✅ Successfully uploaded to R2: ${fileName}`);
+    } catch (uploadError) {
+      console.error('❌ R2 upload failed:', uploadError);
+      throw uploadError;
+    }
 
     // Construct public URL
     const publicUrl = `${R2_PUBLIC_URL}/${fileName}`;
