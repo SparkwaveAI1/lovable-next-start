@@ -114,15 +114,20 @@ export default function MediaLibraryPage() {
         const fileExt = file.name.split('.').pop();
         const fileName = `${businessSlug}/${timestamp}_${Math.random().toString(36).substring(7)}.${fileExt}`;
 
-        const { error: uploadError } = await supabase.storage
-          .from('content-media')
-          .upload(fileName, file);
+        // Upload to R2 via edge function
+        const formData = new FormData();
+        formData.append('file', file);
+        formData.append('fileName', fileName);
 
-        if (uploadError) throw uploadError;
+        const { data: uploadResult, error: uploadError } = await supabase.functions.invoke('upload-to-r2', {
+          body: formData
+        });
 
-        const { data: { publicUrl } } = supabase.storage
-          .from('content-media')
-          .getPublicUrl(fileName);
+        if (uploadError || !uploadResult?.success) {
+          throw new Error(uploadError?.message || 'Upload failed');
+        }
+
+        const publicUrl = uploadResult.publicUrl;
 
         let width, height, thumbnailPath;
 
@@ -137,17 +142,20 @@ export default function MediaLibraryPage() {
             height = thumbnail.height;
             
             const thumbFileName = `${businessSlug}/${timestamp}_thumb_${Math.random().toString(36).substring(7)}.jpg`;
-            const { error: thumbError } = await supabase.storage
-              .from('content-media')
-              .upload(thumbFileName, thumbnail.blob);
+            
+            // Upload thumbnail to R2
+            const thumbFormData = new FormData();
+            thumbFormData.append('file', thumbnail.blob, thumbFileName);
+            thumbFormData.append('fileName', thumbFileName);
+
+            const { data: thumbResult, error: thumbError } = await supabase.functions.invoke('upload-to-r2', {
+              body: thumbFormData
+            });
             
             if (thumbError) {
               console.error('Thumbnail upload error:', thumbError);
-            } else {
-              const { data: { publicUrl: thumbUrl } } = supabase.storage
-                .from('content-media')
-                .getPublicUrl(thumbFileName);
-              thumbnailPath = thumbUrl;
+            } else if (thumbResult?.success) {
+              thumbnailPath = thumbResult.publicUrl;
             }
           } catch (thumbError) {
             console.error('Thumbnail generation error:', thumbError);

@@ -1,5 +1,8 @@
 project_id = "wrsoacujxcskydlzgopa"
 
+[functions.upload-to-r2]
+verify_jwt = false
+
 [functions.webhook-handler]
 verify_jwt = false
 
