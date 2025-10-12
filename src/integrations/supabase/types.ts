@@ -212,6 +212,11 @@ export type Database = {
           description: string | null
           game_twitter_token: string | null
           id: string
+          late_facebook_account_id: string | null
+          late_instagram_account_id: string | null
+          late_linkedin_account_id: string | null
+          late_tiktok_account_id: string | null
+          late_twitter_account_id: string | null
           name: string
           parent_business_id: string | null
           slug: string
@@ -224,6 +229,11 @@ export type Database = {
           description?: string | null
           game_twitter_token?: string | null
           id?: string
+          late_facebook_account_id?: string | null
+          late_instagram_account_id?: string | null
+          late_linkedin_account_id?: string | null
+          late_tiktok_account_id?: string | null
+          late_twitter_account_id?: string | null
           name: string
           parent_business_id?: string | null
           slug: string
@@ -236,6 +246,11 @@ export type Database = {
           description?: string | null
           game_twitter_token?: string | null
           id?: string
+          late_facebook_account_id?: string | null
+          late_instagram_account_id?: string | null
+          late_linkedin_account_id?: string | null
+          late_tiktok_account_id?: string | null
+          late_twitter_account_id?: string | null
           name?: string
           parent_business_id?: string | null
           slug?: string
