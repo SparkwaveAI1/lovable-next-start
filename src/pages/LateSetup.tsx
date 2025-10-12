@@ -4,6 +4,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { toast } from "sonner";
+import { supabase } from "@/integrations/supabase/client";
 
 export default function LateSetup() {
   const [apiKey, setApiKey] = useState("");
@@ -18,18 +19,14 @@ export default function LateSetup() {
 
     setLoading(true);
     try {
-      const response = await fetch("https://getlate.dev/api/v1/accounts", {
-        headers: {
-          "Authorization": `Bearer ${apiKey}`,
-          "Content-Type": "application/json",
-        },
+      const { data, error } = await supabase.functions.invoke('fetch-late-accounts', {
+        body: { apiKey }
       });
 
-      if (!response.ok) {
-        throw new Error(`API Error: ${response.status}`);
+      if (error) {
+        throw error;
       }
 
-      const data = await response.json();
       setAccounts(data.accounts || []);
       toast.success(`Found ${data.accounts?.length || 0} connected accounts`);
     } catch (error) {
