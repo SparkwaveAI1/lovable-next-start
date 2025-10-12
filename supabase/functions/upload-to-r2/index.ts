@@ -43,15 +43,11 @@ Deno.serve(async (req) => {
 
     console.log(`Uploading file: ${fileName}, size: ${file.size} bytes, type: ${file.type}`);
 
-    // Convert file to buffer
-    const arrayBuffer = await file.arrayBuffer();
-    const buffer = new Uint8Array(arrayBuffer);
-
-    // Upload to R2
+    // Upload to R2 using streaming (no memory buffering)
     const command = new PutObjectCommand({
       Bucket: R2_BUCKET,
       Key: fileName,
-      Body: buffer,
+      Body: file.stream(),
       ContentType: file.type,
     });
 
