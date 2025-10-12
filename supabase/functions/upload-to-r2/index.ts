@@ -3,6 +3,7 @@ import { S3Client, PutObjectCommand } from "npm:@aws-sdk/client-s3@3.651.1";
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
+  'Access-Control-Allow-Methods': 'POST, OPTIONS',
 };
 
 // R2 Configuration
@@ -25,11 +26,12 @@ const s3Client = new S3Client({
 Deno.serve(async (req) => {
   // Handle CORS preflight
   if (req.method === 'OPTIONS') {
+    console.log('OPTIONS request received');
     return new Response(null, { headers: corsHeaders });
   }
 
   try {
-    console.log('Upload to R2 request received');
+    console.log('POST request received - Upload to R2 request starting');
 
     const formData = await req.formData();
     const file = formData.get('file') as File;

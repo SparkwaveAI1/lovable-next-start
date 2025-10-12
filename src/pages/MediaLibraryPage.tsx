@@ -120,15 +120,11 @@ export default function MediaLibraryPage() {
         formData.append('fileName', fileName);
 
         // Use direct fetch() because supabase.functions.invoke() doesn't support FormData with binary files
-        const session = await supabase.auth.getSession();
         const uploadResponse = await fetch(
           `https://wrsoacujxcskydlzgopa.supabase.co/functions/v1/upload-to-r2`,
           {
             method: 'POST',
-            body: formData,
-            headers: {
-              'Authorization': `Bearer ${session.data.session?.access_token}`
-            }
+            body: formData
           }
         );
 
@@ -165,15 +161,11 @@ export default function MediaLibraryPage() {
             thumbFormData.append('fileName', thumbFileName);
 
             // Use direct fetch() for thumbnail upload (same reason as main file)
-            const thumbSession = await supabase.auth.getSession();
             const thumbResponse = await fetch(
               `https://wrsoacujxcskydlzgopa.supabase.co/functions/v1/upload-to-r2`,
               {
                 method: 'POST',
-                body: thumbFormData,
-                headers: {
-                  'Authorization': `Bearer ${thumbSession.data.session?.access_token}`
-                }
+                body: thumbFormData
               }
             );
             
