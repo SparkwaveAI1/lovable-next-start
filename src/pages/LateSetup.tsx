@@ -1,8 +1,9 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import { CheckCircle2, XCircle, Loader2 } from "lucide-react";
@@ -27,6 +28,28 @@ export default function LateSetup() {
   const [loading, setLoading] = useState(false);
   const [setupLoading, setSetupLoading] = useState(false);
   const [setupResults, setSetupResults] = useState<SetupResult[]>([]);
+  const [businesses, setBusinesses] = useState<any[]>([]);
+  const [testContent, setTestContent] = useState('');
+  const [testBusiness, setTestBusiness] = useState('');
+  const [testPlatform, setTestPlatform] = useState('');
+  const [testImageUrl, setTestImageUrl] = useState('');
+  const [testResult, setTestResult] = useState<any>(null);
+  const [isTesting, setIsTesting] = useState(false);
+
+  useEffect(() => {
+    fetchBusinesses();
+  }, []);
+
+  const fetchBusinesses = async () => {
+    const { data, error } = await supabase
+      .from('businesses')
+      .select('id, name, slug')
+      .order('name');
+    
+    if (!error && data) {
+      setBusinesses(data);
+    }
+  };
 
   const mapAccountToBusiness = (account: any): { slug: string | null; name: string | null } => {
     const username = (account.username || account.name || '').toLowerCase();
@@ -128,6 +151,38 @@ export default function LateSetup() {
       toast.error(error instanceof Error ? error.message : "Failed to setup accounts");
     } finally {
       setSetupLoading(false);
+    }
+  };
+
+  const handleTestPost = async () => {
+    if (!testBusiness || !testPlatform || !testContent) {
+      toast.error('Please fill in business, platform, and content');
+      return;
+    }
+
+    setIsTesting(true);
+    setTestResult(null);
+
+    try {
+      const { data, error } = await supabase.functions.invoke('post-via-late', {
+        body: {
+          businessId: testBusiness,
+          content: testContent,
+          platforms: [testPlatform],
+          imageUrls: testImageUrl ? [testImageUrl] : undefined
+        }
+      });
+
+      if (error) throw error;
+
+      setTestResult(data);
+      toast.success(data.message || 'Post created successfully!');
+    } catch (error: any) {
+      console.error('Test post error:', error);
+      setTestResult({ error: error.message });
+      toast.error(error.message || 'Failed to post');
+    } finally {
+      setIsTesting(false);
     }
   };
 
@@ -270,6 +325,88 @@ export default function LateSetup() {
                 </div>
               )}
             </div>
+          </CardContent>
+        </Card>
+      )}
+
+      {setupResults.length > 0 && setupResults.every(r => r.success) && (
+        <Card className="mt-6">
+          <CardHeader>
+            <CardTitle>Test Posting</CardTitle>
+            <CardDescription>
+              Send a test post to verify your Late integration is working
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <div>
+              <Label htmlFor="test-business">Business</Label>
+              <select 
+                id="test-business"
+                className="w-full p-2 border rounded-md bg-background"
+                value={testBusiness}
+                onChange={(e) => setTestBusiness(e.target.value)}
+              >
+                <option value="">Select business...</option>
+                {businesses.map(b => (
+                  <option key={b.id} value={b.id}>{b.name}</option>
+                ))}
+              </select>
+            </div>
+
+            <div>
+              <Label htmlFor="test-platform">Platform</Label>
+              <select 
+                id="test-platform"
+                className="w-full p-2 border rounded-md bg-background"
+                value={testPlatform}
+                onChange={(e) => setTestPlatform(e.target.value)}
+              >
+                <option value="">Select platform...</option>
+                <option value="twitter">Twitter</option>
+                <option value="instagram">Instagram</option>
+                <option value="tiktok">TikTok</option>
+                <option value="linkedin">LinkedIn</option>
+                <option value="facebook">Facebook</option>
+              </select>
+            </div>
+
+            <div>
+              <Label htmlFor="test-content">Content</Label>
+              <Textarea 
+                id="test-content"
+                placeholder="Enter your test post content..."
+                value={testContent}
+                onChange={(e) => setTestContent(e.target.value)}
+                rows={4}
+              />
+            </div>
+
+            <div>
+              <Label htmlFor="test-image">Image URL (optional)</Label>
+              <Input 
+                id="test-image"
+                type="text"
+                placeholder="https://example.com/image.jpg"
+                value={testImageUrl}
+                onChange={(e) => setTestImageUrl(e.target.value)}
+              />
+            </div>
+
+            <Button 
+              onClick={handleTestPost}
+              disabled={isTesting || !testBusiness || !testPlatform || !testContent}
+              className="w-full"
+            >
+              {isTesting ? 'Posting...' : 'Send Test Post'}
+            </Button>
+
+            {testResult && (
+              <div className={`p-4 rounded-md ${testResult.error ? 'bg-destructive/10' : 'bg-primary/10'}`}>
+                <pre className="text-sm overflow-auto">
+                  {JSON.stringify(testResult, null, 2)}
+                </pre>
+              </div>
+            )}
           </CardContent>
         </Card>
       )}
