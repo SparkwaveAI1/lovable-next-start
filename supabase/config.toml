@@ -26,3 +26,6 @@ verify_jwt = false
 
 [functions.fetch-late-accounts]
 verify_jwt = false
+
+[functions.update-late-accounts]
+verify_jwt = false
