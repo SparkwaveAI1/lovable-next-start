@@ -117,36 +117,34 @@ export default function MediaLibraryPage() {
           continue;
         }
 
-        const timestamp = Date.now();
-        const fileExt = file.name.split('.').pop();
-        const fileName = `${businessSlug}/${timestamp}_${Math.random().toString(36).substring(7)}.${fileExt}`;
+        // Generate unique filename with business folder
+        const fileExtension = file.name.split('.').pop();
+        const fileName = `${selectedBusiness?.id}/${Date.now()}_${Math.random().toString(36).substring(7)}.${fileExtension}`;
 
-        // Upload to R2 via edge function
-        const formData = new FormData();
-        formData.append('file', file);
-        formData.append('fileName', fileName);
+        console.log('Uploading to Supabase Storage:', fileName, 'Size:', file.size);
 
-        // Use direct fetch() because supabase.functions.invoke() doesn't support FormData with binary files
-        const uploadResponse = await fetch(
-          `https://wrsoacujxcskydlzgopa.supabase.co/functions/v1/upload-to-r2`,
-          {
-            method: 'POST',
-            body: formData
-          }
-        );
+        // Upload directly to Supabase Storage
+        const { data: uploadData, error: uploadError } = await supabase.storage
+          .from('media')
+          .upload(fileName, file, {
+            cacheControl: '3600',
+            upsert: false,
+            contentType: file.type,
+          });
 
-        if (!uploadResponse.ok) {
-          const errorData = await uploadResponse.json().catch(() => ({ error: 'Upload failed' }));
-          throw new Error(errorData.error || `Upload failed with status ${uploadResponse.status}`);
+        if (uploadError) {
+          console.error('Supabase Storage upload error:', uploadError);
+          throw new Error(`Upload failed: ${uploadError.message}`);
         }
 
-        const uploadResult = await uploadResponse.json();
-        
-        if (!uploadResult?.success) {
-          throw new Error('Upload failed');
-        }
+        console.log('Upload successful:', uploadData);
 
-        const publicUrl = uploadResult.publicUrl;
+        // Get public URL for the uploaded file
+        const { data: { publicUrl } } = supabase.storage
+          .from('media')
+          .getPublicUrl(fileName);
+
+        console.log('Public URL generated:', publicUrl);
 
         let width, height, thumbnailPath;
 
@@ -155,37 +153,37 @@ export default function MediaLibraryPage() {
           width = dimensions.width;
           height = dimensions.height;
         } else if (isVideo) {
+          console.log('Video detected, generating thumbnail...');
+          
           try {
             const thumbnail = await generateVideoThumbnail(file);
             width = thumbnail.width;
             height = thumbnail.height;
             
-            const thumbFileName = `${businessSlug}/${timestamp}_thumb_${Math.random().toString(36).substring(7)}.jpg`;
+            const thumbnailFileName = `${selectedBusiness?.id}/${Date.now()}_thumb.jpg`;
+            console.log('Uploading thumbnail:', thumbnailFileName);
             
-            // Upload thumbnail to R2
-            const thumbFormData = new FormData();
-            thumbFormData.append('file', thumbnail.blob, thumbFileName);
-            thumbFormData.append('fileName', thumbFileName);
+            // Upload thumbnail to Supabase Storage
+            const { data: thumbData, error: thumbError } = await supabase.storage
+              .from('media')
+              .upload(thumbnailFileName, thumbnail.blob, {
+                cacheControl: '3600',
+                upsert: false,
+                contentType: 'image/jpeg',
+              });
 
-            // Use direct fetch() for thumbnail upload (same reason as main file)
-            const thumbResponse = await fetch(
-              `https://wrsoacujxcskydlzgopa.supabase.co/functions/v1/upload-to-r2`,
-              {
-                method: 'POST',
-                body: thumbFormData
-              }
-            );
-            
-            if (!thumbResponse.ok) {
-              console.error('Thumbnail upload failed:', thumbResponse.status);
+            if (thumbError) {
+              console.error('Thumbnail upload error:', thumbError);
             } else {
-              const thumbResult = await thumbResponse.json();
-              if (thumbResult?.success) {
-                thumbnailPath = thumbResult.publicUrl;
-              }
+              const { data: { publicUrl: thumbPublicUrl } } = supabase.storage
+                .from('media')
+                .getPublicUrl(thumbnailFileName);
+              
+              thumbnailPath = thumbPublicUrl;
+              console.log('Thumbnail uploaded:', thumbnailPath);
             }
           } catch (thumbError) {
-            console.error('Thumbnail generation error:', thumbError);
+            console.error('Thumbnail generation failed:', thumbError);
           }
         }
 
