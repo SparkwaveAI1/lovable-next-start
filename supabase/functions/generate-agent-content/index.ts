@@ -499,35 +499,50 @@ serve(async (req) => {
       );
     }
 
-    // Get agent configuration using slug
-    const agentConfig = getAgentConfig(business.slug);
-    
-    if (!agentConfig) {
-      console.error(`No agent config found for business: ${request.businessId}`);
+    // Fetch agent config from database
+    console.log('Fetching agent configuration for business:', business.id);
+
+    const { data: dbConfig, error: configError } = await supabaseClient
+      .from('agent_configurations')
+      .select('system_prompt, knowledge_base')
+      .eq('business_id', business.id)
+      .single();
+
+    if (configError || !dbConfig) {
+      console.error('Failed to fetch agent config:', configError);
       return new Response(
         JSON.stringify({ 
-          success: false, 
-          error: `No agent configuration found for business: ${request.businessId}` 
+          error: 'Agent configuration not found for this business.' 
         }),
-        { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 404 }
+        { 
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' }, 
+          status: 404 
+        }
       );
     }
 
-    console.log(`Generating content for ${business.name} using ${agentConfig.agentName}`);
+    console.log('Agent config loaded from database');
+
+    console.log(`Generating content for ${business.name}`);
 
     const quantity = request.quantity || 1;
     const topic = request.topic || 'engaging content for our audience';
 
-    // Build the generation prompt using platform-specific builder
-    const generationPrompt = buildPlatformPrompt(
-      request.platform,
-      request.contentType,
-      quantity,
-      topic,
-      agentConfig
-    );
+    // Use database config instead of hardcoded
+    const systemPromptFromDB = dbConfig.system_prompt;
+    const knowledgeBaseFromDB = dbConfig.knowledge_base || '';
+    
+    // Build the user prompt with knowledge base if available
+    let userPrompt = `Topic: ${topic}\n\nRequirements for ${request.platform} ${request.contentType}:\n`;
+    userPrompt += `Generate exactly ${quantity} distinct pieces of content.\n`;
+    
+    if (knowledgeBaseFromDB) {
+      userPrompt += `\nAdditional Context:\n${knowledgeBaseFromDB}\n`;
+    }
+    
+    userPrompt += `\nFormat: Return ONLY the content, one per line, numbered. No preamble, no explanations.`;
 
-    console.log('Generated prompt:', generationPrompt);
+    console.log('Generated prompt:', userPrompt);
 
     // Call OpenAI API
     const openaiApiKey = Deno.env.get('OPENAI_API_KEY');
@@ -551,8 +566,8 @@ serve(async (req) => {
       body: JSON.stringify({
         model: 'gpt-4o-mini',
         messages: [
-          { role: 'system', content: agentConfig.systemPrompt },
-          { role: 'user', content: generationPrompt }
+          { role: 'system', content: systemPromptFromDB },
+          { role: 'user', content: userPrompt }
         ],
         max_tokens: isLongFormContent(request.platform, request.contentType) ? 4000 : 2000,
         temperature: 0.7
