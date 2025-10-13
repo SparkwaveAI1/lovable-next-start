@@ -62,6 +62,41 @@ export type Database = {
         }
         Relationships: []
       }
+      agent_configurations: {
+        Row: {
+          business_id: string
+          created_at: string | null
+          id: string
+          knowledge_base: string | null
+          system_prompt: string
+          updated_at: string | null
+        }
+        Insert: {
+          business_id: string
+          created_at?: string | null
+          id?: string
+          knowledge_base?: string | null
+          system_prompt: string
+          updated_at?: string | null
+        }
+        Update: {
+          business_id?: string
+          created_at?: string | null
+          id?: string
+          knowledge_base?: string | null
+          system_prompt?: string
+          updated_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "agent_configurations_business_id_fkey"
+            columns: ["business_id"]
+            isOneToOne: true
+            referencedRelation: "businesses"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       agent_notes: {
         Row: {
           content: string | null
