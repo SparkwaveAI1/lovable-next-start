@@ -112,11 +112,6 @@ export default function MediaLibraryPage() {
           continue;
         }
 
-        if (file.size > 50 * 1024 * 1024) {
-          toast.error(`${file.name}: File too large (max 50MB)`);
-          continue;
-        }
-
         // Generate unique filename with business folder
         const fileExtension = file.name.split('.').pop();
         const fileName = `${selectedBusiness?.id}/${Date.now()}_${Math.random().toString(36).substring(7)}.${fileExtension}`;
