@@ -86,28 +86,25 @@ export function ContentReviewDialog({
         .filter(([_, status]) => status === 'rejected')
         .map(([index]) => parseInt(index));
 
-      // Process approved content - save to staging instead of library
+      // Process approved content - save to library
       for (const index of approvedIndexes) {
         const item = normalizedContent[index];
 
         const { error: approveError } = await supabase
-          .from('staged_content')
+          .from('scheduled_content')
           .insert({
             business_id: getBusinessIdFromSlug(businessId),
             platform: platform,
             content: item.content,
             content_type: contentType,
-            topic: topic
+            topic: topic,
+            approval_status: 'approved',
+            approved_at: new Date().toISOString(),
+            status: 'draft'
           });
 
-        if (approveError) {
-          console.error('Error saving to staging:', approveError);
-          toast.error(`Failed to save Tweet #${index + 1} to staging`);
-          throw approveError;
-        }
+        if (approveError) throw approveError;
       }
-
-      console.log(`Saved ${approvedIndexes.length} items to staging successfully`);
 
       // Process rejected content
       for (const index of rejectedIndexes) {
@@ -135,7 +132,7 @@ export function ContentReviewDialog({
       }
 
       toast.success(
-        `Saved to Staging: ${approvedIndexes.length} approved, ${rejectedIndexes.length} rejected. Add media next!`
+        `Saved to Library: ${approvedIndexes.length} approved, ${rejectedIndexes.length} rejected`
       );
       
       // Reset state
@@ -257,7 +254,7 @@ export function ContentReviewDialog({
                   {decision === 'approved' && (
                     <div className="mt-2 p-3 border rounded-lg bg-green-50 dark:bg-green-950/30">
                       <p className="text-xs text-green-700 dark:text-green-300">
-                        ✓ Content will be moved to Staging where you can attach media before posting
+                        ✓ Content will be saved to Library. You can move it to Staging to add media later.
                       </p>
                     </div>
                   )}
