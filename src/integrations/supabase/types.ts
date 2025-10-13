@@ -984,6 +984,86 @@ export type Database = {
           },
         ]
       }
+      staged_content: {
+        Row: {
+          business_id: string
+          content: string
+          content_type: string
+          created_at: string | null
+          id: string
+          platform: string
+          topic: string | null
+          updated_at: string | null
+        }
+        Insert: {
+          business_id: string
+          content: string
+          content_type: string
+          created_at?: string | null
+          id?: string
+          platform: string
+          topic?: string | null
+          updated_at?: string | null
+        }
+        Update: {
+          business_id?: string
+          content?: string
+          content_type?: string
+          created_at?: string | null
+          id?: string
+          platform?: string
+          topic?: string | null
+          updated_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "staged_content_business_id_fkey"
+            columns: ["business_id"]
+            isOneToOne: false
+            referencedRelation: "businesses"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      staging_media: {
+        Row: {
+          display_order: number | null
+          id: string
+          media_id: string
+          paired_at: string | null
+          staged_content_id: string
+        }
+        Insert: {
+          display_order?: number | null
+          id?: string
+          media_id: string
+          paired_at?: string | null
+          staged_content_id: string
+        }
+        Update: {
+          display_order?: number | null
+          id?: string
+          media_id?: string
+          paired_at?: string | null
+          staged_content_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "staging_media_media_id_fkey"
+            columns: ["media_id"]
+            isOneToOne: false
+            referencedRelation: "media_assets"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "staging_media_staged_content_id_fkey"
+            columns: ["staged_content_id"]
+            isOneToOne: false
+            referencedRelation: "staged_content"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       twitter_chat_messages: {
         Row: {
           content: string
