@@ -130,19 +130,13 @@ export default function EmployeeUpload() {
           continue;
         }
 
-        if (file.size > 50 * 1024 * 1024) {
-          toast.error(`${file.name}: File too large (max 50MB)`);
-          updateFileStatus(fileIndex, 'error');
-          continue;
-        }
-
         // Upload to storage
         const timestamp = Date.now();
         const fileExt = file.name.split('.').pop();
         const fileName = `${businessSlug}/${timestamp}_${Math.random().toString(36).substring(7)}.${fileExt}`;
 
         const { error: uploadError } = await supabase.storage
-          .from('content-media')
+          .from('media')
           .upload(fileName, file);
 
         if (uploadError) {
@@ -152,7 +146,7 @@ export default function EmployeeUpload() {
         }
 
         const { data: { publicUrl } } = supabase.storage
-          .from('content-media')
+          .from('media')
           .getPublicUrl(fileName);
 
         // Get dimensions and thumbnail
@@ -170,12 +164,12 @@ export default function EmployeeUpload() {
             // Upload thumbnail
             const thumbnailFileName = `${businessSlug}/thumbnails/${timestamp}_${Math.random().toString(36).substring(7)}.jpg`;
             const { error: thumbError } = await supabase.storage
-              .from('content-media')
+              .from('media')
               .upload(thumbnailFileName, blob);
             
             if (!thumbError) {
               const { data: { publicUrl: thumbUrl } } = supabase.storage
-                .from('content-media')
+                .from('media')
                 .getPublicUrl(thumbnailFileName);
               thumbnailUrl = thumbUrl;
             }
@@ -381,7 +375,7 @@ export default function EmployeeUpload() {
                 {isDragging ? '📂 Drop files here' : 'Drag files here or click to browse'}
               </p>
               <p className="text-sm text-muted-foreground mb-4">
-                Images and videos (max 50MB each)
+                Images and videos (up to 5GB each)
               </p>
               <Button 
                 type="button" 
