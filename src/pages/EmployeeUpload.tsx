@@ -23,23 +23,12 @@ export default function EmployeeUpload() {
   const [businesses, setBusinesses] = useState<Business[]>([]);
   const [selectedBusiness, setSelectedBusiness] = useState<string>("");
   const [uploading, setUploading] = useState(false);
-  const [preparing, setPreparing] = useState(false);
   const [isDragging, setIsDragging] = useState(false);
   const [uploadedFiles, setUploadedFiles] = useState<UploadedFile[]>([]);
 
   useEffect(() => {
     loadBusinesses();
   }, []);
-
-  useEffect(() => {
-    const handleFocus = () => {
-      if (preparing) {
-        setTimeout(() => setPreparing(false), 300);
-      }
-    };
-    window.addEventListener('focus', handleFocus);
-    return () => window.removeEventListener('focus', handleFocus);
-  }, [preparing]);
 
   const loadBusinesses = async () => {
     try {
@@ -95,7 +84,6 @@ export default function EmployeeUpload() {
   };
 
   const handleFileSelect = async (event: React.ChangeEvent<HTMLInputElement>) => {
-    setPreparing(false);
     const files = event.target.files;
     if (!files || files.length === 0) return;
 
@@ -379,10 +367,12 @@ export default function EmployeeUpload() {
               </p>
               <Button 
                 type="button" 
-                disabled={uploading || !selectedBusiness || preparing}
-                onClick={() => setPreparing(true)}
+                disabled={uploading || !selectedBusiness}
+                onClick={() => document.getElementById('employee-upload')?.click()}
+                className="gap-2"
               >
-                {preparing ? 'Opening file picker...' : uploading ? 'Uploading...' : 'Select Files'}
+                <Upload className="h-5 w-5" />
+                {uploading ? 'Uploading...' : 'Select Files'}
               </Button>
             </label>
           </div>
