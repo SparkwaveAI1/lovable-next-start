@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
 import { Link } from "react-router-dom";
-import { Sparkles, FileText, Send, Calendar, TrendingUp, RefreshCw, Edit, Trash2, Rocket, CheckCircle, Copy, ImageIcon } from "lucide-react";
+import { Sparkles, FileText, Send, Calendar, TrendingUp, RefreshCw, Edit, Trash2, Rocket, CheckCircle, Copy, ImageIcon, Settings } from "lucide-react";
+import { AgentPromptEditor } from '@/components/AgentPromptEditor';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -758,17 +759,25 @@ const ContentCenter = () => {
                   <TabsTrigger value="schedule" className="h-9 shrink-0">Schedule</TabsTrigger>
                   <TabsTrigger value="posted" className="h-9 shrink-0">Posted</TabsTrigger>
                   <TabsTrigger value="history" className="h-9 shrink-0">History</TabsTrigger>
+                  <TabsTrigger value="agent-settings" className="h-9 shrink-0">
+                    <Settings className="h-4 w-4 mr-2" />
+                    Agent Settings
+                  </TabsTrigger>
                 </TabsList>
               </div>
 
               {/* Desktop: Grid layout */}
               <div className="hidden md:block mb-2">
-                <TabsList className="grid grid-cols-5">
+                <TabsList className="grid grid-cols-6">
                   <TabsTrigger value="preview">Preview</TabsTrigger>
                   <TabsTrigger value="library">Library</TabsTrigger>
                   <TabsTrigger value="schedule">Schedule</TabsTrigger>
                   <TabsTrigger value="posted">Posted</TabsTrigger>
                   <TabsTrigger value="history">History</TabsTrigger>
+                  <TabsTrigger value="agent-settings">
+                    <Settings className="h-4 w-4 mr-2" />
+                    Agent Settings
+                  </TabsTrigger>
                 </TabsList>
               </div>
               
@@ -967,6 +976,10 @@ const ContentCenter = () => {
                     <p className="text-sm">Track performance and reuse successful content</p>
                   </CardContent>
                 </Card>
+              </TabsContent>
+
+              <TabsContent value="agent-settings">
+                <AgentPromptEditor />
               </TabsContent>
             </Tabs>
           </div>
