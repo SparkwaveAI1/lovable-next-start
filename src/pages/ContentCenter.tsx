@@ -287,7 +287,7 @@ const ContentCenter = () => {
     
     try {
       // Save to existing scheduled_content table
-      const { error } = await supabase
+      const { data: inserted, error } = await supabase
         .from('scheduled_content')
         .insert({
           business_id: selectedBusiness.id,
@@ -297,9 +297,22 @@ const ContentCenter = () => {
           platform: 'twitter',
           scheduled_for: scheduledDateTime.toISOString(),
           status: 'scheduled'
-        });
+        })
+        .select('id')
+        .single();
 
       if (error) throw error;
+
+      // If content has media, persist the mappings
+      if (inserted?.id && schedulingTweet.content_media?.length) {
+        const mappings = schedulingTweet.content_media.map((m) => ({
+          content_id: inserted.id,
+          media_id: m.media_id,
+          display_order: m.display_order ?? 0,
+        }));
+        const { error: mediaErr } = await supabase.from('content_media').insert(mappings);
+        if (mediaErr) throw mediaErr;
+      }
 
       toast({
         title: "Tweet Scheduled",
@@ -309,6 +322,11 @@ const ContentCenter = () => {
       setSchedulingTweet(null);
       setScheduleDate('');
       setScheduleTime('');
+      
+      // Reload scheduled content to show media
+      if (activeTab === 'schedule') {
+        loadScheduledContent();
+      }
       
     } catch (error) {
       console.error("Scheduling error:", error);
@@ -555,18 +573,24 @@ const ContentCenter = () => {
               <label className="text-sm font-medium">Attached Media</label>
               <div className="flex gap-2 mt-2 flex-wrap">
                 {schedulingTweet.content_media.map((media, idx) => (
-                  <div key={idx} className="relative w-20 h-20 rounded border">
+                  <div key={idx} className="relative w-24 h-24 rounded border">
                     {media.media_assets.file_type === 'image' ? (
                       <img 
                         src={media.media_assets.file_path} 
                         alt={`Media ${idx + 1}`}
                         className="w-full h-full object-cover rounded"
+                        onError={(e) => {
+                          (e.currentTarget as HTMLImageElement).style.display = 'none';
+                        }}
                       />
                     ) : media.media_assets.thumbnail_path ? (
                       <img 
                         src={media.media_assets.thumbnail_path} 
                         alt={`Video ${idx + 1}`}
                         className="w-full h-full object-cover rounded"
+                        onError={(e) => {
+                          (e.currentTarget as HTMLImageElement).style.display = 'none';
+                        }}
                       />
                     ) : (
                       <div className="w-full h-full flex items-center justify-center bg-muted rounded">
@@ -644,18 +668,24 @@ const ContentCenter = () => {
                   {item.content_media && item.content_media.length > 0 && (
                     <div className="flex gap-2 mt-2 mb-2 flex-wrap">
                       {item.content_media.map((media: any, idx: number) => (
-                        <div key={idx} className="relative w-16 h-16 rounded border">
+                        <div key={idx} className="relative w-20 h-20 rounded border">
                           {media.media_assets.file_type === 'image' ? (
                             <img 
                               src={media.media_assets.file_path} 
                               alt={`Media ${idx + 1}`}
                               className="w-full h-full object-cover rounded"
+                              onError={(e) => {
+                                (e.currentTarget as HTMLImageElement).style.display = 'none';
+                              }}
                             />
                           ) : media.media_assets.thumbnail_path ? (
                             <img 
                               src={media.media_assets.thumbnail_path} 
                               alt={`Video ${idx + 1}`}
                               className="w-full h-full object-cover rounded"
+                              onError={(e) => {
+                                (e.currentTarget as HTMLImageElement).style.display = 'none';
+                              }}
                             />
                           ) : (
                             <div className="w-full h-full flex items-center justify-center bg-muted rounded">

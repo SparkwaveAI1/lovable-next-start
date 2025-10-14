@@ -335,7 +335,7 @@ export function ContentLibrary({ businessId, onSchedule, onEdit }: ContentLibrar
                     </div>
                     {item.content_media && item.content_media.length > 0 && (
                       <Badge variant="secondary" className="text-xs">
-                        {item.content_media[0].media_assets.file_type.startsWith('image/') ? (
+                        {item.content_media[0].media_assets.file_type === 'image' ? (
                           <><ImageIcon className="w-3 h-3 mr-1" /> {item.content_media.length}</>
                         ) : (
                           <><Video className="w-3 h-3 mr-1" /> {item.content_media.length}</>
@@ -430,7 +430,7 @@ export function ContentLibrary({ businessId, onSchedule, onEdit }: ContentLibrar
                   <Badge variant="outline">{selectedContent.platform}</Badge>
                   {selectedContent.content_media && selectedContent.content_media.length > 0 && (
                     <Badge variant="secondary" className="text-xs">
-                      {selectedContent.content_media[0].media_assets.file_type.startsWith('image/') ? (
+                      {selectedContent.content_media[0].media_assets.file_type === 'image' ? (
                         <><ImageIcon className="w-3 h-3 mr-1" /> {selectedContent.content_media.length}</>
                       ) : (
                         <><Video className="w-3 h-3 mr-1" /> {selectedContent.content_media.length}</>
@@ -461,10 +461,22 @@ export function ContentLibrary({ businessId, onSchedule, onEdit }: ContentLibrar
                 <div className="mb-4 flex gap-2 flex-wrap">
                   {selectedContent.content_media.map((media, idx) => (
                     <div key={idx} className="relative w-24 h-24 rounded border overflow-hidden">
-                      {media.media_assets.file_type.startsWith('image/') ? (
+                      {media.media_assets.file_type === 'image' ? (
                         <img 
                           src={media.media_assets.thumbnail_path || media.media_assets.file_path} 
                           alt="Media" 
+                          className="w-full h-full object-cover"
+                          onError={(e) => { 
+                            const target = e.currentTarget as HTMLImageElement;
+                            if (target.src !== media.media_assets.file_path) {
+                              target.src = media.media_assets.file_path;
+                            }
+                          }}
+                        />
+                      ) : media.media_assets.thumbnail_path ? (
+                        <img 
+                          src={media.media_assets.thumbnail_path} 
+                          alt="Video thumbnail" 
                           className="w-full h-full object-cover"
                         />
                       ) : (
