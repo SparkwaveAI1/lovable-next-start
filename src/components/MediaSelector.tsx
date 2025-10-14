@@ -169,7 +169,7 @@ export function MediaSelector({ open, onClose, businessId, stagedContentId, onMe
           </DialogDescription>
         </DialogHeader>
 
-        <div className="space-y-4">
+        <div className="flex-1 overflow-auto space-y-4">
           {/* Search and Filter */}
           <div className="flex gap-3">
             <div className="relative flex-1">
@@ -270,7 +270,7 @@ export function MediaSelector({ open, onClose, businessId, stagedContentId, onMe
         </div>
 
         {/* Action Buttons */}
-        <div className="flex justify-end gap-3 pt-4 border-t">
+        <div className="flex-shrink-0 flex justify-end gap-3 pt-4 border-t">
           <Button variant="outline" onClick={onClose} disabled={saving}>
             Cancel
           </Button>
