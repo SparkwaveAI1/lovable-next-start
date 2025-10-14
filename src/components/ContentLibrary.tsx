@@ -7,7 +7,7 @@ import { Card, CardContent, CardFooter, CardHeader } from "@/components/ui/card"
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Calendar, Clock, Edit2, Trash2, Image as ImageIcon, Video, CheckCircle, Copy } from "lucide-react";
+import { Calendar, Clock, Edit2, Trash2, Image as ImageIcon, Video, CheckCircle, Copy, ArrowRight } from "lucide-react";
 import { toast } from "sonner";
 import { markAsPosted } from "@/lib/schedulingService";
 
@@ -146,6 +146,36 @@ export function ContentLibrary({ businessId, onSchedule, onEdit }: ContentLibrar
     } catch (error) {
       console.error('Error copying to clipboard:', error);
       toast.error("Failed to copy content");
+    }
+  };
+
+  const handleMoveToStaging = async (content: LibraryContent) => {
+    try {
+      // Copy content to staging
+      const { error } = await supabase
+        .from('staged_content')
+        .insert({
+          business_id: content.business_id,
+          content: content.content,
+          platform: content.platform,
+          content_type: content.content_type,
+          topic: content.topic || null
+        });
+
+      if (error) {
+        console.error('Error moving to staging:', error);
+        toast.error('Failed to move content to staging');
+        return;
+      }
+
+      toast.success('Moved to Staging', {
+        description: 'Content ready for media attachment',
+      });
+
+      console.log('Content moved to staging successfully');
+    } catch (error) {
+      console.error('Move to staging error:', error);
+      toast.error('Failed to move content to staging');
     }
   };
 
@@ -305,7 +335,16 @@ export function ContentLibrary({ businessId, onSchedule, onEdit }: ContentLibrar
                   </div>
                 </CardContent>
 
-                <CardFooter className="pt-3 border-t flex gap-2">
+                <CardFooter className="pt-3 border-t flex flex-wrap gap-2">
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    onClick={() => handleMoveToStaging(item)}
+                    className="gap-2"
+                  >
+                    <ArrowRight className="h-4 w-4" />
+                    Move to Staging
+                  </Button>
                   <Button
                     size="sm"
                     variant="default"
