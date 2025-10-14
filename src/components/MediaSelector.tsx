@@ -20,11 +20,19 @@ interface MediaSelectorProps {
   open: boolean;
   onClose: () => void;
   businessId: string;
-  stagedContentId: string;
+  contentId: string;  // Changed from stagedContentId
   onMediaAttached: () => void;
+  tableName?: 'staging_media' | 'content_media';  // NEW: which table to use
 }
 
-export function MediaSelector({ open, onClose, businessId, stagedContentId, onMediaAttached }: MediaSelectorProps) {
+export function MediaSelector({ 
+  open, 
+  onClose, 
+  businessId, 
+  contentId,  // Changed from stagedContentId
+  onMediaAttached,
+  tableName = 'content_media'  // Default to content_media for Library
+}: MediaSelectorProps) {
   const { toast } = useToast();
   const [media, setMedia] = useState<MediaAsset[]>([]);
   const [loading, setLoading] = useState(true);
@@ -69,18 +77,34 @@ export function MediaSelector({ open, onClose, businessId, stagedContentId, onMe
 
   const loadExistingSelections = async () => {
     try {
-      const { data, error } = await supabase
-        .from('staging_media')
-        .select('media_id')
-        .eq('staged_content_id', stagedContentId);
+      if (tableName === 'staging_media') {
+        const { data, error } = await supabase
+          .from('staging_media')
+          .select('media_id')
+          .eq('staged_content_id', contentId);
 
-      if (error) {
-        console.error('Error loading existing selections:', error);
-        return;
-      }
+        if (error) {
+          console.error('Error loading existing selections:', error);
+          return;
+        }
 
-      if (data) {
-        setSelectedMedia(data.map(item => item.media_id));
+        if (data) {
+          setSelectedMedia(data.map(item => item.media_id));
+        }
+      } else {
+        const { data, error } = await supabase
+          .from('content_media')
+          .select('media_id')
+          .eq('content_id', contentId);
+
+        if (error) {
+          console.error('Error loading existing selections:', error);
+          return;
+        }
+
+        if (data) {
+          setSelectedMedia(data.map(item => item.media_id));
+        }
       }
     } catch (error) {
       console.error('Load selections error:', error);
@@ -101,31 +125,60 @@ export function MediaSelector({ open, onClose, businessId, stagedContentId, onMe
     setSaving(true);
     try {
       // First, remove all existing media attachments
-      const { error: deleteError } = await supabase
-        .from('staging_media')
-        .delete()
-        .eq('staged_content_id', stagedContentId);
+      if (tableName === 'staging_media') {
+        const { error: deleteError } = await supabase
+          .from('staging_media')
+          .delete()
+          .eq('staged_content_id', contentId);
 
-      if (deleteError) {
-        console.error('Error removing old media:', deleteError);
-        throw deleteError;
+        if (deleteError) {
+          console.error('Error removing old media:', deleteError);
+          throw deleteError;
+        }
+      } else {
+        const { error: deleteError } = await supabase
+          .from('content_media')
+          .delete()
+          .eq('content_id', contentId);
+
+        if (deleteError) {
+          console.error('Error removing old media:', deleteError);
+          throw deleteError;
+        }
       }
 
       // Then add new selections
       if (selectedMedia.length > 0) {
-        const insertData = selectedMedia.map((mediaId, index) => ({
-          staged_content_id: stagedContentId,
-          media_id: mediaId,
-          display_order: index
-        }));
+        if (tableName === 'staging_media') {
+          const insertData = selectedMedia.map((mediaId, index) => ({
+            staged_content_id: contentId,
+            media_id: mediaId,
+            display_order: index
+          }));
 
-        const { error: insertError } = await supabase
-          .from('staging_media')
-          .insert(insertData);
+          const { error: insertError } = await supabase
+            .from('staging_media')
+            .insert(insertData);
 
-        if (insertError) {
-          console.error('Error attaching media:', insertError);
-          throw insertError;
+          if (insertError) {
+            console.error('Error attaching media:', insertError);
+            throw insertError;
+          }
+        } else {
+          const insertData = selectedMedia.map((mediaId, index) => ({
+            content_id: contentId,
+            media_id: mediaId,
+            display_order: index
+          }));
+
+          const { error: insertError } = await supabase
+            .from('content_media')
+            .insert(insertData);
+
+          if (insertError) {
+            console.error('Error attaching media:', insertError);
+            throw insertError;
+          }
         }
       }
 

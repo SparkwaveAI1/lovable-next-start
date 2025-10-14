@@ -355,8 +355,9 @@ export function StagingContent() {
           open={mediaSelectorOpen}
           onClose={handleCloseMediaSelector}
           businessId={selectedBusiness.id}
-          stagedContentId={selectedContentId}
+          contentId={selectedContentId}
           onMediaAttached={handleMediaAttached}
+          tableName="staging_media"
         />
       )}
     </div>
