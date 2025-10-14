@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { Link } from "react-router-dom";
-import { Sparkles, FileText, Send, Calendar, TrendingUp, RefreshCw, Edit, Trash2, Rocket, CheckCircle, Copy, ImageIcon, Settings } from "lucide-react";
+import { Sparkles, FileText, Send, Calendar, TrendingUp, RefreshCw, Edit, Trash2, Rocket, CheckCircle, Copy, ImageIcon, Settings, Video } from "lucide-react";
 import { AgentPromptEditor } from '@/components/AgentPromptEditor';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -33,7 +33,20 @@ const ContentCenter = () => {
   const [isGenerating, setIsGenerating] = useState(false);
   const [reviewMode, setReviewMode] = useState(false);
   const [reviewingContent, setReviewingContent] = useState<Array<{content: string, hashtags?: string[]}>>([]);
-  const [schedulingTweet, setSchedulingTweet] = useState<{tweet: string, index: number} | null>(null);
+  const [schedulingTweet, setSchedulingTweet] = useState<{
+    tweet: string;
+    index: number;
+    content_media?: Array<{
+      media_id: string;
+      display_order: number;
+      media_assets: {
+        id: string;
+        file_path: string;
+        file_type: string;
+        thumbnail_path: string | null;
+      };
+    }>;
+  } | null>(null);
   const [scheduleDate, setScheduleDate] = useState('');
   const [scheduleTime, setScheduleTime] = useState('');
   const [activeTab, setActiveTab] = useState('preview');
@@ -312,7 +325,19 @@ const ContentCenter = () => {
     try {
       const { data, error } = await supabase
         .from('scheduled_content')
-        .select('*')
+        .select(`
+          *,
+          content_media (
+            media_id,
+            display_order,
+            media_assets (
+              id,
+              file_path,
+              file_type,
+              thumbnail_path
+            )
+          )
+        `)
         .eq('status', 'scheduled')
         .order('scheduled_for', { ascending: true });
 
@@ -520,6 +545,30 @@ const ContentCenter = () => {
             <label className="text-sm font-medium">Tweet Content</label>
             <Textarea value={schedulingTweet?.tweet || ''} readOnly rows={3} className="mt-1" />
           </div>
+
+          {schedulingTweet?.content_media && schedulingTweet.content_media.length > 0 && (
+            <div>
+              <label className="text-sm font-medium">Attached Media</label>
+              <div className="flex gap-2 mt-2 flex-wrap">
+                {schedulingTweet.content_media.map((media, idx) => (
+                  <div key={idx} className="relative w-20 h-20 rounded border">
+                    {media.media_assets.file_type.startsWith('image/') ? (
+                      <img 
+                        src={media.media_assets.file_path} 
+                        alt={`Media ${idx + 1}`}
+                        className="w-full h-full object-cover rounded"
+                      />
+                    ) : (
+                      <div className="w-full h-full flex items-center justify-center bg-muted rounded">
+                        <Video className="h-6 w-6 text-muted-foreground" />
+                      </div>
+                    )}
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
           <div className="space-y-2">
             <div className="grid grid-cols-2 gap-4">
               <div>
@@ -581,6 +630,27 @@ const ContentCenter = () => {
                     <Badge variant="secondary">{item.platform}</Badge>
                   </div>
                   <p className="text-sm mb-2">{item.content}</p>
+
+                  {item.content_media && item.content_media.length > 0 && (
+                    <div className="flex gap-2 mt-2 mb-2 flex-wrap">
+                      {item.content_media.map((media: any, idx: number) => (
+                        <div key={idx} className="relative w-16 h-16 rounded border">
+                          {media.media_assets.file_type.startsWith('image/') ? (
+                            <img 
+                              src={media.media_assets.file_path} 
+                              alt={`Media ${idx + 1}`}
+                              className="w-full h-full object-cover rounded"
+                            />
+                          ) : (
+                            <div className="w-full h-full flex items-center justify-center bg-muted rounded">
+                              <Video className="h-6 w-6 text-muted-foreground" />
+                            </div>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                  )}
+
                   <div className="text-xs text-muted-foreground">
                     Scheduled: {formatToEasternDateTime(item.scheduled_for)}
                     {item.topic && ` • Topic: ${item.topic}`}
