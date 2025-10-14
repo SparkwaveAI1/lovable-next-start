@@ -23,11 +23,15 @@ interface LibraryContent {
   tags?: string[];
   approved_at?: string;
   created_at: string;
-  media?: Array<{
-    id: string;
-    file_path: string;
-    file_type: string;
-    thumbnail_path?: string;
+  content_media?: Array<{
+    media_id: string;
+    display_order: number;
+    media_assets: {
+      id: string;
+      file_path: string;
+      file_type: string;
+      thumbnail_path: string | null;
+    };
   }>;
 }
 
@@ -78,6 +82,9 @@ export function ContentLibrary({ businessId, onSchedule, onEdit }: ContentLibrar
         .order('approved_at', { ascending: false });
 
       if (error) throw error;
+
+      console.log('Content library loaded:', data);
+      console.log('First item media:', data?.[0]?.content_media);
 
       // Extract all unique tags
       const tags = new Set<string>();
@@ -326,12 +333,12 @@ export function ContentLibrary({ businessId, onSchedule, onEdit }: ContentLibrar
                         {item.platform}
                       </Badge>
                     </div>
-                    {item.media && item.media.length > 0 && (
+                    {item.content_media && item.content_media.length > 0 && (
                       <Badge variant="secondary" className="text-xs">
-                        {item.media[0].file_type === 'image' ? (
-                          <><ImageIcon className="w-3 h-3 mr-1" /> {item.media.length}</>
+                        {item.content_media[0].media_assets.file_type.startsWith('image/') ? (
+                          <><ImageIcon className="w-3 h-3 mr-1" /> {item.content_media.length}</>
                         ) : (
-                          <><Video className="w-3 h-3 mr-1" /> {item.media.length}</>
+                          <><Video className="w-3 h-3 mr-1" /> {item.content_media.length}</>
                         )}
                       </Badge>
                     )}
@@ -372,7 +379,7 @@ export function ContentLibrary({ businessId, onSchedule, onEdit }: ContentLibrar
                     className="gap-2"
                   >
                     <ImagePlus className="h-4 w-4" />
-                    {item.media && item.media.length > 0 ? 'Edit Media' : 'Add Media'}
+                    {item.content_media && item.content_media.length > 0 ? 'Edit Media' : 'Add Media'}
                   </Button>
                   <Button
                     size="sm"
@@ -421,12 +428,12 @@ export function ContentLibrary({ businessId, onSchedule, onEdit }: ContentLibrar
                 <div className="flex items-center gap-2 mb-2">
                   <span className="text-2xl">{getPlatformIcon(selectedContent.platform)}</span>
                   <Badge variant="outline">{selectedContent.platform}</Badge>
-                  {selectedContent.media && selectedContent.media.length > 0 && (
+                  {selectedContent.content_media && selectedContent.content_media.length > 0 && (
                     <Badge variant="secondary" className="text-xs">
-                      {selectedContent.media[0].file_type === 'image' ? (
-                        <><ImageIcon className="w-3 h-3 mr-1" /> {selectedContent.media.length}</>
+                      {selectedContent.content_media[0].media_assets.file_type.startsWith('image/') ? (
+                        <><ImageIcon className="w-3 h-3 mr-1" /> {selectedContent.content_media.length}</>
                       ) : (
-                        <><Video className="w-3 h-3 mr-1" /> {selectedContent.media.length}</>
+                        <><Video className="w-3 h-3 mr-1" /> {selectedContent.content_media.length}</>
                       )}
                     </Badge>
                   )}
@@ -450,13 +457,13 @@ export function ContentLibrary({ businessId, onSchedule, onEdit }: ContentLibrar
               )}
 
               {/* Media Preview */}
-              {selectedContent.media && selectedContent.media.length > 0 && (
+              {selectedContent.content_media && selectedContent.content_media.length > 0 && (
                 <div className="mb-4 flex gap-2 flex-wrap">
-                  {selectedContent.media.map((media) => (
-                    <div key={media.id} className="relative w-24 h-24 rounded border overflow-hidden">
-                      {media.file_type === 'image' ? (
+                  {selectedContent.content_media.map((media, idx) => (
+                    <div key={idx} className="relative w-24 h-24 rounded border overflow-hidden">
+                      {media.media_assets.file_type.startsWith('image/') ? (
                         <img 
-                          src={media.thumbnail_path || media.file_path} 
+                          src={media.media_assets.thumbnail_path || media.media_assets.file_path} 
                           alt="Media" 
                           className="w-full h-full object-cover"
                         />

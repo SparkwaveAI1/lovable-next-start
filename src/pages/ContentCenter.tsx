@@ -342,6 +342,10 @@ const ContentCenter = () => {
         .order('scheduled_for', { ascending: true });
 
       if (error) throw error;
+      
+      console.log('Scheduled content loaded:', data);
+      console.log('First item media:', data?.[0]?.content_media);
+      
       setScheduledContent(data || []);
     } catch (error) {
       toast({
@@ -970,7 +974,11 @@ const ContentCenter = () => {
                     <ContentLibrary
                       businessId={selectedBusiness?.id}
                       onSchedule={(content) => {
-                        setSchedulingTweet({ tweet: content.content, index: 0 });
+                        setSchedulingTweet({ 
+                          tweet: content.content, 
+                          index: 0,
+                          content_media: content.content_media
+                        });
                         setActiveTab('schedule');
                       }}
                       onEdit={(content) => {
