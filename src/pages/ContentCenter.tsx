@@ -556,10 +556,16 @@ const ContentCenter = () => {
               <div className="flex gap-2 mt-2 flex-wrap">
                 {schedulingTweet.content_media.map((media, idx) => (
                   <div key={idx} className="relative w-20 h-20 rounded border">
-                    {media.media_assets.file_type.startsWith('image/') ? (
+                    {media.media_assets.file_type === 'image' ? (
                       <img 
                         src={media.media_assets.file_path} 
                         alt={`Media ${idx + 1}`}
+                        className="w-full h-full object-cover rounded"
+                      />
+                    ) : media.media_assets.thumbnail_path ? (
+                      <img 
+                        src={media.media_assets.thumbnail_path} 
+                        alt={`Video ${idx + 1}`}
                         className="w-full h-full object-cover rounded"
                       />
                     ) : (
@@ -639,10 +645,16 @@ const ContentCenter = () => {
                     <div className="flex gap-2 mt-2 mb-2 flex-wrap">
                       {item.content_media.map((media: any, idx: number) => (
                         <div key={idx} className="relative w-16 h-16 rounded border">
-                          {media.media_assets.file_type.startsWith('image/') ? (
+                          {media.media_assets.file_type === 'image' ? (
                             <img 
                               src={media.media_assets.file_path} 
                               alt={`Media ${idx + 1}`}
+                              className="w-full h-full object-cover rounded"
+                            />
+                          ) : media.media_assets.thumbnail_path ? (
+                            <img 
+                              src={media.media_assets.thumbnail_path} 
+                              alt={`Video ${idx + 1}`}
                               className="w-full h-full object-cover rounded"
                             />
                           ) : (
