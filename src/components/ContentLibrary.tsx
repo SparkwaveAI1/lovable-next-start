@@ -151,8 +151,16 @@ export function ContentLibrary({ businessId, onSchedule, onEdit }: ContentLibrar
 
   const handleMoveToStaging = async (content: LibraryContent) => {
     try {
+      console.log('Moving content to staging:', {
+        business_id: content.business_id,
+        content: content.content?.substring(0, 50),
+        platform: content.platform,
+        content_type: content.content_type,
+        topic: content.topic
+      });
+
       // Copy content to staging
-      const { error } = await supabase
+      const { data, error } = await supabase
         .from('staged_content')
         .insert({
           business_id: content.business_id,
@@ -160,21 +168,25 @@ export function ContentLibrary({ businessId, onSchedule, onEdit }: ContentLibrar
           platform: content.platform,
           content_type: content.content_type,
           topic: content.topic || null
-        });
+        })
+        .select();
 
       if (error) {
-        console.error('Error moving to staging:', error);
-        toast.error('Failed to move content to staging');
+        console.error('Supabase error details:', error);
+        console.error('Error code:', error.code);
+        console.error('Error message:', error.message);
+        console.error('Error details:', error.details);
+        toast.error(`Failed to move content to staging: ${error.message}`);
         return;
       }
+
+      console.log('Successfully inserted into staging:', data);
 
       toast.success('Moved to Staging', {
         description: 'Content ready for media attachment',
       });
-
-      console.log('Content moved to staging successfully');
     } catch (error) {
-      console.error('Move to staging error:', error);
+      console.error('Unexpected error:', error);
       toast.error('Failed to move content to staging');
     }
   };
