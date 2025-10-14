@@ -124,7 +124,7 @@ export default function LateConnections() {
           selectedBusinessId={undefined}
           onBusinessChange={handleBusinessChange}
         />
-        <div className="container mx-auto p-8">
+        <div className="container mx-auto p-8 pt-[120px] md:pt-[88px]">
           <p className="text-muted-foreground">Please select a business</p>
         </div>
       </div>
@@ -138,7 +138,7 @@ export default function LateConnections() {
         onBusinessChange={handleBusinessChange}
       />
       
-      <div className="container mx-auto p-8">
+      <div className="container mx-auto p-8 pt-[120px] md:pt-[88px]">
         <div className="mb-8">
           <h1 className="text-3xl font-bold mb-2">Platforms for {selectedBusiness.name}</h1>
           <p className="text-muted-foreground">Connected social media accounts via Late</p>
