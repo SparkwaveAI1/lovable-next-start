@@ -6,6 +6,7 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { useToast } from '@/hooks/use-toast';
 import { ImagePlus, Trash2, Download, Send, Loader2, Package } from 'lucide-react';
+import { MediaSelector } from './MediaSelector';
 
 interface StagedContent {
   id: string;
@@ -32,6 +33,8 @@ export function StagingContent() {
   const { toast } = useToast();
   const [content, setContent] = useState<StagedContent[]>([]);
   const [loading, setLoading] = useState(true);
+  const [mediaSelectorOpen, setMediaSelectorOpen] = useState(false);
+  const [selectedContentId, setSelectedContentId] = useState<string | null>(null);
 
   useEffect(() => {
     if (selectedBusiness) {
@@ -78,6 +81,20 @@ export function StagingContent() {
     } finally {
       setLoading(false);
     }
+  };
+
+  const handleOpenMediaSelector = (contentId: string) => {
+    setSelectedContentId(contentId);
+    setMediaSelectorOpen(true);
+  };
+
+  const handleCloseMediaSelector = () => {
+    setMediaSelectorOpen(false);
+    setSelectedContentId(null);
+  };
+
+  const handleMediaAttached = () => {
+    loadStagedContent(); // Reload to show new media
   };
 
   const handleDelete = async (id: string) => {
@@ -187,7 +204,7 @@ export function StagingContent() {
                   variant="outline"
                   size="sm"
                   className="gap-2"
-                  onClick={() => toast({ title: 'Coming soon', description: 'Media attachment will be available shortly' })}
+                  onClick={() => handleOpenMediaSelector(item.id)}
                 >
                   <ImagePlus className="h-4 w-4" />
                   {item.staging_media && item.staging_media.length > 0 ? 'Edit Media' : 'Add Media'}
@@ -225,6 +242,16 @@ export function StagingContent() {
           </CardContent>
         </Card>
       ))}
+
+      {selectedBusiness && selectedContentId && (
+        <MediaSelector
+          open={mediaSelectorOpen}
+          onClose={handleCloseMediaSelector}
+          businessId={selectedBusiness.id}
+          stagedContentId={selectedContentId}
+          onMediaAttached={handleMediaAttached}
+        />
+      )}
     </div>
   );
 }
