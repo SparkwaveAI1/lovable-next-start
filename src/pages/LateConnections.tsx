@@ -12,7 +12,8 @@ import {
   Linkedin,
   Video,
   CheckCircle2,
-  Copy
+  Copy,
+  RefreshCw
 } from 'lucide-react';
 import { toast } from 'sonner';
 
@@ -29,6 +30,7 @@ export default function LateConnections() {
   const { selectedBusiness, setSelectedBusiness } = useBusinessContext();
   const [platforms, setPlatforms] = useState<PlatformConnection[]>([]);
   const [loading, setLoading] = useState(false);
+  const [syncing, setSyncing] = useState(false);
 
   useEffect(() => {
     loadConnections();
@@ -122,6 +124,31 @@ export default function LateConnections() {
     }
   };
 
+  const syncFromLate = async () => {
+    if (!selectedBusiness) return;
+    
+    setSyncing(true);
+    try {
+      console.log('🔄 Syncing connections from Late.so for', selectedBusiness.name);
+      
+      const { data, error } = await supabase.functions.invoke('sync-late-connections', {
+        body: { businessId: selectedBusiness.id }
+      });
+      
+      console.log('📥 Sync response:', data);
+      
+      if (error) throw error;
+      
+      toast.success(`Synced ${data.synced} connection(s) from Late.so`);
+      loadConnections(); // Reload to show updated connections
+    } catch (error) {
+      console.error('❌ Sync failed:', error);
+      toast.error('Failed to sync connections from Late');
+    } finally {
+      setSyncing(false);
+    }
+  };
+
   const copyToClipboard = (text: string) => {
     navigator.clipboard.writeText(text);
     toast.success('Copied to clipboard');
@@ -150,8 +177,20 @@ export default function LateConnections() {
       
       <div className="container mx-auto p-8 pt-[120px] md:pt-[88px]">
         <div className="mb-8">
-          <h1 className="text-3xl font-bold mb-2">Platforms for {selectedBusiness.name}</h1>
-          <p className="text-muted-foreground">Connected social media accounts via Late</p>
+          <div className="flex items-center justify-between mb-4">
+            <div>
+              <h1 className="text-3xl font-bold mb-2">Platforms for {selectedBusiness.name}</h1>
+              <p className="text-muted-foreground">Connected social media accounts via Late</p>
+            </div>
+            <Button 
+              onClick={syncFromLate} 
+              disabled={syncing || !selectedBusiness}
+              className="gap-2"
+            >
+              <RefreshCw className={`h-4 w-4 ${syncing ? 'animate-spin' : ''}`} />
+              Sync from Late.so
+            </Button>
+          </div>
         </div>
 
         {loading ? (
