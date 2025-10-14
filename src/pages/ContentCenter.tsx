@@ -1,8 +1,7 @@
 import { useState, useEffect } from "react";
 import { Link } from "react-router-dom";
-import { Sparkles, FileText, Send, Calendar, TrendingUp, RefreshCw, Edit, Trash2, Rocket, CheckCircle, Copy, ImageIcon, Settings, Package } from "lucide-react";
+import { Sparkles, FileText, Send, Calendar, TrendingUp, RefreshCw, Edit, Trash2, Rocket, CheckCircle, Copy, ImageIcon, Settings } from "lucide-react";
 import { AgentPromptEditor } from '@/components/AgentPromptEditor';
-import { StagingContent } from '@/components/StagingContent';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -757,10 +756,6 @@ const ContentCenter = () => {
                 <TabsList className="flex h-auto w-full flex-wrap justify-start gap-2">
                   <TabsTrigger value="preview" className="h-9 shrink-0">Preview</TabsTrigger>
                   <TabsTrigger value="library" className="h-9 shrink-0">Library</TabsTrigger>
-                  <TabsTrigger value="staging" className="h-9 shrink-0">
-                    <Package className="h-4 w-4 mr-2" />
-                    Staging
-                  </TabsTrigger>
                   <TabsTrigger value="schedule" className="h-9 shrink-0">Schedule</TabsTrigger>
                   <TabsTrigger value="posted" className="h-9 shrink-0">Posted</TabsTrigger>
                   <TabsTrigger value="history" className="h-9 shrink-0">History</TabsTrigger>
@@ -773,13 +768,9 @@ const ContentCenter = () => {
 
               {/* Desktop: Grid layout */}
               <div className="hidden md:block mb-2">
-                <TabsList className="grid grid-cols-7">
+                <TabsList className="grid grid-cols-6">
                   <TabsTrigger value="preview">Preview</TabsTrigger>
                   <TabsTrigger value="library">Library</TabsTrigger>
-                  <TabsTrigger value="staging">
-                    <Package className="h-4 w-4 mr-2" />
-                    Staging
-                  </TabsTrigger>
                   <TabsTrigger value="schedule">Schedule</TabsTrigger>
                   <TabsTrigger value="posted">Posted</TabsTrigger>
                   <TabsTrigger value="history">History</TabsTrigger>
@@ -923,10 +914,6 @@ const ContentCenter = () => {
                     />
                   </CardContent>
                 </Card>
-              </TabsContent>
-
-              <TabsContent value="staging">
-                <StagingContent />
               </TabsContent>
 
               <TabsContent value="schedule">
