@@ -97,6 +97,113 @@ export function StagingContent() {
     loadStagedContent(); // Reload to show new media
   };
 
+  const handleSaveToLibrary = async (item: StagedContent) => {
+    try {
+      // 1. Insert into scheduled_content (Library)
+      const { data: savedContent, error: saveError } = await supabase
+        .from('scheduled_content')
+        .insert({
+          business_id: item.business_id,
+          content: item.content,
+          platform: item.platform,
+          content_type: item.content_type,
+          topic: item.topic,
+          status: 'draft',
+          approval_status: 'approved',
+          approved_at: new Date().toISOString()
+        })
+        .select()
+        .single();
+
+      if (saveError) throw saveError;
+
+      // 2. Copy media attachments from staging_media to content_media
+      if (item.staging_media && item.staging_media.length > 0) {
+        const mediaLinks = item.staging_media.map(media => ({
+          content_id: savedContent.id,
+          media_id: media.media_id,
+          display_order: media.display_order
+        }));
+
+        const { error: mediaError } = await supabase
+          .from('content_media')
+          .insert(mediaLinks);
+
+        if (mediaError) {
+          console.error('Error copying media:', mediaError);
+          // Don't fail the whole operation if media copy fails
+        }
+      }
+
+      // 3. Delete from staging
+      const { error: deleteError } = await supabase
+        .from('staged_content')
+        .delete()
+        .eq('id', item.id);
+
+      if (deleteError) {
+        console.error('Error removing from staging:', deleteError);
+        // Don't fail - content is already saved
+      }
+
+      toast({
+        title: 'Saved to Library',
+        description: 'Content and media moved to Library',
+      });
+
+      loadStagedContent();
+    } catch (error) {
+      console.error('Save to library error:', error);
+      toast({
+        title: 'Error',
+        description: 'Failed to save to library',
+        variant: 'destructive',
+      });
+    }
+  };
+
+  const handlePost = async (item: StagedContent) => {
+    try {
+      // Get media URLs for posting
+      const imageUrls = item.staging_media
+        ?.filter(m => m.media_assets.file_type.startsWith('image/'))
+        .sort((a, b) => a.display_order - b.display_order)
+        .map(m => m.media_assets.file_path) || [];
+
+      const videoUrl = item.staging_media
+        ?.find(m => m.media_assets.file_type.startsWith('video/'))
+        ?.media_assets.file_path;
+
+      // Call post-via-late edge function
+      const { data, error } = await supabase.functions.invoke('post-via-late', {
+        body: {
+          businessId: item.business_id,
+          content: item.content,
+          platforms: [item.platform],
+          imageUrls: imageUrls.length > 0 ? imageUrls : undefined,
+          videoUrl: videoUrl || undefined
+        }
+      });
+
+      if (error) throw error;
+
+      // Save to Library as posted
+      await handleSaveToLibrary(item);
+
+      toast({
+        title: 'Posted Successfully',
+        description: `Content posted to ${item.platform}`,
+      });
+    } catch (error) {
+      console.error('Post error:', error);
+      toast({
+        title: 'Error',
+        description: 'Failed to post content',
+        variant: 'destructive',
+      });
+    }
+  };
+
   const handleDelete = async (id: string) => {
     try {
       const { error } = await supabase
@@ -214,20 +321,20 @@ export function StagingContent() {
                   variant="outline"
                   size="sm"
                   className="gap-2"
-                  onClick={() => toast({ title: 'Coming soon', description: 'Save function coming next' })}
+                  onClick={() => handleSaveToLibrary(item)}
                 >
                   <Download className="h-4 w-4" />
-                  Save
+                  Save to Library
                 </Button>
 
                 <Button
                   variant="outline"
                   size="sm"
                   className="gap-2"
-                  onClick={() => toast({ title: 'Coming soon', description: 'Post function coming next' })}
+                  onClick={() => handlePost(item)}
                 >
                   <Send className="h-4 w-4" />
-                  Post
+                  Post Now
                 </Button>
 
                 <Button
