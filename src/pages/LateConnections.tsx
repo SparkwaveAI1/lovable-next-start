@@ -28,7 +28,7 @@ interface PlatformConnection {
 export default function LateConnections() {
   const { selectedBusiness, setSelectedBusiness } = useBusinessContext();
   const [platforms, setPlatforms] = useState<PlatformConnection[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(false);
 
   useEffect(() => {
     loadConnections();
