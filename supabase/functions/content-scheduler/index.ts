@@ -300,47 +300,76 @@ Deno.serve(async (req) => {
 });
 
 /**
- * Post content via GAME SDK Workers
+ * Post content via Late API if connected, otherwise fall back to GAME SDK
  */
 async function postContentViaGame(
   item: ScheduledContentItem,
   businessConfig: any
 ): Promise<GameContentResponse> {
   try {
-    console.log(`🎮 GAME SDK: Posting via ${item.platform} worker`);
+    console.log(`🎮 Routing post for ${item.platform}`);
     console.log(`📋 Content: "${item.content.substring(0, 50)}..."`);
     console.log(`🏢 Business: ${businessConfig.name}`);
     
-    // Import and route to appropriate GAME worker based on platform
+    // Query business to get Late account IDs
+    const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
+    const supabaseKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
+    const supabase = createClient(supabaseUrl, supabaseKey);
+    
+    const { data: business } = await supabase
+      .from('businesses')
+      .select('late_twitter_account_id, late_instagram_account_id, late_tiktok_account_id, late_linkedin_account_id, late_facebook_account_id')
+      .eq('id', item.business_id)
+      .single();
+    
+    const lateAccounts = {
+      twitter: business?.late_twitter_account_id,
+      instagram: business?.late_instagram_account_id,
+      tiktok: business?.late_tiktok_account_id,
+      linkedin: business?.late_linkedin_account_id,
+      facebook: business?.late_facebook_account_id
+    };
+    
+    // Check if Late account exists for this platform
+    const lateAccountId = lateAccounts[item.platform as keyof typeof lateAccounts];
+    
     let postResult;
     
-    switch (item.platform) {
-      case 'twitter':
-        postResult = await postToTwitter({
-          content: item.content,
-          businessId: item.business_id,
-          topic: item.topic
-        });
-        break;
-        
-      case 'discord':
-        postResult = await postToDiscord({
-          content: item.content,
-          businessId: item.business_id,
-          topic: item.topic
-        });
-        break;
-        
-      case 'telegram':
-        postResult = await postToTelegram({
-          content: item.content,
-          businessId: item.business_id,
-          topic: item.topic
-        });
-        break;
-        
-      default:
-        throw new Error(`Unsupported platform: ${item.platform}`);
+    if (lateAccountId && ['twitter', 'instagram', 'tiktok', 'linkedin', 'facebook'].includes(item.platform)) {
+      console.log(`📱 Posting via Late API (account: ${lateAccountId})`);
+      postResult = await postViaLate(item, item.platform, lateAccountId, supabase);
+    } else {
+      console.log(`🎮 Posting via GAME SDK worker`);
+      
+      // Fall back to GAME SDK for platforms without Late connection
+      switch (item.platform) {
+        case 'twitter':
+          postResult = await postToTwitter({
+            content: item.content,
+            businessId: item.business_id,
+            topic: item.topic
+          });
+          break;
+          
+        case 'discord':
+          postResult = await postToDiscord({
+            content: item.content,
+            businessId: item.business_id,
+            topic: item.topic
+          });
+          break;
+          
+        case 'telegram':
+          postResult = await postToTelegram({
+            content: item.content,
+            businessId: item.business_id,
+            topic: item.topic
+          });
+          break;
+          
+        default:
+          throw new Error(`Unsupported platform: ${item.platform}`);
+      }
     }
 
     if (postResult.success) {
@@ -364,6 +393,83 @@ async function postContentViaGame(
     return {
       success: false,
       message: error.message || 'GAME posting failed'
+    };
+  }
+}
+
+/**
+ * Post content via Late API
+ */
+async function postViaLate(
+  item: ScheduledContentItem,
+  platform: string,
+  accountId: string,
+  supabase: any
+): Promise<any> {
+  try {
+    console.log(`📱 Calling post-via-late for ${platform}`);
+    
+    // Fetch media if available
+    const { data: contentMedia } = await supabase
+      .from('content_media')
+      .select(`
+        media_id,
+        display_order,
+        media_assets (
+          file_path,
+          file_type,
+          thumbnail_path
+        )
+      `)
+      .eq('content_id', item.id)
+      .order('display_order', { ascending: true });
+    
+    const imageUrls: string[] = [];
+    let videoUrl: string | null = null;
+    
+    if (contentMedia && contentMedia.length > 0) {
+      for (const media of contentMedia) {
+        const asset = media.media_assets;
+        if (asset.file_type === 'image') {
+          imageUrls.push(asset.file_path);
+        } else if (asset.file_type === 'video' && !videoUrl) {
+          videoUrl = asset.file_path;
+        }
+      }
+    }
+    
+    const { data, error } = await supabase.functions.invoke('post-via-late', {
+      body: {
+        businessId: item.business_id,
+        content: item.content,
+        platforms: [platform],
+        imageUrls: imageUrls.length > 0 ? imageUrls : undefined,
+        videoUrl: videoUrl || undefined
+      }
+    });
+    
+    if (error) {
+      throw new Error(error.message || 'Late API posting failed');
+    }
+    
+    console.log('✅ Posted via Late API:', data);
+    
+    return {
+      success: true,
+      post_id: data?.postId || `late_${Date.now()}`,
+      platform: platform,
+      content: item.content,
+      posted_at: new Date().toISOString(),
+      late_response: data
+    };
+  } catch (error) {
+    console.error('❌ Late API posting error:', error);
+    return {
+      success: false,
+      platform: platform,
+      content: item.content,
+      posted_at: new Date().toISOString(),
+      error: error.message
     };
   }
 }

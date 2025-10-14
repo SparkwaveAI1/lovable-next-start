@@ -283,6 +283,26 @@ const ContentCenter = () => {
       return;
     }
 
+    // Platform-specific validation
+    const contentLength = schedulingTweet.tweet.length;
+    const platformLimits = {
+      twitter: 280,
+      instagram: 2200,
+      tiktok: 2200,
+      facebook: 63206,
+      linkedin: 3000
+    };
+    
+    const limit = platformLimits[selectedPlatform as keyof typeof platformLimits];
+    if (limit && contentLength > limit) {
+      toast({
+        title: "Content Too Long",
+        description: `${selectedPlatform} has a ${limit} character limit (current: ${contentLength})`,
+        variant: "destructive"
+      });
+      return;
+    }
+
     const scheduledDateTime = new Date(`${scheduleDate}T${scheduleTime}`);
     
     try {
@@ -294,7 +314,7 @@ const ContentCenter = () => {
           content: schedulingTweet.tweet,
           content_type: selectedContentType,
           topic: topic,
-          platform: 'twitter',
+          platform: selectedPlatform,
           scheduled_for: scheduledDateTime.toISOString(),
           status: 'scheduled'
         })
