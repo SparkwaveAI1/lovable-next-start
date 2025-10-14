@@ -45,7 +45,17 @@ export default function LateConnections() {
         .eq('id', selectedBusiness.id)
         .single();
 
+      console.log('📊 Database data for', selectedBusiness.name, ':', business);
+
       if (error) throw error;
+
+      console.log('🔍 Account IDs:', {
+        twitter: business?.late_twitter_account_id,
+        instagram: business?.late_instagram_account_id,
+        tiktok: business?.late_tiktok_account_id,
+        facebook: business?.late_facebook_account_id,
+        linkedin: business?.late_linkedin_account_id
+      });
 
       const platformData: PlatformConnection[] = [
         {
