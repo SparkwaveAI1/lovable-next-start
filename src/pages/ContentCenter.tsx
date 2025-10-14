@@ -2,6 +2,7 @@ import { useState, useEffect } from "react";
 import { Link } from "react-router-dom";
 import { Sparkles, FileText, Send, Calendar, TrendingUp, RefreshCw, Edit, Trash2, Rocket, CheckCircle, Copy, ImageIcon, Settings, Package } from "lucide-react";
 import { AgentPromptEditor } from '@/components/AgentPromptEditor';
+import { StagingContent } from '@/components/StagingContent';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -925,17 +926,7 @@ const ContentCenter = () => {
               </TabsContent>
 
               <TabsContent value="staging">
-                <Card>
-                  <CardHeader>
-                    <CardTitle>Staging Area</CardTitle>
-                    <CardDescription>
-                      Add media to your content before saving or posting
-                    </CardDescription>
-                  </CardHeader>
-                  <CardContent>
-                    <p className="text-muted-foreground">Staging content will appear here</p>
-                  </CardContent>
-                </Card>
+                <StagingContent />
               </TabsContent>
 
               <TabsContent value="schedule">
