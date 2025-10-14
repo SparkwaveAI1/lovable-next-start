@@ -99,6 +99,19 @@ export default function LateConnections() {
     }
   };
 
+  const handleBusinessChange = (id: string) => {
+    const businesses = [
+      { id: '456dc53b-d9d9-41b0-bc33-4f4c4a791eff', slug: 'fight-flow-academy', name: 'Fight Flow Academy' },
+      { id: '5a9bbfcf-fae5-4063-9780-bcbe366bae88', slug: 'sparkwave-ai', name: 'Sparkwave AI' },
+      { id: '18d0dbb1-a82d-4477-a9f8-816a1fa2ee08', slug: 'persona-ai', name: 'PersonaAI' },
+      { id: '350b8fcb-9bfe-4b53-9548-c6ffdb1d3cb5', slug: 'charx-world', name: 'CharX World' },
+    ];
+    const business = businesses.find(b => b.id === id);
+    if (business) {
+      setSelectedBusiness(business);
+    }
+  };
+
   const copyToClipboard = (text: string) => {
     navigator.clipboard.writeText(text);
     toast.success('Copied to clipboard');
@@ -109,6 +122,7 @@ export default function LateConnections() {
       <div className="min-h-screen bg-background">
         <DashboardHeader 
           selectedBusinessId={undefined}
+          onBusinessChange={handleBusinessChange}
         />
         <div className="container mx-auto p-8">
           <p className="text-muted-foreground">Please select a business</p>
@@ -121,6 +135,7 @@ export default function LateConnections() {
     <div className="min-h-screen bg-background">
       <DashboardHeader 
         selectedBusinessId={selectedBusiness.id}
+        onBusinessChange={handleBusinessChange}
       />
       
       <div className="container mx-auto p-8">
