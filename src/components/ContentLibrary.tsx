@@ -7,9 +7,10 @@ import { Card, CardContent, CardFooter, CardHeader } from "@/components/ui/card"
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Calendar, Clock, Edit2, Trash2, Image as ImageIcon, Video, CheckCircle, Copy, ArrowRight } from "lucide-react";
+import { Calendar, Clock, Edit2, Trash2, Image as ImageIcon, Video, CheckCircle, Copy, ArrowRight, ImagePlus } from "lucide-react";
 import { toast } from "sonner";
 import { markAsPosted } from "@/lib/schedulingService";
+import { MediaSelector } from './MediaSelector';
 
 interface LibraryContent {
   id: string;
@@ -45,6 +46,8 @@ export function ContentLibrary({ businessId, onSchedule, onEdit }: ContentLibrar
   const [allTags, setAllTags] = useState<string[]>([]);
   const [selectedContent, setSelectedContent] = useState<LibraryContent | null>(null);
   const [dialogOpen, setDialogOpen] = useState(false);
+  const [mediaSelectorOpen, setMediaSelectorOpen] = useState(false);
+  const [selectedContentId, setSelectedContentId] = useState<string | null>(null);
 
   useEffect(() => {
     loadContent();
@@ -189,6 +192,20 @@ export function ContentLibrary({ businessId, onSchedule, onEdit }: ContentLibrar
       console.error('Unexpected error:', error);
       toast.error('Failed to move content to staging');
     }
+  };
+
+  const handleOpenMediaSelector = (contentId: string) => {
+    setSelectedContentId(contentId);
+    setMediaSelectorOpen(true);
+  };
+
+  const handleCloseMediaSelector = () => {
+    setMediaSelectorOpen(false);
+    setSelectedContentId(null);
+  };
+
+  const handleMediaAttached = () => {
+    loadContent(); // Reload library to show new media
   };
 
   // Filter content
@@ -349,13 +366,13 @@ export function ContentLibrary({ businessId, onSchedule, onEdit }: ContentLibrar
 
                 <CardFooter className="pt-3 border-t flex flex-wrap gap-2">
                   <Button
-                    size="sm"
                     variant="outline"
-                    onClick={() => handleMoveToStaging(item)}
+                    size="sm"
+                    onClick={() => handleOpenMediaSelector(item.id)}
                     className="gap-2"
                   >
-                    <ArrowRight className="h-4 w-4" />
-                    Move to Staging
+                    <ImagePlus className="h-4 w-4" />
+                    {item.media && item.media.length > 0 ? 'Edit Media' : 'Add Media'}
                   </Button>
                   <Button
                     size="sm"
@@ -542,6 +559,17 @@ export function ContentLibrary({ businessId, onSchedule, onEdit }: ContentLibrar
           )}
         </DialogContent>
       </Dialog>
+
+      {selectedContentId && (
+        <MediaSelector
+          open={mediaSelectorOpen}
+          onClose={handleCloseMediaSelector}
+          businessId={businessId}
+          contentId={selectedContentId}
+          onMediaAttached={handleMediaAttached}
+          tableName="content_media"
+        />
+      )}
     </div>
   );
 }
