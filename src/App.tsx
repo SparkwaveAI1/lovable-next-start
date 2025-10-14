@@ -12,6 +12,7 @@ import EmployeeUpload from "./pages/EmployeeUpload";
 import ServiceRequests from "./pages/ServiceRequests";
 import Auth from "./pages/Auth";
 import LateSetup from "./pages/LateSetup";
+import LateConnections from "./pages/LateConnections";
 import ProtectedRoute from "./components/ProtectedRoute";
 import { BusinessProvider } from "@/contexts/BusinessContext";
 
@@ -33,6 +34,7 @@ const App = () => (
             <Route path="/media-library" element={<ProtectedRoute><MediaLibraryPage /></ProtectedRoute>} />
             <Route path="/service-requests" element={<ProtectedRoute><ServiceRequests /></ProtectedRoute>} />
             <Route path="/late-setup" element={<ProtectedRoute><LateSetup /></ProtectedRoute>} />
+            <Route path="/late-connections" element={<ProtectedRoute><LateConnections /></ProtectedRoute>} />
             {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
             <Route path="*" element={<NotFound />} />
           </Routes>
