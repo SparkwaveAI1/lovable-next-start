@@ -240,6 +240,53 @@ export type Database = {
           },
         ]
       }
+      business_permissions: {
+        Row: {
+          business_id: string
+          created_at: string | null
+          expires_at: string | null
+          granted_at: string | null
+          granted_by: string | null
+          id: string
+          is_active: boolean | null
+          permission_level: Database["public"]["Enums"]["business_permission_level"]
+          updated_at: string | null
+          user_id: string
+        }
+        Insert: {
+          business_id: string
+          created_at?: string | null
+          expires_at?: string | null
+          granted_at?: string | null
+          granted_by?: string | null
+          id?: string
+          is_active?: boolean | null
+          permission_level?: Database["public"]["Enums"]["business_permission_level"]
+          updated_at?: string | null
+          user_id: string
+        }
+        Update: {
+          business_id?: string
+          created_at?: string | null
+          expires_at?: string | null
+          granted_at?: string | null
+          granted_by?: string | null
+          id?: string
+          is_active?: boolean | null
+          permission_level?: Database["public"]["Enums"]["business_permission_level"]
+          updated_at?: string | null
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "business_permissions_business_id_fkey"
+            columns: ["business_id"]
+            isOneToOne: false
+            referencedRelation: "businesses"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       businesses: {
         Row: {
           business_type: string
@@ -1207,6 +1254,14 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      can_access_business: {
+        Args: { p_business_id: string; p_user_id?: string }
+        Returns: boolean
+      }
+      get_user_business_permission: {
+        Args: { p_business_id: string; p_user_id?: string }
+        Returns: Database["public"]["Enums"]["business_permission_level"]
+      }
       has_role: {
         Args: {
           _role: Database["public"]["Enums"]["app_role"]
@@ -1226,6 +1281,7 @@ export type Database = {
         | "content_manager"
         | "content_creator"
         | "viewer"
+      business_permission_level: "admin" | "manager" | "creator" | "viewer"
     }
     CompositeTypes: {
       [_ in never]: never
@@ -1360,6 +1416,7 @@ export const Constants = {
         "content_creator",
         "viewer",
       ],
+      business_permission_level: ["admin", "manager", "creator", "viewer"],
     },
   },
 } as const
