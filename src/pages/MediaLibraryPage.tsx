@@ -554,8 +554,8 @@ export default function MediaLibraryPage() {
               <ScrollArea className="h-[calc(100vh-400px)] sm:h-[600px]">
                 <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-3 sm:gap-4 pr-2 sm:pr-4">
                   {filteredMedia.map((item) => (
-                    <Card key={item.id} className="overflow-hidden cursor-pointer" onClick={() => setSelectedMedia(item)}>
-                      <div className="aspect-square relative">
+                    <Card key={item.id} className="overflow-hidden cursor-pointer flex flex-col h-full" onClick={() => setSelectedMedia(item)}>
+                      <div className="aspect-square relative shrink-0">
                         {item.file_type === 'image' ? (
                           <img
                             src={item.file_path}
@@ -624,7 +624,7 @@ export default function MediaLibraryPage() {
                           </Button>
                         </div>
                       </div>
-                      <div className="p-3 space-y-2">
+                      <div className="p-3 space-y-2 min-h-[120px] flex flex-col">
                         <p className="text-xs font-medium truncate">{item.file_name}</p>
                         {!item.description ? (
                           <Badge variant="outline" className="text-xs">
