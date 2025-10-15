@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -6,12 +6,7 @@ import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Upload, CheckCircle, Image as ImageIcon, Video } from "lucide-react";
 import { toast } from "sonner";
-
-interface Business {
-  id: string;
-  name: string;
-  slug: string;
-}
+import { useBusinesses } from "@/hooks/useBusinesses";
 
 interface UploadedFile {
   name: string;
@@ -20,35 +15,11 @@ interface UploadedFile {
 }
 
 export default function EmployeeUpload() {
-  const [businesses, setBusinesses] = useState<Business[]>([]);
+  const { data: businesses = [], isLoading } = useBusinesses();
   const [selectedBusiness, setSelectedBusiness] = useState<string>("");
   const [uploading, setUploading] = useState(false);
   const [isDragging, setIsDragging] = useState(false);
   const [uploadedFiles, setUploadedFiles] = useState<UploadedFile[]>([]);
-
-  useEffect(() => {
-    loadBusinesses();
-  }, []);
-
-  const loadBusinesses = async () => {
-    try {
-      const { data, error } = await supabase
-        .from('businesses')
-        .select('id, name, slug')
-        .order('name');
-
-      if (error) throw error;
-      setBusinesses(data || []);
-      
-      if (data && data.length > 0) {
-        const fightFlow = data.find(b => b.name === 'Fight Flow Academy');
-        setSelectedBusiness(fightFlow?.id || data[0].id);
-      }
-    } catch (error) {
-      console.error('Error loading businesses:', error);
-      toast.error('Failed to load businesses');
-    }
-  };
 
   const handleDragEnter = (e: React.DragEvent) => {
     e.preventDefault();

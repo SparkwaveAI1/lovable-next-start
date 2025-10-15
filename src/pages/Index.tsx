@@ -10,10 +10,12 @@ import { supabase } from "@/integrations/supabase/client"
 import { sendSMS } from '@/lib/smsService'
 import { ContactsTable } from '@/components/ContactsTable'
 import { useBusinessContext } from "@/contexts/BusinessContext"
+import { useBusinesses } from "@/hooks/useBusinesses"
 // import { GoHighLevelConfig } from "@/components/GoHighLevelConfig"
 
 const Index = () => {
   const { selectedBusiness, setSelectedBusiness } = useBusinessContext();
+  const { data: businesses = [] } = useBusinesses();
   const [stats, setStats] = useState({
     activeAutomations: 0,
     todayActivity: 0,
@@ -39,12 +41,6 @@ const Index = () => {
       <DashboardHeader 
         selectedBusinessId={selectedBusiness?.id}
         onBusinessChange={(id) => {
-          const businesses = [
-            { id: '456dc53b-d9d9-41b0-bc33-4f4c4a791eff', slug: 'fight-flow-academy', name: 'Fight Flow Academy' },
-            { id: '5a9bbfcf-fae5-4063-9780-bcbe366bae88', slug: 'sparkwave-ai', name: 'Sparkwave AI' },
-            { id: '18d0dbb1-a82d-4477-a9f8-816a1fa2ee08', slug: 'persona-ai', name: 'PersonaAI' },
-            { id: '350b8fcb-9bfe-4b53-9548-c6ffdb1d3cb5', slug: 'charx-world', name: 'CharX World' }
-          ];
           const business = businesses.find(b => b.id === id);
           if (business) setSelectedBusiness(business);
         }}

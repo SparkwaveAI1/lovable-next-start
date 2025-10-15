@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react"
+import { useState } from "react"
 import { Check, ChevronsUpDown, Building2 } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { Button } from "@/components/ui/button"
@@ -14,8 +14,7 @@ import {
   PopoverContent,
   PopoverTrigger,
 } from "@/components/ui/popover"
-import { getBusinesses } from "@/lib/supabase"
-import { Business } from "@/types/business"
+import { useBusinesses } from "@/hooks/useBusinesses"
 
 interface BusinessSwitcherProps {
   selectedBusinessId?: string
@@ -24,19 +23,7 @@ interface BusinessSwitcherProps {
 
 export function BusinessSwitcher({ selectedBusinessId, onBusinessChange }: BusinessSwitcherProps) {
   const [open, setOpen] = useState(false)
-  const [businesses, setBusinesses] = useState<Business[]>([])
-  const [loading, setLoading] = useState(true)
-  
-  useEffect(() => {
-    const fetchBusinesses = async () => {
-      setLoading(true)
-      const data = await getBusinesses()
-      setBusinesses(data)
-      setLoading(false)
-    }
-    
-    fetchBusinesses()
-  }, [])
+  const { data: businesses = [], isLoading: loading } = useBusinesses()
   
   const selectedBusiness = businesses.find(business => business.id === selectedBusinessId)
 

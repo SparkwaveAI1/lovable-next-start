@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -7,6 +7,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import { CheckCircle2, XCircle, Loader2 } from "lucide-react";
+import { useBusinesses } from "@/hooks/useBusinesses";
 
 interface AccountMapping {
   account: any;
@@ -22,34 +23,19 @@ interface SetupResult {
 }
 
 export default function LateSetup() {
+  const { data: businesses = [], isLoading: loadingBusinesses } = useBusinesses();
   const [apiKey, setApiKey] = useState("");
   const [accounts, setAccounts] = useState<any[]>([]);
   const [mappings, setMappings] = useState<AccountMapping[]>([]);
   const [loading, setLoading] = useState(false);
   const [setupLoading, setSetupLoading] = useState(false);
   const [setupResults, setSetupResults] = useState<SetupResult[]>([]);
-  const [businesses, setBusinesses] = useState<any[]>([]);
   const [testContent, setTestContent] = useState('');
   const [testBusiness, setTestBusiness] = useState('');
   const [testPlatform, setTestPlatform] = useState('');
   const [testImageUrl, setTestImageUrl] = useState('');
   const [testResult, setTestResult] = useState<any>(null);
   const [isTesting, setIsTesting] = useState(false);
-
-  useEffect(() => {
-    fetchBusinesses();
-  }, []);
-
-  const fetchBusinesses = async () => {
-    const { data, error } = await supabase
-      .from('businesses')
-      .select('id, name, slug')
-      .order('name');
-    
-    if (!error && data) {
-      setBusinesses(data);
-    }
-  };
 
   const mapAccountToBusiness = (account: any): { slug: string | null; name: string | null } => {
     const username = (account.username || account.name || '').toLowerCase();

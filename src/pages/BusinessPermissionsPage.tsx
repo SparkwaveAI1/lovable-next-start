@@ -65,13 +65,29 @@ export default function BusinessPermissionsPage() {
 
       setPermissions(permsData || []);
 
-      // Load businesses for the dropdown
-      const { data: businessData, error: bizError } = await supabase
-        .from('businesses')
-        .select('id, name')
-        .order('name');
-
-      if (bizError) throw bizError;
+      // Load businesses - permissions are now enforced at the query level
+      const { data: isSuperAdmin } = await supabase.rpc('is_super_admin');
+      
+      let businessData;
+      if (isSuperAdmin) {
+        const { data, error: bizError } = await supabase
+          .from('businesses')
+          .select('id, name')
+          .order('name');
+        if (bizError) throw bizError;
+        businessData = data;
+      } else {
+        const { data: { user } } = await supabase.auth.getUser();
+        if (user) {
+          const { data, error: bizError } = await supabase
+            .from('business_permissions')
+            .select('business:businesses(id, name)')
+            .eq('user_id', user.id)
+            .eq('is_active', true);
+          if (bizError) throw bizError;
+          businessData = data?.map(p => p.business).filter(Boolean);
+        }
+      }
       setBusinesses(businessData || []);
 
     } catch (error) {
