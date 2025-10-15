@@ -9,7 +9,7 @@ import { Label } from '@/components/ui/label';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
-import { Shield, UserPlus, Trash2, Clock, CheckCircle, XCircle, Copy } from 'lucide-react';
+import { Shield, UserPlus, Trash2, Clock, CheckCircle, XCircle } from 'lucide-react';
 
 interface Permission {
   id: string;
@@ -29,27 +29,18 @@ export default function BusinessPermissionsPage() {
   const [businesses, setBusinesses] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [isSuperAdmin, setIsSuperAdmin] = useState(false);
-  const [currentUserId, setCurrentUserId] = useState<string>('');
   const { toast } = useToast();
   
   // Form state for adding permissions
   const [selectedBusiness, setSelectedBusiness] = useState('');
-  const [userId, setUserId] = useState('');
+  const [userEmail, setUserEmail] = useState('');
   const [permissionLevel, setPermissionLevel] = useState<'admin' | 'manager' | 'creator' | 'viewer'>('viewer');
   const [isGranting, setIsGranting] = useState(false);
 
   useEffect(() => {
     checkSuperAdmin();
     loadData();
-    getCurrentUserId();
   }, []);
-
-  const getCurrentUserId = async () => {
-    const { data: { user } } = await supabase.auth.getUser();
-    if (user) {
-      setCurrentUserId(user.id);
-    }
-  };
 
   const checkSuperAdmin = async () => {
     const { data } = await supabase.rpc('is_super_admin');
@@ -96,7 +87,7 @@ export default function BusinessPermissionsPage() {
   };
 
   const grantPermission = async () => {
-    if (!selectedBusiness || !userId || !permissionLevel) {
+    if (!selectedBusiness || !userEmail || !permissionLevel) {
       toast({
         title: 'Error',
         description: 'Please fill in all fields',
@@ -107,30 +98,22 @@ export default function BusinessPermissionsPage() {
 
     setIsGranting(true);
     try {
-      const { data: { user } } = await supabase.auth.getUser();
-      
-      // Grant the permission
-      const { error: permError } = await supabase
-        .from('business_permissions')
-        .upsert({
-          user_id: userId,
-          business_id: selectedBusiness,
-          permission_level: permissionLevel,
-          granted_by: user?.id,
-          is_active: true
-        }, {
-          onConflict: 'user_id,business_id'
-        });
+      // Use the new RPC function to grant permission by email
+      const { error } = await supabase.rpc('grant_business_permission_by_email', {
+        user_email: userEmail,
+        p_business_id: selectedBusiness,
+        p_permission_level: permissionLevel
+      });
 
-      if (permError) throw permError;
+      if (error) throw error;
 
       toast({
         title: 'Success',
-        description: 'Permission granted successfully',
+        description: `Permission granted to ${userEmail}`,
       });
 
       // Reset form
-      setUserId('');
+      setUserEmail('');
       setSelectedBusiness('');
       setPermissionLevel('viewer');
       
@@ -174,14 +157,6 @@ export default function BusinessPermissionsPage() {
     }
   };
 
-  const copyToClipboard = (text: string) => {
-    navigator.clipboard.writeText(text);
-    toast({
-      title: 'Copied',
-      description: 'User ID copied to clipboard',
-    });
-  };
-
   const getPermissionBadgeVariant = (level: string): "default" | "secondary" | "destructive" | "outline" => {
     switch (level) {
       case 'admin': return 'destructive';
@@ -215,20 +190,6 @@ export default function BusinessPermissionsPage() {
 
           {isSuperAdmin && (
             <>
-              {/* Current User ID for Testing */}
-              <Alert>
-                <AlertDescription className="flex items-center justify-between">
-                  <span>Your User ID (for testing): <code className="text-xs bg-muted px-2 py-1 rounded">{currentUserId}</code></span>
-                  <Button 
-                    size="sm" 
-                    variant="ghost" 
-                    onClick={() => copyToClipboard(currentUserId)}
-                  >
-                    <Copy className="h-4 w-4" />
-                  </Button>
-                </AlertDescription>
-              </Alert>
-
               {/* Grant Permission Form */}
               <Card className="bg-muted/30">
                 <CardHeader>
@@ -239,12 +200,12 @@ export default function BusinessPermissionsPage() {
                 </CardHeader>
                 <CardContent className="grid grid-cols-1 md:grid-cols-4 gap-4">
                   <div>
-                    <Label>User ID</Label>
+                    <Label>User Email</Label>
                     <Input
-                      type="text"
-                      placeholder="Enter user UUID"
-                      value={userId}
-                      onChange={(e) => setUserId(e.target.value)}
+                      type="email"
+                      placeholder="user@example.com"
+                      value={userEmail}
+                      onChange={(e) => setUserEmail(e.target.value)}
                     />
                   </div>
                   
@@ -317,17 +278,7 @@ export default function BusinessPermissionsPage() {
                         permissions.map((perm) => (
                           <TableRow key={perm.id}>
                             <TableCell>
-                              <div className="flex items-center gap-2">
-                                <code className="text-xs">{perm.user_id.slice(0, 8)}...</code>
-                                <Button
-                                  size="sm"
-                                  variant="ghost"
-                                  onClick={() => copyToClipboard(perm.user_id)}
-                                  className="h-6 w-6 p-0"
-                                >
-                                  <Copy className="h-3 w-3" />
-                                </Button>
-                              </div>
+                              <code className="text-xs">{perm.user_id.slice(0, 8)}...</code>
                             </TableCell>
                             <TableCell>{perm.businesses?.name || 'Unknown'}</TableCell>
                             <TableCell>

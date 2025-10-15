@@ -1262,6 +1262,22 @@ export type Database = {
         Args: { p_business_id: string; p_user_id?: string }
         Returns: Database["public"]["Enums"]["business_permission_level"]
       }
+      get_user_email_by_id: {
+        Args: { p_user_id: string }
+        Returns: string
+      }
+      get_user_id_by_email: {
+        Args: { user_email: string }
+        Returns: string
+      }
+      grant_business_permission_by_email: {
+        Args: {
+          p_business_id: string
+          p_permission_level: Database["public"]["Enums"]["business_permission_level"]
+          user_email: string
+        }
+        Returns: undefined
+      }
       has_role: {
         Args: {
           _role: Database["public"]["Enums"]["app_role"]
