@@ -552,9 +552,9 @@ export default function MediaLibraryPage() {
               </Card>
             ) : (
               <ScrollArea className="h-[calc(100vh-400px)] sm:h-[600px]">
-                <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-3 sm:gap-4 pr-2 sm:pr-4 items-start">
+                <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-3 sm:gap-4 pr-2 sm:pr-4 items-start content-start">
                   {filteredMedia.map((item) => (
-                    <Card key={item.id} className="overflow-hidden cursor-pointer flex flex-col" onClick={() => setSelectedMedia(item)}>
+                    <Card key={item.id} className="overflow-hidden cursor-pointer flex flex-col self-start h-fit" onClick={() => setSelectedMedia(item)}>
                       <div className="aspect-square relative shrink-0">
                         {item.file_type === 'image' ? (
                           <img
