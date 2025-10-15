@@ -13,6 +13,7 @@ import ServiceRequests from "./pages/ServiceRequests";
 import Auth from "./pages/Auth";
 import LateSetup from "./pages/LateSetup";
 import LateConnections from "./pages/LateConnections";
+import AdminSetupPage from "./pages/AdminSetupPage";
 import ProtectedRoute from "./components/ProtectedRoute";
 import { BusinessProvider } from "@/contexts/BusinessContext";
 
@@ -35,6 +36,7 @@ const App = () => (
             <Route path="/service-requests" element={<ProtectedRoute><ServiceRequests /></ProtectedRoute>} />
             <Route path="/late-setup" element={<ProtectedRoute><LateSetup /></ProtectedRoute>} />
             <Route path="/late-connections" element={<ProtectedRoute><LateConnections /></ProtectedRoute>} />
+            <Route path="/admin-setup" element={<ProtectedRoute><AdminSetupPage /></ProtectedRoute>} />
             {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
             <Route path="*" element={<NotFound />} />
           </Routes>
