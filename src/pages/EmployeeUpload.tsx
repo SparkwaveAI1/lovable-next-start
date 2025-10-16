@@ -6,7 +6,7 @@ import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Upload, CheckCircle, Image as ImageIcon, Video } from "lucide-react";
 import { toast } from "sonner";
-import { useBusinesses } from "@/hooks/useBusinesses";
+import { usePublicBusinesses } from "@/hooks/useBusinesses";
 
 interface UploadedFile {
   name: string;
@@ -15,7 +15,7 @@ interface UploadedFile {
 }
 
 export default function EmployeeUpload() {
-  const { data: businesses = [], isLoading } = useBusinesses();
+  const { data: businesses = [], isLoading } = usePublicBusinesses();
   const [selectedBusiness, setSelectedBusiness] = useState<string>("");
   const [uploading, setUploading] = useState(false);
   const [isDragging, setIsDragging] = useState(false);

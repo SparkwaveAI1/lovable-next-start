@@ -115,3 +115,20 @@ export const useHasPermission = (businessId: string | null, requiredLevel: strin
     enabled: !!businessId,
   });
 };
+
+// Hook to get all businesses without authentication (for public pages)
+export const usePublicBusinesses = () => {
+  return useQuery({
+    queryKey: ['public-businesses'],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('businesses')
+        .select('*')
+        .eq('status', 'active')
+        .order('name');
+        
+      if (error) throw error;
+      return data || [];
+    },
+  });
+};
