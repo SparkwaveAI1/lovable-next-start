@@ -2,11 +2,8 @@ import { useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Label } from "@/components/ui/label";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Upload, CheckCircle, Image as ImageIcon, Video } from "lucide-react";
+import { Upload, CheckCircle, Video } from "lucide-react";
 import { toast } from "sonner";
-import { usePublicBusinesses } from "@/hooks/useBusinesses";
 
 interface UploadedFile {
   name: string;
@@ -14,9 +11,11 @@ interface UploadedFile {
   preview?: string;
 }
 
+// Hard-coded for Fight Flow Academy
+const FIGHT_FLOW_BUSINESS_ID = '456dc53b-d9d9-41b0-bc33-4f4c4a791eff';
+const FIGHT_FLOW_SLUG = 'fight-flow-academy';
+
 export default function EmployeeUpload() {
-  const { data: businesses = [], isLoading } = usePublicBusinesses();
-  const [selectedBusiness, setSelectedBusiness] = useState<string>("");
   const [uploading, setUploading] = useState(false);
   const [isDragging, setIsDragging] = useState(false);
   const [uploadedFiles, setUploadedFiles] = useState<UploadedFile[]>([]);
@@ -58,11 +57,6 @@ export default function EmployeeUpload() {
     const files = event.target.files;
     if (!files || files.length === 0) return;
 
-    if (!selectedBusiness) {
-      toast.error('Please select a business first');
-      return;
-    }
-
     setUploading(true);
 
     // Initialize upload status for all files
@@ -74,8 +68,6 @@ export default function EmployeeUpload() {
     setUploadedFiles(prev => [...prev, ...fileStatuses]);
 
     try {
-      const businessSlug = businesses.find(b => b.id === selectedBusiness)?.slug;
-
       for (let i = 0; i < files.length; i++) {
         const file = files[i];
         const fileIndex = uploadedFiles.length + i;
@@ -92,7 +84,7 @@ export default function EmployeeUpload() {
         // Upload to storage
         const timestamp = Date.now();
         const fileExt = file.name.split('.').pop();
-        const fileName = `${businessSlug}/${timestamp}_${Math.random().toString(36).substring(7)}.${fileExt}`;
+        const fileName = `${FIGHT_FLOW_SLUG}/${timestamp}_${Math.random().toString(36).substring(7)}.${fileExt}`;
 
         const { error: uploadError } = await supabase.storage
           .from('media')
@@ -121,7 +113,7 @@ export default function EmployeeUpload() {
             height = vHeight;
             
             // Upload thumbnail
-            const thumbnailFileName = `${businessSlug}/thumbnails/${timestamp}_${Math.random().toString(36).substring(7)}.jpg`;
+            const thumbnailFileName = `${FIGHT_FLOW_SLUG}/thumbnails/${timestamp}_${Math.random().toString(36).substring(7)}.jpg`;
             const { error: thumbError } = await supabase.storage
               .from('media')
               .upload(thumbnailFileName, blob);
@@ -141,7 +133,7 @@ export default function EmployeeUpload() {
         const { data: insertedMedia, error: dbError } = await supabase
           .from('media_assets')
           .insert({
-            business_id: selectedBusiness,
+            business_id: FIGHT_FLOW_BUSINESS_ID,
             file_name: file.name,
             file_path: publicUrl,
             file_type: isImage ? 'image' : 'video',
@@ -169,7 +161,7 @@ export default function EmployeeUpload() {
             mediaId: insertedMedia.id,
             fileType: isImage ? 'image' : 'video',
             filePath: publicUrl,
-            businessId: selectedBusiness
+            businessId: FIGHT_FLOW_BUSINESS_ID
           }
         }).catch(error => {
           console.error('AI analysis error:', error);
@@ -278,9 +270,9 @@ export default function EmployeeUpload() {
   return (
     <div className="container mx-auto p-6 max-w-4xl">
       <div className="text-center mb-8">
-        <h1 className="text-3xl font-bold mb-2">Employee Media Upload</h1>
+        <h1 className="text-3xl font-bold mb-2">Fight Flow Academy - Media Upload</h1>
         <p className="text-muted-foreground">
-          Upload images and videos for social media content
+          Upload training photos and videos for social media
         </p>
       </div>
 
@@ -289,23 +281,7 @@ export default function EmployeeUpload() {
           <CardTitle>Upload Media</CardTitle>
         </CardHeader>
         <CardContent className="space-y-4">
-          <div className="space-y-2">
-            <Label>Select Business</Label>
-            <Select value={selectedBusiness} onValueChange={setSelectedBusiness}>
-              <SelectTrigger>
-                <SelectValue placeholder="Choose a business..." />
-              </SelectTrigger>
-              <SelectContent>
-                {businesses.map(business => (
-                  <SelectItem key={business.id} value={business.id}>
-                    {business.name}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
-
-          <div 
+          <div
             className={`border-2 border-dashed rounded-lg p-8 text-center transition-colors ${
               isDragging 
                 ? 'border-primary bg-primary/5' 
@@ -321,7 +297,7 @@ export default function EmployeeUpload() {
               accept="image/*,video/*"
               multiple
               onChange={handleFileSelect}
-              disabled={uploading || !selectedBusiness}
+              disabled={uploading}
               className="hidden"
               id="employee-upload"
             />
@@ -338,7 +314,7 @@ export default function EmployeeUpload() {
               </p>
               <Button 
                 type="button" 
-                disabled={uploading || !selectedBusiness}
+                disabled={uploading}
                 onClick={() => document.getElementById('employee-upload')?.click()}
                 className="gap-2"
               >
