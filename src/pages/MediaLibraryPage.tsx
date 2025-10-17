@@ -339,6 +339,20 @@ export default function MediaLibraryPage() {
 
   const handleDownload = async (item: MediaAsset) => {
     try {
+      // For videos, use direct download link to avoid CORS and memory issues
+      if (item.file_type === 'video') {
+        const a = document.createElement('a');
+        a.href = item.file_path;
+        a.download = item.file_name;
+        a.target = '_blank'; // Fallback: open in new tab if download fails
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        toast.success('Download started');
+        return;
+      }
+
+      // For images, keep the current blob approach (works fine)
       const response = await fetch(item.file_path);
       const blob = await response.blob();
       
@@ -368,7 +382,7 @@ export default function MediaLibraryPage() {
       toast.success('Download started');
     } catch (error) {
       console.error('Error downloading file:', error);
-      toast.error('Failed to download file');
+      toast.error(`Failed to download ${item.file_type}: ${error instanceof Error ? error.message : 'Unknown error'}`);
     }
   };
 
