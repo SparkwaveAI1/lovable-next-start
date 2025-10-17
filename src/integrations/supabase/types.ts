@@ -297,6 +297,7 @@ export type Database = {
           late_facebook_account_id: string | null
           late_instagram_account_id: string | null
           late_linkedin_account_id: string | null
+          late_profile_id: string | null
           late_tiktok_account_id: string | null
           late_twitter_account_id: string | null
           name: string
@@ -314,6 +315,7 @@ export type Database = {
           late_facebook_account_id?: string | null
           late_instagram_account_id?: string | null
           late_linkedin_account_id?: string | null
+          late_profile_id?: string | null
           late_tiktok_account_id?: string | null
           late_twitter_account_id?: string | null
           name: string
@@ -331,6 +333,7 @@ export type Database = {
           late_facebook_account_id?: string | null
           late_instagram_account_id?: string | null
           late_linkedin_account_id?: string | null
+          late_profile_id?: string | null
           late_tiktok_account_id?: string | null
           late_twitter_account_id?: string | null
           name?: string
