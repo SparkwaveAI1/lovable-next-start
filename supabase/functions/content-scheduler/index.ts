@@ -480,7 +480,8 @@ async function postViaLate(
         media_assets (
           file_path,
           file_type,
-          thumbnail_path
+          thumbnail_path,
+          mime_type
         )
       `)
       .eq('content_id', item.id)
@@ -488,6 +489,7 @@ async function postViaLate(
     
     const imageUrls: string[] = [];
     let videoUrl: string | null = null;
+    let videoMimeType: string | null = null;
     
     if (contentMedia && contentMedia.length > 0) {
       for (const media of contentMedia) {
@@ -496,17 +498,36 @@ async function postViaLate(
           imageUrls.push(asset.file_path);
         } else if (asset.file_type === 'video' && !videoUrl) {
           videoUrl = asset.file_path;
+          videoMimeType = asset.mime_type;
         }
       }
     }
     
+    // Validate Instagram video format
+    if (platform === 'instagram' && videoUrl) {
+      const isMovFile = videoUrl.toLowerCase().endsWith('.mov');
+      const isQuickTime = videoMimeType === 'video/quicktime';
+      
+      if (isMovFile || isQuickTime) {
+        throw new Error('Instagram requires MP4 format (H.264/AAC codec). Provided MOV file. Please convert to MP4 or post an image instead.');
+      }
+    }
+    
+    // Combine all media into single array
+    const mediaUrls = [
+      ...imageUrls,
+      ...(videoUrl ? [videoUrl] : [])
+    ];
+    
+    console.log(`📎 Media: ${mediaUrls.length} file(s), Account ID: ${accountId}`);
+    
     const { data, error } = await supabase.functions.invoke('post-via-late', {
       body: {
         businessId: item.business_id,
+        platform: platform,
         content: item.content,
-        platforms: [platform],
-        imageUrls: imageUrls.length > 0 ? imageUrls : undefined,
-        videoUrl: videoUrl || undefined
+        mediaUrls: mediaUrls.length > 0 ? mediaUrls : undefined,
+        accountId: accountId
       }
     });
     
@@ -522,6 +543,7 @@ async function postViaLate(
       platform: platform,
       content: item.content,
       posted_at: new Date().toISOString(),
+      late_post_id: data?.postId,
       late_response: data
     };
   } catch (error) {
@@ -531,7 +553,8 @@ async function postViaLate(
       platform: platform,
       content: item.content,
       posted_at: new Date().toISOString(),
-      error: error.message
+      error: error.message,
+      error_details: error.stack
     };
   }
 }
