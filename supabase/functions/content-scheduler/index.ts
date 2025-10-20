@@ -224,7 +224,7 @@ Deno.serve(async (req) => {
           
           if (postResult.success) {
             // Mark as posted
-            await supabase
+            const { error: updateError } = await supabase
               .from('scheduled_content')
               .update({
                 status: 'posted',
@@ -235,6 +235,11 @@ Deno.serve(async (req) => {
                 }
               })
               .eq('id', item.id);
+
+            if (updateError) {
+              console.error(`❌ CRITICAL: Failed to update status to 'posted' for ${item.id}:`, updateError);
+              throw new Error(`Status update failed: ${updateError.message}`);
+            }
 
             console.log(`✅ Successfully posted content: ${item.id}`);
             results.push({
@@ -251,13 +256,17 @@ Deno.serve(async (req) => {
           console.error(`❌ Failed to post content ${item.id}:`, error);
           
           // Mark as failed
-          await supabase
+          const { error: updateError } = await supabase
             .from('scheduled_content')
             .update({
               status: 'failed',
               error_message: error.message || 'Unknown posting error'
             })
             .eq('id', item.id);
+
+          if (updateError) {
+            console.error(`❌ CRITICAL: Failed to update status to 'failed' for ${item.id}:`, updateError);
+          }
 
           results.push({
             id: item.id,
