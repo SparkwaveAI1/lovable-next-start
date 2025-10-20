@@ -7,150 +7,156 @@ const corsHeaders = {
 };
 
 serve(async (req) => {
+  // Handle CORS preflight
   if (req.method === 'OPTIONS') {
     return new Response(null, { headers: corsHeaders });
   }
 
   try {
-    const supabaseClient = createClient(
-      Deno.env.get('SUPABASE_URL') ?? '',
-      Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
-    );
-
-    const { 
-      businessId, 
-      content, 
-      platforms,  // ['twitter', 'instagram', 'tiktok']
-      scheduledFor,
-      imageUrls,
-      videoUrl
-    } = await req.json();
-
-    console.log('📝 Post request:', { businessId, platforms, contentLength: content?.length });
-
-    const lateApiKey = Deno.env.get('LATE_API_KEY');
+    console.log('📡 post-via-late function started');
     
+    // Get the Late API key
+    const lateApiKey = Deno.env.get('LATE_API_KEY');
     if (!lateApiKey) {
+      console.error('❌ LATE_API_KEY not configured');
       throw new Error('Late API key not configured');
     }
 
-    // Get business with account IDs
-    const { data: business, error: businessError } = await supabaseClient
-      .from('businesses')
-      .select(`
-        name,
-        late_twitter_account_id,
-        late_instagram_account_id,
-        late_tiktok_account_id,
-        late_linkedin_account_id,
-        late_facebook_account_id
-      `)
-      .eq('id', businessId)
-      .maybeSingle();
-
-    if (businessError) {
-      console.error('Database error:', businessError);
-      throw new Error(`Database error: ${businessError.message}`);
-    }
-
-    if (!business) {
-      throw new Error('Business not found');
-    }
-
-    console.log('🏢 Business:', business.name);
-
-    // Build platforms array for Late API
-    const latePlatforms = platforms.map((platform: string) => {
-      const accountIdMap: Record<string, string | null> = {
-        twitter: business.late_twitter_account_id,
-        instagram: business.late_instagram_account_id,
-        tiktok: business.late_tiktok_account_id,
-        linkedin: business.late_linkedin_account_id,
-        facebook: business.late_facebook_account_id
-      };
-
-      const accountId = accountIdMap[platform.toLowerCase()];
-      
-      if (!accountId) {
-        throw new Error(`${platform} not connected for ${business.name}`);
-      }
-
-      return {
-        platform: platform.toLowerCase(),
-        accountId: accountId
-      };
+    // Parse request body
+    const { businessId, platform, content, mediaUrls, accountId } = await req.json();
+    
+    console.log(`📝 Request details:`, {
+      businessId,
+      platform,
+      contentLength: content?.length,
+      mediaCount: mediaUrls?.length || 0,
+      accountId
     });
 
-    // Build Late API request
-    const lateData: any = {
-      platforms: latePlatforms,
-      content: content
+    if (!businessId || !platform || !content) {
+      throw new Error('Missing required fields: businessId, platform, or content');
+    }
+
+    if (!accountId) {
+      throw new Error(`No Late account ID provided for ${platform}`);
+    }
+
+    // Build Late API request payload
+    const latePayload: any = {
+      content: content,
+      platforms: [{
+        platform: platform,
+        accountId: accountId
+      }],
+      publishNow: true
     };
 
-    // Add media
-    if (imageUrls && imageUrls.length > 0) {
-      lateData.mediaItems = imageUrls.map((url: string) => ({
-        type: 'image',
+    // Add media if provided
+    if (mediaUrls && mediaUrls.length > 0) {
+      console.log(`📎 Adding ${mediaUrls.length} media items`);
+      latePayload.mediaItems = mediaUrls.map((url: string) => ({
+        type: url.match(/\.(mp4|mov|avi)$/i) ? 'video' : 'image',
         url: url
       }));
-      console.log('📸 Adding images:', imageUrls.length);
     }
 
-    if (videoUrl) {
-      lateData.mediaItems = [{
-        type: 'video',
-        url: videoUrl
-      }];
-      console.log('🎥 Adding video:', videoUrl);
+    console.log(`📡 Calling Late API for ${platform}...`);
+    console.log(`   Account ID: ${accountId}`);
+    console.log(`   Payload:`, JSON.stringify(latePayload, null, 2));
+
+    // Call Late API with timeout
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 30000); // 30s timeout
+
+    let response;
+    try {
+      response = await fetch('https://getlate.dev/api/v1/posts', {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${lateApiKey}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(latePayload),
+        signal: controller.signal
+      });
+    } catch (fetchError: any) {
+      clearTimeout(timeoutId);
+      
+      if (fetchError.name === 'AbortError') {
+        console.error('❌ Late API request timed out after 30 seconds');
+        throw new Error('Late API timeout - video upload may be too large or connection slow');
+      }
+      
+      console.error('❌ Late API fetch error:', fetchError);
+      throw new Error(`Network error calling Late API: ${fetchError.message}`);
     }
+    
+    clearTimeout(timeoutId);
 
-    // Add scheduling
-    if (scheduledFor) {
-      lateData.scheduledFor = scheduledFor;
-      console.log('⏰ Scheduling for:', scheduledFor);
-    }
+    console.log(`📊 Late API response status: ${response.status} ${response.statusText}`);
 
-    console.log('📤 Posting to Late API...');
+    // Get response text first (works for both JSON and non-JSON responses)
+    const responseText = await response.text();
+    console.log(`📄 Late API raw response:`, responseText);
 
-    // Call Late API
-    const response = await fetch('https://getlate.dev/api/v1/posts', {
-      method: 'POST',
-      headers: {
-        'Authorization': `Bearer ${lateApiKey}`,
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify(lateData)
-    });
-
-    const result = await response.json();
-
+    // Check if request was successful
     if (!response.ok) {
-      console.error('❌ Late API error:', result);
-      throw new Error(result.message || `Late API error: ${response.status}`);
+      console.error(`❌ Late API returned error status: ${response.status}`);
+      
+      // Try to parse as JSON for structured error
+      let errorMessage = `Late API error (${response.status})`;
+      try {
+        const errorData = JSON.parse(responseText);
+        errorMessage = errorData.error || errorData.message || errorMessage;
+        console.error(`❌ Late API error details:`, errorData);
+      } catch {
+        // Not JSON, use raw text
+        errorMessage = responseText || errorMessage;
+      }
+      
+      throw new Error(errorMessage);
     }
 
-    console.log('✅ Posted via Late:', result.id);
+    // Parse successful response
+    let responseData;
+    try {
+      responseData = JSON.parse(responseText);
+    } catch (parseError) {
+      console.error('❌ Failed to parse Late API response as JSON:', parseError);
+      throw new Error('Invalid JSON response from Late API');
+    }
 
+    console.log(`✅ Successfully posted to ${platform} via Late API`);
+    console.log(`   Post data:`, responseData);
+
+    // Return success
     return new Response(
       JSON.stringify({
         success: true,
-        postId: result.id,
-        platforms: platforms,
-        message: scheduledFor 
-          ? `Scheduled for ${new Date(scheduledFor).toLocaleString()}`
-          : 'Posted successfully!'
+        postId: responseData.post?._id || responseData._id,
+        platform: platform,
+        response: responseData
       }),
-      { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      {
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        status: 200,
+      }
     );
 
-  } catch (error) {
-    console.error('❌ Error:', error);
+  } catch (error: any) {
+    console.error('❌ Error in post-via-late function:', error);
+    console.error('❌ Error stack:', error.stack);
+    
     return new Response(
-      JSON.stringify({ 
-        success: false, 
-        error: error instanceof Error ? error.message : 'Unknown error' 
+      JSON.stringify({
+        success: false,
+        error: error.message || 'Unknown error occurred',
+        details: error.stack
       }),
-      { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 500 }
+      {
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        status: 500,
+      }
     );
   }
 });
