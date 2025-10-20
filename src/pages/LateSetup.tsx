@@ -24,7 +24,6 @@ interface SetupResult {
 
 export default function LateSetup() {
   const { data: businesses = [], isLoading: loadingBusinesses } = useBusinesses();
-  const [apiKey, setApiKey] = useState("");
   const [accounts, setAccounts] = useState<any[]>([]);
   const [mappings, setMappings] = useState<AccountMapping[]>([]);
   const [loading, setLoading] = useState(false);
@@ -57,40 +56,73 @@ export default function LateSetup() {
   };
 
   const fetchAccounts = async () => {
-    if (!apiKey) {
-      toast.error("Please enter your Late API key");
-      return;
-    }
-
     setLoading(true);
     setSetupResults([]);
-    try {
-      const { data, error } = await supabase.functions.invoke('fetch-late-accounts', {
-        body: { apiKey }
-      });
 
-      if (error) {
-        throw error;
+    try {
+      console.log('📡 Starting profile-based account fetch...');
+
+      // Fetch all businesses to get their profile IDs
+      const { data: businessesData, error: businessError } = await supabase
+        .from('businesses')
+        .select('id, name, slug, late_profile_id');
+
+      if (businessError) throw businessError;
+
+      console.log('✅ Fetched businesses:', businessesData);
+
+      // Fetch accounts for each business's profile
+      const accountsByBusiness: Record<string, any[]> = {};
+      const allFetchedAccounts: any[] = [];
+
+      for (const business of businessesData || []) {
+        if (!business.late_profile_id) {
+          console.warn(`⚠️ Business ${business.name} has no profile ID, skipping`);
+          continue;
+        }
+
+        console.log(`📡 Fetching accounts for ${business.name} (profile: ${business.late_profile_id})`);
+
+        const response = await fetch(
+          `https://wrsoacujxcskydlzgopa.supabase.co/functions/v1/fetch-late-accounts?profileId=${business.late_profile_id}`,
+          {
+            headers: {
+              'Authorization': `Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Indyc29hY3VqeGNza3lkbHpnb3BhIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NDk2MDUyMTEsImV4cCI6MjA2NTE4MTIxMX0.TyzOJ0_qZ6nwHW_p9tTd4RZ8FtP7rg8u_Ow92phO7rc`,
+              'Content-Type': 'application/json'
+            }
+          }
+        );
+
+        const data = await response.json();
+
+        if (data?.success && data?.accounts) {
+          accountsByBusiness[business.name] = data.accounts.map((acc: any) => ({
+            ...acc,
+            _businessSlug: business.slug,
+            _businessName: business.name
+          }));
+          allFetchedAccounts.push(...accountsByBusiness[business.name]);
+          console.log(`✅ Found ${data.accounts.length} accounts for ${business.name}`);
+        }
       }
 
-      const fetchedAccounts = data.accounts || [];
-      setAccounts(fetchedAccounts);
-      
+      setAccounts(allFetchedAccounts);
+
       // Auto-map accounts to businesses
-      const accountMappings = fetchedAccounts.map((account: any) => {
-        const mapping = mapAccountToBusiness(account);
-        return {
-          account,
-          businessSlug: mapping.slug,
-          businessName: mapping.name,
-        };
-      });
-      
+      const accountMappings = allFetchedAccounts.map((account: any) => ({
+        account,
+        businessSlug: account._businessSlug,
+        businessName: account._businessName,
+      }));
+
       setMappings(accountMappings);
-      toast.success(`Found ${fetchedAccounts.length} connected accounts`);
-    } catch (error) {
-      console.error("Error fetching accounts:", error);
-      toast.error(error instanceof Error ? error.message : "Failed to fetch accounts");
+
+      console.log('✅ Total accounts fetched:', allFetchedAccounts.length);
+      toast.success(`Successfully fetched ${allFetchedAccounts.length} accounts from ${Object.keys(accountsByBusiness).length} profiles`);
+
+    } catch (err: any) {
+      console.error('❌ Error in fetchAccounts:', err);
+      toast.error(`Failed to fetch accounts: ${err.message}`);
     } finally {
       setLoading(false);
     }
@@ -106,35 +138,95 @@ export default function LateSetup() {
 
     setSetupLoading(true);
     setSetupResults([]);
+    const results: SetupResult[] = [];
 
     try {
-      const mappingsPayload = validMappings.map(m => ({
-        businessSlug: m.businessSlug,
-        platform: m.account.platform.toLowerCase(),
-        accountId: m.account._id || m.account.id,
-      }));
+      console.log('🔧 Starting automatic profile-based setup...');
 
-      const { data, error } = await supabase.functions.invoke('update-late-accounts', {
-        body: { mappings: mappingsPayload }
-      });
+      // Fetch all businesses with their profile IDs
+      const { data: businessesData, error: businessError } = await supabase
+        .from('businesses')
+        .select('id, name, slug, late_profile_id');
 
-      if (error) {
-        throw error;
+      if (businessError) throw businessError;
+
+      let totalUpdates = 0;
+
+      // For each business, fetch its profile's accounts and update
+      for (const business of businessesData || []) {
+        if (!business.late_profile_id) {
+          console.warn(`⚠️ Skipping ${business.name} - no profile ID`);
+          continue;
+        }
+
+        console.log(`🔧 Setting up ${business.name}...`);
+
+        // Fetch accounts for this business's specific profile
+        const response = await fetch(
+          `https://wrsoacujxcskydlzgopa.supabase.co/functions/v1/fetch-late-accounts?profileId=${business.late_profile_id}`,
+          {
+            headers: {
+              'Authorization': `Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Indyc29hY3VqeGNza3lkbHpnb3BhIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NDk2MDUyMTEsImV4cCI6MjA2NTE4MTIxMX0.TyzOJ0_qZ6nwHW_p9tTd4RZ8FtP7rg8u_Ow92phO7rc`,
+              'Content-Type': 'application/json'
+            }
+          }
+        );
+
+        const data = await response.json();
+
+        if (!data?.success) {
+          console.error(`❌ Failed to fetch accounts for ${business.name}`);
+          continue;
+        }
+
+        const accounts = data.accounts || [];
+        console.log(`✅ Found ${accounts.length} accounts for ${business.name}`);
+
+        // Build update object with account IDs for each platform
+        const updates: any = {};
+
+        accounts.forEach((account: any) => {
+          const platform = account.platform.toLowerCase();
+          const fieldName = `late_${platform}_account_id`;
+          updates[fieldName] = account._id;
+          console.log(`  ✓ Mapped ${platform}: ${account._id}`);
+          
+          results.push({
+            success: true,
+            platform,
+            businessSlug: business.slug
+          });
+        });
+
+        // Update the business with new account IDs
+        if (Object.keys(updates).length > 0) {
+          const { error: updateError } = await supabase
+            .from('businesses')
+            .update(updates)
+            .eq('id', business.id);
+
+          if (updateError) {
+            console.error(`❌ Failed to update ${business.name}:`, updateError);
+            results.push({
+              success: false,
+              platform: 'all',
+              businessSlug: business.slug,
+              error: updateError.message
+            });
+          } else {
+            totalUpdates++;
+            console.log(`✅ Updated ${business.name} with ${Object.keys(updates).length} account IDs`);
+          }
+        }
       }
 
-      setSetupResults(data.results || []);
-      
-      const successCount = data.successCount || 0;
-      const totalCount = data.totalCount || 0;
-      
-      if (successCount === totalCount) {
-        toast.success(`Successfully configured all ${successCount} accounts!`);
-      } else {
-        toast.warning(`Configured ${successCount} of ${totalCount} accounts`);
-      }
-    } catch (error) {
-      console.error("Error setting up accounts:", error);
-      toast.error(error instanceof Error ? error.message : "Failed to setup accounts");
+      setSetupResults(results);
+      console.log(`✅ Setup complete: ${totalUpdates} businesses updated`);
+      toast.success(`Successfully configured ${totalUpdates} businesses with their Late accounts`);
+
+    } catch (err: any) {
+      console.error('❌ Error in handleAutomaticSetup:', err);
+      toast.error(`Setup failed: ${err.message}`);
     } finally {
       setSetupLoading(false);
     }
@@ -178,25 +270,22 @@ export default function LateSetup() {
 
       <Card className="mb-6">
         <CardHeader>
-          <CardTitle>Step 1: Enter Your Late API Key</CardTitle>
+          <CardTitle>Step 1: Fetch Accounts by Profile</CardTitle>
+          <CardDescription>
+            Automatically fetch accounts for each business from their Late profile
+          </CardDescription>
         </CardHeader>
         <CardContent>
           <div className="space-y-4">
-            <div>
-              <Label htmlFor="apiKey">Late API Key</Label>
-              <Input
-                id="apiKey"
-                type="password"
-                placeholder="sk_..."
-                value={apiKey}
-                onChange={(e) => setApiKey(e.target.value)}
-              />
-              <p className="text-sm text-muted-foreground mt-1">
-                Get this from your Late dashboard
-              </p>
-            </div>
-            <Button onClick={fetchAccounts} disabled={loading}>
-              {loading ? "Fetching..." : "Fetch Connected Accounts"}
+            <Button onClick={fetchAccounts} disabled={loading} className="w-full">
+              {loading ? (
+                <>
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  Fetching Accounts...
+                </>
+              ) : (
+                "Fetch Connected Accounts from All Profiles"
+              )}
             </Button>
           </div>
         </CardContent>
