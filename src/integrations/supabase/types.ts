@@ -895,6 +895,7 @@ export type Database = {
           status: string | null
           tags: string[] | null
           topic: string | null
+          updated_at: string | null
         }
         Insert: {
           approval_status?: string | null
@@ -916,6 +917,7 @@ export type Database = {
           status?: string | null
           tags?: string[] | null
           topic?: string | null
+          updated_at?: string | null
         }
         Update: {
           approval_status?: string | null
@@ -937,6 +939,7 @@ export type Database = {
           status?: string | null
           tags?: string[] | null
           topic?: string | null
+          updated_at?: string | null
         }
         Relationships: [
           {
