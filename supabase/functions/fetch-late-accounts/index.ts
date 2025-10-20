@@ -6,46 +6,73 @@ const corsHeaders = {
 };
 
 serve(async (req) => {
+  // Handle CORS preflight requests
   if (req.method === 'OPTIONS') {
     return new Response(null, { headers: corsHeaders });
   }
 
   try {
-    const { apiKey } = await req.json();
-
-    if (!apiKey) {
-      throw new Error('API key is required');
+    // Get the Late API key from environment
+    const lateApiKey = Deno.env.get('LATE_API_KEY');
+    if (!lateApiKey) {
+      console.error('❌ LATE_API_KEY not found in environment');
+      throw new Error('Late API key not configured');
     }
 
-    console.log('📡 Fetching Late accounts...');
+    // Get profileId from query parameters
+    const url = new URL(req.url);
+    const profileId = url.searchParams.get('profileId');
 
-    const response = await fetch('https://getlate.dev/api/v1/accounts', {
+    console.log('📡 Fetching Late accounts', profileId ? `for profile: ${profileId}` : '(all profiles)');
+
+    // Build the API URL with optional profileId
+    let apiUrl = 'https://getlate.dev/api/v1/accounts';
+    if (profileId) {
+      apiUrl += `?profileId=${profileId}`;
+    }
+
+    // Fetch accounts from Late API
+    const response = await fetch(apiUrl, {
+      method: 'GET',
       headers: {
-        'Authorization': `Bearer ${apiKey}`,
+        'Authorization': `Bearer ${lateApiKey}`,
         'Content-Type': 'application/json',
       },
     });
 
     if (!response.ok) {
-      console.error('❌ Late API error:', response.status);
-      throw new Error(`API Error: ${response.status}`);
+      const errorText = await response.text();
+      console.error('❌ Late API error:', response.status, errorText);
+      throw new Error(`Late API returned ${response.status}: ${errorText}`);
     }
 
     const data = await response.json();
-    console.log('✅ Found accounts:', data.accounts?.length || 0);
+    console.log('✅ Successfully fetched accounts:', data.accounts?.length || 0, 'accounts');
 
+    // Return the accounts
     return new Response(
-      JSON.stringify(data),
-      { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      JSON.stringify({
+        success: true,
+        accounts: data.accounts || [],
+        profileId: profileId || null,
+      }),
+      {
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        status: 200,
+      }
     );
 
   } catch (error) {
-    console.error('❌ Error fetching accounts:', error);
+    console.error('❌ Error in fetch-late-accounts:', error);
     return new Response(
-      JSON.stringify({ 
-        error: error instanceof Error ? error.message : 'Unknown error' 
+      JSON.stringify({
+        success: false,
+        error: error instanceof Error ? error.message : 'Unknown error',
       }),
-      { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 500 }
+      {
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        status: 500,
+      }
     );
   }
 });
