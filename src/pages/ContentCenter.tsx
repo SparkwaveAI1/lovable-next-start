@@ -11,7 +11,7 @@ import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
 import { Label } from "@/components/ui/label";
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { useToast } from "@/hooks/use-toast";
 import { DashboardHeader } from "@/components/DashboardHeader";
 import { supabase } from "@/integrations/supabase/client";
@@ -19,7 +19,7 @@ import { ContentReviewDialog } from "@/components/ContentReviewDialog";
 import { ContentLibrary } from "@/components/ContentLibrary";
 import { PostedContentLibrary } from "@/components/PostedContentLibrary";
 import { formatToEasternDateTime } from "@/lib/dateUtils";
-import { toZonedTime } from "date-fns-tz";
+import { fromZonedTime } from "date-fns-tz";
 import { useBusinessContext } from "@/contexts/BusinessContext";
 
 const TIME_RE = /^([01]\d|2[0-3]):([0-5]\d)$/;
@@ -266,6 +266,15 @@ const ContentCenter = () => {
 
 
   const handleScheduleTweet = async () => {
+    if (!selectedBusiness) {
+      toast({
+        title: "No Business Selected",
+        description: "Please select a business first.",
+        variant: "destructive"
+      });
+      return;
+    }
+
     if (!schedulingTweet || !scheduleDate || !scheduleTime) {
       toast({
         title: "Missing Information",
@@ -304,15 +313,15 @@ const ContentCenter = () => {
       return;
     }
 
-    // Convert user input to Eastern Time
-    const localDateTime = new Date(`${scheduleDate}T${scheduleTime}`);
-    const easternDateTime = toZonedTime(localDateTime, 'America/New_York');
+    // Convert user input (treated as Eastern Time) to UTC
+    const wallTime = new Date(`${scheduleDate}T${scheduleTime}:00`);
+    const scheduledUtc = fromZonedTime(wallTime, 'America/New_York');
     
     console.log('Schedule Debug:', {
       userInput: `${scheduleDate} ${scheduleTime}`,
-      localDateTime: localDateTime.toISOString(),
-      easternDateTime: easternDateTime.toISOString(),
-      formatted: formatToEasternDateTime(easternDateTime)
+      wallTime: wallTime.toISOString(),
+      scheduledUtc: scheduledUtc.toISOString(),
+      formatted: formatToEasternDateTime(scheduledUtc)
     });
     
     try {
@@ -325,7 +334,7 @@ const ContentCenter = () => {
           content_type: selectedContentType,
           topic: topic,
           platform: selectedPlatform,
-          scheduled_for: easternDateTime.toISOString(),
+          scheduled_for: scheduledUtc.toISOString(),
           status: 'scheduled'
         })
         .select('id')
@@ -346,7 +355,7 @@ const ContentCenter = () => {
 
       toast({
         title: "Tweet Scheduled",
-        description: `Tweet scheduled for ${formatToEasternDateTime(easternDateTime)}`
+        description: `Tweet scheduled for ${formatToEasternDateTime(scheduledUtc)}`
       });
 
       setSchedulingTweet(null);
@@ -447,6 +456,15 @@ const ContentCenter = () => {
   };
 
   const handleUpdateScheduledTweet = async () => {
+    if (!selectedBusiness) {
+      toast({
+        title: "No Business Selected",
+        description: "Please select a business first.",
+        variant: "destructive"
+      });
+      return;
+    }
+
     if (!editingTweet || !editContent.trim() || !editDate || !editTime) {
       toast({
         title: "Missing Information",
@@ -465,14 +483,16 @@ const ContentCenter = () => {
       return;
     }
 
-    const updatedDateTime = new Date(`${editDate}T${editTime}`);
+    // Convert user input (treated as Eastern Time) to UTC
+    const wallTime = new Date(`${editDate}T${editTime}:00`);
+    const updatedUtc = fromZonedTime(wallTime, 'America/New_York');
 
     try {
       const { error } = await supabase
         .from('scheduled_content')
         .update({
           content: editContent,
-          scheduled_for: updatedDateTime.toISOString()
+          scheduled_for: updatedUtc.toISOString()
         })
         .eq('id', editingTweet.id);
 
@@ -540,24 +560,21 @@ const ContentCenter = () => {
 
   const EditModal = () => (
     <Dialog open={!!editingTweet} onOpenChange={(open) => { if (!open) setEditingTweet(null); }}>
-      <DialogContent onInteractOutside={(e) => {
-        // Allow interactions with textarea to preserve cursor position
-        if (e.target instanceof HTMLTextAreaElement) {
-          return;
-        }
-        e.preventDefault();
-      }}>
+      <DialogContent>
         <DialogHeader>
           <DialogTitle>Edit Scheduled Tweet</DialogTitle>
+          <DialogDescription className="sr-only">Edit content and schedule settings</DialogDescription>
         </DialogHeader>
         <div className="space-y-4">
           <div>
             <label className="text-sm font-medium">Tweet Content</label>
             <Textarea
-              value={editContent}
+              key={editingTweet?.id}
+              defaultValue={editContent}
               onChange={(e) => setEditContent(e.target.value)}
               rows={4}
               className="mt-1"
+              autoFocus
             />
             <div className="text-xs text-muted-foreground mt-1">
               {editContent.length}/280 characters
@@ -600,6 +617,7 @@ const ContentCenter = () => {
       <DialogContent onInteractOutside={(e) => e.preventDefault()} onPointerDownOutside={(e) => e.preventDefault()} onFocusOutside={(e) => e.preventDefault()}>
         <DialogHeader>
           <DialogTitle>Schedule Tweet</DialogTitle>
+          <DialogDescription className="sr-only">Schedule content for posting</DialogDescription>
         </DialogHeader>
         <div className="space-y-4">
           <div>
