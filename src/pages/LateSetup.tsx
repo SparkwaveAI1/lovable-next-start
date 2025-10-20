@@ -150,6 +150,8 @@ export default function LateSetup() {
 
       if (businessError) throw businessError;
 
+      console.log('📊 Businesses to configure:', businessesData?.map(b => b.name));
+
       let totalUpdates = 0;
 
       // For each business, fetch its profile's accounts and update
@@ -159,7 +161,8 @@ export default function LateSetup() {
           continue;
         }
 
-        console.log(`🔧 Setting up ${business.name}...`);
+        console.log(`\n🔧 ========== Setting up ${business.name} ==========`);
+        console.log(`   Profile ID: ${business.late_profile_id}`);
 
         // Fetch accounts for this business's specific profile
         const response = await fetch(
@@ -175,38 +178,47 @@ export default function LateSetup() {
         const data = await response.json();
 
         if (!data?.success) {
-          console.error(`❌ Failed to fetch accounts for ${business.name}`);
+          console.error(`❌ Failed to fetch accounts for ${business.name}:`, data);
+          results.push({
+            success: false,
+            platform: 'all',
+            businessSlug: business.slug,
+            error: 'Failed to fetch accounts from Late API'
+          });
           continue;
         }
 
         const accounts = data.accounts || [];
-        console.log(`✅ Found ${accounts.length} accounts for ${business.name}`);
+        console.log(`✅ Fetched ${accounts.length} accounts for ${business.name}:`);
+        accounts.forEach((acc: any) => {
+          console.log(`   - ${acc.platform}: ${acc._id} (@${acc.username})`);
+        });
 
         // Build update object with account IDs for each platform
         const updates: any = {};
 
+        console.log(`\n📝 Building updates object for ${business.name}...`);
         accounts.forEach((account: any) => {
           const platform = account.platform.toLowerCase();
           const fieldName = `late_${platform}_account_id`;
           updates[fieldName] = account._id;
-          console.log(`  ✓ Mapped ${platform}: ${account._id}`);
-          
-          results.push({
-            success: true,
-            platform,
-            businessSlug: business.slug
-          });
+          console.log(`   ✓ ${fieldName} = ${account._id}`);
         });
+
+        console.log(`\n📦 Final updates object for ${business.name}:`, JSON.stringify(updates, null, 2));
 
         // Update the business with new account IDs
         if (Object.keys(updates).length > 0) {
-          const { error: updateError } = await supabase
+          console.log(`\n💾 Updating database for ${business.name}...`);
+          
+          const { data: updateResult, error: updateError } = await supabase
             .from('businesses')
             .update(updates)
-            .eq('id', business.id);
+            .eq('id', business.id)
+            .select();
 
           if (updateError) {
-            console.error(`❌ Failed to update ${business.name}:`, updateError);
+            console.error(`❌ Database update FAILED for ${business.name}:`, updateError);
             results.push({
               success: false,
               platform: 'all',
@@ -215,13 +227,28 @@ export default function LateSetup() {
             });
           } else {
             totalUpdates++;
-            console.log(`✅ Updated ${business.name} with ${Object.keys(updates).length} account IDs`);
+            console.log(`✅ Database update SUCCESS for ${business.name}`);
+            console.log(`   Updated record:`, updateResult);
+            
+            // Add individual success results for each platform
+            accounts.forEach((account: any) => {
+              results.push({
+                success: true,
+                platform: account.platform.toLowerCase(),
+                businessSlug: business.slug
+              });
+            });
           }
+        } else {
+          console.warn(`⚠️ No updates to perform for ${business.name} (no accounts found)`);
         }
+
+        console.log(`========== Finished ${business.name} ==========\n`);
       }
 
       setSetupResults(results);
-      console.log(`✅ Setup complete: ${totalUpdates} businesses updated`);
+      console.log(`\n✅ Setup complete: ${totalUpdates} businesses updated`);
+      console.log(`📊 Total successful account mappings: ${results.filter(r => r.success).length}`);
       toast.success(`Successfully configured ${totalUpdates} businesses with their Late accounts`);
 
     } catch (err: any) {
