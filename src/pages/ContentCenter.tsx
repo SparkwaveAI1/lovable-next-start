@@ -19,6 +19,7 @@ import { ContentReviewDialog } from "@/components/ContentReviewDialog";
 import { ContentLibrary } from "@/components/ContentLibrary";
 import { PostedContentLibrary } from "@/components/PostedContentLibrary";
 import { formatToEasternDateTime } from "@/lib/dateUtils";
+import { toZonedTime } from "date-fns-tz";
 import { useBusinessContext } from "@/contexts/BusinessContext";
 
 const TIME_RE = /^([01]\d|2[0-3]):([0-5]\d)$/;
@@ -303,7 +304,16 @@ const ContentCenter = () => {
       return;
     }
 
-    const scheduledDateTime = new Date(`${scheduleDate}T${scheduleTime}`);
+    // Convert user input to Eastern Time
+    const localDateTime = new Date(`${scheduleDate}T${scheduleTime}`);
+    const easternDateTime = toZonedTime(localDateTime, 'America/New_York');
+    
+    console.log('Schedule Debug:', {
+      userInput: `${scheduleDate} ${scheduleTime}`,
+      localDateTime: localDateTime.toISOString(),
+      easternDateTime: easternDateTime.toISOString(),
+      formatted: formatToEasternDateTime(easternDateTime)
+    });
     
     try {
       // Save to existing scheduled_content table
@@ -315,7 +325,7 @@ const ContentCenter = () => {
           content_type: selectedContentType,
           topic: topic,
           platform: selectedPlatform,
-          scheduled_for: scheduledDateTime.toISOString(),
+          scheduled_for: easternDateTime.toISOString(),
           status: 'scheduled'
         })
         .select('id')
@@ -336,7 +346,7 @@ const ContentCenter = () => {
 
       toast({
         title: "Tweet Scheduled",
-        description: `Tweet scheduled for ${scheduledDateTime.toLocaleString()}`
+        description: `Tweet scheduled for ${formatToEasternDateTime(easternDateTime)}`
       });
 
       setSchedulingTweet(null);
@@ -349,10 +359,13 @@ const ContentCenter = () => {
       }
       
     } catch (error) {
-      console.error("Scheduling error:", error);
+      console.error("Scheduling error:", error, {
+        fullError: error,
+        message: error instanceof Error ? error.message : 'Unknown error'
+      });
       toast({
         title: "Scheduling Failed", 
-        description: "Failed to schedule tweet",
+        description: error instanceof Error ? error.message : "Failed to schedule tweet",
         variant: "destructive"
       });
     }
@@ -527,7 +540,13 @@ const ContentCenter = () => {
 
   const EditModal = () => (
     <Dialog open={!!editingTweet} onOpenChange={(open) => { if (!open) setEditingTweet(null); }}>
-      <DialogContent onInteractOutside={(e) => e.preventDefault()} onPointerDownOutside={(e) => e.preventDefault()} onFocusOutside={(e) => e.preventDefault()}>
+      <DialogContent onInteractOutside={(e) => {
+        // Allow interactions with textarea to preserve cursor position
+        if (e.target instanceof HTMLTextAreaElement) {
+          return;
+        }
+        e.preventDefault();
+      }}>
         <DialogHeader>
           <DialogTitle>Edit Scheduled Tweet</DialogTitle>
         </DialogHeader>
