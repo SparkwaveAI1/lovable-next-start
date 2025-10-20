@@ -881,6 +881,7 @@ export type Database = {
           approved_by: string | null
           business_id: string | null
           content: string
+          content_hash: string | null
           content_type: string
           created_at: string | null
           error_message: string | null
@@ -901,6 +902,7 @@ export type Database = {
           approved_by?: string | null
           business_id?: string | null
           content: string
+          content_hash?: string | null
           content_type: string
           created_at?: string | null
           error_message?: string | null
@@ -921,6 +923,7 @@ export type Database = {
           approved_by?: string | null
           business_id?: string | null
           content?: string
+          content_hash?: string | null
           content_type?: string
           created_at?: string | null
           error_message?: string | null

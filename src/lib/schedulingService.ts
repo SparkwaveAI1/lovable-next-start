@@ -9,7 +9,8 @@ export interface ScheduledContentItem {
   topic?: string;
   platform: string;
   scheduled_for: string;
-  status: 'scheduled' | 'posted' | 'failed' | 'cancelled';
+  status: 'scheduled' | 'processing' | 'posted' | 'failed' | 'cancelled';
+  content_hash?: string;
   created_at: string;
   posted_at?: string;
   error_message?: string;

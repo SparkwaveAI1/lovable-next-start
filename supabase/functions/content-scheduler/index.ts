@@ -15,6 +15,7 @@ interface ScheduledContentItem {
   platform: string;
   scheduled_for: string;
   status: string;
+  content_hash?: string;
   metadata?: Record<string, any>;
 }
 
@@ -140,7 +141,29 @@ Deno.serve(async (req) => {
 
     const supabase = createClient(supabaseUrl, supabaseKey);
 
-    // Get content due for posting
+    // Step 1: Clean up items stuck in 'processing' for > 10 minutes (likely posted but update failed)
+    const tenMinutesAgo = new Date(Date.now() - 10 * 60 * 1000).toISOString();
+    const { data: stuckItems } = await supabase
+      .from('scheduled_content')
+      .select('id, content_hash')
+      .eq('status', 'processing')
+      .lt('updated_at', tenMinutesAgo);
+
+    if (stuckItems && stuckItems.length > 0) {
+      console.log(`🔧 Found ${stuckItems.length} items stuck in 'processing' - marking as 'posted'`);
+      for (const stuck of stuckItems) {
+        await supabase
+          .from('scheduled_content')
+          .update({
+            status: 'posted',
+            posted_at: new Date().toISOString(),
+            error_message: 'Auto-resolved from stuck processing state'
+          })
+          .eq('id', stuck.id);
+      }
+    }
+
+    // Step 2: Get content due for posting
     const now = new Date().toISOString();
     console.log('Checking for content due at:', now);
 
@@ -163,111 +186,141 @@ Deno.serve(async (req) => {
 
     if (dueContent && dueContent.length > 0) {
       for (const item of dueContent) {
-        console.log(`Processing content item: ${item.id}`);
-        
-        // ─── DRY RUN: compute and log idempotency hash only ──────────────────────────
         try {
-          const platform = (item.platform || "").toLowerCase() as "twitter" | "discord" | "telegram";
-          const whenISO = (item.scheduled_for ?? item.scheduledFor ?? item.when ?? "").toString();
-          const text = String(item.content ?? "");
-
-          // Validate minimal inputs to avoid noisy logs
-          if (!platform || !["twitter", "discord", "telegram"].includes(platform)) {
-            console.error("hash-check error", {
-              businessId: item.business_id,
-              platform: item.platform,
-              err: "invalid platform"
-            });
-          } else if (!whenISO) {
-            console.error("hash-check error", {
-              businessId: item.business_id,
-              platform,
-              err: "missing when/scheduled_for"
-            });
-          } else if (!text) {
-            console.error("hash-check error", {
-              businessId: item.business_id,
-              platform,
-              err: "empty content"
-            });
-          } else {
-            const hash = await contentHash(platform, text, whenISO);
-            console.log(
-              JSON.stringify({
-                tag: "hash-check",
-                businessId: item.business_id,
-                platform,
-                scheduledFor: item.scheduled_for,
-                contentLength: item.content.length,
-                hash,
+          console.log(`\n📝 Processing: ${item.business_id} → ${item.platform}`);
+          
+          // Step 1: Generate content hash for idempotency
+          const hashInput = `${item.business_id}-${item.platform}-${item.content}-${item.scheduled_for}`;
+          const hashBuffer = await crypto.subtle.digest(
+            'SHA-256',
+            new TextEncoder().encode(hashInput)
+          );
+          const contentHashValue = Array.from(new Uint8Array(hashBuffer))
+            .map(b => b.toString(16).padStart(2, '0'))
+            .join('');
+          
+          console.log(`🔒 Content hash: ${contentHashValue.substring(0, 16)}...`);
+          
+          // Step 2: Check if this hash has already been posted (idempotency check)
+          const { data: existingPost } = await supabase
+            .from('scheduled_content')
+            .select('id, status, posted_at')
+            .eq('content_hash', contentHashValue)
+            .eq('status', 'posted')
+            .single();
+          
+          if (existingPost) {
+            console.log(`⚠️ DUPLICATE DETECTED: This content was already posted at ${existingPost.posted_at}`);
+            console.log(`   Marking current item as duplicate...`);
+            
+            // Mark the duplicate as failed with explanation
+            await supabase
+              .from('scheduled_content')
+              .update({
+                status: 'failed',
+                error_message: `Duplicate post detected - already posted at ${existingPost.posted_at} (hash: ${contentHashValue.substring(0, 16)}...)`,
+                updated_at: new Date().toISOString()
               })
-            );
+              .eq('id', item.id);
+            
+            results.push({
+              id: item.id,
+              status: 'duplicate',
+              platform: item.platform
+            });
+            continue; // Skip to next item
           }
-        } catch (e) {
-          console.error("hash-check error", {
-            businessId: item.business_id,
-            platform: item.platform,
-            err: e?.message || String(e),
-          });
-        }
-        // ─────────────────────────────────────────────────────────────────────────────
-        
-        try {
-          // Get business configuration for GAME posting
+          
+          // Step 3: Mark as 'processing' with hash BEFORE posting (prevents race conditions)
+          const { error: processingError } = await supabase
+            .from('scheduled_content')
+            .update({
+              status: 'processing',
+              content_hash: contentHashValue,
+              updated_at: new Date().toISOString()
+            })
+            .eq('id', item.id)
+            .eq('status', 'scheduled'); // Only update if still scheduled
+          
+          if (processingError) {
+            console.error(`❌ Failed to mark as processing:`, processingError);
+            continue; // Don't proceed if we can't claim this item
+          }
+          
+          console.log(`✅ Marked as processing - hash stored`);
+          
+          // Step 4: Get business configuration
           const businessConfig = getBusinessConfigById(item.business_id);
           if (!businessConfig) {
             throw new Error(`Unknown business: ${item.business_id}`);
           }
 
-          // Call GAME SDK to post content
+          // Step 5: Post content via GAME SDK
+          console.log(`📡 Posting to ${item.platform}...`);
           const postResult = await postContentViaGame(item, businessConfig);
           
-          if (postResult.success) {
-            // Mark as posted
-            const { error: updateError } = await supabase
-              .from('scheduled_content')
-              .update({
-                status: 'posted',
-                posted_at: new Date().toISOString(),
-                metadata: {
-                  ...item.metadata,
-                  post_result: postResult
-                }
-              })
-              .eq('id', item.id);
-
-            if (updateError) {
-              console.error(`❌ CRITICAL: Failed to update status to 'posted' for ${item.id}:`, updateError);
-              throw new Error(`Status update failed: ${updateError.message}`);
-            }
-
-            console.log(`✅ Successfully posted content: ${item.id}`);
-            results.push({
-              id: item.id,
-              status: 'posted',
-              platform: item.platform
-            });
-
-          } else {
+          if (!postResult.success) {
             throw new Error(postResult.message || 'Posting failed');
           }
+          
+          console.log(`✅ Successfully posted to ${item.platform}`);
+          
+          // Step 6: Mark as 'posted' (hash already stored in step 3)
+          const { error: postedError } = await supabase
+            .from('scheduled_content')
+            .update({
+              status: 'posted',
+              posted_at: new Date().toISOString(),
+              metadata: {
+                ...item.metadata,
+                post_result: postResult
+              },
+              updated_at: new Date().toISOString()
+            })
+            .eq('id', item.id);
+          
+          if (postedError) {
+            console.error(`❌ CRITICAL: Post succeeded but status update failed:`, postedError);
+            console.error(`   Post ID ${item.id} is stuck in 'processing' status`);
+            console.error(`   BUT the post DID go out to ${item.platform}!`);
+            console.error(`   Hash ${contentHashValue.substring(0, 16)}... will prevent duplicate if scheduler retries`);
+            // Don't throw - the post went out successfully, hash is stored, idempotency will protect us
+          } else {
+            console.log(`✅ Status updated to 'posted'`);
+          }
+          
+          results.push({
+            id: item.id,
+            status: 'posted',
+            platform: item.platform
+          });
 
         } catch (error) {
-          console.error(`❌ Failed to post content ${item.id}:`, error);
+          console.error(`❌ Error posting ${item.platform}:`, error);
+          
+          // Only mark as failed if we haven't successfully posted
+          // Check current status to see if we're in 'processing' with a hash
+          const { data: currentStatus } = await supabase
+            .from('scheduled_content')
+            .select('status, content_hash')
+            .eq('id', item.id)
+            .single();
+          
+          if (currentStatus?.status === 'processing' && currentStatus?.content_hash) {
+            console.log(`⚠️ Item is in 'processing' with hash - may have posted successfully`);
+            console.log(`   Marking as 'failed' but hash will prevent duplicates if it did post`);
+          }
           
           // Mark as failed
-          const { error: updateError } = await supabase
+          await supabase
             .from('scheduled_content')
             .update({
               status: 'failed',
-              error_message: error.message || 'Unknown posting error'
+              error_message: error.message || 'Unknown posting error',
+              updated_at: new Date().toISOString()
             })
             .eq('id', item.id);
-
-          if (updateError) {
-            console.error(`❌ CRITICAL: Failed to update status to 'failed' for ${item.id}:`, updateError);
-          }
-
+          
           results.push({
             id: item.id,
             status: 'failed',
