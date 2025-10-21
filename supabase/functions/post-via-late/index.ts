@@ -66,7 +66,7 @@ serve(async (req) => {
 
     // Call Late API with timeout
     const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 30000); // 30s timeout
+    const timeoutId = setTimeout(() => controller.abort(), 90000); // 90s timeout for video uploads
 
     let response;
     try {
@@ -83,8 +83,8 @@ serve(async (req) => {
       clearTimeout(timeoutId);
       
       if (fetchError.name === 'AbortError') {
-        console.error('❌ Late API request timed out after 30 seconds');
-        throw new Error('Late API timeout - video upload may be too large or connection slow');
+        console.error('❌ Late API request timed out after 90 seconds');
+        throw new Error('Late API timeout after 90s - video file may be too large or network is slow. Try converting to MP4 or reducing file size.');
       }
       
       console.error('❌ Late API fetch error:', fetchError);

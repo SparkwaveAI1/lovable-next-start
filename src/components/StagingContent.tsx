@@ -170,15 +170,41 @@ export function StagingContent() {
         .sort((a, b) => a.display_order - b.display_order)
         .map(m => m.media_assets.file_path) || [];
 
-      const videoUrl = item.staging_media
-        ?.find(m => m.media_assets.file_type === 'video')
-        ?.media_assets.file_path;
+      const videoMedia = item.staging_media
+        ?.find(m => m.media_assets.file_type === 'video');
+
+      const videoUrl = videoMedia?.media_assets.file_path;
 
       // Combine all media into single array
       const mediaUrls = [
         ...imageUrls,
         ...(videoUrl ? [videoUrl] : [])
       ];
+
+      // Check for large videos or .mov files
+      if (videoUrl) {
+        const isMovFile = videoUrl.toLowerCase().endsWith('.mov');
+        
+        // Warn about .mov files
+        if (isMovFile) {
+          toast({
+            title: '⚠️ Video Format Warning',
+            description: '.mov files often timeout during upload. Consider converting to MP4 for better reliability.',
+            variant: 'default',
+          });
+        }
+        
+        // Check file size if we have the full media object
+        // Note: file_path is a URL, we can't check size here without fetching
+        // But we can warn about .mov files which are typically large
+        if (isMovFile) {
+          toast({
+            title: '💡 Tip',
+            description: 'Large video files may timeout. Try compressing to under 20MB for best results.',
+            variant: 'default',
+          });
+        }
+      }
 
       // Validate Instagram requires media
       if (item.platform === 'instagram' && mediaUrls.length === 0) {
@@ -365,10 +391,32 @@ export function StagingContent() {
       loadStagedContent();
     } catch (error: any) {
       console.error('Post error:', error);
+      
+      // Provide specific error messages based on error type
+      let errorMessage = 'Failed to post';
+      
+      if (error.message?.includes('timeout') || error.message?.includes('90s')) {
+        errorMessage = '⏱️ Upload timed out. Video may be too large. Try converting to MP4 or reducing file size.';
+      } else if (error.message?.includes('Late API')) {
+        errorMessage = `❌ Late API Error: ${error.message}`;
+      } else if (error.message?.includes('account')) {
+        errorMessage = `🔗 Account Error: ${error.message}`;
+      } else {
+        errorMessage = error.message || 'Failed to post';
+      }
+      
       toast({
         title: 'Error',
-        description: error.message || 'Failed to post content',
+        description: errorMessage,
         variant: 'destructive',
+      });
+      
+      // Log detailed error for debugging
+      console.error('Full error details:', {
+        message: error.message,
+        stack: error.stack,
+        response: error.response,
+        details: error.details
       });
     }
   };
@@ -485,6 +533,12 @@ export function StagingContent() {
                   <ImagePlus className="h-4 w-4" />
                   {item.staging_media && item.staging_media.length > 0 ? 'Edit Media' : 'Add Media'}
                 </Button>
+                
+                {item.staging_media && item.staging_media.length === 0 && (
+                  <p className="text-xs text-muted-foreground mt-1 px-1">
+                    📹 Videos: MP4 recommended, under 20MB
+                  </p>
+                )}
 
                 <Button
                   variant="outline"
