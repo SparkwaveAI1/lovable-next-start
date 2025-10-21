@@ -166,26 +166,80 @@ export function StagingContent() {
     try {
       // Get media URLs for posting
       const imageUrls = item.staging_media
-        ?.filter(m => m.media_assets.file_type.startsWith('image/'))
+        ?.filter(m => m.media_assets.file_type === 'image')
         .sort((a, b) => a.display_order - b.display_order)
         .map(m => m.media_assets.file_path) || [];
 
       const videoUrl = item.staging_media
-        ?.find(m => m.media_assets.file_type.startsWith('video/'))
+        ?.find(m => m.media_assets.file_type === 'video')
         ?.media_assets.file_path;
+
+      // Combine all media into single array
+      const mediaUrls = [
+        ...imageUrls,
+        ...(videoUrl ? [videoUrl] : [])
+      ];
+
+      // Validate Instagram requires media
+      if (item.platform === 'instagram' && mediaUrls.length === 0) {
+        toast({
+          title: 'Media Required',
+          description: 'Instagram requires an image or video. Please attach media first.',
+          variant: 'destructive',
+        });
+        return;
+      }
+
+      // Fetch the Late account ID for this platform
+      const { data: businessData, error: businessError } = await supabase
+        .from('businesses')
+        .select('late_twitter_account_id, late_instagram_account_id, late_tiktok_account_id, late_linkedin_account_id, late_facebook_account_id')
+        .eq('id', item.business_id)
+        .single();
+
+      if (businessError) throw businessError;
+
+      const accountIdMap: Record<string, string | null> = {
+        twitter: businessData.late_twitter_account_id,
+        instagram: businessData.late_instagram_account_id,
+        tiktok: businessData.late_tiktok_account_id,
+        linkedin: businessData.late_linkedin_account_id,
+        facebook: businessData.late_facebook_account_id,
+      };
+
+      const accountId = accountIdMap[item.platform];
+
+      if (!accountId) {
+        toast({
+          title: 'Account Not Connected',
+          description: `No ${item.platform} account connected for this business`,
+          variant: 'destructive',
+        });
+        return;
+      }
 
       // Call post-via-late edge function
       const { data, error } = await supabase.functions.invoke('post-via-late', {
         body: {
           businessId: item.business_id,
+          platform: item.platform,
           content: item.content,
-          platforms: [item.platform],
-          imageUrls: imageUrls.length > 0 ? imageUrls : undefined,
-          videoUrl: videoUrl || undefined
+          mediaUrls: mediaUrls.length > 0 ? mediaUrls : undefined,
+          accountId: accountId
         }
       });
 
       if (error) throw error;
+
+      // Check if edge function returned an error
+      if (data && !data.success) {
+        toast({
+          title: 'Post Failed',
+          description: data.error || data.details || 'Failed to post content',
+          variant: 'destructive',
+        });
+        return;
+      }
 
       // Save to Library as posted
       await handleSaveToLibrary(item);
@@ -194,11 +248,11 @@ export function StagingContent() {
         title: 'Posted Successfully',
         description: `Content posted to ${item.platform}`,
       });
-    } catch (error) {
+    } catch (error: any) {
       console.error('Post error:', error);
       toast({
         title: 'Error',
-        description: 'Failed to post content',
+        description: error.message || 'Failed to post content',
         variant: 'destructive',
       });
     }

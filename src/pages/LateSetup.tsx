@@ -269,16 +269,53 @@ export default function LateSetup() {
     setTestResult(null);
 
     try {
+      // Fetch the Late account ID for this platform
+      const { data: businessData, error: businessError } = await supabase
+        .from('businesses')
+        .select('late_twitter_account_id, late_instagram_account_id, late_tiktok_account_id, late_linkedin_account_id, late_facebook_account_id')
+        .eq('id', testBusiness)
+        .single();
+
+      if (businessError) throw businessError;
+
+      const accountIdMap: Record<string, string | null> = {
+        twitter: businessData.late_twitter_account_id,
+        instagram: businessData.late_instagram_account_id,
+        tiktok: businessData.late_tiktok_account_id,
+        linkedin: businessData.late_linkedin_account_id,
+        facebook: businessData.late_facebook_account_id,
+      };
+
+      const accountId = accountIdMap[testPlatform];
+
+      if (!accountId) {
+        toast.error(`No ${testPlatform} account connected for this business`);
+        setTestResult({ error: `No ${testPlatform} account connected` });
+        setIsTesting(false);
+        return;
+      }
+
+      // Build mediaUrls array
+      const mediaUrls = testImageUrl ? [testImageUrl] : undefined;
+
       const { data, error } = await supabase.functions.invoke('post-via-late', {
         body: {
           businessId: testBusiness,
+          platform: testPlatform,
           content: testContent,
-          platforms: [testPlatform],
-          imageUrls: testImageUrl ? [testImageUrl] : undefined
+          mediaUrls: mediaUrls,
+          accountId: accountId
         }
       });
 
       if (error) throw error;
+
+      // Check if edge function returned an error
+      if (data && !data.success) {
+        setTestResult(data);
+        toast.error(data.error || data.details || 'Failed to post');
+        return;
+      }
 
       setTestResult(data);
       toast.success(data.message || 'Post created successfully!');

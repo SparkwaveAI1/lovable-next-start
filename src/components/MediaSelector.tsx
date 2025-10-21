@@ -206,8 +206,8 @@ export function MediaSelector({
       item.file_path.toLowerCase().includes(searchQuery.toLowerCase());
     
     const matchesType = filterType === 'all' || 
-      (filterType === 'image' && item.file_type.startsWith('image/')) ||
-      (filterType === 'video' && item.file_type.startsWith('video/'));
+      (filterType === 'image' && (item.file_type === 'image' || item.file_type.startsWith('image/'))) ||
+      (filterType === 'video' && (item.file_type === 'video' || item.file_type.startsWith('video/')));
 
     return matchesSearch && matchesType;
   });
@@ -293,7 +293,7 @@ export function MediaSelector({
                         <Check className="h-4 w-4" />
                       </div>
                     )}
-                    {item.file_type.startsWith('video/') && (
+                    {(item.file_type === 'video' || item.file_type.startsWith('video/')) && (
                       <Badge className="absolute bottom-2 left-2" variant="secondary">
                         <Video className="h-3 w-3 mr-1" />
                         Video
