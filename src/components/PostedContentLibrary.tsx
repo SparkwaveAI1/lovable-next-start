@@ -20,6 +20,8 @@ interface PostedContent {
   tags?: string[];
   posted_at?: string;
   created_at: string;
+  metadata?: any;
+  error_message?: string;
   media?: Array<{
     id: string;
     file_path: string;
@@ -100,6 +102,50 @@ export function PostedContentLibrary({ businessId }: PostedContentLibraryProps) 
     } catch (error) {
       console.error('Error deleting:', error);
       toast.error('Failed to delete content');
+    }
+  };
+
+  const handleCheckStatus = async (item: PostedContent) => {
+    const latePostId = item.metadata?.late_post_id;
+    if (!latePostId) return;
+
+    try {
+      toast.loading('Checking Late status...');
+
+      const { data, error } = await supabase.functions.invoke('late-post-status', {
+        body: { postId: latePostId }
+      });
+
+      if (error) throw error;
+
+      const state = data?.state || 'unknown';
+      const errorMsg = data?.errorMessage;
+
+      // Update the item
+      await supabase
+        .from('scheduled_content')
+        .update({
+          metadata: {
+            ...item.metadata,
+            late_status: state,
+            last_checked: new Date().toISOString()
+          },
+          error_message: errorMsg || item.error_message
+        })
+        .eq('id', item.id);
+
+      if (state === 'published') {
+        toast.success(`✅ Confirmed: Published to ${item.platform}`);
+      } else if (state === 'failed') {
+        toast.error(`Post failed: ${errorMsg || 'Unknown error'}`);
+      } else {
+        toast.info(`Status: ${state}`);
+      }
+
+      loadContent();
+    } catch (error: any) {
+      console.error('Status check error:', error);
+      toast.error('Failed to check status');
     }
   };
 
@@ -264,6 +310,17 @@ export function PostedContentLibrary({ businessId }: PostedContentLibraryProps) 
                 </CardContent>
 
                 <CardFooter className="pt-3 border-t flex gap-2">
+                  {item.metadata?.late_post_id && (
+                    <Button
+                      size="sm"
+                      variant="secondary"
+                      className="flex-1"
+                      onClick={() => handleCheckStatus(item)}
+                    >
+                      <CheckCircle className="w-4 h-4 mr-1" />
+                      Status
+                    </Button>
+                  )}
                   <Button
                     size="sm"
                     variant="outline"

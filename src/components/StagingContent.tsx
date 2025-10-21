@@ -241,13 +241,128 @@ export function StagingContent() {
         return;
       }
 
-      // Save to Library as posted
-      await handleSaveToLibrary(item);
+      const latePostId = data?.postId;
 
+      // Show initial success with Late post ID
       toast({
-        title: 'Posted Successfully',
-        description: `Content posted to ${item.platform}`,
+        title: 'Post Sent to Late',
+        description: latePostId ? `Post ID: ${latePostId}. Checking status...` : 'Verifying publication...',
       });
+
+      // Save to Library with Late metadata
+      const { data: savedContent, error: saveError } = await supabase
+        .from('scheduled_content')
+        .insert({
+          business_id: item.business_id,
+          content: item.content,
+          platform: item.platform,
+          content_type: item.content_type,
+          topic: item.topic,
+          status: 'posted',
+          approval_status: 'approved',
+          approved_at: new Date().toISOString(),
+          posted_at: new Date().toISOString(),
+          metadata: {
+            late_post_id: latePostId,
+            late_status: 'queued',
+            posted_from_staging: true
+          }
+        })
+        .select()
+        .single();
+
+      if (saveError) throw saveError;
+
+      // Copy media attachments
+      if (item.staging_media && item.staging_media.length > 0) {
+        const mediaLinks = item.staging_media.map(media => ({
+          content_id: savedContent.id,
+          media_id: media.media_id,
+          display_order: media.display_order
+        }));
+
+        await supabase.from('content_media').insert(mediaLinks);
+      }
+
+      // Delete from staging
+      await supabase.from('staged_content').delete().eq('id', item.id);
+
+      // Poll Late status if we have a post ID
+      if (latePostId) {
+        let attempts = 0;
+        const maxAttempts = 5;
+        const pollInterval = 15000; // 15 seconds
+
+        const checkStatus = async () => {
+          attempts++;
+          try {
+            const { data: statusData, error: statusError } = await supabase.functions.invoke('late-post-status', {
+              body: { postId: latePostId }
+            });
+
+            if (statusError) {
+              console.error('Status check error:', statusError);
+              return;
+            }
+
+            const state = statusData?.state || 'unknown';
+            
+            if (state === 'published') {
+              // Update to published
+              await supabase
+                .from('scheduled_content')
+                .update({
+                  metadata: {
+                    late_post_id: latePostId,
+                    late_status: 'published',
+                    verified_at: new Date().toISOString()
+                  } as any
+                })
+                .eq('id', savedContent.id);
+
+              toast({
+                title: '✅ Published',
+                description: `Successfully posted to ${item.platform}`,
+              });
+            } else if (state === 'failed') {
+              const errorMsg = statusData?.errorMessage || 'Post failed';
+              
+              await supabase
+                .from('scheduled_content')
+                .update({
+                  error_message: errorMsg,
+                  metadata: {
+                    late_post_id: latePostId,
+                    late_status: 'failed'
+                  } as any
+                })
+                .eq('id', savedContent.id);
+
+              toast({
+                title: 'Post Failed',
+                description: errorMsg,
+                variant: 'destructive',
+              });
+            } else if (attempts < maxAttempts) {
+              // Still processing, check again
+              setTimeout(checkStatus, pollInterval);
+            } else {
+              // Max attempts reached
+              toast({
+                title: 'Still Processing',
+                description: 'Post is queued. Check Library for status updates.',
+              });
+            }
+          } catch (err) {
+            console.error('Status polling error:', err);
+          }
+        };
+
+        // Start polling after a short delay
+        setTimeout(checkStatus, 10000); // First check after 10s
+      }
+
+      loadStagedContent();
     } catch (error: any) {
       console.error('Post error:', error);
       toast({
