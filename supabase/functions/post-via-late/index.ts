@@ -64,9 +64,8 @@ serve(async (req) => {
     console.log(`   Account ID: ${accountId}`);
     console.log(`   Payload:`, JSON.stringify(latePayload, null, 2));
 
-    // Call Late API with timeout
-    const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 90000); // 90s timeout for video uploads
+    // Call Late API (let it take as long as needed)
+    console.log('📡 Calling Late API...');
 
     let response;
     try {
@@ -76,22 +75,15 @@ serve(async (req) => {
           'Authorization': `Bearer ${lateApiKey}`,
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify(latePayload),
-        signal: controller.signal
+        body: JSON.stringify(latePayload)
+        // No timeout - Late API will handle it
       });
     } catch (fetchError: any) {
-      clearTimeout(timeoutId);
-      
-      if (fetchError.name === 'AbortError') {
-        console.error('❌ Late API request timed out after 90 seconds');
-        throw new Error('Late API timeout after 90s - video file may be too large or network is slow. Try converting to MP4 or reducing file size.');
-      }
-      
       console.error('❌ Late API fetch error:', fetchError);
       throw new Error(`Network error calling Late API: ${fetchError.message}`);
     }
-    
-    clearTimeout(timeoutId);
+
+    console.log('✅ Late API responded');
 
     console.log(`📊 Late API response status: ${response.status} ${response.statusText}`);
 
