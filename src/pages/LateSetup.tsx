@@ -6,7 +6,7 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
-import { CheckCircle2, XCircle, Loader2 } from "lucide-react";
+import { CheckCircle2, XCircle, Loader2, AlertCircle } from "lucide-react";
 import { useBusinesses } from "@/hooks/useBusinesses";
 
 interface AccountMapping {
@@ -540,10 +540,72 @@ export default function LateSetup() {
             </Button>
 
             {testResult && (
-              <div className={`p-4 rounded-md ${testResult.error ? 'bg-destructive/10' : 'bg-primary/10'}`}>
-                <pre className="text-sm overflow-auto">
-                  {JSON.stringify(testResult, null, 2)}
-                </pre>
+              <div className={`p-4 rounded-lg border ${
+                testResult.error 
+                  ? testResult.errorType === 'TOKEN_EXPIRED'
+                    ? 'bg-yellow-50 dark:bg-yellow-950 border-yellow-200 dark:border-yellow-800' 
+                    : 'bg-red-50 dark:bg-red-950 border-red-200 dark:border-red-800'
+                  : 'bg-green-50 dark:bg-green-950 border-green-200 dark:border-green-800'
+              }`}>
+                {testResult.error ? (
+                  <div className="space-y-3">
+                    <div className="flex items-start gap-3">
+                      {testResult.errorType === 'TOKEN_EXPIRED' ? (
+                        <AlertCircle className="w-5 h-5 text-yellow-600 dark:text-yellow-400 mt-0.5" />
+                      ) : (
+                        <XCircle className="w-5 h-5 text-red-600 dark:text-red-400 mt-0.5" />
+                      )}
+                      <div className="flex-1">
+                        <p className={`font-semibold ${
+                          testResult.errorType === 'TOKEN_EXPIRED' 
+                            ? 'text-yellow-900 dark:text-yellow-100' 
+                            : 'text-red-900 dark:text-red-100'
+                        }`}>
+                          {testResult.error}
+                        </p>
+                        {testResult.errorType === 'TOKEN_EXPIRED' && (
+                          <p className="text-sm text-yellow-700 dark:text-yellow-300 mt-1">
+                            Please reconnect {testResult.businessName}'s {testResult.platform} account in Late.so
+                          </p>
+                        )}
+                      </div>
+                    </div>
+                    
+                    {testResult.needsReconnection && (
+                      <div className="flex gap-2">
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => window.open('https://app.getlate.dev/accounts', '_blank')}
+                          className="text-yellow-600 border-yellow-600 hover:bg-yellow-50 dark:hover:bg-yellow-950"
+                        >
+                          Open Late.so
+                        </Button>
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => window.location.href = '/late-connections'}
+                        >
+                          Go to Late Connections
+                        </Button>
+                      </div>
+                    )}
+                  </div>
+                ) : (
+                  <div className="flex items-start gap-3">
+                    <CheckCircle2 className="w-5 h-5 text-green-600 dark:text-green-400 mt-0.5" />
+                    <div className="flex-1">
+                      <p className="font-semibold text-green-900 dark:text-green-100">
+                        Post created successfully!
+                      </p>
+                      {testResult.postId && (
+                        <p className="text-sm text-green-700 dark:text-green-300 mt-1">
+                          Post ID: {testResult.postId}
+                        </p>
+                      )}
+                    </div>
+                  </div>
+                )}
               </div>
             )}
           </CardContent>

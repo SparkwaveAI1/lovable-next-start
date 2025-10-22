@@ -13,7 +13,10 @@ import {
   Video,
   CheckCircle2,
   Copy,
-  RefreshCw
+  RefreshCw,
+  AlertCircle,
+  Shield,
+  XCircle
 } from 'lucide-react';
 import { toast } from 'sonner';
 
@@ -24,6 +27,9 @@ interface PlatformConnection {
   accountId: string | null;
   connected: boolean;
   color: string;
+  tokenHealth?: 'valid' | 'expired' | 'error' | 'untested' | 'testing';
+  lastTested?: Date;
+  healthMessage?: string;
 }
 
 export default function LateConnections() {
@@ -31,6 +37,7 @@ export default function LateConnections() {
   const [platforms, setPlatforms] = useState<PlatformConnection[]>([]);
   const [loading, setLoading] = useState(false);
   const [syncing, setSyncing] = useState(false);
+  const [testing, setTesting] = useState(false);
 
   useEffect(() => {
     loadConnections();
@@ -154,6 +161,97 @@ export default function LateConnections() {
     toast.success('Copied to clipboard');
   };
 
+  const testConnection = async (platform: string, accountId: string) => {
+    try {
+      console.log(`🔍 Testing ${platform} connection...`);
+      
+      const { data, error } = await supabase.functions.invoke('test-late-connection', {
+        body: { accountId, platform }
+      });
+      
+      if (error) throw error;
+      
+      console.log(`📊 Test result for ${platform}:`, data);
+      
+      return {
+        status: data.status,
+        message: data.message,
+        needsReconnection: data.needsReconnection
+      };
+    } catch (error: any) {
+      console.error(`❌ Error testing ${platform}:`, error);
+      return {
+        status: 'error',
+        message: error.message || 'Failed to test connection',
+        needsReconnection: false
+      };
+    }
+  };
+
+  const testAllConnections = async () => {
+    if (!selectedBusiness) return;
+    
+    setTesting(true);
+    
+    // Mark all as testing
+    setPlatforms(prev => prev.map(p => ({
+      ...p,
+      tokenHealth: p.connected ? 'testing' : 'untested'
+    })));
+    
+    try {
+      // Test all connected platforms in parallel
+      const connectedPlatforms = platforms.filter(p => p.connected && p.accountId);
+      
+      const testPromises = connectedPlatforms.map(async (platform) => {
+        const result = await testConnection(platform.platform, platform.accountId!);
+        return {
+          platform: platform.platform,
+          ...result
+        };
+      });
+      
+      const results = await Promise.all(testPromises);
+      
+      // Update platforms with test results
+      setPlatforms(prev => prev.map(p => {
+        const result = results.find(r => r.platform === p.platform);
+        if (!result) return p;
+        
+        return {
+          ...p,
+          tokenHealth: result.status as 'valid' | 'expired' | 'error',
+          lastTested: new Date(),
+          healthMessage: result.message
+        };
+      }));
+      
+      // Show summary
+      const expired = results.filter(r => r.status === 'expired').length;
+      const errors = results.filter(r => r.status === 'error').length;
+      const valid = results.filter(r => r.status === 'valid').length;
+      
+      if (expired > 0) {
+        toast.error(`${expired} connection(s) need reconnection`);
+      } else if (errors > 0) {
+        toast.warning(`${errors} connection(s) had errors`);
+      } else {
+        toast.success(`All ${valid} connection(s) are healthy`);
+      }
+      
+    } catch (error) {
+      console.error('Error testing connections:', error);
+      toast.error('Failed to test connections');
+    } finally {
+      setTesting(false);
+    }
+  };
+
+  const reconnectPlatform = () => {
+    window.open('https://app.getlate.dev/accounts', '_blank');
+    toast.info('Opening Late.so dashboard...');
+  };
+
   if (!selectedBusiness) {
     return (
       <div className="min-h-screen bg-background">
@@ -182,15 +280,41 @@ export default function LateConnections() {
               <h1 className="text-3xl font-bold mb-2">Platforms for {selectedBusiness.name}</h1>
               <p className="text-muted-foreground">Connected social media accounts via Late</p>
             </div>
-            <Button 
-              onClick={syncFromLate} 
-              disabled={syncing || !selectedBusiness}
-              className="gap-2"
-            >
-              <RefreshCw className={`h-4 w-4 ${syncing ? 'animate-spin' : ''}`} />
-              Sync from Late.so
-            </Button>
+            <div className="flex gap-2">
+              <Button 
+                onClick={testAllConnections} 
+                disabled={testing || !selectedBusiness}
+                variant="outline"
+                className="gap-2"
+              >
+                <Shield className={`h-4 w-4 ${testing ? 'animate-pulse' : ''}`} />
+                Test All Connections
+              </Button>
+              <Button 
+                onClick={syncFromLate} 
+                disabled={syncing || !selectedBusiness}
+                className="gap-2"
+              >
+                <RefreshCw className={`h-4 w-4 ${syncing ? 'animate-spin' : ''}`} />
+                Sync from Late.so
+              </Button>
+            </div>
           </div>
+          
+          {/* Warning banner for expired tokens */}
+          {platforms.some(p => p.tokenHealth === 'expired') && (
+            <div className="mb-4 p-4 bg-yellow-50 dark:bg-yellow-950 border border-yellow-200 dark:border-yellow-800 rounded-lg flex items-start gap-3">
+              <AlertCircle className="h-5 w-5 text-yellow-600 dark:text-yellow-400 mt-0.5" />
+              <div className="flex-1">
+                <p className="font-semibold text-yellow-900 dark:text-yellow-100">
+                  {platforms.filter(p => p.tokenHealth === 'expired').length} account(s) need reconnection
+                </p>
+                <p className="text-sm text-yellow-700 dark:text-yellow-300 mt-1">
+                  Click "Reconnect in Late.so" on expired accounts below to restore access.
+                </p>
+              </div>
+            </div>
+          )}
         </div>
 
         {loading ? (
@@ -200,7 +324,13 @@ export default function LateConnections() {
         ) : (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
             {platforms.map((platform) => (
-              <Card key={platform.platform} className="relative">
+              <Card 
+                key={platform.platform} 
+                className={`relative ${
+                  platform.tokenHealth === 'expired' ? 'border-yellow-500 dark:border-yellow-600' : 
+                  platform.tokenHealth === 'error' ? 'border-red-500 dark:border-red-600' : ''
+                }`}
+              >
                 <CardHeader>
                   <div className="flex items-center gap-3">
                     <div className={`p-3 rounded-lg ${platform.color}`}>
@@ -216,6 +346,56 @@ export default function LateConnections() {
                         <CheckCircle2 className="w-4 h-4 text-green-600" />
                         <span className="text-sm font-medium text-green-600">Connected</span>
                       </div>
+                      
+                      {/* Token Health Status */}
+                      {platform.tokenHealth && platform.tokenHealth !== 'untested' && (
+                        <div className="space-y-2">
+                          <div className="flex items-center gap-2">
+                            {platform.tokenHealth === 'valid' && (
+                              <>
+                                <Shield className="w-4 h-4 text-green-600" />
+                                <span className="text-sm font-medium text-green-600">Token Valid ✓</span>
+                              </>
+                            )}
+                            {platform.tokenHealth === 'expired' && (
+                              <>
+                                <AlertCircle className="w-4 h-4 text-yellow-600" />
+                                <span className="text-sm font-medium text-yellow-600">Token Expired ⚠️</span>
+                              </>
+                            )}
+                            {platform.tokenHealth === 'error' && (
+                              <>
+                                <XCircle className="w-4 h-4 text-red-600" />
+                                <span className="text-sm font-medium text-red-600">Error ❌</span>
+                              </>
+                            )}
+                            {platform.tokenHealth === 'testing' && (
+                              <>
+                                <RefreshCw className="w-4 h-4 text-blue-600 animate-spin" />
+                                <span className="text-sm font-medium text-blue-600">Testing...</span>
+                              </>
+                            )}
+                          </div>
+                          
+                          {platform.lastTested && (
+                            <p className="text-xs text-muted-foreground">
+                              Last tested: {new Date(platform.lastTested).toLocaleTimeString()}
+                            </p>
+                          )}
+                          
+                          {platform.tokenHealth === 'expired' && (
+                            <Button
+                              onClick={reconnectPlatform}
+                              variant="outline"
+                              size="sm"
+                              className="w-full text-yellow-600 border-yellow-600 hover:bg-yellow-50 dark:hover:bg-yellow-950"
+                            >
+                              Reconnect in Late.so
+                            </Button>
+                          )}
+                        </div>
+                      )}
+                      
                       <div className="space-y-1">
                         <p className="text-sm text-muted-foreground">Account ID:</p>
                         <div className="flex items-center gap-2">

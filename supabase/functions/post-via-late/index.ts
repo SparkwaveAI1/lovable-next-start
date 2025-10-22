@@ -22,11 +22,27 @@ serve(async (req) => {
       throw new Error('Late API key not configured');
     }
 
+    // Initialize Supabase client
+    const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
+    const supabaseKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
+    const supabase = createClient(supabaseUrl, supabaseKey);
+
     // Parse request body
     const { businessId, platform, content, mediaUrls, accountId } = await req.json();
     
-    console.log(`📝 Request details:`, {
+    // Fetch business name for better logging and error messages
+    const { data: business, error: businessError } = await supabase
+      .from('businesses')
+      .select('name, slug')
+      .eq('id', businessId)
+      .single();
+    
+    const businessName = business?.name || 'Unknown Business';
+    const businessSlug = business?.slug || 'unknown';
+    
+    console.log(`📝 [${businessName} - ${platform}] Request details:`, {
       businessId,
+      businessName,
       platform,
       contentLength: content?.length,
       mediaCount: mediaUrls?.length || 0,
@@ -93,20 +109,55 @@ serve(async (req) => {
 
     // Check if request was successful
     if (!response.ok) {
-      console.error(`❌ Late API returned error status: ${response.status}`);
+      console.error(`❌ [${businessName} - ${platform}] Late API returned error status: ${response.status}`);
       
       // Try to parse as JSON for structured error
       let errorMessage = `Late API error (${response.status})`;
+      let errorType = 'API_ERROR';
+      
       try {
         const errorData = JSON.parse(responseText);
         errorMessage = errorData.error || errorData.message || errorMessage;
-        console.error(`❌ Late API error details:`, errorData);
+        console.error(`❌ [${businessName} - ${platform}] Late API error details:`, errorData);
+        
+        // Detect token expiry errors
+        const tokenErrorKeywords = ['token', 'refresh', 'authorization', 'expired', 'invalid', 'bad request'];
+        const isTokenError = tokenErrorKeywords.some(keyword => 
+          errorMessage.toLowerCase().includes(keyword)
+        );
+        
+        if (response.status === 401 || response.status === 403 || isTokenError) {
+          errorType = 'TOKEN_EXPIRED';
+          errorMessage = `${businessName}'s ${platform} connection has expired`;
+          console.error(`❌ [${businessName} - ${platform}] Token expired - needs reconnection`);
+        }
       } catch {
         // Not JSON, use raw text
         errorMessage = responseText || errorMessage;
+        
+        // Check raw text for token errors too
+        if (response.status === 401 || response.status === 403) {
+          errorType = 'TOKEN_EXPIRED';
+          errorMessage = `${businessName}'s ${platform} connection has expired`;
+        }
       }
       
-      throw new Error(errorMessage);
+      // Return structured error response
+      return new Response(
+        JSON.stringify({
+          success: false,
+          error: errorMessage,
+          errorType: errorType,
+          platform: platform,
+          businessName: businessName,
+          needsReconnection: errorType === 'TOKEN_EXPIRED',
+          reconnectUrl: 'https://app.getlate.dev/accounts'
+        }),
+        {
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+          status: 200, // Return 200 so frontend can parse the error details
+        }
+      );
     }
 
     // Parse successful response
