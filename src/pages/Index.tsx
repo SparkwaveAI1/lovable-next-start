@@ -11,6 +11,7 @@ import { sendSMS } from '@/lib/smsService'
 import { ContactsTable } from '@/components/ContactsTable'
 import { useBusinessContext } from "@/contexts/BusinessContext"
 import { useBusinesses } from "@/hooks/useBusinesses"
+import { TokenHealthDashboard } from "@/components/TokenHealthDashboard"
 // import { GoHighLevelConfig } from "@/components/GoHighLevelConfig"
 
 const Index = () => {
@@ -94,6 +95,10 @@ const Index = () => {
           />
         </div>
 
+        {/* Token Health Monitoring */}
+        <div className="mb-12">
+          <TokenHealthDashboard />
+        </div>
 
         {/* Contacts Management - Show when business is selected */}
         {selectedBusiness && (

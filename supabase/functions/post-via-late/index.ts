@@ -169,14 +169,98 @@ serve(async (req) => {
       throw new Error('Invalid JSON response from Late API');
     }
 
+    console.log(`📊 Late API response data:`, responseData);
+
+    // Check if the post was actually created successfully
+    const postId = responseData.post?._id || responseData._id || responseData.data?._id;
+    
+    if (!postId) {
+      console.error(`❌ [${businessName} - ${platform}] No post ID in response`);
+      return new Response(
+        JSON.stringify({
+          success: false,
+          error: 'Failed to create post - no post ID returned',
+          platform: platform,
+          businessName: businessName
+        }),
+        {
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+          status: 200,
+        }
+      );
+    }
+
+    // Check the post status after a brief delay to see if it actually published
+    console.log(`⏳ Waiting 3 seconds to verify post status...`);
+    await new Promise(resolve => setTimeout(resolve, 3000));
+
+    try {
+      const statusResponse = await fetch(`https://getlate.dev/api/v1/posts/${postId}`, {
+        method: 'GET',
+        headers: {
+          'Authorization': `Bearer ${lateApiKey}`,
+          'Content-Type': 'application/json',
+        }
+      });
+
+      if (statusResponse.ok) {
+        const statusData = await statusResponse.json();
+        console.log(`📊 Post status check:`, statusData);
+
+        const postStatus = statusData.post?.status || statusData.status || statusData.data?.status;
+        const postError = statusData.post?.error || statusData.error || statusData.data?.error;
+
+        console.log(`📊 Post ${postId} status: ${postStatus}`);
+
+        // Check if post failed to publish
+        if (postStatus === 'failed' || postError) {
+          console.error(`❌ [${businessName} - ${platform}] Post created but failed to publish`);
+          console.error(`   Error:`, postError);
+
+          // Check for token-related errors
+          const errorMessage = postError?.message || postError || 'Post failed to publish';
+          const isTokenError = errorMessage.toLowerCase().includes('token') || 
+                               errorMessage.toLowerCase().includes('refresh') ||
+                               errorMessage.toLowerCase().includes('authorization') ||
+                               errorMessage.toLowerCase().includes('expired');
+
+          return new Response(
+            JSON.stringify({
+              success: false,
+              error: isTokenError 
+                ? `${businessName}'s ${platform} token has expired - please reconnect in Late.so`
+                : `Post created but failed to publish: ${errorMessage}`,
+              errorType: isTokenError ? 'TOKEN_EXPIRED' : 'PUBLISH_FAILED',
+              platform: platform,
+              businessName: businessName,
+              postId: postId,
+              needsReconnection: isTokenError,
+              reconnectUrl: 'https://app.getlate.dev/accounts',
+              details: statusData
+            }),
+            {
+              headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+              status: 200,
+            }
+          );
+        }
+
+        // Post is published or scheduled successfully
+        console.log(`✅ [${businessName} - ${platform}] Post published successfully`);
+        console.log(`   Status: ${postStatus}`);
+      }
+    } catch (statusError) {
+      // If status check fails, we'll still return success for the initial creation
+      console.warn(`⚠️ Could not verify post status:`, statusError);
+    }
+
     console.log(`✅ Successfully posted to ${platform} via Late API`);
-    console.log(`   Post data:`, responseData);
 
     // Return success
     return new Response(
       JSON.stringify({
         success: true,
-        postId: responseData.post?._id || responseData._id,
+        postId: postId,
         platform: platform,
         response: responseData
       }),

@@ -1120,6 +1120,86 @@ export type Database = {
           },
         ]
       }
+      token_alert_preferences: {
+        Row: {
+          alert_email: string | null
+          alert_enabled: boolean | null
+          check_frequency_hours: number | null
+          created_at: string | null
+          id: string
+          updated_at: string | null
+          warning_days_before_expiry: number | null
+        }
+        Insert: {
+          alert_email?: string | null
+          alert_enabled?: boolean | null
+          check_frequency_hours?: number | null
+          created_at?: string | null
+          id?: string
+          updated_at?: string | null
+          warning_days_before_expiry?: number | null
+        }
+        Update: {
+          alert_email?: string | null
+          alert_enabled?: boolean | null
+          check_frequency_hours?: number | null
+          created_at?: string | null
+          id?: string
+          updated_at?: string | null
+          warning_days_before_expiry?: number | null
+        }
+        Relationships: []
+      }
+      token_health_checks: {
+        Row: {
+          business_id: string
+          check_timestamp: string
+          created_at: string | null
+          days_until_expiry: number | null
+          error_message: string | null
+          id: string
+          platform: string
+          status: string
+          test_post_attempted: boolean | null
+          test_post_successful: boolean | null
+          token_expires_at: string | null
+        }
+        Insert: {
+          business_id: string
+          check_timestamp?: string
+          created_at?: string | null
+          days_until_expiry?: number | null
+          error_message?: string | null
+          id?: string
+          platform: string
+          status: string
+          test_post_attempted?: boolean | null
+          test_post_successful?: boolean | null
+          token_expires_at?: string | null
+        }
+        Update: {
+          business_id?: string
+          check_timestamp?: string
+          created_at?: string | null
+          days_until_expiry?: number | null
+          error_message?: string | null
+          id?: string
+          platform?: string
+          status?: string
+          test_post_attempted?: boolean | null
+          test_post_successful?: boolean | null
+          token_expires_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "token_health_checks_business_id_fkey"
+            columns: ["business_id"]
+            isOneToOne: false
+            referencedRelation: "businesses"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       twitter_chat_messages: {
         Row: {
           content: string
@@ -1260,7 +1340,29 @@ export type Database = {
       }
     }
     Views: {
-      [_ in never]: never
+      latest_token_health: {
+        Row: {
+          business_id: string | null
+          check_timestamp: string | null
+          days_until_expiry: number | null
+          error_message: string | null
+          id: string | null
+          platform: string | null
+          status: string | null
+          test_post_attempted: boolean | null
+          test_post_successful: boolean | null
+          token_expires_at: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "token_health_checks_business_id_fkey"
+            columns: ["business_id"]
+            isOneToOne: false
+            referencedRelation: "businesses"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
     }
     Functions: {
       can_access_business: {
@@ -1271,14 +1373,8 @@ export type Database = {
         Args: { p_business_id: string; p_user_id?: string }
         Returns: Database["public"]["Enums"]["business_permission_level"]
       }
-      get_user_email_by_id: {
-        Args: { p_user_id: string }
-        Returns: string
-      }
-      get_user_id_by_email: {
-        Args: { user_email: string }
-        Returns: string
-      }
+      get_user_email_by_id: { Args: { p_user_id: string }; Returns: string }
+      get_user_id_by_email: { Args: { user_email: string }; Returns: string }
       grant_business_permission_by_email: {
         Args: {
           p_business_id: string
@@ -1298,10 +1394,7 @@ export type Database = {
         Args: { p_business_id: string; p_user_id?: string }
         Returns: boolean
       }
-      is_super_admin: {
-        Args: Record<PropertyKey, never>
-        Returns: boolean
-      }
+      is_super_admin: { Args: never; Returns: boolean }
     }
     Enums: {
       app_role:
