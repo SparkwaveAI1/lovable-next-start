@@ -125,7 +125,8 @@ export default function EmployeeUpload() {
               thumbnailUrl = thumbUrl;
             }
           } catch (error) {
-            console.error('Error generating video thumbnail:', error);
+            console.error('Error generating video thumbnail (this is OK on mobile):', error);
+            // Continue without thumbnail - this is common on mobile devices
           }
         }
 
@@ -396,6 +397,13 @@ export default function EmployeeUpload() {
                 <p className="text-sm text-green-700 mt-1">
                   Your media is now available in the Media Library
                 </p>
+                <Button
+                  onClick={() => window.location.href = '/media-library'}
+                  className="mt-3"
+                  variant="outline"
+                >
+                  View in Media Library
+                </Button>
               </div>
             )}
           </CardContent>

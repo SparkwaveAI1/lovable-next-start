@@ -55,6 +55,31 @@ export default function MediaLibraryPage() {
     }
   }, [selectedBusiness]);
 
+  // Auto-refresh when new media is added via real-time subscription
+  useEffect(() => {
+    if (!selectedBusiness) return;
+
+    const channel = supabase
+      .channel('media-changes')
+      .on(
+        'postgres_changes',
+        {
+          event: 'INSERT',
+          schema: 'public',
+          table: 'media_assets',
+          filter: `business_id=eq.${selectedBusiness.id}`
+        },
+        () => {
+          loadMedia();
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [selectedBusiness]);
+
   const loadMedia = async () => {
     setLoading(true);
     try {
