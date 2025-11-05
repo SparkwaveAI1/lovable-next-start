@@ -48,6 +48,7 @@ export default function MediaLibraryPage() {
   const [editTags, setEditTags] = useState("");
   const [selectedMedia, setSelectedMedia] = useState<MediaAsset | null>(null);
   const [uploadProgress, setUploadProgress] = useState({ current: 0, total: 0, fileName: '' });
+  const [isProcessing, setIsProcessing] = useState(false);
 
   useEffect(() => {
     if (selectedBusiness) {
@@ -315,6 +316,98 @@ export default function MediaLibraryPage() {
     });
   };
 
+  const generateMissingThumbnails = async () => {
+    // Check if on desktop (better codec support)
+    const isMobile = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
+    if (isMobile) {
+      toast.error('Please use a desktop browser to generate thumbnails');
+      return;
+    }
+
+    const videosWithoutThumbnails = media.filter(
+      m => m.file_type === 'video' && !m.thumbnail_path
+    );
+
+    if (videosWithoutThumbnails.length === 0) {
+      toast.info('All videos have thumbnails');
+      return;
+    }
+
+    setIsProcessing(true);
+    let successCount = 0;
+    let failCount = 0;
+
+    toast.info(`Processing ${videosWithoutThumbnails.length} video(s)...`);
+
+    for (const video of videosWithoutThumbnails) {
+      try {
+        // Extract storage path from public URL
+        // URL format: https://{project}.supabase.co/storage/v1/object/public/media/{storage_path}
+        const urlParts = video.file_path.split('/storage/v1/object/public/media/');
+        if (urlParts.length !== 2) {
+          throw new Error('Invalid file path format');
+        }
+        const storagePath = urlParts[1];
+        
+        // Download video from storage
+        const { data: videoBlob, error: downloadError } = await supabase.storage
+          .from('media')
+          .download(storagePath);
+        
+        if (downloadError) throw downloadError;
+        
+        // Convert to File for thumbnail generation
+        const videoFile = new File([videoBlob], video.file_name, { 
+          type: video.mime_type || 'video/mp4' 
+        });
+        
+        // Generate thumbnail using existing function
+        const { blob, width, height } = await generateVideoThumbnail(videoFile);
+        
+        // Upload thumbnail
+        const timestamp = Date.now();
+        const businessFolder = storagePath.split('/')[0];
+        const thumbnailStoragePath = `${businessFolder}/thumbnails/thumb_${timestamp}_${video.id}.jpg`;
+        
+        const { error: uploadError } = await supabase.storage
+          .from('media')
+          .upload(thumbnailStoragePath, blob, {
+            contentType: 'image/jpeg',
+            upsert: true
+          });
+        
+        if (uploadError) throw uploadError;
+
+        // Get public URL for thumbnail
+        const { data: { publicUrl: thumbnailPublicUrl } } = supabase.storage
+          .from('media')
+          .getPublicUrl(thumbnailStoragePath);
+        
+        // Update database
+        const { error: updateError } = await supabase
+          .from('media_assets')
+          .update({ 
+            thumbnail_path: thumbnailPublicUrl, 
+            width, 
+            height 
+          })
+          .eq('id', video.id);
+        
+        if (updateError) throw updateError;
+        
+        successCount++;
+        toast.success(`Generated thumbnail for ${video.file_name}`);
+      } catch (error) {
+        console.error(`Failed to generate thumbnail for ${video.file_name}:`, error);
+        failCount++;
+      }
+    }
+
+    setIsProcessing(false);
+    toast.success(`Completed: ${successCount} thumbnails generated${failCount > 0 ? `, ${failCount} failed` : ''}`);
+    loadMedia(); // Refresh the display
+  };
+
   const handleDelete = async (mediaId: string) => {
     if (!confirm('Delete this media file? This cannot be undone.')) return;
 
@@ -464,7 +557,7 @@ export default function MediaLibraryPage() {
                 className="hidden"
                 id="media-upload"
               />
-              <div className="flex gap-2">
+              <div className="flex flex-wrap gap-2">
                 <Button
                   onClick={() => document.getElementById('media-upload')?.click()}
                   disabled={uploading}
@@ -482,6 +575,19 @@ export default function MediaLibraryPage() {
                 >
                   <RefreshCw className="w-4 h-4" />
                 </Button>
+                {/* Show thumbnail generation button on desktop only */}
+                {!(/iPhone|iPad|iPod|Android/i.test(navigator.userAgent)) && 
+                  media.some(m => m.file_type === 'video' && !m.thumbnail_path) && (
+                  <Button
+                    onClick={generateMissingThumbnails}
+                    disabled={isProcessing}
+                    variant="secondary"
+                    className="w-full sm:w-auto"
+                  >
+                    <ImageIcon className="w-4 h-4 mr-2" />
+                    {isProcessing ? 'Generating...' : 'Generate Missing Thumbnails'}
+                  </Button>
+                )}
               </div>
               
               {uploading && uploadProgress.total > 0 && (
