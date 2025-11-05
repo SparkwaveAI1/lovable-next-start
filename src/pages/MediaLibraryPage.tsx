@@ -9,7 +9,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/u
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Upload, Image as ImageIcon, Video, Trash2, Edit2, Search, Download, Play } from "lucide-react";
+import { Upload, Image as ImageIcon, Video, Trash2, Edit2, Search, Download, Play, RefreshCw } from "lucide-react";
 import { MediaViewerDialog } from "@/components/MediaViewerDialog";
 import { toast } from "sonner";
 import { useBusinessContext } from "@/contexts/BusinessContext";
@@ -464,14 +464,25 @@ export default function MediaLibraryPage() {
                 className="hidden"
                 id="media-upload"
               />
-              <Button
-                onClick={() => document.getElementById('media-upload')?.click()}
-                disabled={uploading}
-                className="w-full sm:w-auto"
-              >
-                <Upload className="w-4 h-4 mr-2" />
-                {uploading ? 'Uploading...' : 'Upload Media'}
-              </Button>
+              <div className="flex gap-2">
+                <Button
+                  onClick={() => document.getElementById('media-upload')?.click()}
+                  disabled={uploading}
+                  className="w-full sm:w-auto"
+                >
+                  <Upload className="w-4 h-4 mr-2" />
+                  {uploading ? 'Uploading...' : 'Upload Media'}
+                </Button>
+                <Button
+                  onClick={loadMedia}
+                  disabled={loading}
+                  variant="outline"
+                  size="icon"
+                  title="Refresh media library"
+                >
+                  <RefreshCw className="w-4 h-4" />
+                </Button>
+              </div>
               
               {uploading && uploadProgress.total > 0 && (
                 <Card className="p-4">
@@ -610,19 +621,19 @@ export default function MediaLibraryPage() {
                                 className="w-full h-full object-cover"
                               />
                             ) : (
-                              <video
-                                src={item.file_path}
-                                className="w-full h-full object-cover"
-                                preload="metadata"
-                                muted
-                                playsInline
-                              />
-                            )}
-                            <div className="absolute inset-0 flex items-center justify-center bg-black/20 hover:bg-black/30 transition-colors">
-                              <div className="w-16 h-16 rounded-full bg-white/90 flex items-center justify-center shadow-lg">
-                                <Play className="w-8 h-8 text-gray-900 ml-1" fill="currentColor" />
+                              <div className="absolute inset-0 flex flex-col items-center justify-center bg-gray-100">
+                                <Video className="w-16 h-16 text-gray-400 mb-2" />
+                                <span className="text-xs text-gray-500">Video</span>
+                                <span className="text-xs text-gray-400 mt-1">No preview</span>
                               </div>
-                            </div>
+                            )}
+                            {item.thumbnail_path && (
+                              <div className="absolute inset-0 flex items-center justify-center bg-black/20 hover:bg-black/30 transition-colors">
+                                <div className="w-16 h-16 rounded-full bg-white/90 flex items-center justify-center shadow-lg">
+                                  <Play className="w-8 h-8 text-gray-900 ml-1" fill="currentColor" />
+                                </div>
+                              </div>
+                            )}
                           </div>
                         ) : null}
                         <div className="absolute top-2 right-2 flex gap-1">
