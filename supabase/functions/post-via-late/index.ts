@@ -191,8 +191,10 @@ serve(async (req) => {
     }
 
     // Check the post status after a brief delay to see if it actually published
-    console.log(`⏳ Waiting 3 seconds to verify post status...`);
-    await new Promise(resolve => setTimeout(resolve, 3000));
+    // Instagram needs more time to process media
+    const waitTime = (platform === 'instagram' && mediaUrls && mediaUrls.length > 0) ? 15000 : 3000;
+    console.log(`⏳ Waiting ${waitTime/1000} seconds for ${platform} to process post${mediaUrls?.length ? ' with media' : ''}...`);
+    await new Promise(resolve => setTimeout(resolve, waitTime));
 
     try {
       const statusResponse = await fetch(`https://getlate.dev/api/v1/posts/${postId}`, {
