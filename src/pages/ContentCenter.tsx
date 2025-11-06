@@ -570,7 +570,7 @@ const ContentCenter = () => {
             <label className="text-sm font-medium">Tweet Content</label>
             <Textarea
               key={editingTweet?.id}
-              defaultValue={editContent}
+              value={editContent}
               onChange={(e) => setEditContent(e.target.value)}
               rows={4}
               className="mt-1"
