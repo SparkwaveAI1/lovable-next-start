@@ -535,6 +535,12 @@ async function postViaLate(
       throw new Error(error.message || 'Late API posting failed');
     }
     
+    // Check if Late API reported a failure in the response body
+    if (!data || data.success === false) {
+      console.error('❌ Late API reported failure:', data);
+      throw new Error(data?.error || 'Post failed on platform - check Late.so for details');
+    }
+    
     console.log('✅ Posted via Late API:', data);
     
     return {
