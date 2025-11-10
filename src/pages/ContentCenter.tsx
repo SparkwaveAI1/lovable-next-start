@@ -58,7 +58,15 @@ const ContentCenter = () => {
   const [editDate, setEditDate] = useState('');
   const [editTime, setEditTime] = useState('');
   const [postingTweet, setPostingTweet] = useState<number | null>(null);
+  const [modalSelectedPlatform, setModalSelectedPlatform] = useState<string>('twitter');
   const { toast } = useToast();
+
+  // Initialize modal platform when scheduling tweet
+  useEffect(() => {
+    if (schedulingTweet) {
+      setModalSelectedPlatform('twitter');
+    }
+  }, [schedulingTweet]);
 
   const copyToClipboard = async (text: string, label: string) => {
     try {
@@ -303,11 +311,11 @@ const ContentCenter = () => {
       linkedin: 3000
     };
     
-    const limit = platformLimits[selectedPlatform as keyof typeof platformLimits];
+    const limit = platformLimits[modalSelectedPlatform as keyof typeof platformLimits];
     if (limit && contentLength > limit) {
       toast({
         title: "Content Too Long",
-        description: `${selectedPlatform} has a ${limit} character limit (current: ${contentLength})`,
+        description: `${modalSelectedPlatform} has a ${limit} character limit (current: ${contentLength})`,
         variant: "destructive"
       });
       return;
@@ -333,7 +341,7 @@ const ContentCenter = () => {
           content: schedulingTweet.tweet,
           content_type: selectedContentType,
           topic: topic,
-          platform: selectedPlatform,
+          platform: modalSelectedPlatform,
           scheduled_for: scheduledUtc.toISOString(),
           status: 'scheduled'
         })
@@ -613,15 +621,11 @@ const ContentCenter = () => {
   );
 
   const ScheduleModal = () => {
-    const [modalSelectedPlatform, setModalSelectedPlatform] = useState(
-      selectedPlatform || 'twitter'
-    );
-
     return (
       <Dialog open={!!schedulingTweet} onOpenChange={(open) => { if (!open) setSchedulingTweet(null); }}>
         <DialogContent onInteractOutside={(e) => e.preventDefault()} onPointerDownOutside={(e) => e.preventDefault()} onFocusOutside={(e) => e.preventDefault()}>
           <DialogHeader>
-            <DialogTitle>Schedule Tweet</DialogTitle>
+            <DialogTitle>Schedule Post</DialogTitle>
             <DialogDescription className="sr-only">Schedule content for posting</DialogDescription>
           </DialogHeader>
           <div className="space-y-4">
@@ -713,13 +717,7 @@ const ContentCenter = () => {
               <p className="text-xs text-muted-foreground">All times are in Eastern Time (ET)</p>
             </div>
             <div className="flex gap-2">
-              <Button type="button" onClick={() => {
-                // Store the modal's platform in a temporary state or pass it directly
-                const originalPlatform = selectedPlatform;
-                setSelectedPlatform(modalSelectedPlatform);
-                handleScheduleTweet();
-                setSelectedPlatform(originalPlatform);
-              }}>Schedule Tweet</Button>
+              <Button type="button" onClick={handleScheduleTweet}>Schedule Post</Button>
               <Button type="button" variant="outline" onClick={() => setSchedulingTweet(null)}>Cancel</Button>
             </div>
           </div>
