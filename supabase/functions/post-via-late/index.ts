@@ -6,6 +6,43 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
 
+async function uploadMediaToLate(mediaUrl: string, lateApiKey: string): Promise<string> {
+  try {
+    console.log('Uploading media to Late CDN from:', mediaUrl);
+    
+    // Download from Supabase
+    const response = await fetch(mediaUrl);
+    if (!response.ok) {
+      throw new Error(`Failed to fetch media from Supabase: ${response.status}`);
+    }
+    
+    const blob = await response.blob();
+    const formData = new FormData();
+    formData.append('file', blob);
+    
+    // Upload to Late's CDN
+    const uploadRes = await fetch('https://api.late.so/media/upload', {
+      method: 'POST',
+      headers: { 
+        'Authorization': `Bearer ${lateApiKey}` 
+      },
+      body: formData
+    });
+    
+    if (!uploadRes.ok) {
+      const errorText = await uploadRes.text();
+      throw new Error(`Late CDN upload failed: ${errorText}`);
+    }
+    
+    const result = await uploadRes.json();
+    console.log('Media uploaded to Late CDN:', result.url);
+    return result.url;
+  } catch (error) {
+    console.error('Media upload to Late failed:', error);
+    throw error;
+  }
+}
+
 serve(async (req) => {
   // Handle CORS preflight
   if (req.method === 'OPTIONS') {
@@ -69,11 +106,19 @@ serve(async (req) => {
 
     // Add media if provided
     if (mediaUrls && mediaUrls.length > 0) {
-      console.log(`📎 Adding ${mediaUrls.length} media items`);
-      latePayload.mediaItems = mediaUrls.map((url: string) => ({
+      console.log(`Processing ${mediaUrls.length} media items for ${platform}`);
+      
+      // Instagram needs media uploaded to Late's CDN
+      const processedUrls = platform === 'instagram' 
+        ? await Promise.all(mediaUrls.map((url: string) => uploadMediaToLate(url, lateApiKey)))
+        : mediaUrls;
+      
+      latePayload.mediaItems = processedUrls.map((url: string) => ({
         type: url.match(/\.(mp4|mov|avi)$/i) ? 'video' : 'image',
         url: url
       }));
+      
+      console.log('Media items prepared for Late API:', latePayload.mediaItems);
     }
 
     console.log(`📡 Calling Late API for ${platform}...`);
