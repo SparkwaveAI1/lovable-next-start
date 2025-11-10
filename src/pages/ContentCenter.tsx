@@ -612,85 +612,121 @@ const ContentCenter = () => {
     </Dialog>
   );
 
-  const ScheduleModal = () => (
-    <Dialog open={!!schedulingTweet} onOpenChange={(open) => { if (!open) setSchedulingTweet(null); }}>
-      <DialogContent onInteractOutside={(e) => e.preventDefault()} onPointerDownOutside={(e) => e.preventDefault()} onFocusOutside={(e) => e.preventDefault()}>
-        <DialogHeader>
-          <DialogTitle>Schedule Tweet</DialogTitle>
-          <DialogDescription className="sr-only">Schedule content for posting</DialogDescription>
-        </DialogHeader>
-        <div className="space-y-4">
-          <div>
-            <label className="text-sm font-medium">Tweet Content</label>
-            <Textarea value={schedulingTweet?.tweet || ''} readOnly rows={3} className="mt-1" />
-          </div>
+  const ScheduleModal = () => {
+    const [modalSelectedPlatform, setModalSelectedPlatform] = useState(
+      selectedPlatform || 'twitter'
+    );
 
-          {schedulingTweet?.content_media && schedulingTweet.content_media.length > 0 && (
+    return (
+      <Dialog open={!!schedulingTweet} onOpenChange={(open) => { if (!open) setSchedulingTweet(null); }}>
+        <DialogContent onInteractOutside={(e) => e.preventDefault()} onPointerDownOutside={(e) => e.preventDefault()} onFocusOutside={(e) => e.preventDefault()}>
+          <DialogHeader>
+            <DialogTitle>Schedule Tweet</DialogTitle>
+            <DialogDescription className="sr-only">Schedule content for posting</DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4">
             <div>
-              <label className="text-sm font-medium">Attached Media</label>
-              <div className="flex gap-2 mt-2 flex-wrap">
-                {schedulingTweet.content_media.map((media, idx) => (
-                  <div key={idx} className="relative w-24 h-24 rounded border">
-                    {media.media_assets.file_type === 'image' ? (
-                      <img 
-                        src={media.media_assets.file_path} 
-                        alt={`Media ${idx + 1}`}
-                        className="w-full h-full object-cover rounded"
-                        onError={(e) => {
-                          (e.currentTarget as HTMLImageElement).style.display = 'none';
-                        }}
-                      />
-                    ) : media.media_assets.thumbnail_path ? (
-                      <img 
-                        src={media.media_assets.thumbnail_path} 
-                        alt={`Video ${idx + 1}`}
-                        className="w-full h-full object-cover rounded"
-                        onError={(e) => {
-                          (e.currentTarget as HTMLImageElement).style.display = 'none';
-                        }}
-                      />
-                    ) : (
-                      <div className="w-full h-full flex items-center justify-center bg-muted rounded">
-                        <Video className="h-6 w-6 text-muted-foreground" />
-                      </div>
-                    )}
-                  </div>
-                ))}
-              </div>
+              <label className="text-sm font-medium">Tweet Content</label>
+              <Textarea value={schedulingTweet?.tweet || ''} readOnly rows={3} className="mt-1" />
             </div>
-          )}
 
-          <div className="space-y-2">
-            <div className="grid grid-cols-2 gap-4">
+            {schedulingTweet?.content_media && schedulingTweet.content_media.length > 0 && (
               <div>
-                <label className="text-sm font-medium">Date</label>
-                <Input 
-                  type="date" 
-                  value={scheduleDate}
-                  onChange={(e) => setScheduleDate(e.target.value)}
-                  onKeyDown={(e) => e.key === 'Enter' && e.preventDefault()}
-                  className="mt-1"
-                />
+                <label className="text-sm font-medium">Attached Media</label>
+                <div className="flex gap-2 mt-2 flex-wrap">
+                  {schedulingTweet.content_media.map((media, idx) => (
+                    <div key={idx} className="relative w-24 h-24 rounded border">
+                      {media.media_assets.file_type === 'image' ? (
+                        <img 
+                          src={media.media_assets.file_path} 
+                          alt={`Media ${idx + 1}`}
+                          className="w-full h-full object-cover rounded"
+                          onError={(e) => {
+                            (e.currentTarget as HTMLImageElement).style.display = 'none';
+                          }}
+                        />
+                      ) : media.media_assets.thumbnail_path ? (
+                        <img 
+                          src={media.media_assets.thumbnail_path} 
+                          alt={`Video ${idx + 1}`}
+                          className="w-full h-full object-cover rounded"
+                          onError={(e) => {
+                            (e.currentTarget as HTMLImageElement).style.display = 'none';
+                          }}
+                        />
+                      ) : (
+                        <div className="w-full h-full flex items-center justify-center bg-muted rounded">
+                          <Video className="h-6 w-6 text-muted-foreground" />
+                        </div>
+                      )}
+                    </div>
+                  ))}
+                </div>
               </div>
-              <div>
-                <label className="text-sm font-medium">Time (Eastern)</label>
-                <SimpleTimeInput
-                  value={scheduleTime}
-                  onChange={setScheduleTime}
-                  className="mt-1"
-                />
-              </div>
+            )}
+
+            {/* Platform Selection */}
+            <div className="mb-4">
+              <Label>Platform to Post To</Label>
+              <Select value={modalSelectedPlatform} onValueChange={setModalSelectedPlatform}>
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="twitter">Twitter</SelectItem>
+                  <SelectItem value="instagram">Instagram</SelectItem>
+                  <SelectItem value="tiktok">TikTok</SelectItem>
+                  <SelectItem value="facebook">Facebook</SelectItem>
+                  <SelectItem value="linkedin">LinkedIn</SelectItem>
+                </SelectContent>
+              </Select>
+              {modalSelectedPlatform === 'instagram' && schedulingTweet?.content_media?.some((m: any) => 
+                m.media_assets?.file_path?.toLowerCase().endsWith('.mov')
+              ) && (
+                <p className="text-yellow-600 text-sm mt-1">
+                  ⚠️ Warning: Instagram via Late.so may reject .MOV files
+                </p>
+              )}
             </div>
-            <p className="text-xs text-muted-foreground">All times are in Eastern Time (ET)</p>
+
+            <div className="space-y-2">
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="text-sm font-medium">Date</label>
+                  <Input 
+                    type="date" 
+                    value={scheduleDate}
+                    onChange={(e) => setScheduleDate(e.target.value)}
+                    onKeyDown={(e) => e.key === 'Enter' && e.preventDefault()}
+                    className="mt-1"
+                  />
+                </div>
+                <div>
+                  <label className="text-sm font-medium">Time (Eastern)</label>
+                  <SimpleTimeInput
+                    value={scheduleTime}
+                    onChange={setScheduleTime}
+                    className="mt-1"
+                  />
+                </div>
+              </div>
+              <p className="text-xs text-muted-foreground">All times are in Eastern Time (ET)</p>
+            </div>
+            <div className="flex gap-2">
+              <Button type="button" onClick={() => {
+                // Store the modal's platform in a temporary state or pass it directly
+                const originalPlatform = selectedPlatform;
+                setSelectedPlatform(modalSelectedPlatform);
+                handleScheduleTweet();
+                setSelectedPlatform(originalPlatform);
+              }}>Schedule Tweet</Button>
+              <Button type="button" variant="outline" onClick={() => setSchedulingTweet(null)}>Cancel</Button>
+            </div>
           </div>
-          <div className="flex gap-2">
-            <Button type="button" onClick={handleScheduleTweet}>Schedule Tweet</Button>
-            <Button type="button" variant="outline" onClick={() => setSchedulingTweet(null)}>Cancel</Button>
-          </div>
-        </div>
-      </DialogContent>
-    </Dialog>
-  );
+        </DialogContent>
+      </Dialog>
+    );
+  };
 
   const ScheduleTabContent = () => (
     <div className="space-y-4">
