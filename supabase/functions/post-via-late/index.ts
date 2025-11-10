@@ -21,7 +21,7 @@ async function uploadMediaToLate(mediaUrl: string, lateApiKey: string): Promise<
     formData.append('file', blob);
     
     // Upload to Late's CDN
-    const uploadRes = await fetch('https://api.late.so/media/upload', {
+    const uploadRes = await fetch('https://getlate.dev/api/v1/media/upload', {
       method: 'POST',
       headers: { 
         'Authorization': `Bearer ${lateApiKey}` 
