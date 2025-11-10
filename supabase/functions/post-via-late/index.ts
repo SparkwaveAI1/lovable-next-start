@@ -108,10 +108,8 @@ serve(async (req) => {
     if (mediaUrls && mediaUrls.length > 0) {
       console.log(`Processing ${mediaUrls.length} media items for ${platform}`);
       
-      // Instagram needs media uploaded to Late's CDN
-      const processedUrls = platform === 'instagram' 
-        ? await Promise.all(mediaUrls.map((url: string) => uploadMediaToLate(url, lateApiKey)))
-        : mediaUrls;
+      // Skip CDN upload - send Supabase URLs directly to Late
+      const processedUrls = mediaUrls;
       
       latePayload.mediaItems = processedUrls.map((url: string) => ({
         type: url.match(/\.(mp4|mov|avi)$/i) ? 'video' : 'image',
