@@ -11,6 +11,7 @@ import MediaLibraryPage from "./pages/MediaLibraryPage";
 import EmployeeUpload from "./pages/EmployeeUpload";
 import ServiceRequests from "./pages/ServiceRequests";
 import Auth from "./pages/Auth";
+import CrisisMonitor from "./pages/CrisisMonitor";
 import LateSetup from "./pages/LateSetup";
 import LateConnections from "./pages/LateConnections";
 import AdminSetupPage from "./pages/AdminSetupPage";
@@ -29,6 +30,7 @@ const App = () => (
         <BrowserRouter>
           <Routes>
             <Route path="/auth" element={<Auth />} />
+            <Route path="/crisis-monitor" element={<CrisisMonitor />} />
             <Route path="/upload" element={<EmployeeUpload />} />
             <Route path="/" element={<ProtectedRoute><Index /></ProtectedRoute>} />
             <Route path="/content-center" element={<ProtectedRoute><ContentCenter /></ProtectedRoute>} />
