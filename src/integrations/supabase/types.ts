@@ -676,6 +676,7 @@ export type Database = {
           indicator_key: string
           indicator_name: string
           last_updated: string | null
+          reading_date: string | null
           source: string | null
           unit: string | null
           value: number | null
@@ -686,6 +687,7 @@ export type Database = {
           indicator_key: string
           indicator_name: string
           last_updated?: string | null
+          reading_date?: string | null
           source?: string | null
           unit?: string | null
           value?: number | null
@@ -696,6 +698,7 @@ export type Database = {
           indicator_key?: string
           indicator_name?: string
           last_updated?: string | null
+          reading_date?: string | null
           source?: string | null
           unit?: string | null
           value?: number | null
