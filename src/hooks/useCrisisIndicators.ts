@@ -67,12 +67,18 @@ export function useCrisisIndicators() {
     return ind?.value ?? null;
   };
 
+  const getIndicatorReadingDate = (key: string): string | null => {
+    const ind = indicators.find(i => i.indicator_key === key);
+    return ind?.reading_date ?? null;
+  };
+
   return {
     indicators,
     loading,
     lastUpdated,
     error,
     refreshData,
-    getIndicatorValue
+    getIndicatorValue,
+    getIndicatorReadingDate
   };
 }
