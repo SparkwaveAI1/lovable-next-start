@@ -1,43 +1,55 @@
 import React, { useState } from 'react';
+import { useCrisisIndicators } from '@/hooks/useCrisisIndicators';
+import { RefreshCw } from 'lucide-react';
+import { format } from 'date-fns';
 
 const CrisisMonitor = () => {
   const [activeTab, setActiveTab] = useState('dashboard');
+  const { loading, lastUpdated, refreshData, getIndicatorValue } = useCrisisIndicators();
+
+  // Get live values from DB, with fallbacks to hardcoded defaults
+  const sofrIorbSpread = getIndicatorValue('sofr_iorb_spread') ?? 22;
+  const reverseRepo = getIndicatorValue('reverse_repo') ?? 0;
+  
+  // These are not from FRED, keep hardcoded for now (manual updates)
+  const creDelinquency = 11.7;
+  const moveIndex = 71;
 
   const indicators = [
     {
       name: 'Plumbing Stress',
       metric: 'SOFR - IORB Spread',
-      currentValue: 22,
-      currentDisplay: '+22 bps',
+      currentValue: sofrIorbSpread,
+      currentDisplay: `${sofrIorbSpread >= 0 ? '+' : ''}${sofrIorbSpread} bps`,
       unit: 'basis points',
       normalMax: 0,
       yellowMax: 10,
       whatIsIt: 'The SOFR-IORB spread measures how desperately banks need cash. SOFR is what banks pay to borrow overnight. IORB is what the Fed pays banks to park cash. When SOFR exceeds IORB, banks are so desperate for cash they are paying above the Fed rate.',
       whyItMatters: 'A positive spread means the banking system plumbing is clogged. Banks cannot get the cash they need through normal channels.',
-      currentAnalysis: 'At +22 basis points, banks are paying significantly above the Fed target rate just to get overnight cash. This is a CRITICAL warning sign - well past the danger threshold of 10-15 bps.',
-      dataSource: 'Federal Reserve Bank of New York',
-      lastUpdated: 'Dec 2, 2025'
+      currentAnalysis: `At ${sofrIorbSpread >= 0 ? '+' : ''}${sofrIorbSpread} basis points, ${sofrIorbSpread > 10 ? 'banks are paying significantly above the Fed target rate just to get overnight cash. This is a CRITICAL warning sign - well past the danger threshold of 10-15 bps.' : sofrIorbSpread > 0 ? 'there is some stress in overnight lending markets.' : 'overnight lending markets are functioning normally.'}`,
+      dataSource: 'FRED (SOFR, IORB)',
+      isLive: true
     },
     {
       name: 'System Buffer',
       metric: 'Reverse Repo Facility (RRP)',
-      currentValue: 0,
-      currentDisplay: '~$0B',
-      unit: 'billions USD',
-      normalMin: 300,
-      yellowMin: 100,
+      currentValue: reverseRepo,
+      currentDisplay: reverseRepo < 0.1 ? '~$0B' : `$${reverseRepo.toFixed(2)}T`,
+      unit: 'trillions USD',
+      normalMin: 0.3,
+      yellowMin: 0.1,
       isInverted: true,
       whatIsIt: 'The Reverse Repo Facility is where money market funds park excess cash overnight at the Fed. Think of it as an overflow tank for extra money in the financial system.',
       whyItMatters: 'When the RRP is full, it absorbs shocks from Treasury issuance. When it is empty, every new Treasury bond issued sucks cash directly from bank reserves.',
-      currentAnalysis: 'The buffer is essentially EMPTY. This means the financial system has no shock absorber left. Any new government borrowing now competes directly with banks for cash.',
-      dataSource: 'Federal Reserve',
-      lastUpdated: 'Dec 2, 2025'
+      currentAnalysis: reverseRepo < 0.1 ? 'The buffer is essentially EMPTY. This means the financial system has no shock absorber left. Any new government borrowing now competes directly with banks for cash.' : `At $${reverseRepo.toFixed(2)}T, there is still some buffer in the system.`,
+      dataSource: 'FRED (RRPONTSYD)',
+      isLive: true
     },
     {
       name: 'Commercial Real Estate Crisis',
       metric: 'Office Building Loan Delinquencies',
-      currentValue: 11.7,
-      currentDisplay: '11.7%',
+      currentValue: creDelinquency,
+      currentDisplay: `${creDelinquency}%`,
       unit: 'percent',
       normalMax: 5,
       yellowMax: 8,
@@ -45,22 +57,22 @@ const CrisisMonitor = () => {
       whatIsIt: 'This measures what percentage of commercial office building loans are 30+ days past due. When businesses cannot pay their office building mortgages, the banks holding those loans take losses.',
       whyItMatters: 'Regional banks hold most of these loans. High delinquency rates mean guaranteed losses for these banks, potentially triggering failures.',
       currentAnalysis: 'At 11.7%, we are well past the 10% threshold where extend and pretend (banks quietly renewing bad loans) breaks down. Regional bank losses are now unavoidable.',
-      dataSource: 'Trepp CMBS Research',
-      lastUpdated: 'Nov 2025'
+      dataSource: 'Trepp CMBS Research (Manual)',
+      isLive: false
     },
     {
       name: 'Bond Market Fear',
       metric: 'MOVE Index',
-      currentValue: 71,
-      currentDisplay: '71',
+      currentValue: moveIndex,
+      currentDisplay: `${moveIndex}`,
       unit: 'index points',
       normalMax: 100,
       yellowMax: 130,
       whatIsIt: 'The MOVE Index is like the VIX, but for bonds. It measures expected volatility in US Treasury yields. Higher equals more fear and uncertainty in the bond market.',
       whyItMatters: 'When bond traders are scared, lending freezes up. A spike in MOVE often precedes broader market crashes.',
       currentAnalysis: 'At 71, the bond market appears calm. BUT this is misleading - the Fed $125B injection is artificially suppressing fear. Watch for this to spike if injections stop.',
-      dataSource: 'ICE BofA',
-      lastUpdated: 'Dec 2, 2025'
+      dataSource: 'ICE BofA (Manual)',
+      isLive: false
     }
   ];
 
@@ -80,7 +92,7 @@ const CrisisMonitor = () => {
     whyItMatters: string;
     currentAnalysis: string;
     dataSource: string;
-    lastUpdated: string;
+    isLive?: boolean;
   }
 
   const getIndicatorStatus = (indicator: Indicator) => {
@@ -250,6 +262,21 @@ const CrisisMonitor = () => {
               }`} />
               <h1 className="text-xl font-bold tracking-tight">CRISIS MONITOR</h1>
             </div>
+            <div className="flex items-center gap-3">
+              {lastUpdated && (
+                <span className="text-xs text-zinc-500">
+                  Last updated: {format(lastUpdated, 'MMM d, yyyy h:mm a')}
+                </span>
+              )}
+              <button
+                onClick={refreshData}
+                disabled={loading}
+                className="flex items-center gap-2 px-3 py-1.5 text-xs bg-zinc-800 hover:bg-zinc-700 rounded border border-zinc-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+              >
+                <RefreshCw className={`w-3 h-3 ${loading ? 'animate-spin' : ''}`} />
+                {loading ? 'Updating...' : 'Refresh Data'}
+              </button>
+            </div>
           </div>
 
           <nav className="flex gap-1 mt-4 overflow-x-auto pb-1">
@@ -380,7 +407,7 @@ const CrisisMonitor = () => {
                       </div>
                       
                       <p className="text-xs text-zinc-600">
-                        Source: {ind.dataSource} | Last updated: {ind.lastUpdated}
+                        Source: {ind.dataSource} | Last updated: {ind.isLive && lastUpdated ? format(lastUpdated, 'MMM d, yyyy') : 'Manual update'}
                       </p>
                     </div>
                   </div>

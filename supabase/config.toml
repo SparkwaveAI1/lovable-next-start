@@ -38,3 +38,6 @@ verify_jwt = false
 
 [functions.test-late-connection]
 verify_jwt = false
+
+[functions.update-crisis-data]
+verify_jwt = false

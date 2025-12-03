@@ -669,6 +669,39 @@ export type Database = {
           },
         ]
       }
+      crisis_indicators: {
+        Row: {
+          created_at: string | null
+          id: string
+          indicator_key: string
+          indicator_name: string
+          last_updated: string | null
+          source: string | null
+          unit: string | null
+          value: number | null
+        }
+        Insert: {
+          created_at?: string | null
+          id?: string
+          indicator_key: string
+          indicator_name: string
+          last_updated?: string | null
+          source?: string | null
+          unit?: string | null
+          value?: number | null
+        }
+        Update: {
+          created_at?: string | null
+          id?: string
+          indicator_key?: string
+          indicator_name?: string
+          last_updated?: string | null
+          source?: string | null
+          unit?: string | null
+          value?: number | null
+        }
+        Relationships: []
+      }
       generated_tweets: {
         Row: {
           business_id: string | null
