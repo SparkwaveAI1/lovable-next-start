@@ -7,6 +7,7 @@ import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { toast } from "sonner";
 import { RefreshCw, Save } from "lucide-react";
+import { format } from "date-fns";
 
 interface CrisisIndicator {
   id: string;
@@ -16,6 +17,7 @@ interface CrisisIndicator {
   unit: string | null;
   source: string | null;
   last_updated: string | null;
+  reading_date: string | null;
 }
 
 const MANUAL_INDICATORS = [
@@ -27,6 +29,7 @@ export function ManualIndicatorEntry() {
   const [indicators, setIndicators] = useState<CrisisIndicator[]>([]);
   const [selectedKey, setSelectedKey] = useState<string>("");
   const [value, setValue] = useState<string>("");
+  const [readingDate, setReadingDate] = useState<string>(format(new Date(), "yyyy-MM-dd"));
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
 
@@ -64,6 +67,11 @@ export function ManualIndicatorEntry() {
       return;
     }
 
+    if (!readingDate) {
+      toast.error("Please select a reading date");
+      return;
+    }
+
     setSaving(true);
     try {
       const indicatorConfig = MANUAL_INDICATORS.find(i => i.key === selectedKey);
@@ -75,6 +83,7 @@ export function ManualIndicatorEntry() {
           .from("crisis_indicators")
           .update({
             value: numValue,
+            reading_date: readingDate,
             last_updated: new Date().toISOString(),
           })
           .eq("indicator_key", selectedKey);
@@ -90,6 +99,7 @@ export function ManualIndicatorEntry() {
             value: numValue,
             unit: indicatorConfig?.unit || "",
             source: indicatorConfig?.source || "Manual Entry",
+            reading_date: readingDate,
             last_updated: new Date().toISOString(),
           });
 
@@ -98,6 +108,7 @@ export function ManualIndicatorEntry() {
 
       toast.success("Indicator updated successfully");
       setValue("");
+      setReadingDate(format(new Date(), "yyyy-MM-dd"));
       loadIndicators();
     } catch (error) {
       console.error("Error saving indicator:", error);
@@ -140,23 +151,36 @@ export function ManualIndicatorEntry() {
         </div>
 
         {selectedIndicator && (
-          <div className="p-3 bg-muted rounded-md text-sm">
+          <div className="p-3 bg-muted rounded-md text-sm space-y-1">
             <p><strong>Current Value:</strong> {selectedIndicator.value ?? "Not set"} {selectedIndicator.unit}</p>
+            <p><strong>Reading Date:</strong> {selectedIndicator.reading_date 
+              ? new Date(selectedIndicator.reading_date).toLocaleDateString() 
+              : "Not set"}</p>
             <p><strong>Last Updated:</strong> {selectedIndicator.last_updated 
               ? new Date(selectedIndicator.last_updated).toLocaleString() 
               : "Never"}</p>
           </div>
         )}
 
-        <div className="space-y-2">
-          <Label>New Value</Label>
-          <Input
-            type="number"
-            step="0.01"
-            placeholder="Enter value..."
-            value={value}
-            onChange={(e) => setValue(e.target.value)}
-          />
+        <div className="grid grid-cols-2 gap-4">
+          <div className="space-y-2">
+            <Label>New Value</Label>
+            <Input
+              type="number"
+              step="0.01"
+              placeholder="Enter value..."
+              value={value}
+              onChange={(e) => setValue(e.target.value)}
+            />
+          </div>
+          <div className="space-y-2">
+            <Label>Reading Date</Label>
+            <Input
+              type="date"
+              value={readingDate}
+              onChange={(e) => setReadingDate(e.target.value)}
+            />
+          </div>
         </div>
 
         <Button onClick={handleSave} disabled={saving || !selectedKey || !value} className="w-full">
@@ -171,9 +195,14 @@ export function ManualIndicatorEntry() {
               {indicators.map((indicator) => (
                 <div key={indicator.id} className="flex justify-between items-center p-2 bg-muted/50 rounded text-sm">
                   <span>{indicator.indicator_name}</span>
-                  <span className="text-muted-foreground">
-                    {indicator.value ?? "—"} {indicator.unit}
-                  </span>
+                  <div className="text-right text-muted-foreground">
+                    <span>{indicator.value ?? "—"} {indicator.unit}</span>
+                    {indicator.reading_date && (
+                      <span className="ml-2 text-xs">
+                        ({new Date(indicator.reading_date).toLocaleDateString()})
+                      </span>
+                    )}
+                  </div>
                 </div>
               ))}
             </div>
