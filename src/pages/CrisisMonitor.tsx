@@ -5,7 +5,7 @@ import { format } from 'date-fns';
 
 const CrisisMonitor = () => {
   const [activeTab, setActiveTab] = useState('dashboard');
-  const { loading, lastUpdated, refreshData, getIndicatorValue } = useCrisisIndicators();
+  const { loading, lastUpdated, refreshData, getIndicatorValue, getIndicatorReadingDate } = useCrisisIndicators();
 
   // Get live values from DB, with fallbacks to hardcoded defaults
   const sofrIorbSpread = getIndicatorValue('sofr_iorb_spread') ?? 22;
@@ -14,6 +14,8 @@ const CrisisMonitor = () => {
   // Manual entry indicators - fetched from DB with fallbacks
   const creDelinquency = getIndicatorValue('cre_delinquency') ?? 11.7;
   const moveIndex = getIndicatorValue('move_index') ?? 71;
+  const creReadingDate = getIndicatorReadingDate('cre_delinquency');
+  const moveReadingDate = getIndicatorReadingDate('move_index');
 
   const indicators = [
     {
@@ -58,7 +60,8 @@ const CrisisMonitor = () => {
       whyItMatters: 'Regional banks hold most of these loans. High delinquency rates mean guaranteed losses for these banks, potentially triggering failures.',
       currentAnalysis: 'At 11.7%, we are well past the 10% threshold where extend and pretend (banks quietly renewing bad loans) breaks down. Regional bank losses are now unavoidable.',
       dataSource: 'Trepp CMBS Research (Manual)',
-      isLive: false
+      isLive: false,
+      readingDate: creReadingDate
     },
     {
       name: 'Bond Market Fear',
@@ -72,7 +75,8 @@ const CrisisMonitor = () => {
       whyItMatters: 'When bond traders are scared, lending freezes up. A spike in MOVE often precedes broader market crashes.',
       currentAnalysis: 'At 71, the bond market appears calm. BUT this is misleading - the Fed $125B injection is artificially suppressing fear. Watch for this to spike if injections stop.',
       dataSource: 'ICE BofA (Manual)',
-      isLive: false
+      isLive: false,
+      readingDate: moveReadingDate
     }
   ];
 
@@ -93,6 +97,7 @@ const CrisisMonitor = () => {
     currentAnalysis: string;
     dataSource: string;
     isLive?: boolean;
+    readingDate?: string | null;
   }
 
   const getIndicatorStatus = (indicator: Indicator) => {
@@ -407,7 +412,13 @@ const CrisisMonitor = () => {
                       </div>
                       
                       <p className="text-xs text-zinc-600">
-                        Source: {ind.dataSource} | Last updated: {ind.isLive && lastUpdated ? format(lastUpdated, 'MMM d, yyyy') : 'Manual update'}
+                        Source: {ind.dataSource} | Last updated: {
+                          ind.isLive && lastUpdated 
+                            ? format(lastUpdated, 'MMM d, yyyy') 
+                            : ind.readingDate 
+                              ? format(new Date(ind.readingDate), 'MMM d, yyyy')
+                              : 'Not yet entered'
+                        }
                       </p>
                     </div>
                   </div>
