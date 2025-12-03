@@ -5,7 +5,7 @@ import { format } from 'date-fns';
 
 const CrisisMonitor = () => {
   const [activeTab, setActiveTab] = useState('dashboard');
-  const { loading, lastUpdated, refreshData, getIndicatorValue, getIndicatorReadingDate } = useCrisisIndicators();
+  const { loading, lastUpdated, refreshData, getIndicatorValue, getIndicatorReadingDate, indicators: hookIndicators } = useCrisisIndicators();
 
   // Get live values from DB, with fallbacks to hardcoded defaults
   const sofrIorbSpread = getIndicatorValue('sofr_iorb_spread') ?? 22;
@@ -14,8 +14,12 @@ const CrisisMonitor = () => {
   // Manual entry indicators - fetched from DB with fallbacks
   const creDelinquency = getIndicatorValue('cre_delinquency') ?? 11.7;
   const moveIndex = getIndicatorValue('move_index') ?? 71;
-  const creReadingDate = getIndicatorReadingDate('cre_delinquency');
-  const moveReadingDate = getIndicatorReadingDate('move_index');
+  
+  // Get reading dates directly from hook indicators
+  const moveIndicator = hookIndicators.find(i => i.indicator_key === 'move_index');
+  const creIndicator = hookIndicators.find(i => i.indicator_key === 'cre_delinquency');
+  const moveReadingDate = moveIndicator?.reading_date ?? null;
+  const creReadingDate = creIndicator?.reading_date ?? null;
 
   const indicators = [
     {
