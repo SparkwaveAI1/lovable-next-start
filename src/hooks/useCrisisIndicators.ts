@@ -8,6 +8,7 @@ export interface CrisisIndicator {
   unit: string | null;
   source: string | null;
   last_updated: string | null;
+  reading_date: string | null;
 }
 
 export function useCrisisIndicators() {

@@ -11,9 +11,9 @@ const CrisisMonitor = () => {
   const sofrIorbSpread = getIndicatorValue('sofr_iorb_spread') ?? 22;
   const reverseRepo = getIndicatorValue('reverse_repo') ?? 0;
   
-  // These are not from FRED, keep hardcoded for now (manual updates)
-  const creDelinquency = 11.7;
-  const moveIndex = 71;
+  // Manual entry indicators - fetched from DB with fallbacks
+  const creDelinquency = getIndicatorValue('cre_delinquency') ?? 11.7;
+  const moveIndex = getIndicatorValue('move_index') ?? 71;
 
   const indicators = [
     {
