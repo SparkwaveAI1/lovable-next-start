@@ -1,10 +1,12 @@
-import { Settings, Bell, Menu } from "lucide-react"
+import { useState, useEffect } from "react"
+import { Settings, Bell, Menu, Shield } from "lucide-react"
 import { Link } from "react-router-dom"
 import { Button } from "@/components/ui/button"
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
 import { BusinessSwitcher } from "./BusinessSwitcher"
 import LogoutButton from "./LogoutButton"
 import sparkwaveIcon from "@/assets/sparkwave-icon.png"
+import { supabase } from "@/integrations/supabase/client"
 
 interface DashboardHeaderProps {
   selectedBusinessId?: string
@@ -12,6 +14,21 @@ interface DashboardHeaderProps {
 }
 
 export function DashboardHeader({ selectedBusinessId, onBusinessChange }: DashboardHeaderProps) {
+  const [isSuperAdmin, setIsSuperAdmin] = useState(false)
+
+  useEffect(() => {
+    const checkSuperAdmin = async () => {
+      try {
+        const { data, error } = await supabase.rpc("is_super_admin")
+        if (!error && data === true) {
+          setIsSuperAdmin(true)
+        }
+      } catch (error) {
+        console.error("Error checking admin status:", error)
+      }
+    }
+    checkSuperAdmin()
+  }, [])
   return (
     <header className="sticky top-0 md:fixed md:top-0 md:left-0 md:right-0 z-50 border-b border-border bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60 min-h-[100px] md:min-h-[72px] w-full">
       <div className="container mx-auto px-4 md:px-6 py-2 md:py-4 max-w-full">
@@ -56,6 +73,15 @@ export function DashboardHeader({ selectedBusinessId, onBusinessChange }: Dashbo
               >
                 Service Requests
               </Link>
+              {isSuperAdmin && (
+                <Link
+                  to="/admin"
+                  className="text-sm font-medium text-muted-foreground hover:text-foreground transition-colors flex items-center gap-1"
+                >
+                  <Shield className="h-3 w-3" />
+                  Admin
+                </Link>
+              )}
             </nav>
             <div className="flex items-center gap-1 md:gap-2">
               <Button variant="ghost" size="sm" className="h-8 w-8 p-0 hidden lg:inline-flex">
@@ -86,6 +112,14 @@ export function DashboardHeader({ selectedBusinessId, onBusinessChange }: Dashbo
                   <DropdownMenuItem asChild>
                     <Link to="/service-requests" className="w-full">Service Requests</Link>
                   </DropdownMenuItem>
+                  {isSuperAdmin && (
+                    <DropdownMenuItem asChild>
+                      <Link to="/admin" className="w-full flex items-center gap-2">
+                        <Shield className="h-3 w-3" />
+                        Admin
+                      </Link>
+                    </DropdownMenuItem>
+                  )}
                 </DropdownMenuContent>
               </DropdownMenu>
               

@@ -16,6 +16,7 @@ import LateSetup from "./pages/LateSetup";
 import LateConnections from "./pages/LateConnections";
 import AdminSetupPage from "./pages/AdminSetupPage";
 import BusinessPermissionsPage from "./pages/BusinessPermissionsPage";
+import AdminDashboard from "./pages/AdminDashboard";
 import ProtectedRoute from "./components/ProtectedRoute";
 import { BusinessProvider } from "@/contexts/BusinessContext";
 
@@ -41,6 +42,7 @@ const App = () => (
             <Route path="/late-connections" element={<ProtectedRoute><LateConnections /></ProtectedRoute>} />
             <Route path="/admin-setup" element={<ProtectedRoute><AdminSetupPage /></ProtectedRoute>} />
             <Route path="/permissions" element={<ProtectedRoute><BusinessPermissionsPage /></ProtectedRoute>} />
+            <Route path="/admin" element={<ProtectedRoute><AdminDashboard /></ProtectedRoute>} />
             {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
             <Route path="*" element={<NotFound />} />
           </Routes>
