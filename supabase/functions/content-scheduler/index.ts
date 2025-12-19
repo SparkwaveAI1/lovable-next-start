@@ -32,6 +32,19 @@ Deno.serve(async (req) => {
     return new Response(null, { headers: corsHeaders });
   }
 
+  // Initialize Supabase client FIRST - before any route handling
+  const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
+  const supabaseKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
+  
+  if (!supabaseUrl || !supabaseKey) {
+    return new Response(
+      JSON.stringify({ error: 'Missing Supabase configuration' }),
+      { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+    );
+  }
+
+  const supabase = createClient(supabaseUrl, supabaseKey);
+
   // DEBUG: compute content hash without any side effects
   // GET /debug/hash?platform=twitter&content=Hello%20World&when=2025-09-03T12:00:00.000Z
   if (req.method === "GET" && new URL(req.url).pathname.endsWith("/debug/hash")) {
@@ -130,16 +143,6 @@ Deno.serve(async (req) => {
 
   try {
     console.log('=== Content Scheduler Job Starting ===');
-    
-    // Initialize Supabase client
-    const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
-    const supabaseKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
-    
-    if (!supabaseUrl || !supabaseKey) {
-      throw new Error('Missing Supabase configuration');
-    }
-
-    const supabase = createClient(supabaseUrl, supabaseKey);
 
     // Step 1: Clean up items stuck in 'processing' for > 10 minutes (likely posted but update failed)
     const tenMinutesAgo = new Date(Date.now() - 10 * 60 * 1000).toISOString();
