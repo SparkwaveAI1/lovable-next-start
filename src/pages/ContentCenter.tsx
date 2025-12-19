@@ -1,4 +1,5 @@
 import { useState, useEffect } from "react";
+import { BUSINESSES } from '@/constants/businesses';
 import { Link } from "react-router-dom";
 import { Sparkles, FileText, Send, Calendar, TrendingUp, RefreshCw, Edit, Trash2, Rocket, CheckCircle, Copy, ImageIcon, Settings, Video } from "lucide-react";
 import { AgentPromptEditor } from '@/components/AgentPromptEditor';
@@ -84,12 +85,7 @@ const ContentCenter = () => {
     }
   };
 
-  const businesses = [
-    { id: '456dc53b-d9d9-41b0-bc33-4f4c4a791eff', slug: 'fight-flow-academy', name: 'Fight Flow Academy' },
-    { id: '5a9bbfcf-fae5-4063-9780-bcbe366bae88', slug: 'sparkwave-ai', name: 'Sparkwave AI' },
-    { id: '18d0dbb1-a82d-4477-a9f8-816a1fa2ee08', slug: 'persona-ai', name: 'PersonaAI' },
-    { id: '350b8fcb-9bfe-4b53-9548-c6ffdb1d3cb5', slug: 'charx-world', name: 'CharX World' }
-  ];
+  const businesses = BUSINESSES;
 
   const platforms = [
     {
