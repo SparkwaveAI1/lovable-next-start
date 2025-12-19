@@ -9,12 +9,13 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/u
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Upload, Image as ImageIcon, Video, Trash2, Edit2, Search, Download, Play, RefreshCw } from "lucide-react";
+import { Upload, Image as ImageIcon, Video, Trash2, Edit2, Search, Download, Play, RefreshCw, Calendar } from "lucide-react";
 import { MediaViewerDialog } from "@/components/MediaViewerDialog";
 import { toast } from "sonner";
 import { useBusinessContext } from "@/contexts/BusinessContext";
 import { DashboardHeader } from "@/components/DashboardHeader";
 import { Progress } from "@/components/ui/progress";
+import { format } from "date-fns";
 
 interface MediaAsset {
   id: string;
@@ -791,6 +792,10 @@ export default function MediaLibraryPage() {
                             {item.description}
                           </p>
                         )}
+                        <div className="flex items-center gap-1 text-xs text-muted-foreground">
+                          <Calendar className="w-3 h-3" />
+                          <span>{format(new Date(item.uploaded_at || item.created_at), 'MMM d, yyyy')}</span>
+                        </div>
                         <div className="flex justify-between items-center text-xs text-muted-foreground">
                           <span>{formatFileSize(item.file_size)}</span>
                           {item.width && item.height && (
