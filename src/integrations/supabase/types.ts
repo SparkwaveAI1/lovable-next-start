@@ -834,6 +834,11 @@ export type Database = {
           sent_at: string | null
           status: string | null
           subject: string
+          target_filters: Json | null
+          target_segment_id: string | null
+          target_tags: string[] | null
+          target_tags_match: string | null
+          target_type: string | null
           total_bounced: number | null
           total_clicked: number | null
           total_complained: number | null
@@ -860,6 +865,11 @@ export type Database = {
           sent_at?: string | null
           status?: string | null
           subject: string
+          target_filters?: Json | null
+          target_segment_id?: string | null
+          target_tags?: string[] | null
+          target_tags_match?: string | null
+          target_type?: string | null
           total_bounced?: number | null
           total_clicked?: number | null
           total_complained?: number | null
@@ -886,6 +896,11 @@ export type Database = {
           sent_at?: string | null
           status?: string | null
           subject?: string
+          target_filters?: Json | null
+          target_segment_id?: string | null
+          target_tags?: string[] | null
+          target_tags_match?: string | null
+          target_type?: string | null
           total_bounced?: number | null
           total_clicked?: number | null
           total_complained?: number | null
@@ -909,6 +924,13 @@ export type Database = {
             columns: ["list_id"]
             isOneToOne: false
             referencedRelation: "email_lists"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "email_campaigns_target_segment_id_fkey"
+            columns: ["target_segment_id"]
+            isOneToOne: false
+            referencedRelation: "contact_segments"
             referencedColumns: ["id"]
           },
         ]
@@ -1855,6 +1877,10 @@ export type Database = {
         Returns: undefined
       }
       contact_touch: { Args: { p_contact_id: string }; Returns: undefined }
+      count_campaign_recipients: {
+        Args: { p_campaign_id: string }
+        Returns: number
+      }
       create_contact_tag: {
         Args: {
           p_business_id: string
@@ -1863,6 +1889,15 @@ export type Database = {
           p_name: string
         }
         Returns: string
+      }
+      get_campaign_recipients: {
+        Args: { p_campaign_id: string }
+        Returns: {
+          contact_id: string
+          email: string
+          first_name: string
+          last_name: string
+        }[]
       }
       get_contacts_by_tags: {
         Args: {
@@ -1932,6 +1967,15 @@ export type Database = {
         Returns: boolean
       }
       is_super_admin: { Args: never; Returns: boolean }
+      preview_campaign_recipients: {
+        Args: { p_campaign_id: string; p_limit?: number }
+        Returns: {
+          contact_id: string
+          email: string
+          first_name: string
+          last_name: string
+        }[]
+      }
       refresh_tag_counts: {
         Args: { p_business_id: string }
         Returns: undefined
