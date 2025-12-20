@@ -1,5 +1,12 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 
+/**
+ * REQUIRED ENVIRONMENT SECRETS (set in Supabase Dashboard -> Edge Functions -> Secrets):
+ * - TWILIO_ACCOUNT_SID (or TWILIO_SID): Your Twilio Account SID
+ * - TWILIO_AUTH_TOKEN: Your Twilio Auth Token  
+ * - TWILIO_PHONE_NUMBER: Your Twilio phone number in E.164 format (e.g., +1234567890)
+ */
+
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
@@ -79,7 +86,8 @@ serve(async (req) => {
     console.log('Extracted parameters:', { to: to?.substring(0, 3) + '...', messageLength: message?.length });
 
     console.log('=== CHECKING ENVIRONMENT VARIABLES INDIVIDUALLY ===');
-    const accountSid = Deno.env.get('TWILIO_SID');
+    // Support both naming conventions for account SID
+    const accountSid = Deno.env.get('TWILIO_ACCOUNT_SID') || Deno.env.get('TWILIO_SID');
     const authToken = Deno.env.get('TWILIO_AUTH_TOKEN');
     const fromNumber = Deno.env.get('TWILIO_PHONE_NUMBER');
 
