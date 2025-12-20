@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react"
-import { Settings, Bell, Menu, Shield } from "lucide-react"
+import { Settings, Bell, Menu, Shield, Mail } from "lucide-react"
 import { Link } from "react-router-dom"
 import { Button } from "@/components/ui/button"
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
@@ -73,6 +73,13 @@ export function DashboardHeader({ selectedBusinessId, onBusinessChange }: Dashbo
               >
                 Service Requests
               </Link>
+              <Link
+                to="/email-marketing"
+                className="text-sm font-medium text-muted-foreground hover:text-foreground transition-colors flex items-center gap-1"
+              >
+                <Mail className="h-3 w-3" />
+                Email
+              </Link>
               {isSuperAdmin && (
                 <Link
                   to="/admin"
@@ -111,6 +118,12 @@ export function DashboardHeader({ selectedBusinessId, onBusinessChange }: Dashbo
                   </DropdownMenuItem>
                   <DropdownMenuItem asChild>
                     <Link to="/service-requests" className="w-full">Service Requests</Link>
+                  </DropdownMenuItem>
+                  <DropdownMenuItem asChild>
+                    <Link to="/email-marketing" className="w-full flex items-center gap-2">
+                      <Mail className="h-3 w-3" />
+                      Email Marketing
+                    </Link>
                   </DropdownMenuItem>
                   {isSuperAdmin && (
                     <DropdownMenuItem asChild>
