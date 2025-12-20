@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { BUSINESS_ID_MAP } from '@/constants/businesses';
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -11,8 +12,8 @@ interface UploadedFile {
   preview?: string;
 }
 
-// Hard-coded for Fight Flow Academy
-const FIGHT_FLOW_BUSINESS_ID = '456dc53b-d9d9-41b0-bc33-4f4c4a791eff';
+// Use centralized business constants
+const FIGHT_FLOW_BUSINESS_ID = BUSINESS_ID_MAP['fight-flow-academy'];
 const FIGHT_FLOW_SLUG = 'fight-flow-academy';
 
 export default function EmployeeUpload() {
