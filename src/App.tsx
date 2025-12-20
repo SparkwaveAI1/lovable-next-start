@@ -18,6 +18,7 @@ import AdminSetupPage from "./pages/AdminSetupPage";
 import BusinessPermissionsPage from "./pages/BusinessPermissionsPage";
 import AdminDashboard from "./pages/AdminDashboard";
 import ProtectedRoute from "./components/ProtectedRoute";
+import { ErrorBoundary } from "./components/ErrorBoundary";
 import { BusinessProvider } from "@/contexts/BusinessContext";
 
 const queryClient = new QueryClient();
@@ -33,16 +34,16 @@ const App = () => (
             <Route path="/auth" element={<Auth />} />
             <Route path="/crisis-monitor" element={<CrisisMonitor />} />
             <Route path="/upload" element={<EmployeeUpload />} />
-            <Route path="/" element={<ProtectedRoute><Index /></ProtectedRoute>} />
-            <Route path="/content-center" element={<ProtectedRoute><ContentCenter /></ProtectedRoute>} />
-            <Route path="/game-test" element={<ProtectedRoute><GameTestInterface /></ProtectedRoute>} />
-            <Route path="/media-library" element={<ProtectedRoute><MediaLibraryPage /></ProtectedRoute>} />
-            <Route path="/service-requests" element={<ProtectedRoute><ServiceRequests /></ProtectedRoute>} />
-            <Route path="/late-setup" element={<ProtectedRoute><LateSetup /></ProtectedRoute>} />
-            <Route path="/late-connections" element={<ProtectedRoute><LateConnections /></ProtectedRoute>} />
-            <Route path="/admin-setup" element={<ProtectedRoute><AdminSetupPage /></ProtectedRoute>} />
-            <Route path="/permissions" element={<ProtectedRoute><BusinessPermissionsPage /></ProtectedRoute>} />
-            <Route path="/admin" element={<ProtectedRoute><AdminDashboard /></ProtectedRoute>} />
+            <Route path="/" element={<ProtectedRoute><ErrorBoundary><Index /></ErrorBoundary></ProtectedRoute>} />
+            <Route path="/content-center" element={<ProtectedRoute><ErrorBoundary><ContentCenter /></ErrorBoundary></ProtectedRoute>} />
+            <Route path="/game-test" element={<ProtectedRoute><ErrorBoundary><GameTestInterface /></ErrorBoundary></ProtectedRoute>} />
+            <Route path="/media-library" element={<ProtectedRoute><ErrorBoundary><MediaLibraryPage /></ErrorBoundary></ProtectedRoute>} />
+            <Route path="/service-requests" element={<ProtectedRoute><ErrorBoundary><ServiceRequests /></ErrorBoundary></ProtectedRoute>} />
+            <Route path="/late-setup" element={<ProtectedRoute><ErrorBoundary><LateSetup /></ErrorBoundary></ProtectedRoute>} />
+            <Route path="/late-connections" element={<ProtectedRoute><ErrorBoundary><LateConnections /></ErrorBoundary></ProtectedRoute>} />
+            <Route path="/admin-setup" element={<ProtectedRoute><ErrorBoundary><AdminSetupPage /></ErrorBoundary></ProtectedRoute>} />
+            <Route path="/permissions" element={<ProtectedRoute><ErrorBoundary><BusinessPermissionsPage /></ErrorBoundary></ProtectedRoute>} />
+            <Route path="/admin" element={<ProtectedRoute><ErrorBoundary><AdminDashboard /></ErrorBoundary></ProtectedRoute>} />
             {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
             <Route path="*" element={<NotFound />} />
           </Routes>
