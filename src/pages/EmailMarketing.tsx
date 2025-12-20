@@ -2,6 +2,8 @@ import React, { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useBusinessContext } from '@/contexts/BusinessContext';
+import { useBusinesses } from '@/hooks/useBusinesses';
+import { DashboardHeader } from '@/components/DashboardHeader';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -50,12 +52,18 @@ interface Campaign {
 type ViewMode = 'list' | 'create' | 'edit';
 
 export default function EmailMarketing() {
-  const { selectedBusiness } = useBusinessContext();
+  const { selectedBusiness, setSelectedBusiness } = useBusinessContext();
+  const { data: businesses = [] } = useBusinesses();
   const { toast } = useToast();
   const queryClient = useQueryClient();
   
   const [viewMode, setViewMode] = useState<ViewMode>('list');
   const [editingCampaignId, setEditingCampaignId] = useState<string | null>(null);
+
+  const handleBusinessChange = (businessId: string) => {
+    const business = businesses.find(b => b.id === businessId);
+    if (business) setSelectedBusiness(business);
+  };
 
   const { data: campaigns, isLoading } = useQuery({
     queryKey: ['email-campaigns', selectedBusiness?.id],
@@ -154,14 +162,20 @@ export default function EmailMarketing() {
 
   if (!selectedBusiness) {
     return (
-      <div className="p-8">
-        <Card>
-          <CardContent className="py-8 text-center">
-            <p className="text-muted-foreground">
-              Select a business to manage email campaigns.
-            </p>
-          </CardContent>
-        </Card>
+      <div className="min-h-screen bg-background">
+        <DashboardHeader 
+          selectedBusinessId={undefined}
+          onBusinessChange={handleBusinessChange}
+        />
+        <main className="container mx-auto px-4 sm:px-6 py-4 md:py-8 pt-2 md:pt-28">
+          <Card>
+            <CardContent className="py-8 text-center">
+              <p className="text-muted-foreground">
+                Select a business to manage email campaigns.
+              </p>
+            </CardContent>
+          </Card>
+        </main>
       </div>
     );
   }
@@ -169,27 +183,38 @@ export default function EmailMarketing() {
   // Show builder view
   if (viewMode === 'create' || viewMode === 'edit') {
     return (
-      <div className="p-8 max-w-4xl mx-auto">
-        <Button variant="ghost" onClick={handleCancel} className="mb-4">
-          <ArrowLeft className="h-4 w-4 mr-2" />
-          Back to Campaigns
-        </Button>
-        <h1 className="text-2xl font-bold mb-6">
-          {viewMode === 'create' ? 'Create Campaign' : 'Edit Campaign'}
-        </h1>
-        <CampaignBuilder
-          businessId={selectedBusiness.id}
-          campaignId={editingCampaignId || undefined}
-          onSave={handleSaveComplete}
-          onCancel={handleCancel}
+      <div className="min-h-screen bg-background">
+        <DashboardHeader 
+          selectedBusinessId={selectedBusiness?.id}
+          onBusinessChange={handleBusinessChange}
         />
+        <main className="container mx-auto px-4 sm:px-6 py-4 md:py-8 pt-2 md:pt-28 max-w-4xl">
+          <Button variant="ghost" onClick={handleCancel} className="mb-4">
+            <ArrowLeft className="h-4 w-4 mr-2" />
+            Back to Campaigns
+          </Button>
+          <h1 className="text-2xl font-bold mb-6">
+            {viewMode === 'create' ? 'Create Campaign' : 'Edit Campaign'}
+          </h1>
+          <CampaignBuilder
+            businessId={selectedBusiness.id}
+            campaignId={editingCampaignId || undefined}
+            onSave={handleSaveComplete}
+            onCancel={handleCancel}
+          />
+        </main>
       </div>
     );
   }
 
   // Show list view
   return (
-    <div className="p-8">
+    <div className="min-h-screen bg-background">
+      <DashboardHeader 
+        selectedBusinessId={selectedBusiness?.id}
+        onBusinessChange={handleBusinessChange}
+      />
+      <main className="container mx-auto px-4 sm:px-6 py-4 md:py-8 pt-2 md:pt-28">
       <div className="flex items-center justify-between mb-6">
         <div>
           <h1 className="text-2xl font-bold">Email Marketing</h1>
@@ -309,6 +334,7 @@ export default function EmailMarketing() {
           )}
         </CardContent>
       </Card>
+      </main>
     </div>
   );
 }
