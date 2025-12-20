@@ -1744,6 +1744,10 @@ export type Database = {
         }
         Returns: boolean
       }
+      increment_campaign_stat: {
+        Args: { p_campaign_id: string; p_stat: string }
+        Returns: undefined
+      }
       is_business_admin: {
         Args: { p_business_id: string; p_user_id?: string }
         Returns: boolean
