@@ -32,6 +32,9 @@ interface SendEmailRequest {
   template?: 'welcome' | 'password_reset' | 'notification';
   template_data?: Record<string, any>;
   business_id?: string;
+  
+  // For linking to contact
+  contact_id?: string;
 }
 
 serve(async (req) => {
@@ -99,6 +102,26 @@ serve(async (req) => {
     }
 
     console.log('✅ Email sent successfully:', result.id);
+
+    // If contact_id is provided, create email_sends record and update contact
+    if (body.contact_id) {
+      // Create email_sends record linked to contact
+      await supabase.from('email_sends').insert({
+        contact_id: body.contact_id,
+        resend_id: result.id,
+        status: 'sent',
+        sent_at: new Date().toISOString(),
+        campaign_id: null, // Direct email, not campaign
+        subscriber_id: null, // Using contact_id instead
+      });
+
+      // Update contact's last_activity_date
+      await supabase.from('contacts').update({
+        last_activity_date: new Date().toISOString(),
+      }).eq('id', body.contact_id);
+
+      console.log('📧 Email linked to contact:', body.contact_id);
+    }
 
     return new Response(
       JSON.stringify({

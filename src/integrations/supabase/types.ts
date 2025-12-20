@@ -485,18 +485,24 @@ export type Database = {
           comments: string | null
           created_at: string | null
           email: string | null
+          email_status: string | null
           first_name: string | null
           id: string
           interested_programs: string[] | null
           last_activity_date: string | null
           last_name: string | null
           lead_type: string | null
+          lifetime_value: number | null
+          metadata: Json | null
           next_follow_up_date: string | null
           phone: string | null
           pipeline_stage: string | null
+          preferred_channel: string | null
+          sms_status: string | null
           source: string | null
           status: string | null
           status_notes: string | null
+          tags: string[] | null
           updated_at: string | null
         }
         Insert: {
@@ -504,18 +510,24 @@ export type Database = {
           comments?: string | null
           created_at?: string | null
           email?: string | null
+          email_status?: string | null
           first_name?: string | null
           id?: string
           interested_programs?: string[] | null
           last_activity_date?: string | null
           last_name?: string | null
           lead_type?: string | null
+          lifetime_value?: number | null
+          metadata?: Json | null
           next_follow_up_date?: string | null
           phone?: string | null
           pipeline_stage?: string | null
+          preferred_channel?: string | null
+          sms_status?: string | null
           source?: string | null
           status?: string | null
           status_notes?: string | null
+          tags?: string[] | null
           updated_at?: string | null
         }
         Update: {
@@ -523,18 +535,24 @@ export type Database = {
           comments?: string | null
           created_at?: string | null
           email?: string | null
+          email_status?: string | null
           first_name?: string | null
           id?: string
           interested_programs?: string[] | null
           last_activity_date?: string | null
           last_name?: string | null
           lead_type?: string | null
+          lifetime_value?: number | null
+          metadata?: Json | null
           next_follow_up_date?: string | null
           phone?: string | null
           pipeline_stage?: string | null
+          preferred_channel?: string | null
+          sms_status?: string | null
           source?: string | null
           status?: string | null
           status_notes?: string | null
+          tags?: string[] | null
           updated_at?: string | null
         }
         Relationships: [
@@ -919,6 +937,7 @@ export type Database = {
           bounced_at: string | null
           campaign_id: string
           clicked_at: string | null
+          contact_id: string | null
           created_at: string | null
           delivered_at: string | null
           error_message: string | null
@@ -934,6 +953,7 @@ export type Database = {
           bounced_at?: string | null
           campaign_id: string
           clicked_at?: string | null
+          contact_id?: string | null
           created_at?: string | null
           delivered_at?: string | null
           error_message?: string | null
@@ -949,6 +969,7 @@ export type Database = {
           bounced_at?: string | null
           campaign_id?: string
           clicked_at?: string | null
+          contact_id?: string | null
           created_at?: string | null
           delivered_at?: string | null
           error_message?: string | null
@@ -965,6 +986,13 @@ export type Database = {
             columns: ["campaign_id"]
             isOneToOne: false
             referencedRelation: "email_campaigns"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "email_sends_contact_id_fkey"
+            columns: ["contact_id"]
+            isOneToOne: false
+            referencedRelation: "contacts"
             referencedColumns: ["id"]
           },
           {
@@ -1722,6 +1750,53 @@ export type Database = {
       can_access_business: {
         Args: { p_business_id: string; p_user_id?: string }
         Returns: boolean
+      }
+      contact_add_tag: {
+        Args: { p_contact_id: string; p_tag: string }
+        Returns: undefined
+      }
+      contact_remove_tag: {
+        Args: { p_contact_id: string; p_tag: string }
+        Returns: undefined
+      }
+      contact_touch: { Args: { p_contact_id: string }; Returns: undefined }
+      get_contacts_by_tags: {
+        Args: {
+          p_business_id: string
+          p_email_status?: string
+          p_tags: string[]
+        }
+        Returns: {
+          business_id: string | null
+          comments: string | null
+          created_at: string | null
+          email: string | null
+          email_status: string | null
+          first_name: string | null
+          id: string
+          interested_programs: string[] | null
+          last_activity_date: string | null
+          last_name: string | null
+          lead_type: string | null
+          lifetime_value: number | null
+          metadata: Json | null
+          next_follow_up_date: string | null
+          phone: string | null
+          pipeline_stage: string | null
+          preferred_channel: string | null
+          sms_status: string | null
+          source: string | null
+          status: string | null
+          status_notes: string | null
+          tags: string[] | null
+          updated_at: string | null
+        }[]
+        SetofOptions: {
+          from: "*"
+          to: "contacts"
+          isOneToOne: false
+          isSetofReturn: true
+        }
       }
       get_user_business_permission: {
         Args: { p_business_id: string; p_user_id?: string }
