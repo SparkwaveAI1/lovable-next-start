@@ -17,6 +17,7 @@ import LateConnections from "./pages/LateConnections";
 import AdminSetupPage from "./pages/AdminSetupPage";
 import BusinessPermissionsPage from "./pages/BusinessPermissionsPage";
 import AdminDashboard from "./pages/AdminDashboard";
+import EmailMarketing from "./pages/EmailMarketing";
 import ProtectedRoute from "./components/ProtectedRoute";
 import { ErrorBoundary } from "./components/ErrorBoundary";
 import { BusinessProvider } from "@/contexts/BusinessContext";
@@ -44,6 +45,7 @@ const App = () => (
             <Route path="/admin-setup" element={<ProtectedRoute><ErrorBoundary><AdminSetupPage /></ErrorBoundary></ProtectedRoute>} />
             <Route path="/permissions" element={<ProtectedRoute><ErrorBoundary><BusinessPermissionsPage /></ErrorBoundary></ProtectedRoute>} />
             <Route path="/admin" element={<ProtectedRoute><ErrorBoundary><AdminDashboard /></ErrorBoundary></ProtectedRoute>} />
+            <Route path="/email-marketing" element={<ProtectedRoute><ErrorBoundary><EmailMarketing /></ErrorBoundary></ProtectedRoute>} />
             {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
             <Route path="*" element={<NotFound />} />
           </Routes>
