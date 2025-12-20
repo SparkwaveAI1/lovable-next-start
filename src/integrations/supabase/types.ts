@@ -989,8 +989,6 @@ export type Database = {
       }
       sms_config: {
         Row: {
-          account_sid: string | null
-          auth_token: string | null
           business_id: string | null
           created_at: string | null
           id: string
@@ -1000,8 +998,6 @@ export type Database = {
           welcome_message: string | null
         }
         Insert: {
-          account_sid?: string | null
-          auth_token?: string | null
           business_id?: string | null
           created_at?: string | null
           id?: string
@@ -1011,8 +1007,6 @@ export type Database = {
           welcome_message?: string | null
         }
         Update: {
-          account_sid?: string | null
-          auth_token?: string | null
           business_id?: string | null
           created_at?: string | null
           id?: string
