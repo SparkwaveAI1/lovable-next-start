@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { BUSINESS_ID_MAP } from '@/constants/businesses';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
@@ -65,13 +66,7 @@ export function ContentReviewDialog({
   };
 
   const getBusinessIdFromSlug = (slug: string) => {
-    const businessIds: Record<string, string> = {
-      'fight-flow-academy': '456dc53b-d9d9-41b0-bc33-4f4c4a791eff',
-      'sparkwave-ai': '5a9bbfcf-fae5-4063-9780-bcbe366bae88',
-      'persona-ai': '18d0dbb1-a82d-4477-a9f8-816a1fa2ee08',
-      'charx-world': '350b8fcb-9bfe-4b53-9548-c6ffdb1d3cb5'
-    };
-    return businessIds[slug] || slug;
+    return BUSINESS_ID_MAP[slug] || slug;
   };
 
   const handleSaveDecisions = async () => {
