@@ -705,6 +705,330 @@ export type Database = {
         }
         Relationships: []
       }
+      email_campaigns: {
+        Row: {
+          business_id: string
+          content_html: string
+          content_text: string | null
+          created_at: string | null
+          from_email: string
+          from_name: string
+          id: string
+          list_id: string | null
+          name: string
+          preview_text: string | null
+          reply_to: string | null
+          scheduled_for: string | null
+          sent_at: string | null
+          status: string | null
+          subject: string
+          total_bounced: number | null
+          total_clicked: number | null
+          total_complained: number | null
+          total_delivered: number | null
+          total_opened: number | null
+          total_recipients: number | null
+          total_sent: number | null
+          total_unsubscribed: number | null
+          updated_at: string | null
+        }
+        Insert: {
+          business_id: string
+          content_html: string
+          content_text?: string | null
+          created_at?: string | null
+          from_email: string
+          from_name: string
+          id?: string
+          list_id?: string | null
+          name: string
+          preview_text?: string | null
+          reply_to?: string | null
+          scheduled_for?: string | null
+          sent_at?: string | null
+          status?: string | null
+          subject: string
+          total_bounced?: number | null
+          total_clicked?: number | null
+          total_complained?: number | null
+          total_delivered?: number | null
+          total_opened?: number | null
+          total_recipients?: number | null
+          total_sent?: number | null
+          total_unsubscribed?: number | null
+          updated_at?: string | null
+        }
+        Update: {
+          business_id?: string
+          content_html?: string
+          content_text?: string | null
+          created_at?: string | null
+          from_email?: string
+          from_name?: string
+          id?: string
+          list_id?: string | null
+          name?: string
+          preview_text?: string | null
+          reply_to?: string | null
+          scheduled_for?: string | null
+          sent_at?: string | null
+          status?: string | null
+          subject?: string
+          total_bounced?: number | null
+          total_clicked?: number | null
+          total_complained?: number | null
+          total_delivered?: number | null
+          total_opened?: number | null
+          total_recipients?: number | null
+          total_sent?: number | null
+          total_unsubscribed?: number | null
+          updated_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "email_campaigns_business_id_fkey"
+            columns: ["business_id"]
+            isOneToOne: false
+            referencedRelation: "businesses"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "email_campaigns_list_id_fkey"
+            columns: ["list_id"]
+            isOneToOne: false
+            referencedRelation: "email_lists"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      email_clicks: {
+        Row: {
+          clicked_at: string | null
+          id: string
+          ip_address: unknown
+          send_id: string
+          url: string
+          user_agent: string | null
+        }
+        Insert: {
+          clicked_at?: string | null
+          id?: string
+          ip_address?: unknown
+          send_id: string
+          url: string
+          user_agent?: string | null
+        }
+        Update: {
+          clicked_at?: string | null
+          id?: string
+          ip_address?: unknown
+          send_id?: string
+          url?: string
+          user_agent?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "email_clicks_send_id_fkey"
+            columns: ["send_id"]
+            isOneToOne: false
+            referencedRelation: "email_sends"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      email_list_members: {
+        Row: {
+          added_at: string | null
+          id: string
+          list_id: string
+          subscriber_id: string
+        }
+        Insert: {
+          added_at?: string | null
+          id?: string
+          list_id: string
+          subscriber_id: string
+        }
+        Update: {
+          added_at?: string | null
+          id?: string
+          list_id?: string
+          subscriber_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "email_list_members_list_id_fkey"
+            columns: ["list_id"]
+            isOneToOne: false
+            referencedRelation: "email_lists"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "email_list_members_subscriber_id_fkey"
+            columns: ["subscriber_id"]
+            isOneToOne: false
+            referencedRelation: "email_subscribers"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      email_lists: {
+        Row: {
+          business_id: string
+          created_at: string | null
+          description: string | null
+          id: string
+          is_active: boolean | null
+          name: string
+          subscriber_count: number | null
+          updated_at: string | null
+        }
+        Insert: {
+          business_id: string
+          created_at?: string | null
+          description?: string | null
+          id?: string
+          is_active?: boolean | null
+          name: string
+          subscriber_count?: number | null
+          updated_at?: string | null
+        }
+        Update: {
+          business_id?: string
+          created_at?: string | null
+          description?: string | null
+          id?: string
+          is_active?: boolean | null
+          name?: string
+          subscriber_count?: number | null
+          updated_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "email_lists_business_id_fkey"
+            columns: ["business_id"]
+            isOneToOne: false
+            referencedRelation: "businesses"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      email_sends: {
+        Row: {
+          bounce_type: string | null
+          bounced_at: string | null
+          campaign_id: string
+          clicked_at: string | null
+          created_at: string | null
+          delivered_at: string | null
+          error_message: string | null
+          id: string
+          opened_at: string | null
+          resend_id: string | null
+          sent_at: string | null
+          status: string | null
+          subscriber_id: string
+        }
+        Insert: {
+          bounce_type?: string | null
+          bounced_at?: string | null
+          campaign_id: string
+          clicked_at?: string | null
+          created_at?: string | null
+          delivered_at?: string | null
+          error_message?: string | null
+          id?: string
+          opened_at?: string | null
+          resend_id?: string | null
+          sent_at?: string | null
+          status?: string | null
+          subscriber_id: string
+        }
+        Update: {
+          bounce_type?: string | null
+          bounced_at?: string | null
+          campaign_id?: string
+          clicked_at?: string | null
+          created_at?: string | null
+          delivered_at?: string | null
+          error_message?: string | null
+          id?: string
+          opened_at?: string | null
+          resend_id?: string | null
+          sent_at?: string | null
+          status?: string | null
+          subscriber_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "email_sends_campaign_id_fkey"
+            columns: ["campaign_id"]
+            isOneToOne: false
+            referencedRelation: "email_campaigns"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "email_sends_subscriber_id_fkey"
+            columns: ["subscriber_id"]
+            isOneToOne: false
+            referencedRelation: "email_subscribers"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      email_subscribers: {
+        Row: {
+          business_id: string
+          created_at: string | null
+          email: string
+          first_name: string | null
+          id: string
+          last_name: string | null
+          metadata: Json | null
+          source: string | null
+          status: string | null
+          subscribed_at: string | null
+          unsubscribed_at: string | null
+          updated_at: string | null
+        }
+        Insert: {
+          business_id: string
+          created_at?: string | null
+          email: string
+          first_name?: string | null
+          id?: string
+          last_name?: string | null
+          metadata?: Json | null
+          source?: string | null
+          status?: string | null
+          subscribed_at?: string | null
+          unsubscribed_at?: string | null
+          updated_at?: string | null
+        }
+        Update: {
+          business_id?: string
+          created_at?: string | null
+          email?: string
+          first_name?: string | null
+          id?: string
+          last_name?: string | null
+          metadata?: Json | null
+          source?: string | null
+          status?: string | null
+          subscribed_at?: string | null
+          unsubscribed_at?: string | null
+          updated_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "email_subscribers_business_id_fkey"
+            columns: ["business_id"]
+            isOneToOne: false
+            referencedRelation: "businesses"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       generated_tweets: {
         Row: {
           business_id: string | null
