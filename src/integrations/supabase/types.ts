@@ -935,7 +935,7 @@ export type Database = {
         Row: {
           bounce_type: string | null
           bounced_at: string | null
-          campaign_id: string
+          campaign_id: string | null
           clicked_at: string | null
           contact_id: string | null
           created_at: string | null
@@ -946,12 +946,12 @@ export type Database = {
           resend_id: string | null
           sent_at: string | null
           status: string | null
-          subscriber_id: string
+          subscriber_id: string | null
         }
         Insert: {
           bounce_type?: string | null
           bounced_at?: string | null
-          campaign_id: string
+          campaign_id?: string | null
           clicked_at?: string | null
           contact_id?: string | null
           created_at?: string | null
@@ -962,12 +962,12 @@ export type Database = {
           resend_id?: string | null
           sent_at?: string | null
           status?: string | null
-          subscriber_id: string
+          subscriber_id?: string | null
         }
         Update: {
           bounce_type?: string | null
           bounced_at?: string | null
-          campaign_id?: string
+          campaign_id?: string | null
           clicked_at?: string | null
           contact_id?: string | null
           created_at?: string | null
@@ -978,7 +978,7 @@ export type Database = {
           resend_id?: string | null
           sent_at?: string | null
           status?: string | null
-          subscriber_id?: string
+          subscriber_id?: string | null
         }
         Relationships: [
           {
