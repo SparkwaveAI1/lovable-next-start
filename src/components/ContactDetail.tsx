@@ -3,8 +3,18 @@ import { supabase } from '@/integrations/supabase/client';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { ArrowLeft, MessageSquare, Calendar, User, Activity } from 'lucide-react';
+import { 
+  ArrowLeft, MessageSquare, Calendar, User, Activity, 
+  Mail, Phone, Sparkles, X, Plus, Send, ChevronDown
+} from 'lucide-react';
 import { formatToEasternDateTime, formatToEasternDate } from '@/lib/dateUtils';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
+import { toast } from 'sonner';
 
 interface Contact {
   id: string;
@@ -17,6 +27,10 @@ interface Contact {
   comments: string;
   created_at: string;
   business_id: string;
+  email_status?: string;
+  sms_status?: string;
+  tags?: string[];
+  preferred_channel?: string;
 }
 
 interface SMSMessage {
@@ -25,6 +39,15 @@ interface SMSMessage {
   message: string;
   ai_response: boolean;
   created_at: string;
+}
+
+interface EmailSend {
+  id: string;
+  status: string;
+  sent_at: string;
+  opened_at: string | null;
+  clicked_at: string | null;
+  campaign_id: string;
 }
 
 interface ClassBooking {
@@ -41,18 +64,77 @@ interface ClassBooking {
   };
 }
 
+// Unified message for conversation timeline
+interface UnifiedMessage {
+  id: string;
+  type: 'sms' | 'email' | 'form';
+  direction: 'inbound' | 'outbound';
+  content: string;
+  created_at: string;
+  metadata?: {
+    ai_response?: boolean;
+    email_status?: string;
+    form_name?: string;
+  };
+}
+
+type MessageChannel = 'sms' | 'email';
+
 export function ContactDetail({ contactId, onBack }: { contactId: string; onBack: () => void }) {
   const [contact, setContact] = useState<Contact | null>(null);
   const [messages, setMessages] = useState<SMSMessage[]>([]);
+  const [emails, setEmails] = useState<EmailSend[]>([]);
   const [bookings, setBookings] = useState<ClassBooking[]>([]);
   const [interactions, setInteractions] = useState<any[]>([]);
+  const [unifiedMessages, setUnifiedMessages] = useState<UnifiedMessage[]>([]);
   const [newMessage, setNewMessage] = useState('');
+  const [emailSubject, setEmailSubject] = useState('');
   const [isSending, setIsSending] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
+  const [isGeneratingAI, setIsGeneratingAI] = useState(false);
+  const [selectedChannel, setSelectedChannel] = useState<MessageChannel>('sms');
+  const [newTag, setNewTag] = useState('');
+  const [isAddingTag, setIsAddingTag] = useState(false);
 
   useEffect(() => {
     loadContactDetails();
   }, [contactId]);
+
+  // Build unified timeline when data changes
+  useEffect(() => {
+    const unified: UnifiedMessage[] = [];
+
+    // Add SMS messages
+    messages.forEach(msg => {
+      unified.push({
+        id: `sms-${msg.id}`,
+        type: 'sms',
+        direction: msg.direction as 'inbound' | 'outbound',
+        content: msg.message,
+        created_at: msg.created_at,
+        metadata: { ai_response: msg.ai_response }
+      });
+    });
+
+    // Add form submissions from interactions
+    interactions.forEach(interaction => {
+      if (interaction.automation_type === 'contact_created') {
+        const formName = interaction.source_data?.data?.formName || 'Form Submission';
+        unified.push({
+          id: `form-${interaction.id}`,
+          type: 'form',
+          direction: 'inbound',
+          content: `Submitted: ${formName}`,
+          created_at: interaction.created_at,
+          metadata: { form_name: formName }
+        });
+      }
+    });
+
+    // Sort by date ascending
+    unified.sort((a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime());
+    setUnifiedMessages(unified);
+  }, [messages, emails, interactions]);
 
   const loadContactDetails = async () => {
     setIsLoading(true);
@@ -68,6 +150,14 @@ export function ContactDetail({ contactId, onBack }: { contactId: string; onBack
       console.error('Error loading contact:', contactError);
     } else {
       setContact(contactData);
+      // Set preferred channel if available
+      if (contactData?.preferred_channel === 'email' && contactData?.email) {
+        setSelectedChannel('email');
+      } else if (contactData?.phone) {
+        setSelectedChannel('sms');
+      } else if (contactData?.email) {
+        setSelectedChannel('email');
+      }
     }
 
     // Load SMS messages
@@ -81,6 +171,19 @@ export function ContactDetail({ contactId, onBack }: { contactId: string; onBack
       console.error('Error loading messages:', messagesError);
     } else {
       setMessages(messagesData || []);
+    }
+
+    // Load email sends for this contact
+    const { data: emailData, error: emailError } = await supabase
+      .from('email_sends')
+      .select('*')
+      .eq('contact_id', contactId)
+      .order('created_at', { ascending: true });
+
+    if (emailError) {
+      console.error('Error loading emails:', emailError);
+    } else {
+      setEmails(emailData || []);
     }
 
     // Load class bookings
@@ -120,62 +223,165 @@ export function ContactDetail({ contactId, onBack }: { contactId: string; onBack
     setIsLoading(false);
   };
 
-  const sendManualMessage = async () => {
-    if (!newMessage.trim() || !contact?.phone) return;
+  const sendMessage = async () => {
+    if (!newMessage.trim() || !contact) return;
     
+    if (selectedChannel === 'sms' && !contact.phone) {
+      toast.error('No phone number available for SMS');
+      return;
+    }
+    
+    if (selectedChannel === 'email' && !contact.email) {
+      toast.error('No email address available');
+      return;
+    }
+
     setIsSending(true);
     
     try {
-      // Call the send-sms Edge Function
-      const { data, error } = await supabase.functions.invoke('send-sms', {
-        body: {
-          to: contact.phone,
-          message: newMessage,
-          businessId: contact.business_id
+      if (selectedChannel === 'sms') {
+        // Send SMS
+        const { data, error } = await supabase.functions.invoke('send-sms', {
+          body: {
+            to: contact.phone,
+            message: newMessage,
+            businessId: contact.business_id
+          }
+        });
+
+        if (error || !data.success) {
+          toast.error('Failed to send SMS');
+          return;
         }
-      });
 
-      if (error || !data.success) {
-        console.error('SMS sending failed:', error || data.error);
-        alert('Failed to send message. Please try again.');
-        return;
-      }
-
-      // Store the outbound message in conversation history
-      const { error: messageError } = await supabase
-        .from('sms_messages')
-        .insert({
+        // Store the outbound message
+        await supabase.from('sms_messages').insert({
           contact_id: contactId,
           direction: 'outbound',
           message: newMessage,
           ai_response: false
         });
 
-      if (messageError) {
-        console.error('Failed to log message:', messageError);
+        toast.success('SMS sent successfully');
+      } else {
+        // Send Email
+        if (!emailSubject.trim()) {
+          toast.error('Please enter an email subject');
+          setIsSending(false);
+          return;
+        }
+
+        const { data, error } = await supabase.functions.invoke('send-email', {
+          body: {
+            to: contact.email,
+            subject: emailSubject,
+            html: `<p>${newMessage.replace(/\n/g, '<br/>')}</p>`,
+            text: newMessage,
+            contact_id: contactId,
+            business_id: contact.business_id
+          }
+        });
+
+        if (error || !data.success) {
+          toast.error('Failed to send email');
+          return;
+        }
+
+        toast.success('Email sent successfully');
+        setEmailSubject('');
       }
 
-      // Clear the input and reload conversation
       setNewMessage('');
-      loadContactDetails(); // Refresh to show the new message
-      
-      console.log('Manual SMS sent successfully');
+      loadContactDetails();
     } catch (error) {
-      console.error('Error sending SMS:', error);
-      alert('Error sending message. Please check your connection.');
+      console.error('Error sending message:', error);
+      toast.error('Error sending message');
     } finally {
       setIsSending(false);
     }
   };
 
-  const formatDate = (dateString: string) => {
-    return formatToEasternDateTime(dateString);
+  const generateAIMessage = async () => {
+    if (!contact) return;
+    
+    setIsGeneratingAI(true);
+    
+    try {
+      const { data, error } = await supabase.functions.invoke('ai-response', {
+        body: {
+          contactName: `${contact.first_name} ${contact.last_name}`,
+          context: `Generate a friendly ${selectedChannel === 'sms' ? 'SMS message (keep under 160 chars)' : 'email'} for a ${contact.source || 'new'} contact.`,
+          recentMessages: unifiedMessages.slice(-5).map(m => ({
+            role: m.direction === 'inbound' ? 'user' : 'assistant',
+            content: m.content
+          }))
+        }
+      });
+
+      if (error) throw error;
+      
+      if (data?.response) {
+        setNewMessage(data.response);
+        toast.success('AI message generated');
+      }
+    } catch (error) {
+      console.error('AI generation error:', error);
+      toast.error('Failed to generate AI message');
+    } finally {
+      setIsGeneratingAI(false);
+    }
   };
 
+  const addTag = async () => {
+    if (!newTag.trim() || !contact) return;
+    
+    setIsAddingTag(true);
+    try {
+      const updatedTags = [...(contact.tags || []), newTag.toLowerCase().trim()];
+      const { error } = await supabase
+        .from('contacts')
+        .update({ tags: updatedTags })
+        .eq('id', contactId);
+      
+      if (error) throw error;
+      
+      setContact({ ...contact, tags: updatedTags });
+      setNewTag('');
+      toast.success('Tag added');
+    } catch (error) {
+      console.error('Error adding tag:', error);
+      toast.error('Failed to add tag');
+    } finally {
+      setIsAddingTag(false);
+    }
+  };
+
+  const removeTag = async (tagToRemove: string) => {
+    if (!contact) return;
+    
+    try {
+      const updatedTags = (contact.tags || []).filter(t => t !== tagToRemove);
+      const { error } = await supabase
+        .from('contacts')
+        .update({ tags: updatedTags })
+        .eq('id', contactId);
+      
+      if (error) throw error;
+      
+      setContact({ ...contact, tags: updatedTags });
+      toast.success('Tag removed');
+    } catch (error) {
+      console.error('Error removing tag:', error);
+      toast.error('Failed to remove tag');
+    }
+  };
+
+  const formatDate = (dateString: string) => formatToEasternDateTime(dateString);
+
   const formatStatusLabel = (status: string) => {
-    return status.split('_').map(word => 
+    return status?.split('_').map(word => 
       word.charAt(0).toUpperCase() + word.slice(1)
-    ).join(' ');
+    ).join(' ') || '';
   };
 
   const getStatusBadgeVariant = (status: string) => {
@@ -184,6 +390,14 @@ export function ContactDetail({ contactId, onBack }: { contactId: string; onBack
       case 'qualified': return 'secondary';
       case 'active_member': return 'outline';
       default: return 'destructive';
+    }
+  };
+
+  const getChannelIcon = (type: string) => {
+    switch (type) {
+      case 'sms': return <Phone className="h-3 w-3" />;
+      case 'email': return <Mail className="h-3 w-3" />;
+      default: return <Activity className="h-3 w-3" />;
     }
   };
 
@@ -204,19 +418,21 @@ export function ContactDetail({ contactId, onBack }: { contactId: string; onBack
         <CardContent className="p-8 text-center">
           <User className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
           <h3 className="text-lg font-medium text-muted-foreground">Contact not found</h3>
-          <p className="text-sm text-muted-foreground">The contact you're looking for doesn't exist</p>
         </CardContent>
       </Card>
     );
   }
 
+  const canSendSMS = contact.phone && contact.sms_status !== 'opted_out';
+  const canSendEmail = contact.email && contact.email_status !== 'unsubscribed';
+
   return (
     <div className="space-y-6">
       {/* Header */}
-      <div className="flex items-center gap-4">
+      <div className="flex items-center gap-4 flex-wrap">
         <Button variant="outline" onClick={onBack}>
           <ArrowLeft className="h-4 w-4 mr-2" />
-          Back to Contacts
+          Back
         </Button>
         <h2 className="text-2xl font-bold text-foreground">
           {contact.first_name} {contact.last_name}
@@ -224,65 +440,51 @@ export function ContactDetail({ contactId, onBack }: { contactId: string; onBack
         <Badge variant={getStatusBadgeVariant(contact.status)}>
           {formatStatusLabel(contact.status)}
         </Badge>
+        
+        {/* Email/SMS Status Badges */}
+        <div className="flex gap-2 ml-auto">
+          {contact.email && (
+            <Badge variant={contact.email_status === 'subscribed' ? 'outline' : 'destructive'} className="gap-1">
+              <Mail className="h-3 w-3" />
+              {contact.email_status || 'subscribed'}
+            </Badge>
+          )}
+          {contact.phone && (
+            <Badge variant={contact.sms_status === 'active' ? 'outline' : 'destructive'} className="gap-1">
+              <Phone className="h-3 w-3" />
+              {contact.sms_status || 'active'}
+            </Badge>
+          )}
+        </div>
       </div>
 
-      {/* Interaction Timeline */}
-      {interactions.length > 0 && (
-        <Card>
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <Activity className="h-5 w-5" />
-              Interaction Timeline ({interactions.length})
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="space-y-3 max-h-96 overflow-y-auto">
-              {interactions.map((interaction) => {
-                const contact = interaction.source_data?.data?.contact || {};
-                const formName = interaction.source_data?.data?.formName || '';
-                const message = interaction.processed_data?.message || '';
-                
-                return (
-                  <div
-                    key={interaction.id}
-                    className="p-3 rounded-lg border border-border bg-card/50"
-                  >
-                    <div className="flex justify-between items-start mb-2">
-                      <Badge variant="outline">
-                        {interaction.automation_type.replace(/_/g, ' ')}
-                      </Badge>
-                      <span className="text-xs text-muted-foreground">
-                        {formatDate(interaction.created_at)}
-                      </span>
-                    </div>
-                    
-                    {interaction.automation_type === 'contact_created' && (
-                      <div className="text-sm space-y-1">
-                        <div className="font-medium text-foreground">Form Submitted: {formName}</div>
-                        {contact.email && <div className="text-muted-foreground">Email: {contact.email}</div>}
-                        {contact.phone && <div className="text-muted-foreground">Phone: {contact.phone}</div>}
-                      </div>
-                    )}
-                    
-                    {interaction.automation_type === 'sms_welcome_sent' && message && (
-                      <div className="text-sm">
-                        <div className="font-medium text-foreground mb-1">Welcome SMS Sent</div>
-                        <div className="text-muted-foreground italic">"{message}"</div>
-                      </div>
-                    )}
-                    
-                    {interaction.status === 'error' && interaction.error_message && (
-                      <div className="text-xs text-destructive mt-2">
-                        Error: {interaction.error_message}
-                      </div>
-                    )}
-                  </div>
-                );
-              })}
-            </div>
-          </CardContent>
-        </Card>
-      )}
+      {/* Tags Section */}
+      <Card className="p-4">
+        <div className="flex items-center gap-2 flex-wrap">
+          <span className="text-sm font-medium text-muted-foreground">Tags:</span>
+          {(contact.tags || []).map((tag) => (
+            <Badge key={tag} variant="secondary" className="gap-1">
+              {tag}
+              <button onClick={() => removeTag(tag)} className="ml-1 hover:text-destructive">
+                <X className="h-3 w-3" />
+              </button>
+            </Badge>
+          ))}
+          <div className="flex items-center gap-1">
+            <input
+              type="text"
+              value={newTag}
+              onChange={(e) => setNewTag(e.target.value)}
+              onKeyDown={(e) => e.key === 'Enter' && addTag()}
+              placeholder="Add tag..."
+              className="text-sm px-2 py-1 border border-input rounded bg-background w-24"
+            />
+            <Button size="sm" variant="ghost" onClick={addTag} disabled={isAddingTag || !newTag.trim()}>
+              <Plus className="h-4 w-4" />
+            </Button>
+          </div>
+        </div>
+      </Card>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         {/* Contact Information */}
@@ -311,48 +513,66 @@ export function ContactDetail({ contactId, onBack }: { contactId: string; onBack
               <div className="text-foreground">{formatDate(contact.created_at)}</div>
             </div>
             <div>
-              <label className="text-sm font-medium text-muted-foreground">Comments</label>
-              <div className="text-sm text-foreground">{contact.comments || 'No comments'}</div>
+              <label className="text-sm font-medium text-muted-foreground">Preferred Channel</label>
+              <div className="text-foreground capitalize">{contact.preferred_channel || 'email'}</div>
             </div>
+            {contact.comments && (
+              <div>
+                <label className="text-sm font-medium text-muted-foreground">Comments</label>
+                <div className="text-sm text-foreground">{contact.comments}</div>
+              </div>
+            )}
           </CardContent>
         </Card>
 
-        {/* SMS Conversation */}
-        <Card>
+        {/* Unified Conversation - Wix Style */}
+        <Card className="lg:col-span-2">
           <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <MessageSquare className="h-5 w-5" />
-              SMS Conversation ({messages.length})
+            <CardTitle className="flex items-center justify-between">
+              <span className="flex items-center gap-2">
+                <MessageSquare className="h-5 w-5" />
+                Conversation
+              </span>
+              <span className="text-sm font-normal text-muted-foreground">
+                {unifiedMessages.length} messages
+              </span>
             </CardTitle>
           </CardHeader>
           <CardContent>
-            {messages.length === 0 ? (
+            {/* Unified Message Timeline */}
+            {unifiedMessages.length === 0 ? (
               <div className="text-center py-8">
                 <MessageSquare className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
-                <h3 className="text-lg font-medium text-muted-foreground">No SMS conversation yet</h3>
-                <p className="text-sm text-muted-foreground">Messages will appear here when the customer texts</p>
+                <h3 className="text-lg font-medium text-muted-foreground">No conversation yet</h3>
+                <p className="text-sm text-muted-foreground">Send the first message below</p>
               </div>
             ) : (
-              <div className="space-y-3 max-h-96 overflow-y-auto">
-                {messages.map((msg) => (
+              <div className="space-y-3 max-h-80 overflow-y-auto mb-4 pr-2">
+                {unifiedMessages.map((msg) => (
                   <div
                     key={msg.id}
                     className={`p-3 rounded-lg border ${
                       msg.direction === 'inbound'
                         ? 'bg-primary/5 border-primary/20'
-                        : 'bg-secondary/50 border-secondary'
+                        : 'bg-secondary/50 border-secondary ml-8'
                     }`}
                   >
                     <div className="flex justify-between items-start mb-1">
-                      <span className="text-sm font-medium text-foreground">
-                        {msg.direction === 'inbound' ? 'Customer' : msg.ai_response ? 'AI Assistant' : 'Staff'}
+                      <span className="text-sm font-medium text-foreground flex items-center gap-2">
+                        {getChannelIcon(msg.type)}
+                        {msg.direction === 'inbound' 
+                          ? 'Customer' 
+                          : msg.metadata?.ai_response ? 'AI Assistant' : 'Staff'}
+                        <Badge variant="outline" className="text-xs">
+                          {msg.type.toUpperCase()}
+                        </Badge>
                       </span>
                       <span className="text-xs text-muted-foreground">
                         {formatDate(msg.created_at)}
                       </span>
                     </div>
-                    <div className="text-sm text-foreground">{msg.message}</div>
-                    {msg.ai_response && (
+                    <div className="text-sm text-foreground">{msg.content}</div>
+                    {msg.metadata?.ai_response && (
                       <Badge variant="outline" className="mt-2 text-xs">
                         AI Generated
                       </Badge>
@@ -362,36 +582,105 @@ export function ContactDetail({ contactId, onBack }: { contactId: string; onBack
               </div>
             )}
             
-            {/* Manual Message Sending Interface */}
-            {contact.phone && (
-              <div className="mt-4 pt-4 border-t border-border">
-                <div className="space-y-3">
-                  <textarea
-                    placeholder="Type your message..."
-                    value={newMessage}
-                    onChange={(e) => setNewMessage(e.target.value)}
-                    className="w-full p-3 border border-input bg-background text-foreground rounded-md resize-none focus:outline-none focus:ring-2 focus:ring-ring placeholder:text-muted-foreground"
-                    rows={3}
-                    disabled={isSending}
-                  />
-                  <div className="flex justify-between items-center">
-                    <span className="text-sm text-muted-foreground">
-                      {newMessage.length}/160 characters
-                    </span>
-                    <Button
-                      onClick={sendManualMessage}
-                      disabled={!newMessage.trim() || isSending}
-                      className="bg-primary text-primary-foreground hover:bg-primary/90"
-                    >
-                      {isSending ? 'Sending...' : 'Send Message'}
+            {/* Multi-Channel Composer */}
+            <div className="border-t border-border pt-4 space-y-3">
+              {/* Channel Selector */}
+              <div className="flex items-center gap-3">
+                <DropdownMenu>
+                  <DropdownMenuTrigger asChild>
+                    <Button variant="outline" className="gap-2">
+                      {selectedChannel === 'sms' ? (
+                        <>
+                          <Phone className="h-4 w-4" />
+                          SMS
+                        </>
+                      ) : (
+                        <>
+                          <Mail className="h-4 w-4" />
+                          Email
+                        </>
+                      )}
+                      <ChevronDown className="h-4 w-4" />
                     </Button>
-                  </div>
-                </div>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent>
+                    <DropdownMenuItem 
+                      onClick={() => setSelectedChannel('sms')}
+                      disabled={!canSendSMS}
+                    >
+                      <Phone className="h-4 w-4 mr-2" />
+                      SMS {contact.phone && <span className="text-xs text-muted-foreground ml-2">{contact.phone}</span>}
+                      {!canSendSMS && <span className="text-xs text-destructive ml-2">(unavailable)</span>}
+                    </DropdownMenuItem>
+                    <DropdownMenuItem 
+                      onClick={() => setSelectedChannel('email')}
+                      disabled={!canSendEmail}
+                    >
+                      <Mail className="h-4 w-4 mr-2" />
+                      Email {contact.email && <span className="text-xs text-muted-foreground ml-2">{contact.email}</span>}
+                      {!canSendEmail && <span className="text-xs text-destructive ml-2">(unsubscribed)</span>}
+                    </DropdownMenuItem>
+                  </DropdownMenuContent>
+                </DropdownMenu>
+
+                <span className="text-sm text-muted-foreground">
+                  To: {selectedChannel === 'sms' ? contact.phone : contact.email}
+                </span>
+
+                {/* Write with AI Button */}
+                <Button 
+                  variant="outline" 
+                  size="sm" 
+                  onClick={generateAIMessage}
+                  disabled={isGeneratingAI}
+                  className="ml-auto gap-2"
+                >
+                  <Sparkles className="h-4 w-4" />
+                  {isGeneratingAI ? 'Writing...' : 'Write with AI'}
+                </Button>
               </div>
-            )}
+
+              {/* Email Subject (only for email) */}
+              {selectedChannel === 'email' && (
+                <input
+                  type="text"
+                  placeholder="Subject..."
+                  value={emailSubject}
+                  onChange={(e) => setEmailSubject(e.target.value)}
+                  className="w-full p-3 border border-input bg-background text-foreground rounded-md focus:outline-none focus:ring-2 focus:ring-ring"
+                />
+              )}
+
+              {/* Message Textarea */}
+              <textarea
+                placeholder={selectedChannel === 'sms' ? "Type your SMS..." : "Type your email..."}
+                value={newMessage}
+                onChange={(e) => setNewMessage(e.target.value)}
+                className="w-full p-3 border border-input bg-background text-foreground rounded-md resize-none focus:outline-none focus:ring-2 focus:ring-ring placeholder:text-muted-foreground"
+                rows={4}
+                disabled={isSending}
+              />
+              
+              <div className="flex justify-between items-center">
+                <span className="text-sm text-muted-foreground">
+                  {selectedChannel === 'sms' && `${newMessage.length}/160 characters`}
+                </span>
+                <Button
+                  onClick={sendMessage}
+                  disabled={!newMessage.trim() || isSending || (selectedChannel === 'email' && !emailSubject.trim())}
+                  className="gap-2"
+                >
+                  <Send className="h-4 w-4" />
+                  {isSending ? 'Sending...' : `Send ${selectedChannel.toUpperCase()}`}
+                </Button>
+              </div>
+            </div>
           </CardContent>
         </Card>
+      </div>
 
+      {/* Class Bookings and Interaction Timeline */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         {/* Class Bookings */}
         <Card>
           <CardHeader>
@@ -404,30 +693,18 @@ export function ContactDetail({ contactId, onBack }: { contactId: string; onBack
             {bookings.length === 0 ? (
               <div className="text-center py-8">
                 <Calendar className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
-                <h3 className="text-lg font-medium text-muted-foreground">No class bookings yet</h3>
-                <p className="text-sm text-muted-foreground">Bookings will appear here when classes are scheduled</p>
+                <h3 className="text-lg font-medium text-muted-foreground">No bookings</h3>
               </div>
             ) : (
-              <div className="space-y-3">
+              <div className="space-y-3 max-h-64 overflow-y-auto">
                 {bookings.map((booking) => (
                   <div key={booking.id} className="p-3 border border-border rounded-lg bg-card">
                     <div className="font-medium text-foreground">
                       {booking.class_schedule?.class_name}
                     </div>
                     <div className="text-sm text-muted-foreground">
-                      Instructor: {booking.class_schedule?.instructor}
+                      {formatToEasternDate(booking.booking_date)} • {booking.class_schedule?.start_time}
                     </div>
-                    <div className="text-sm text-muted-foreground">
-                      Date: {formatToEasternDate(booking.booking_date)}
-                    </div>
-                    <div className="text-sm text-muted-foreground">
-                      Time: {booking.class_schedule?.start_time} - {booking.class_schedule?.end_time}
-                    </div>
-                    {booking.notes && (
-                      <div className="text-sm text-muted-foreground mt-1">
-                        Notes: {booking.notes}
-                      </div>
-                    )}
                     <Badge variant="outline" className="mt-2">
                       {formatStatusLabel(booking.status)}
                     </Badge>
@@ -437,6 +714,56 @@ export function ContactDetail({ contactId, onBack }: { contactId: string; onBack
             )}
           </CardContent>
         </Card>
+
+        {/* Interaction Timeline */}
+        {interactions.length > 0 && (
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <Activity className="h-5 w-5" />
+                Activity Timeline ({interactions.length})
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="space-y-3 max-h-64 overflow-y-auto">
+                {interactions.map((interaction) => {
+                  const formName = interaction.source_data?.data?.formName || '';
+                  const message = interaction.processed_data?.message || '';
+                  
+                  return (
+                    <div
+                      key={interaction.id}
+                      className="p-3 rounded-lg border border-border bg-card/50"
+                    >
+                      <div className="flex justify-between items-start mb-2">
+                        <Badge variant="outline">
+                          {interaction.automation_type.replace(/_/g, ' ')}
+                        </Badge>
+                        <span className="text-xs text-muted-foreground">
+                          {formatDate(interaction.created_at)}
+                        </span>
+                      </div>
+                      
+                      {interaction.automation_type === 'contact_created' && formName && (
+                        <div className="text-sm text-foreground">Form: {formName}</div>
+                      )}
+                      
+                      {interaction.automation_type === 'sms_welcome_sent' && message && (
+                        <div className="text-sm text-muted-foreground italic">"{message}"</div>
+                      )}
+                      
+                      {interaction.status === 'error' && interaction.error_message && (
+                        <div className="text-xs text-destructive mt-2">
+                          Error: {interaction.error_message}
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            </CardContent>
+          </Card>
+        )}
       </div>
     </div>
   );
