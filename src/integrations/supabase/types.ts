@@ -479,6 +479,100 @@ export type Database = {
           },
         ]
       }
+      contact_segments: {
+        Row: {
+          business_id: string
+          created_at: string | null
+          description: string | null
+          filters: Json
+          id: string
+          is_active: boolean | null
+          last_computed_at: string | null
+          last_computed_count: number | null
+          name: string
+          updated_at: string | null
+        }
+        Insert: {
+          business_id: string
+          created_at?: string | null
+          description?: string | null
+          filters?: Json
+          id?: string
+          is_active?: boolean | null
+          last_computed_at?: string | null
+          last_computed_count?: number | null
+          name: string
+          updated_at?: string | null
+        }
+        Update: {
+          business_id?: string
+          created_at?: string | null
+          description?: string | null
+          filters?: Json
+          id?: string
+          is_active?: boolean | null
+          last_computed_at?: string | null
+          last_computed_count?: number | null
+          name?: string
+          updated_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "contact_segments_business_id_fkey"
+            columns: ["business_id"]
+            isOneToOne: false
+            referencedRelation: "businesses"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      contact_tags: {
+        Row: {
+          business_id: string
+          color: string | null
+          contact_count: number | null
+          created_at: string | null
+          description: string | null
+          id: string
+          is_active: boolean | null
+          name: string
+          slug: string
+          updated_at: string | null
+        }
+        Insert: {
+          business_id: string
+          color?: string | null
+          contact_count?: number | null
+          created_at?: string | null
+          description?: string | null
+          id?: string
+          is_active?: boolean | null
+          name: string
+          slug: string
+          updated_at?: string | null
+        }
+        Update: {
+          business_id?: string
+          color?: string | null
+          contact_count?: number | null
+          created_at?: string | null
+          description?: string | null
+          id?: string
+          is_active?: boolean | null
+          name?: string
+          slug?: string
+          updated_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "contact_tags_business_id_fkey"
+            columns: ["business_id"]
+            isOneToOne: false
+            referencedRelation: "businesses"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       contacts: {
         Row: {
           business_id: string | null
@@ -1751,6 +1845,7 @@ export type Database = {
         Args: { p_business_id: string; p_user_id?: string }
         Returns: boolean
       }
+      compute_segment_count: { Args: { p_segment_id: string }; Returns: number }
       contact_add_tag: {
         Args: { p_contact_id: string; p_tag: string }
         Returns: undefined
@@ -1760,6 +1855,15 @@ export type Database = {
         Returns: undefined
       }
       contact_touch: { Args: { p_contact_id: string }; Returns: undefined }
+      create_contact_tag: {
+        Args: {
+          p_business_id: string
+          p_color?: string
+          p_description?: string
+          p_name: string
+        }
+        Returns: string
+      }
       get_contacts_by_tags: {
         Args: {
           p_business_id: string
@@ -1828,6 +1932,10 @@ export type Database = {
         Returns: boolean
       }
       is_super_admin: { Args: never; Returns: boolean }
+      refresh_tag_counts: {
+        Args: { p_business_id: string }
+        Returns: undefined
+      }
     }
     Enums: {
       app_role:
