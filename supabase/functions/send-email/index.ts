@@ -150,7 +150,7 @@ serve(async (req) => {
 });
 
 /**
- * Send a campaign to all subscribers on the associated list
+ * Send a campaign to contacts based on targeting criteria
  */
 async function sendCampaign(
   campaignId: string,
@@ -174,8 +174,8 @@ async function sendCampaign(
     throw new Error('Campaign has already been sent');
   }
 
-  if (!campaign.list_id) {
-    throw new Error('Campaign has no associated list');
+  if (campaign.status === 'sending') {
+    throw new Error('Campaign is already being sent');
   }
 
   // Update campaign status to sending
@@ -184,165 +184,209 @@ async function sendCampaign(
     .update({ status: 'sending' })
     .eq('id', campaignId);
 
-  // Get all active subscribers from the list
-  const { data: members, error: membersError } = await supabase
-    .from('email_list_members')
-    .select(`
-      subscriber:email_subscribers(
-        id,
-        email,
-        first_name,
-        last_name,
-        status
-      )
-    `)
-    .eq('list_id', campaign.list_id);
+  try {
+    // Get recipients using the database function
+    const { data: recipients, error: recipientsError } = await supabase
+      .rpc('get_campaign_recipients', { p_campaign_id: campaignId });
 
-  if (membersError) {
-    throw new Error('Failed to fetch list members');
-  }
+    if (recipientsError) {
+      console.error('❌ Error fetching recipients:', recipientsError);
+      throw new Error('Failed to fetch campaign recipients');
+    }
 
-  // Filter to only active subscribers
-  const activeSubscribers = members
-    .map((m: any) => m.subscriber)
-    .filter((s: any) => s && s.status === 'active');
+    if (!recipients || recipients.length === 0) {
+      // No recipients - mark as sent with 0 count
+      await supabase
+        .from('email_campaigns')
+        .update({
+          status: 'sent',
+          sent_at: new Date().toISOString(),
+          total_recipients: 0,
+          total_sent: 0,
+        })
+        .eq('id', campaignId);
 
-  console.log(`📧 Sending to ${activeSubscribers.length} subscribers`);
-
-  // Update total recipients
-  await supabase
-    .from('email_campaigns')
-    .update({ total_recipients: activeSubscribers.length })
-    .eq('id', campaignId);
-
-  let sentCount = 0;
-  let errorCount = 0;
-
-  // Send emails in batches of 10 to avoid rate limits
-  const BATCH_SIZE = 10;
-  for (let i = 0; i < activeSubscribers.length; i += BATCH_SIZE) {
-    const batch = activeSubscribers.slice(i, i + BATCH_SIZE);
-    
-    await Promise.all(batch.map(async (subscriber: any) => {
-      try {
-        // Personalize content
-        const personalizedHtml = personalizeContent(
-          campaign.content_html,
-          subscriber
-        );
-        const personalizedText = campaign.content_text 
-          ? personalizeContent(campaign.content_text, subscriber)
-          : undefined;
-
-        // Create send record first
-        const { data: sendRecord } = await supabase
-          .from('email_sends')
-          .insert({
-            campaign_id: campaignId,
-            subscriber_id: subscriber.id,
-            status: 'pending',
-          })
-          .select('id')
-          .single();
-
-        // Send via Resend
-        const response = await fetch('https://api.resend.com/emails', {
-          method: 'POST',
-          headers: {
-            'Authorization': `Bearer ${resendApiKey}`,
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify({
-            from: `${campaign.from_name} <${campaign.from_email}>`,
-            to: [subscriber.email],
-            subject: campaign.subject,
-            html: personalizedHtml,
-            text: personalizedText,
-            reply_to: campaign.reply_to,
-            headers: {
-              'X-Campaign-Id': campaignId,
-              'X-Send-Id': sendRecord?.id,
-            },
-          }),
-        });
-
-        const result = await response.json();
-
-        if (response.ok) {
-          // Update send record with success
-          await supabase
-            .from('email_sends')
-            .update({
-              resend_id: result.id,
-              status: 'sent',
-              sent_at: new Date().toISOString(),
-            })
-            .eq('id', sendRecord?.id);
-
-          sentCount++;
-        } else {
-          // Update send record with error
-          await supabase
-            .from('email_sends')
-            .update({
-              status: 'bounced',
-              error_message: result.message || 'Send failed',
-            })
-            .eq('id', sendRecord?.id);
-
-          errorCount++;
-          console.error(`❌ Failed to send to ${subscriber.email}:`, result);
+      return new Response(
+        JSON.stringify({
+          success: true,
+          campaign_id: campaignId,
+          total_recipients: 0,
+          sent: 0,
+          errors: 0,
+          message: 'No recipients matched the targeting criteria',
+        }),
+        {
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+          status: 200,
         }
-      } catch (err: any) {
-        errorCount++;
-        console.error(`❌ Error sending to ${subscriber.email}:`, err);
+      );
+    }
+
+    console.log(`📧 Sending to ${recipients.length} contacts`);
+
+    // Update total recipients
+    await supabase
+      .from('email_campaigns')
+      .update({ total_recipients: recipients.length })
+      .eq('id', campaignId);
+
+    let sentCount = 0;
+    let errorCount = 0;
+
+    // Send emails in batches of 10 to avoid rate limits
+    const BATCH_SIZE = 10;
+    for (let i = 0; i < recipients.length; i += BATCH_SIZE) {
+      const batch = recipients.slice(i, i + BATCH_SIZE);
+
+      await Promise.all(batch.map(async (contact: any) => {
+        try {
+          // Personalize content
+          const personalizedHtml = personalizeContent(
+            campaign.content_html,
+            contact
+          );
+          const personalizedText = campaign.content_text
+            ? personalizeContent(campaign.content_text, contact)
+            : undefined;
+          const personalizedSubject = personalizeContent(
+            campaign.subject,
+            contact
+          );
+
+          // Create send record first (linked to contact)
+          const { data: sendRecord, error: sendRecordError } = await supabase
+            .from('email_sends')
+            .insert({
+              campaign_id: campaignId,
+              contact_id: contact.contact_id,
+              status: 'pending',
+            })
+            .select('id')
+            .single();
+
+          if (sendRecordError) {
+            console.error(`❌ Failed to create send record for ${contact.email}:`, sendRecordError);
+            errorCount++;
+            return;
+          }
+
+          // Send via Resend
+          const response = await fetch('https://api.resend.com/emails', {
+            method: 'POST',
+            headers: {
+              'Authorization': `Bearer ${resendApiKey}`,
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+              from: `${campaign.from_name} <${campaign.from_email}>`,
+              to: [contact.email],
+              subject: personalizedSubject,
+              html: personalizedHtml,
+              text: personalizedText,
+              reply_to: campaign.reply_to,
+              headers: {
+                'X-Campaign-Id': campaignId,
+                'X-Send-Id': sendRecord.id,
+                'X-Contact-Id': contact.contact_id,
+              },
+            }),
+          });
+
+          const result = await response.json();
+
+          if (response.ok) {
+            // Update send record with success
+            await supabase
+              .from('email_sends')
+              .update({
+                resend_id: result.id,
+                status: 'sent',
+                sent_at: new Date().toISOString(),
+              })
+              .eq('id', sendRecord.id);
+
+            // Update contact's last activity
+            await supabase.rpc('contact_touch', { p_contact_id: contact.contact_id });
+
+            sentCount++;
+          } else {
+            // Update send record with error
+            await supabase
+              .from('email_sends')
+              .update({
+                status: 'bounced',
+                error_message: result.message || 'Send failed',
+              })
+              .eq('id', sendRecord.id);
+
+            errorCount++;
+            console.error(`❌ Failed to send to ${contact.email}:`, result);
+          }
+        } catch (err: any) {
+          errorCount++;
+          console.error(`❌ Error sending to ${contact.email}:`, err.message);
+        }
+      }));
+
+      // Small delay between batches to respect rate limits
+      if (i + BATCH_SIZE < recipients.length) {
+        await new Promise(resolve => setTimeout(resolve, 100));
       }
-    }));
 
-    // Small delay between batches to respect rate limits
-    if (i + BATCH_SIZE < activeSubscribers.length) {
-      await new Promise(resolve => setTimeout(resolve, 100));
+      // Log progress for large campaigns
+      if (recipients.length > 100 && (i + BATCH_SIZE) % 100 === 0) {
+        console.log(`📧 Progress: ${Math.min(i + BATCH_SIZE, recipients.length)}/${recipients.length}`);
+      }
     }
+
+    // Update campaign with final stats
+    await supabase
+      .from('email_campaigns')
+      .update({
+        status: 'sent',
+        sent_at: new Date().toISOString(),
+        total_sent: sentCount,
+      })
+      .eq('id', campaignId);
+
+    console.log(`✅ Campaign sent: ${sentCount} delivered, ${errorCount} errors`);
+
+    return new Response(
+      JSON.stringify({
+        success: true,
+        campaign_id: campaignId,
+        total_recipients: recipients.length,
+        sent: sentCount,
+        errors: errorCount,
+      }),
+      {
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        status: 200,
+      }
+    );
+
+  } catch (error: any) {
+    // If sending fails, revert campaign status to draft
+    await supabase
+      .from('email_campaigns')
+      .update({ status: 'draft' })
+      .eq('id', campaignId);
+
+    throw error;
   }
-
-  // Update campaign with final stats
-  await supabase
-    .from('email_campaigns')
-    .update({
-      status: 'sent',
-      sent_at: new Date().toISOString(),
-      total_sent: sentCount,
-    })
-    .eq('id', campaignId);
-
-  console.log(`✅ Campaign sent: ${sentCount} delivered, ${errorCount} errors`);
-
-  return new Response(
-    JSON.stringify({
-      success: true,
-      campaign_id: campaignId,
-      total_recipients: activeSubscribers.length,
-      sent: sentCount,
-      errors: errorCount,
-    }),
-    {
-      headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-      status: 200,
-    }
-  );
 }
 
 /**
  * Replace personalization tokens in content
  */
-function personalizeContent(content: string, subscriber: any): string {
+function personalizeContent(content: string, contact: any): string {
   return content
-    .replace(/{{first_name}}/gi, subscriber.first_name || 'there')
-    .replace(/{{last_name}}/gi, subscriber.last_name || '')
-    .replace(/{{email}}/gi, subscriber.email || '')
+    .replace(/{{first_name}}/gi, contact.first_name || 'there')
+    .replace(/{{last_name}}/gi, contact.last_name || '')
+    .replace(/{{email}}/gi, contact.email || '')
     .replace(/{{name}}/gi, 
-      subscriber.first_name 
-        ? `${subscriber.first_name}${subscriber.last_name ? ' ' + subscriber.last_name : ''}`
+      contact.first_name 
+        ? `${contact.first_name}${contact.last_name ? ' ' + contact.last_name : ''}`
         : 'there'
     );
 }
