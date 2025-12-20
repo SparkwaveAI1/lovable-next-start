@@ -8,8 +8,9 @@ import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Badge } from '@/components/ui/badge';
-import { Loader2, Users, Tag, Filter, X, Eye } from 'lucide-react';
+import { Loader2, Users, Tag, Filter, X, Eye, Mail } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
+import { AlertCircle } from 'lucide-react';
 
 interface CampaignBuilderProps {
   businessId: string;
@@ -38,6 +39,13 @@ interface PreviewContact {
   last_name: string | null;
 }
 
+interface VerifiedSender {
+  id: string;
+  email: string;
+  name: string;
+  is_default: boolean;
+}
+
 export function CampaignBuilder({ businessId, campaignId, onSave, onCancel }: CampaignBuilderProps) {
   const { toast } = useToast();
   const queryClient = useQueryClient();
@@ -45,8 +53,7 @@ export function CampaignBuilder({ businessId, campaignId, onSave, onCancel }: Ca
   const [name, setName] = useState('');
   const [subject, setSubject] = useState('');
   const [contentHtml, setContentHtml] = useState('');
-  const [fromName, setFromName] = useState('');
-  const [fromEmail, setFromEmail] = useState('');
+  const [selectedSenderId, setSelectedSenderId] = useState<string | null>(null);
   const [targetType, setTargetType] = useState<'all' | 'tags' | 'segment'>('all');
   const [selectedTags, setSelectedTags] = useState<string[]>([]);
   const [tagsMatch, setTagsMatch] = useState<'all' | 'any'>('any');
@@ -54,6 +61,33 @@ export function CampaignBuilder({ businessId, campaignId, onSave, onCancel }: Ca
   const [recipientCount, setRecipientCount] = useState<number | null>(null);
   const [previewContacts, setPreviewContacts] = useState<PreviewContact[]>([]);
   const [isLoadingPreview, setIsLoadingPreview] = useState(false);
+
+  // Fetch verified senders for this business
+  const { data: senders = [], isLoading: loadingSenders } = useQuery({
+    queryKey: ['verified-senders', businessId],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('verified_senders')
+        .select('*')
+        .eq('business_id', businessId)
+        .eq('is_active', true)
+        .order('is_default', { ascending: false })
+        .order('name');
+      if (error) throw error;
+      return data as VerifiedSender[];
+    },
+    enabled: !!businessId
+  });
+
+  // Set default sender when senders load and no sender selected
+  useEffect(() => {
+    if (senders.length > 0 && !selectedSenderId && !campaignId) {
+      const defaultSender = senders.find(s => s.is_default) || senders[0];
+      if (defaultSender) {
+        setSelectedSenderId(defaultSender.id);
+      }
+    }
+  }, [senders, selectedSenderId, campaignId]);
 
   // Fetch available tags for this business
   const { data: tags } = useQuery({
@@ -105,8 +139,11 @@ export function CampaignBuilder({ businessId, campaignId, onSave, onCancel }: Ca
       setName(data.name || '');
       setSubject(data.subject || '');
       setContentHtml(data.content_html || '');
-      setFromName(data.from_name || '');
-      setFromEmail(data.from_email || '');
+      // Find sender by email match when editing existing campaign
+      const matchingSender = senders.find(s => s.email === data.from_email);
+      if (matchingSender) {
+        setSelectedSenderId(matchingSender.id);
+      }
       setTargetType((data.target_type as 'all' | 'tags' | 'segment') || 'all');
       setSelectedTags(data.target_tags || []);
       setTagsMatch((data.target_tags_match as 'all' | 'any') || 'any');
@@ -160,15 +197,21 @@ export function CampaignBuilder({ businessId, campaignId, onSave, onCancel }: Ca
     );
   };
 
+  const selectedSender = senders.find(s => s.id === selectedSenderId);
+
   const saveCampaign = useMutation({
     mutationFn: async () => {
+      if (!selectedSender) {
+        throw new Error('Please select a verified sender');
+      }
+      
       const campaignData = {
         business_id: businessId,
         name,
         subject,
         content_html: contentHtml,
-        from_name: fromName,
-        from_email: fromEmail,
+        from_name: selectedSender.name,
+        from_email: selectedSender.email,
         target_type: targetType,
         target_tags: targetType === 'tags' ? selectedTags : [],
         target_tags_match: tagsMatch,
@@ -237,26 +280,44 @@ export function CampaignBuilder({ businessId, campaignId, onSave, onCancel }: Ca
             />
           </div>
 
-          <div className="grid grid-cols-2 gap-4">
-            <div>
-              <Label htmlFor="from-name">From Name</Label>
-              <Input
-                id="from-name"
-                value={fromName}
-                onChange={(e) => setFromName(e.target.value)}
-                placeholder="e.g., Your Business"
-              />
-            </div>
-            <div>
-              <Label htmlFor="from-email">From Email</Label>
-              <Input
-                id="from-email"
-                type="email"
-                value={fromEmail}
-                onChange={(e) => setFromEmail(e.target.value)}
-                placeholder="e.g., hello@yourbusiness.com"
-              />
-            </div>
+          <div>
+            <Label htmlFor="sender">Send From</Label>
+            {loadingSenders ? (
+              <div className="flex items-center gap-2 py-2">
+                <Loader2 className="h-4 w-4 animate-spin" />
+                <span className="text-sm text-muted-foreground">Loading senders...</span>
+              </div>
+            ) : senders.length === 0 ? (
+              <div className="flex items-center gap-2 p-3 border rounded-md bg-destructive/10 border-destructive/20">
+                <AlertCircle className="h-4 w-4 text-destructive" />
+                <span className="text-sm text-destructive">
+                  No verified senders configured. Contact admin to add sender addresses.
+                </span>
+              </div>
+            ) : (
+              <Select 
+                value={selectedSenderId || ''} 
+                onValueChange={(v) => setSelectedSenderId(v)}
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="Select a verified sender..." />
+                </SelectTrigger>
+                <SelectContent>
+                  {senders.map((sender) => (
+                    <SelectItem key={sender.id} value={sender.id}>
+                      <div className="flex items-center gap-2">
+                        <Mail className="h-4 w-4" />
+                        <span>{sender.name}</span>
+                        <span className="text-muted-foreground">({sender.email})</span>
+                        {sender.is_default && (
+                          <Badge variant="secondary" className="ml-1 text-xs">Default</Badge>
+                        )}
+                      </div>
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            )}
           </div>
 
           <div>
@@ -448,7 +509,7 @@ export function CampaignBuilder({ businessId, campaignId, onSave, onCancel }: Ca
         )}
         <Button
           onClick={() => saveCampaign.mutate()}
-          disabled={!name || !subject || !contentHtml || !fromName || !fromEmail || saveCampaign.isPending}
+          disabled={!name || !subject || !contentHtml || !selectedSenderId || saveCampaign.isPending}
         >
           {saveCampaign.isPending && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
           Save Draft

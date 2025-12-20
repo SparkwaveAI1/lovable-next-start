@@ -1798,6 +1798,50 @@ export type Database = {
         }
         Relationships: []
       }
+      verified_senders: {
+        Row: {
+          business_id: string
+          created_at: string | null
+          email: string
+          id: string
+          is_active: boolean | null
+          is_default: boolean | null
+          name: string
+          updated_at: string | null
+          verified_at: string | null
+        }
+        Insert: {
+          business_id: string
+          created_at?: string | null
+          email: string
+          id?: string
+          is_active?: boolean | null
+          is_default?: boolean | null
+          name: string
+          updated_at?: string | null
+          verified_at?: string | null
+        }
+        Update: {
+          business_id?: string
+          created_at?: string | null
+          email?: string
+          id?: string
+          is_active?: boolean | null
+          is_default?: boolean | null
+          name?: string
+          updated_at?: string | null
+          verified_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "verified_senders_business_id_fkey"
+            columns: ["business_id"]
+            isOneToOne: false
+            referencedRelation: "businesses"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       webhook_endpoints: {
         Row: {
           business_id: string
@@ -1980,6 +2024,7 @@ export type Database = {
         Args: { p_business_id: string }
         Returns: undefined
       }
+      set_default_sender: { Args: { p_sender_id: string }; Returns: undefined }
     }
     Enums: {
       app_role:
