@@ -35,6 +35,9 @@ interface SendEmailRequest {
   
   // For linking to contact
   contact_id?: string;
+  
+  // For test send mode
+  test_email?: string;
 }
 
 serve(async (req) => {
@@ -59,7 +62,75 @@ serve(async (req) => {
     const supabase = createClient(supabaseUrl, supabaseKey);
 
     const body: SendEmailRequest = await req.json();
-    console.log('📧 Request type:', body.campaign_id ? 'campaign' : 'single');
+    console.log('📧 Request type:', body.test_email ? 'test' : body.campaign_id ? 'campaign' : 'single');
+
+    // Test send mode - send to a single email for verification without affecting stats
+    if (body.test_email && body.campaign_id) {
+      console.log('📧 Test send mode to:', body.test_email);
+      
+      const { data: campaign, error: campaignError } = await supabase
+        .from('email_campaigns')
+        .select('*')
+        .eq('id', body.campaign_id)
+        .single();
+
+      if (campaignError || !campaign) {
+        console.error('❌ Campaign not found for test send:', campaignError);
+        return new Response(
+          JSON.stringify({ success: false, error: 'Campaign not found' }),
+          { status: 404, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        );
+      }
+
+      // Personalize content with test values
+      const personalizedSubject = (campaign.subject || 'Test Email')
+        .replace(/\{\{first_name\}\}/gi, 'Test')
+        .replace(/\{\{last_name\}\}/gi, 'User')
+        .replace(/\{\{email\}\}/gi, body.test_email)
+        .replace(/\{\{name\}\}/gi, 'Test User');
+
+      const personalizedHtml = (campaign.content_html || '')
+        .replace(/\{\{first_name\}\}/gi, 'Test')
+        .replace(/\{\{last_name\}\}/gi, 'User')
+        .replace(/\{\{email\}\}/gi, body.test_email)
+        .replace(/\{\{name\}\}/gi, 'Test User');
+
+      // Send test email via Resend
+      const response = await fetch('https://api.resend.com/emails', {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${resendApiKey}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          from: `${campaign.from_name || 'Test'} <${campaign.from_email || 'noreply@example.com'}>`,
+          to: [body.test_email],
+          subject: `[TEST] ${personalizedSubject}`,
+          html: personalizedHtml,
+          reply_to: campaign.reply_to,
+        }),
+      });
+
+      const result = await response.json();
+
+      if (!response.ok) {
+        console.error('❌ Test send failed:', result);
+        return new Response(
+          JSON.stringify({ success: false, error: result.message || 'Failed to send test email', details: result }),
+          { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        );
+      }
+
+      console.log('✅ Test email sent successfully:', result.id);
+      return new Response(
+        JSON.stringify({ 
+          success: true, 
+          message: `Test email sent to ${body.test_email}`,
+          resend_id: result.id 
+        }),
+        { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
 
     // Campaign sending mode
     if (body.campaign_id) {
