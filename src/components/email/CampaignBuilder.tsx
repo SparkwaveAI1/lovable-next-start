@@ -8,9 +8,17 @@ import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Badge } from '@/components/ui/badge';
-import { Loader2, Users, Tag, Filter, X, Eye, Mail } from 'lucide-react';
+import { Loader2, Users, Tag, Filter, X, Eye, Mail, Send, AlertCircle } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
-import { AlertCircle } from 'lucide-react';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from '@/components/ui/dialog';
 
 interface CampaignBuilderProps {
   businessId: string;
@@ -61,6 +69,11 @@ export function CampaignBuilder({ businessId, campaignId, onSave, onCancel }: Ca
   const [recipientCount, setRecipientCount] = useState<number | null>(null);
   const [previewContacts, setPreviewContacts] = useState<PreviewContact[]>([]);
   const [isLoadingPreview, setIsLoadingPreview] = useState(false);
+  
+  // Test email dialog state
+  const [isTestDialogOpen, setIsTestDialogOpen] = useState(false);
+  const [testEmailAddress, setTestEmailAddress] = useState('');
+  const [isSendingTest, setIsSendingTest] = useState(false);
 
   // Fetch verified senders for this business
   const { data: senders = [], isLoading: loadingSenders } = useQuery({
@@ -247,6 +260,57 @@ export function CampaignBuilder({ businessId, campaignId, onSave, onCancel }: Ca
       toast({ title: 'Error', description: error.message, variant: 'destructive' });
     }
   });
+
+  const sendTestEmail = async () => {
+    if (!testEmailAddress) {
+      toast({ 
+        title: 'Enter Email', 
+        description: 'Please enter an email address to send the test to.',
+        variant: 'destructive'
+      });
+      return;
+    }
+    
+    if (!campaignId) {
+      toast({ 
+        title: 'Save First', 
+        description: 'Please save the campaign as a draft before sending a test.',
+        variant: 'destructive'
+      });
+      return;
+    }
+
+    setIsSendingTest(true);
+    try {
+      const { data, error } = await supabase.functions.invoke('send-email', {
+        body: { 
+          campaign_id: campaignId, 
+          test_email: testEmailAddress 
+        }
+      });
+
+      if (error) throw error;
+
+      if (data?.success) {
+        toast({ 
+          title: 'Test Sent!', 
+          description: `Test email sent to ${testEmailAddress}` 
+        });
+        setIsTestDialogOpen(false);
+        setTestEmailAddress('');
+      } else {
+        throw new Error(data?.error || 'Failed to send test');
+      }
+    } catch (err: any) {
+      toast({ 
+        title: 'Test Failed', 
+        description: err.message,
+        variant: 'destructive'
+      });
+    } finally {
+      setIsSendingTest(false);
+    }
+  };
 
   const getTagColor = (color: string | null) => {
     const colors: Record<string, string> = {
@@ -507,6 +571,47 @@ export function CampaignBuilder({ businessId, campaignId, onSave, onCancel }: Ca
             Cancel
           </Button>
         )}
+        
+        {/* Send Test Email Dialog */}
+        <Dialog open={isTestDialogOpen} onOpenChange={setIsTestDialogOpen}>
+          <DialogTrigger asChild>
+            <Button variant="outline" disabled={!campaignId}>
+              <Send className="h-4 w-4 mr-2" />
+              Send Test
+            </Button>
+          </DialogTrigger>
+          <DialogContent>
+            <DialogHeader>
+              <DialogTitle>Send Test Email</DialogTitle>
+              <DialogDescription>
+                Send a preview of this campaign to verify it looks correct. The subject will be prefixed with [TEST].
+              </DialogDescription>
+            </DialogHeader>
+            <div className="py-4">
+              <Label htmlFor="test-email">Email Address</Label>
+              <Input
+                id="test-email"
+                type="email"
+                value={testEmailAddress}
+                onChange={(e) => setTestEmailAddress(e.target.value)}
+                placeholder="your@email.com"
+              />
+            </div>
+            <DialogFooter>
+              <Button variant="outline" onClick={() => setIsTestDialogOpen(false)}>
+                Cancel
+              </Button>
+              <Button 
+                onClick={sendTestEmail} 
+                disabled={!testEmailAddress || isSendingTest}
+              >
+                {isSendingTest && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
+                Send Test
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+        
         <Button
           onClick={() => saveCampaign.mutate()}
           disabled={!name || !subject || !contentHtml || !selectedSenderId || saveCampaign.isPending}
