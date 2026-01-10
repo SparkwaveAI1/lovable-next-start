@@ -32,6 +32,7 @@ import {
   ArrowLeft 
 } from 'lucide-react';
 import { CampaignBuilder } from '@/components/email/CampaignBuilder';
+import { CampaignQueueMonitor } from '@/components/email/CampaignQueueMonitor';
 import { useToast } from '@/hooks/use-toast';
 import { format } from 'date-fns';
 
@@ -49,16 +50,17 @@ interface Campaign {
   sent_at: string | null;
 }
 
-type ViewMode = 'list' | 'create' | 'edit';
+type ViewMode = 'list' | 'create' | 'edit' | 'sending';
 
 export default function EmailMarketing() {
   const { selectedBusiness, setSelectedBusiness } = useBusinessContext();
   const { data: businesses = [] } = useBusinesses();
   const { toast } = useToast();
   const queryClient = useQueryClient();
-  
+
   const [viewMode, setViewMode] = useState<ViewMode>('list');
   const [editingCampaignId, setEditingCampaignId] = useState<string | null>(null);
+  const [sendingCampaign, setSendingCampaign] = useState<Campaign | null>(null);
 
   const handleBusinessChange = (businessId: string) => {
     const business = businesses.find(b => b.id === businessId);
@@ -96,25 +98,16 @@ export default function EmailMarketing() {
     }
   });
 
-  const sendCampaign = useMutation({
-    mutationFn: async (campaignId: string) => {
-      const { data, error } = await supabase.functions.invoke('send-email', {
-        body: { campaignId }
-      });
-      if (error) throw error;
-      return data;
-    },
-    onSuccess: (data) => {
-      toast({ 
-        title: 'Campaign sent!', 
-        description: `Sent to ${data?.sent || 0} contacts` 
-      });
-      queryClient.invalidateQueries({ queryKey: ['email-campaigns'] });
-    },
-    onError: (error: Error) => {
-      toast({ title: 'Send failed', description: error.message, variant: 'destructive' });
-    }
-  });
+  const handleSendCampaign = (campaign: Campaign) => {
+    setSendingCampaign(campaign);
+    setViewMode('sending');
+  };
+
+  const handleSendComplete = () => {
+    setSendingCampaign(null);
+    setViewMode('list');
+    queryClient.invalidateQueries({ queryKey: ['email-campaigns'] });
+  };
 
   const handleCreateNew = () => {
     setEditingCampaignId(null);
@@ -140,8 +133,11 @@ export default function EmailMarketing() {
     const variants: Record<string, 'outline' | 'secondary' | 'default' | 'destructive'> = {
       draft: 'outline',
       scheduled: 'secondary',
+      queued: 'secondary',
       sending: 'default',
       sent: 'default',
+      paused: 'secondary',
+      cancelled: 'outline',
       failed: 'destructive'
     };
     return (
@@ -184,7 +180,7 @@ export default function EmailMarketing() {
   if (viewMode === 'create' || viewMode === 'edit') {
     return (
       <div className="min-h-screen bg-background">
-        <DashboardHeader 
+        <DashboardHeader
           selectedBusinessId={selectedBusiness?.id}
           onBusinessChange={handleBusinessChange}
         />
@@ -201,6 +197,31 @@ export default function EmailMarketing() {
             campaignId={editingCampaignId || undefined}
             onSave={handleSaveComplete}
             onCancel={handleCancel}
+          />
+        </main>
+      </div>
+    );
+  }
+
+  // Show sending/queue monitor view
+  if (viewMode === 'sending' && sendingCampaign) {
+    return (
+      <div className="min-h-screen bg-background">
+        <DashboardHeader
+          selectedBusinessId={selectedBusiness?.id}
+          onBusinessChange={handleBusinessChange}
+        />
+        <main className="container mx-auto px-4 sm:px-6 py-4 md:py-8 pt-2 md:pt-28 max-w-2xl">
+          <Button variant="ghost" onClick={handleSendComplete} className="mb-4">
+            <ArrowLeft className="h-4 w-4 mr-2" />
+            Back to Campaigns
+          </Button>
+          <h1 className="text-2xl font-bold mb-6">Send Campaign</h1>
+          <CampaignQueueMonitor
+            campaignId={sendingCampaign.id}
+            campaignName={sendingCampaign.name}
+            onComplete={handleSendComplete}
+            onCancel={handleSendComplete}
           />
         </main>
       </div>
@@ -296,13 +317,10 @@ export default function EmailMarketing() {
                             <Edit className="h-4 w-4 mr-2" />
                             Edit
                           </DropdownMenuItem>
-                          {campaign.status === 'draft' && (
-                            <DropdownMenuItem 
-                              onClick={() => sendCampaign.mutate(campaign.id)}
-                              disabled={sendCampaign.isPending}
-                            >
+                          {(campaign.status === 'draft' || campaign.status === 'queued' || campaign.status === 'paused') && (
+                            <DropdownMenuItem onClick={() => handleSendCampaign(campaign)}>
                               <Send className="h-4 w-4 mr-2" />
-                              Send Now
+                              {campaign.status === 'draft' ? 'Send Now' : 'Resume Sending'}
                             </DropdownMenuItem>
                           )}
                           <DropdownMenuItem 

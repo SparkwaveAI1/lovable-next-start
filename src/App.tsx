@@ -21,6 +21,7 @@ import EmailMarketing from "./pages/EmailMarketing";
 import ProtectedRoute from "./components/ProtectedRoute";
 import { ErrorBoundary } from "./components/ErrorBoundary";
 import { BusinessProvider } from "@/contexts/BusinessContext";
+import { AuthProvider } from "@/contexts/AuthContext";
 
 const queryClient = new QueryClient();
 
@@ -29,9 +30,10 @@ const App = () => (
     <TooltipProvider>
       <Toaster />
       <Sonner />
-      <BusinessProvider>
-        <BrowserRouter>
-          <Routes>
+      <AuthProvider>
+        <BusinessProvider>
+          <BrowserRouter>
+            <Routes>
             <Route path="/auth" element={<Auth />} />
             <Route path="/crisis-monitor" element={<CrisisMonitor />} />
             <Route path="/upload" element={<EmployeeUpload />} />
@@ -48,9 +50,10 @@ const App = () => (
             <Route path="/email-marketing" element={<ProtectedRoute><ErrorBoundary><EmailMarketing /></ErrorBoundary></ProtectedRoute>} />
             {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
             <Route path="*" element={<NotFound />} />
-          </Routes>
-        </BrowserRouter>
-      </BusinessProvider>
+            </Routes>
+          </BrowserRouter>
+        </BusinessProvider>
+      </AuthProvider>
     </TooltipProvider>
   </QueryClientProvider>
 );

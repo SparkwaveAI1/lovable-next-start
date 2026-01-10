@@ -17,6 +17,7 @@ import { useBusinessContext } from "@/contexts/BusinessContext";
 import { DashboardHeader } from "@/components/DashboardHeader";
 import { Progress } from "@/components/ui/progress";
 import { format } from "date-fns";
+import { useContentFilter } from "@/hooks/useContentFilter";
 
 interface MediaAsset {
   id: string;
@@ -41,16 +42,27 @@ export default function MediaLibraryPage() {
   const [media, setMedia] = useState<MediaAsset[]>([]);
   const [loading, setLoading] = useState(false);
   const [uploading, setUploading] = useState(false);
-  const [searchTerm, setSearchTerm] = useState("");
-  const [typeFilter, setTypeFilter] = useState<'all' | 'image' | 'video'>('all');
-  const [tagFilter, setTagFilter] = useState<string>("all");
-  const [allTags, setAllTags] = useState<string[]>([]);
   const [editingMedia, setEditingMedia] = useState<MediaAsset | null>(null);
   const [editDescription, setEditDescription] = useState("");
   const [editTags, setEditTags] = useState("");
   const [selectedMedia, setSelectedMedia] = useState<MediaAsset | null>(null);
   const [uploadProgress, setUploadProgress] = useState({ current: 0, total: 0, fileName: '' });
   const [isProcessing, setIsProcessing] = useState(false);
+
+  const {
+    filteredItems: filteredMedia,
+    searchTerm,
+    setSearchTerm,
+    categoryFilter: typeFilter,
+    setCategoryFilter: setTypeFilter,
+    tagFilter,
+    setTagFilter,
+    availableTags,
+  } = useContentFilter({
+    items: media,
+    searchFields: ['file_name', 'description', 'tags'],
+    categoryField: 'file_type',
+  });
 
   useEffect(() => {
     if (selectedBusiness) {
@@ -93,13 +105,6 @@ export default function MediaLibraryPage() {
         .order('created_at', { ascending: false });
 
       if (error) throw error;
-
-      // Extract all unique tags
-      const tags = new Set<string>();
-      data?.forEach(item => {
-        item.tags?.forEach((tag: string) => tags.add(tag));
-      });
-      setAllTags(Array.from(tags).sort());
 
       setMedia(data || []);
     } catch (error) {
@@ -506,18 +511,6 @@ export default function MediaLibraryPage() {
     }
   };
 
-  const filteredMedia = media.filter(item => {
-    const matchesSearch = !searchTerm || 
-      item.file_name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      item.description?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      item.tags?.some(t => t.toLowerCase().includes(searchTerm.toLowerCase()));
-    
-    const matchesType = typeFilter === 'all' || item.file_type === typeFilter;
-    const matchesTag = tagFilter === 'all' || item.tags?.includes(tagFilter);
-
-    return matchesSearch && matchesType && matchesTag;
-  });
-
   const formatFileSize = (bytes: number) => {
     if (bytes < 1024) return bytes + ' B';
     if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + ' KB';
@@ -650,14 +643,14 @@ export default function MediaLibraryPage() {
                 </Button>
               </div>
 
-              {allTags.length > 0 && (
+              {availableTags.length > 0 && (
                 <Select value={tagFilter} onValueChange={setTagFilter}>
                   <SelectTrigger className="w-full sm:w-[180px] bg-background">
                     <SelectValue placeholder="All Tags" />
                   </SelectTrigger>
                   <SelectContent className="bg-background z-50">
                     <SelectItem value="all">All Tags</SelectItem>
-                    {allTags.map(tag => (
+                    {availableTags.map(tag => (
                       <SelectItem key={tag} value={tag}>{tag}</SelectItem>
                     ))}
                   </SelectContent>

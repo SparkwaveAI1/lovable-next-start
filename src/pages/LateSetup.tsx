@@ -83,17 +83,14 @@ export default function LateSetup() {
 
         console.log(`📡 Fetching accounts for ${business.name} (profile: ${business.late_profile_id})`);
 
-        const response = await fetch(
-          `https://wrsoacujxcskydlzgopa.supabase.co/functions/v1/fetch-late-accounts?profileId=${business.late_profile_id}`,
-          {
-            headers: {
-              'Authorization': `Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Indyc29hY3VqeGNza3lkbHpnb3BhIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NDk2MDUyMTEsImV4cCI6MjA2NTE4MTIxMX0.TyzOJ0_qZ6nwHW_p9tTd4RZ8FtP7rg8u_Ow92phO7rc`,
-              'Content-Type': 'application/json'
-            }
-          }
-        );
+        const { data, error: fetchError } = await supabase.functions.invoke('fetch-late-accounts', {
+          body: { profileId: business.late_profile_id }
+        });
 
-        const data = await response.json();
+        if (fetchError) {
+          console.warn(`⚠️ Error fetching accounts for ${business.name}:`, fetchError);
+          continue;
+        }
 
         if (data?.success && data?.accounts) {
           accountsByBusiness[business.name] = data.accounts.map((acc: any) => ({
@@ -165,19 +162,11 @@ export default function LateSetup() {
         console.log(`   Profile ID: ${business.late_profile_id}`);
 
         // Fetch accounts for this business's specific profile
-        const response = await fetch(
-          `https://wrsoacujxcskydlzgopa.supabase.co/functions/v1/fetch-late-accounts?profileId=${business.late_profile_id}`,
-          {
-            headers: {
-              'Authorization': `Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Indyc29hY3VqeGNza3lkbHpnb3BhIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NDk2MDUyMTEsImV4cCI6MjA2NTE4MTIxMX0.TyzOJ0_qZ6nwHW_p9tTd4RZ8FtP7rg8u_Ow92phO7rc`,
-              'Content-Type': 'application/json'
-            }
-          }
-        );
+        const { data, error: fetchError } = await supabase.functions.invoke('fetch-late-accounts', {
+          body: { profileId: business.late_profile_id }
+        });
 
-        const data = await response.json();
-
-        if (!data?.success) {
+        if (fetchError || !data?.success) {
           console.error(`❌ Failed to fetch accounts for ${business.name}:`, data);
           results.push({
             success: false,

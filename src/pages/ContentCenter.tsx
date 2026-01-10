@@ -17,8 +17,7 @@ import { useToast } from "@/hooks/use-toast";
 import { DashboardHeader } from "@/components/DashboardHeader";
 import { supabase } from "@/integrations/supabase/client";
 import { ContentReviewDialog } from "@/components/ContentReviewDialog";
-import { ContentLibrary } from "@/components/ContentLibrary";
-import { PostedContentLibrary } from "@/components/PostedContentLibrary";
+import { UnifiedContentLibrary } from "@/components/UnifiedContentLibrary";
 import { formatToEasternDateTime } from "@/lib/dateUtils";
 import { fromZonedTime } from "date-fns-tz";
 import { useBusinessContext } from "@/contexts/BusinessContext";
@@ -1100,11 +1099,12 @@ const ContentCenter = () => {
                     </CardDescription>
                   </CardHeader>
                   <CardContent>
-                    <ContentLibrary
+                    <UnifiedContentLibrary
                       businessId={selectedBusiness?.id}
+                      mode="approved"
                       onSchedule={(content) => {
-                        setSchedulingTweet({ 
-                          tweet: content.content, 
+                        setSchedulingTweet({
+                          tweet: content.content,
                           index: 0,
                           content_media: content.content_media
                         });
@@ -1153,8 +1153,9 @@ const ContentCenter = () => {
                   </CardHeader>
                   <CardContent>
                     {selectedBusiness ? (
-                      <PostedContentLibrary 
+                      <UnifiedContentLibrary
                         businessId={selectedBusiness.id}
+                        mode="posted"
                       />
                     ) : (
                       <div className="text-center py-12 text-muted-foreground">

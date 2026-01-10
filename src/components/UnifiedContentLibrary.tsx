@@ -7,11 +7,13 @@ import { Card, CardContent, CardFooter, CardHeader } from "@/components/ui/card"
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Calendar, Clock, Edit2, Trash2, Image as ImageIcon, Video, CheckCircle, Copy, ArrowRight, ImagePlus } from "lucide-react";
+import { Calendar, Clock, Edit2, Trash2, Image as ImageIcon, Video, CheckCircle, Copy, ImagePlus, RefreshCw } from "lucide-react";
 import { toast } from "sonner";
 import { markAsPosted } from "@/lib/schedulingService";
 import { MediaSelector } from './MediaSelector';
+import { useContentFilter } from "@/hooks/useContentFilter";
 
+// Unified content interface that covers both approved and posted content
 interface LibraryContent {
   id: string;
   business_id: string;
@@ -21,8 +23,11 @@ interface LibraryContent {
   topic?: string;
   keywords?: string[];
   tags?: string[];
-  approved_at?: string;
+  approved_at?: string | null;
+  posted_at?: string | null;
   created_at: string;
+  metadata?: any;
+  error_message?: string | null;
   content_media?: Array<{
     media_id: string;
     display_order: number;
@@ -35,33 +40,44 @@ interface LibraryContent {
   }>;
 }
 
-interface ContentLibraryProps {
+interface UnifiedContentLibraryProps {
   businessId: string;
-  onSchedule: (content: LibraryContent) => void;
-  onEdit: (content: LibraryContent) => void;
+  mode: 'approved' | 'posted';
+  onSchedule?: (content: LibraryContent) => void;
+  onEdit?: (content: LibraryContent) => void;
 }
 
-export function ContentLibrary({ businessId, onSchedule, onEdit }: ContentLibraryProps) {
+export function UnifiedContentLibrary({ businessId, mode, onSchedule, onEdit }: UnifiedContentLibraryProps) {
   const [content, setContent] = useState<LibraryContent[]>([]);
   const [loading, setLoading] = useState(true);
-  const [searchTerm, setSearchTerm] = useState("");
-  const [platformFilter, setPlatformFilter] = useState("all");
-  const [tagFilter, setTagFilter] = useState("all");
-  const [allTags, setAllTags] = useState<string[]>([]);
   const [selectedContent, setSelectedContent] = useState<LibraryContent | null>(null);
   const [dialogOpen, setDialogOpen] = useState(false);
   const [mediaSelectorOpen, setMediaSelectorOpen] = useState(false);
   const [selectedContentId, setSelectedContentId] = useState<string | null>(null);
 
+  const {
+    filteredItems: filteredContent,
+    searchTerm,
+    setSearchTerm,
+    categoryFilter: platformFilter,
+    setCategoryFilter: setPlatformFilter,
+    tagFilter,
+    setTagFilter,
+    availableTags,
+  } = useContentFilter({
+    items: content,
+    searchFields: ['content', 'topic', 'keywords'],
+    categoryField: 'platform',
+  });
+
   useEffect(() => {
     loadContent();
-  }, [businessId]);
+  }, [businessId, mode]);
 
   const loadContent = async () => {
     setLoading(true);
     try {
-      // Use businessId directly as UUID
-      const { data, error } = await supabase
+      let query = supabase
         .from('scheduled_content')
         .select(`
           *,
@@ -76,34 +92,38 @@ export function ContentLibrary({ businessId, onSchedule, onEdit }: ContentLibrar
             )
           )
         `)
-        .eq('business_id', businessId)
-        .eq('approval_status', 'approved')
-        .eq('status', 'draft')
-        .order('approved_at', { ascending: false });
+        .eq('business_id', businessId);
+
+      // Apply mode-specific filters
+      if (mode === 'approved') {
+        query = query
+          .eq('approval_status', 'approved')
+          .eq('status', 'draft')
+          .order('approved_at', { ascending: false });
+      } else {
+        query = query
+          .eq('status', 'posted')
+          .order('posted_at', { ascending: false });
+      }
+
+      const { data, error } = await query;
 
       if (error) throw error;
-
-      console.log('Content library loaded:', data);
-      console.log('First item media:', data?.[0]?.content_media);
-
-      // Extract all unique tags
-      const tags = new Set<string>();
-      data?.forEach(item => {
-        item.tags?.forEach((tag: string) => tags.add(tag));
-      });
-      setAllTags(Array.from(tags).sort());
 
       setContent(data || []);
     } catch (error) {
       console.error('Error loading content:', error);
-      toast.error('Failed to load content library');
+      toast.error(`Failed to load ${mode} content`);
     } finally {
       setLoading(false);
     }
   };
 
   const handleDelete = async (id: string) => {
-    if (!confirm('Delete this content from your library?')) return;
+    const confirmMsg = mode === 'approved'
+      ? 'Delete this content from your library?'
+      : 'Delete this posted content from history?';
+    if (!confirm(confirmMsg)) return;
 
     try {
       const { error } = await supabase
@@ -126,7 +146,7 @@ export function ContentLibrary({ businessId, onSchedule, onEdit }: ContentLibrar
 
     try {
       const result = await markAsPosted(id);
-      
+
       if (result.success) {
         toast.success('Content marked as posted');
         loadContent();
@@ -136,6 +156,50 @@ export function ContentLibrary({ businessId, onSchedule, onEdit }: ContentLibrar
     } catch (error) {
       console.error('Error marking as posted:', error);
       toast.error('Failed to mark as posted');
+    }
+  };
+
+  const handleCheckStatus = async (item: LibraryContent) => {
+    const latePostId = item.metadata?.late_post_id;
+    if (!latePostId) return;
+
+    try {
+      toast.loading('Checking Late status...');
+
+      const { data, error } = await supabase.functions.invoke('late-post-status', {
+        body: { postId: latePostId }
+      });
+
+      if (error) throw error;
+
+      const state = data?.state || 'unknown';
+      const errorMsg = data?.errorMessage;
+
+      // Update the item
+      await supabase
+        .from('scheduled_content')
+        .update({
+          metadata: {
+            ...item.metadata,
+            late_status: state,
+            last_checked: new Date().toISOString()
+          },
+          error_message: errorMsg || item.error_message
+        })
+        .eq('id', item.id);
+
+      if (state === 'published') {
+        toast.success(`Confirmed: Published to ${item.platform}`);
+      } else if (state === 'failed') {
+        toast.error(`Post failed: ${errorMsg || 'Unknown error'}`);
+      } else {
+        toast.info(`Status: ${state}`);
+      }
+
+      loadContent();
+    } catch (error: any) {
+      console.error('Status check error:', error);
+      toast.error('Failed to check status');
     }
   };
 
@@ -149,9 +213,9 @@ export function ContentLibrary({ businessId, onSchedule, onEdit }: ContentLibrar
     setTimeout(() => setSelectedContent(null), 200);
   };
 
-  const handleCopyContent = async (content: string) => {
+  const handleCopyContent = async (contentText: string) => {
     try {
-      await navigator.clipboard.writeText(content);
+      await navigator.clipboard.writeText(contentText);
       toast.success("Content copied to clipboard");
     } catch (error) {
       console.error('Error copying to clipboard:', error);
@@ -159,38 +223,24 @@ export function ContentLibrary({ businessId, onSchedule, onEdit }: ContentLibrar
     }
   };
 
-  const handleMoveToStaging = async (content: LibraryContent) => {
+  const handleMoveToStaging = async (item: LibraryContent) => {
     try {
-      console.log('Moving content to staging:', {
-        business_id: content.business_id,
-        content: content.content?.substring(0, 50),
-        platform: content.platform,
-        content_type: content.content_type,
-        topic: content.topic
-      });
-
-      // Copy content to staging
       const { data, error } = await supabase
         .from('staged_content')
         .insert({
-          business_id: content.business_id,
-          content: content.content,
-          platform: content.platform,
-          content_type: content.content_type,
-          topic: content.topic || null
+          business_id: item.business_id,
+          content: item.content,
+          platform: item.platform,
+          content_type: item.content_type,
+          topic: item.topic || null
         })
         .select();
 
       if (error) {
-        console.error('Supabase error details:', error);
-        console.error('Error code:', error.code);
-        console.error('Error message:', error.message);
-        console.error('Error details:', error.details);
+        console.error('Supabase error:', error);
         toast.error(`Failed to move content to staging: ${error.message}`);
         return;
       }
-
-      console.log('Successfully inserted into staging:', data);
 
       toast.success('Moved to Staging', {
         description: 'Content ready for media attachment',
@@ -212,22 +262,8 @@ export function ContentLibrary({ businessId, onSchedule, onEdit }: ContentLibrar
   };
 
   const handleMediaAttached = () => {
-    loadContent(); // Reload library to show new media
+    loadContent();
   };
-
-  // Filter content
-  const filteredContent = content.filter(item => {
-    const matchesSearch = !searchTerm || 
-      item.content.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      item.topic?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      item.keywords?.some(k => k.toLowerCase().includes(searchTerm.toLowerCase()));
-
-    const matchesPlatform = platformFilter === 'all' || item.platform === platformFilter;
-    
-    const matchesTag = tagFilter === 'all' || item.tags?.includes(tagFilter);
-
-    return matchesSearch && matchesPlatform && matchesTag;
-  });
 
   const getPlatformIcon = (platform: string) => {
     const icons: Record<string, string> = {
@@ -244,12 +280,23 @@ export function ContentLibrary({ businessId, onSchedule, onEdit }: ContentLibrar
     return icons[platform] || '📱';
   };
 
+  const getDateDisplay = (item: LibraryContent) => {
+    if (mode === 'posted') {
+      return item.posted_at ? new Date(item.posted_at).toLocaleDateString() : 'Unknown';
+    }
+    return new Date(item.approved_at || item.created_at).toLocaleDateString();
+  };
+
+  const getDateLabel = () => mode === 'posted' ? 'Posted' : 'Approved';
+
   if (loading) {
     return (
       <div className="flex items-center justify-center p-12">
         <div className="text-center">
           <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary mx-auto mb-4"></div>
-          <p className="text-sm text-muted-foreground">Loading your content library...</p>
+          <p className="text-sm text-muted-foreground">
+            Loading {mode === 'posted' ? 'posted' : 'your'} content...
+          </p>
         </div>
       </div>
     );
@@ -265,7 +312,7 @@ export function ContentLibrary({ businessId, onSchedule, onEdit }: ContentLibrar
           onChange={(e) => setSearchTerm(e.target.value)}
           className="flex-1"
         />
-        
+
         <Select value={platformFilter} onValueChange={setPlatformFilter}>
           <SelectTrigger className="w-[180px]">
             <SelectValue placeholder="All Platforms" />
@@ -288,7 +335,7 @@ export function ContentLibrary({ businessId, onSchedule, onEdit }: ContentLibrar
           </SelectTrigger>
           <SelectContent>
             <SelectItem value="all">All Tags</SelectItem>
-            {allTags.map(tag => (
+            {availableTags.map(tag => (
               <SelectItem key={tag} value={tag}>{tag}</SelectItem>
             ))}
           </SelectContent>
@@ -298,7 +345,7 @@ export function ContentLibrary({ businessId, onSchedule, onEdit }: ContentLibrar
       {/* Stats */}
       <div className="flex gap-4 text-sm">
         <Badge variant="secondary">
-          Total: {filteredContent.length}
+          {mode === 'posted' ? 'Total Posted' : 'Total'}: {filteredContent.length}
         </Badge>
         {platformFilter !== 'all' && (
           <Badge variant="outline">
@@ -311,12 +358,16 @@ export function ContentLibrary({ businessId, onSchedule, onEdit }: ContentLibrar
       {filteredContent.length === 0 ? (
         <Card>
           <CardContent className="flex flex-col items-center justify-center p-12 text-center">
-            <div className="text-4xl mb-4">📚</div>
-            <h3 className="text-lg font-semibold mb-2">No content in library</h3>
+            <div className="text-4xl mb-4">{mode === 'posted' ? '✅' : '📚'}</div>
+            <h3 className="text-lg font-semibold mb-2">
+              {mode === 'posted' ? 'No posted content' : 'No content in library'}
+            </h3>
             <p className="text-sm text-muted-foreground mb-4">
               {searchTerm || platformFilter !== 'all' || tagFilter !== 'all'
-                ? "No content matches your filters"
-                : "Generate and approve content to build your library"}
+                ? `No ${mode === 'posted' ? 'posted ' : ''}content matches your filters`
+                : mode === 'posted'
+                  ? 'Posted content will appear here'
+                  : 'Generate and approve content to build your library'}
             </p>
           </CardContent>
         </Card>
@@ -333,20 +384,27 @@ export function ContentLibrary({ businessId, onSchedule, onEdit }: ContentLibrar
                         {item.platform}
                       </Badge>
                     </div>
-                    {item.content_media && item.content_media.length > 0 && (
-                      <Badge variant="secondary" className="text-xs">
-                        {item.content_media[0].media_assets.file_type === 'image' ? (
-                          <><ImageIcon className="w-3 h-3 mr-1" /> {item.content_media.length}</>
-                        ) : (
-                          <><Video className="w-3 h-3 mr-1" /> {item.content_media.length}</>
-                        )}
-                      </Badge>
-                    )}
+                    <div className="flex items-center gap-2">
+                      {item.content_media && item.content_media.length > 0 && (
+                        <Badge variant="secondary" className="text-xs">
+                          {item.content_media[0].media_assets.file_type === 'image' ? (
+                            <><ImageIcon className="w-3 h-3 mr-1" /> {item.content_media.length}</>
+                          ) : (
+                            <><Video className="w-3 h-3 mr-1" /> {item.content_media.length}</>
+                          )}
+                        </Badge>
+                      )}
+                      {mode === 'posted' && (
+                        <Badge variant="default" className="text-xs">
+                          <CheckCircle className="w-3 h-3 mr-1" /> Posted
+                        </Badge>
+                      )}
+                    </div>
                   </div>
                 </CardHeader>
 
                 <CardContent className="flex-1">
-                  <div 
+                  <div
                     className="cursor-pointer hover:bg-accent/5 -m-2 p-2 rounded transition-colors"
                     onClick={() => handleCardClick(item)}
                   >
@@ -361,57 +419,84 @@ export function ContentLibrary({ businessId, onSchedule, onEdit }: ContentLibrar
                     )}
 
                     <p className="text-sm mb-3 line-clamp-3">{item.content}</p>
-                    
+
                     <p className="text-xs text-primary font-medium">Click to view full content →</p>
                   </div>
 
                   <div className="flex items-center gap-2 text-xs text-muted-foreground mt-3">
                     <Clock className="w-3 h-3" />
-                    {new Date(item.approved_at || item.created_at).toLocaleDateString()}
+                    {getDateLabel()}: {getDateDisplay(item)}
                   </div>
                 </CardContent>
 
                 <CardFooter className="pt-3 border-t flex flex-wrap gap-2">
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={() => handleOpenMediaSelector(item.id)}
-                    className="gap-2"
-                  >
-                    <ImagePlus className="h-4 w-4" />
-                    {item.content_media && item.content_media.length > 0 ? 'Edit Media' : 'Add Media'}
-                  </Button>
-                  <Button
-                    size="sm"
-                    variant="default"
-                    className="flex-1"
-                    onClick={() => onSchedule(item)}
-                  >
-                    <Calendar className="w-4 h-4 mr-1" />
-                    Schedule
-                  </Button>
-                  <Button
-                    size="sm"
-                    variant="secondary"
-                    onClick={() => handleMarkAsPosted(item.id)}
-                    title="Mark as Posted"
-                  >
-                    <CheckCircle className="w-4 h-4" />
-                  </Button>
-                  <Button
-                    size="sm"
-                    variant="outline"
-                    onClick={() => onEdit(item)}
-                  >
-                    <Edit2 className="w-4 h-4" />
-                  </Button>
-                  <Button
-                    size="sm"
-                    variant="outline"
-                    onClick={() => handleDelete(item.id)}
-                  >
-                    <Trash2 className="w-4 h-4" />
-                  </Button>
+                  {mode === 'approved' ? (
+                    <>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => handleOpenMediaSelector(item.id)}
+                        className="gap-2"
+                      >
+                        <ImagePlus className="h-4 w-4" />
+                        {item.content_media && item.content_media.length > 0 ? 'Edit Media' : 'Add Media'}
+                      </Button>
+                      <Button
+                        size="sm"
+                        variant="default"
+                        className="flex-1"
+                        onClick={() => onSchedule?.(item)}
+                      >
+                        <Calendar className="w-4 h-4 mr-1" />
+                        Schedule
+                      </Button>
+                      <Button
+                        size="sm"
+                        variant="secondary"
+                        onClick={() => handleMarkAsPosted(item.id)}
+                        title="Mark as Posted"
+                      >
+                        <CheckCircle className="w-4 h-4" />
+                      </Button>
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        onClick={() => onEdit?.(item)}
+                      >
+                        <Edit2 className="w-4 h-4" />
+                      </Button>
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        onClick={() => handleDelete(item.id)}
+                      >
+                        <Trash2 className="w-4 h-4" />
+                      </Button>
+                    </>
+                  ) : (
+                    <>
+                      {item.metadata?.late_post_id && (
+                        <Button
+                          size="sm"
+                          variant="secondary"
+                          className="flex-1"
+                          onClick={() => handleCheckStatus(item)}
+                        >
+                          <RefreshCw className="w-4 h-4 mr-1" />
+                          Check Status
+                        </Button>
+                      )}
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        className="flex-1"
+                        onClick={() => handleDelete(item.id)}
+                      >
+                        <Trash2 className="w-4 h-4 mr-1" />
+                        Delete
+                      </Button>
+                    </>
+                  )}
                 </CardFooter>
               </Card>
             ))}
@@ -437,8 +522,13 @@ export function ContentLibrary({ businessId, onSchedule, onEdit }: ContentLibrar
                       )}
                     </Badge>
                   )}
+                  {mode === 'posted' && (
+                    <Badge variant="default" className="text-xs">
+                      <CheckCircle className="w-3 h-3 mr-1" /> Posted
+                    </Badge>
+                  )}
                 </div>
-                
+
                 <DialogTitle className="sr-only">Content Details</DialogTitle>
                 <DialogDescription className="sr-only">
                   View full content for {selectedContent.platform}
@@ -462,11 +552,11 @@ export function ContentLibrary({ businessId, onSchedule, onEdit }: ContentLibrar
                   {selectedContent.content_media.map((media, idx) => (
                     <div key={idx} className="relative w-24 h-24 rounded border overflow-hidden">
                       {media.media_assets.file_type === 'image' ? (
-                        <img 
-                          src={media.media_assets.thumbnail_path || media.media_assets.file_path} 
-                          alt="Media" 
+                        <img
+                          src={media.media_assets.thumbnail_path || media.media_assets.file_path}
+                          alt="Media"
                           className="w-full h-full object-cover"
-                          onError={(e) => { 
+                          onError={(e) => {
                             const target = e.currentTarget as HTMLImageElement;
                             if (target.src !== media.media_assets.file_path) {
                               target.src = media.media_assets.file_path;
@@ -474,9 +564,9 @@ export function ContentLibrary({ businessId, onSchedule, onEdit }: ContentLibrar
                           }}
                         />
                       ) : media.media_assets.thumbnail_path ? (
-                        <img 
-                          src={media.media_assets.thumbnail_path} 
-                          alt="Video thumbnail" 
+                        <img
+                          src={media.media_assets.thumbnail_path}
+                          alt="Video thumbnail"
                           className="w-full h-full object-cover"
                         />
                       ) : (
@@ -513,13 +603,20 @@ export function ContentLibrary({ businessId, onSchedule, onEdit }: ContentLibrar
                   <div className="pt-4 border-t space-y-2">
                     <div className="flex items-center gap-2 text-xs text-muted-foreground">
                       <Clock className="w-3 h-3" />
-                      Approved: {new Date(selectedContent.approved_at || selectedContent.created_at).toLocaleDateString()}
+                      {getDateLabel()}: {getDateDisplay(selectedContent)}
                     </div>
-                    
+
                     {selectedContent.keywords && selectedContent.keywords.length > 0 && (
                       <div className="text-xs">
                         <span className="text-muted-foreground">Keywords: </span>
                         <span>{selectedContent.keywords.join(', ')}</span>
+                      </div>
+                    )}
+
+                    {mode === 'posted' && selectedContent.error_message && (
+                      <div className="text-xs text-destructive">
+                        <span className="font-medium">Error: </span>
+                        <span>{selectedContent.error_message}</span>
                       </div>
                     )}
                   </div>
@@ -528,58 +625,92 @@ export function ContentLibrary({ businessId, onSchedule, onEdit }: ContentLibrar
 
               {/* Action Buttons */}
               <div className="pt-4 border-t flex flex-col sm:flex-row gap-2">
-                <Button
-                  size="sm"
-                  variant="default"
-                  className="flex-1"
-                  onClick={() => {
-                    handleCloseDialog();
-                    onSchedule(selectedContent);
-                  }}
-                >
-                  <Calendar className="w-4 h-4 mr-1" />
-                  Schedule
-                </Button>
-                <Button
-                  size="sm"
-                  variant="secondary"
-                  onClick={() => {
-                    handleCloseDialog();
-                    handleMarkAsPosted(selectedContent.id);
-                  }}
-                >
-                  <CheckCircle className="w-4 h-4 mr-1" />
-                  Mark Posted
-                </Button>
-                <Button
-                  size="sm"
-                  variant="outline"
-                  onClick={() => {
-                    handleCloseDialog();
-                    onEdit(selectedContent);
-                  }}
-                >
-                  <Edit2 className="w-4 h-4 mr-1" />
-                  Edit
-                </Button>
-                <Button
-                  size="sm"
-                  variant="outline"
-                  onClick={() => {
-                    handleCloseDialog();
-                    handleDelete(selectedContent.id);
-                  }}
-                >
-                  <Trash2 className="w-4 h-4 mr-1" />
-                  Delete
-                </Button>
+                {mode === 'approved' ? (
+                  <>
+                    <Button
+                      size="sm"
+                      variant="default"
+                      className="flex-1"
+                      onClick={() => {
+                        handleCloseDialog();
+                        onSchedule?.(selectedContent);
+                      }}
+                    >
+                      <Calendar className="w-4 h-4 mr-1" />
+                      Schedule
+                    </Button>
+                    <Button
+                      size="sm"
+                      variant="secondary"
+                      onClick={() => {
+                        handleCloseDialog();
+                        handleMarkAsPosted(selectedContent.id);
+                      }}
+                    >
+                      <CheckCircle className="w-4 h-4 mr-1" />
+                      Mark Posted
+                    </Button>
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={() => {
+                        handleCloseDialog();
+                        onEdit?.(selectedContent);
+                      }}
+                    >
+                      <Edit2 className="w-4 h-4 mr-1" />
+                      Edit
+                    </Button>
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={() => {
+                        handleCloseDialog();
+                        handleDelete(selectedContent.id);
+                      }}
+                    >
+                      <Trash2 className="w-4 h-4 mr-1" />
+                      Delete
+                    </Button>
+                  </>
+                ) : (
+                  <>
+                    {selectedContent.metadata?.late_post_id && (
+                      <Button
+                        size="sm"
+                        variant="secondary"
+                        className="flex-1"
+                        onClick={() => {
+                          handleCloseDialog();
+                          handleCheckStatus(selectedContent);
+                        }}
+                      >
+                        <RefreshCw className="w-4 h-4 mr-1" />
+                        Check Status
+                      </Button>
+                    )}
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      className="flex-1"
+                      onClick={() => {
+                        handleCloseDialog();
+                        handleDelete(selectedContent.id);
+                      }}
+                    >
+                      <Trash2 className="w-4 h-4 mr-1" />
+                      Delete
+                    </Button>
+                  </>
+                )}
               </div>
             </>
           )}
         </DialogContent>
       </Dialog>
 
-      {selectedContentId && (
+      {/* Media Selector (approved mode only) */}
+      {mode === 'approved' && selectedContentId && (
         <MediaSelector
           open={mediaSelectorOpen}
           onClose={handleCloseMediaSelector}
