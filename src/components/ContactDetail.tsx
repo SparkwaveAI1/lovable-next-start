@@ -1,11 +1,19 @@
 import { useState, useEffect } from 'react';
+import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { 
-  ArrowLeft, MessageSquare, Calendar, User, Activity, 
-  Mail, Phone, Sparkles, X, Plus, Send, ChevronDown
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
+import {
+  ArrowLeft, MessageSquare, Calendar, User, Activity,
+  Mail, Phone, Sparkles, X, Send, ChevronDown
 } from 'lucide-react';
 import { formatToEasternDateTime, formatToEasternDate } from '@/lib/dateUtils';
 import {
@@ -80,6 +88,13 @@ interface UnifiedMessage {
 
 type MessageChannel = 'sms' | 'email';
 
+interface ContactTag {
+  id: string;
+  name: string;
+  slug: string;
+  color: string | null;
+}
+
 export function ContactDetail({ contactId, onBack }: { contactId: string; onBack: () => void }) {
   const [contact, setContact] = useState<Contact | null>(null);
   const [messages, setMessages] = useState<SMSMessage[]>([]);
@@ -93,8 +108,22 @@ export function ContactDetail({ contactId, onBack }: { contactId: string; onBack
   const [isLoading, setIsLoading] = useState(true);
   const [isGeneratingAI, setIsGeneratingAI] = useState(false);
   const [selectedChannel, setSelectedChannel] = useState<MessageChannel>('sms');
-  const [newTag, setNewTag] = useState('');
-  const [isAddingTag, setIsAddingTag] = useState(false);
+
+  // Fetch available tags from contact_tags table
+  const { data: availableTags = [] } = useQuery({
+    queryKey: ['contact-tags', contact?.business_id],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('contact_tags')
+        .select('*')
+        .eq('business_id', contact?.business_id)
+        .eq('is_active', true)
+        .order('name');
+      if (error) throw error;
+      return data as ContactTag[];
+    },
+    enabled: !!contact?.business_id
+  });
 
   useEffect(() => {
     loadContactDetails();
@@ -332,27 +361,26 @@ export function ContactDetail({ contactId, onBack }: { contactId: string; onBack
     }
   };
 
-  const addTag = async () => {
-    if (!newTag.trim() || !contact) return;
-    
-    setIsAddingTag(true);
+  const addTag = async (tagSlug: string) => {
+    if (!tagSlug || !contact) return;
+
+    // Don't add if already exists
+    if ((contact.tags || []).includes(tagSlug)) return;
+
     try {
-      const updatedTags = [...(contact.tags || []), newTag.toLowerCase().trim()];
+      const updatedTags = [...(contact.tags || []), tagSlug];
       const { error } = await supabase
         .from('contacts')
         .update({ tags: updatedTags })
         .eq('id', contactId);
-      
+
       if (error) throw error;
-      
+
       setContact({ ...contact, tags: updatedTags });
-      setNewTag('');
       toast.success('Tag added');
     } catch (error) {
       console.error('Error adding tag:', error);
       toast.error('Failed to add tag');
-    } finally {
-      setIsAddingTag(false);
     }
   };
 
@@ -462,27 +490,37 @@ export function ContactDetail({ contactId, onBack }: { contactId: string; onBack
       <Card className="p-4">
         <div className="flex items-center gap-2 flex-wrap">
           <span className="text-sm font-medium text-muted-foreground">Tags:</span>
-          {(contact.tags || []).map((tag) => (
-            <Badge key={tag} variant="secondary" className="gap-1">
-              {tag}
-              <button onClick={() => removeTag(tag)} className="ml-1 hover:text-destructive">
-                <X className="h-3 w-3" />
-              </button>
-            </Badge>
-          ))}
-          <div className="flex items-center gap-1">
-            <input
-              type="text"
-              value={newTag}
-              onChange={(e) => setNewTag(e.target.value)}
-              onKeyDown={(e) => e.key === 'Enter' && addTag()}
-              placeholder="Add tag..."
-              className="text-sm px-2 py-1 border border-input rounded bg-background w-24"
-            />
-            <Button size="sm" variant="ghost" onClick={addTag} disabled={isAddingTag || !newTag.trim()}>
-              <Plus className="h-4 w-4" />
-            </Button>
-          </div>
+          {(contact.tags || []).map((tagSlug) => {
+            const tagInfo = availableTags.find(t => t.slug === tagSlug);
+            return (
+              <Badge key={tagSlug} variant="secondary" className="gap-1">
+                {tagInfo?.name || tagSlug}
+                <button onClick={() => removeTag(tagSlug)} className="ml-1 hover:text-destructive">
+                  <X className="h-3 w-3" />
+                </button>
+              </Badge>
+            );
+          })}
+          {/* Tag dropdown - only show tags not already applied */}
+          {(() => {
+            const appliedTags = contact.tags || [];
+            const unusedTags = availableTags.filter(t => !appliedTags.includes(t.slug));
+            if (unusedTags.length === 0) return null;
+            return (
+              <Select onValueChange={addTag}>
+                <SelectTrigger className="w-32 h-7 text-xs">
+                  <SelectValue placeholder="Add tag..." />
+                </SelectTrigger>
+                <SelectContent>
+                  {unusedTags.map((tag) => (
+                    <SelectItem key={tag.id} value={tag.slug}>
+                      {tag.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            );
+          })()}
         </div>
       </Card>
 
