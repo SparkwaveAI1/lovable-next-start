@@ -144,8 +144,18 @@ export function CampaignQueueMonitor({
   };
 
   const startProcessing = async () => {
-    // If no queue yet, queue first
-    if (!progress || progress.total === 0) {
+    // Check current campaign status to determine if we need to queue
+    const { data: campaign } = await supabase
+      .from('email_campaigns')
+      .select('status')
+      .eq('id', campaignId)
+      .single();
+
+    const currentStatus = campaign?.status || 'draft';
+
+    // Only queue if campaign is in draft or scheduled status
+    // If already queued/sending, skip to processing
+    if (currentStatus === 'draft' || currentStatus === 'scheduled') {
       const queued = await queueCampaign();
       if (!queued) return;
     }
