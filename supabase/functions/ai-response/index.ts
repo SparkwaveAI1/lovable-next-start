@@ -62,7 +62,7 @@ serve(async (req) => {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' }
     });
 
-  } catch (error) {
+  } catch (error: any) {
     console.error('AI response error:', error);
     return new Response(JSON.stringify({
       message: 'Sorry, I had a technical issue. Please try again or call us directly.'

@@ -598,8 +598,8 @@ serve(async (req) => {
       // For blog posts, articles, emails - keep entire content together
       const hashtagMatches = rawContent.match(/#\w+/g) || [];
       const hashtags = hashtagMatches
-        .filter(tag => !tag.match(/^#[A-Z]/)) // Exclude markdown headers like #Title
-        .map(tag => tag.substring(1));
+        .filter((tag: string) => !tag.match(/^#[A-Z]/)) // Exclude markdown headers like #Title
+        .map((tag: string) => tag.substring(1));
       
       contentItems.push({
         content: rawContent.trim(),
@@ -608,7 +608,7 @@ serve(async (req) => {
       
     } else {
       // For short-form (tweets, captions) - parse line by line
-      const contentLines = rawContent.split('\n').filter(line => line.trim());
+      const contentLines = rawContent.split('\n').filter((line: string) => line.trim());
       
       for (const line of contentLines) {
         // Remove numbering patterns like "1.", "1/5", "Tweet 1:", etc.
@@ -622,7 +622,7 @@ serve(async (req) => {
         if (cleaned && cleaned.length > 0) {
           // Extract hashtags (anything starting with #)
           const hashtagMatches = cleaned.match(/#\w+/g) || [];
-          const hashtags = hashtagMatches.map(tag => tag.substring(1));
+          const hashtags = hashtagMatches.map((tag: string) => tag.substring(1));
           
           // Remove hashtags from content
           const contentWithoutHashtags = cleaned.replace(/#\w+/g, '').trim().replace(/\s+/g, ' ');
@@ -665,7 +665,7 @@ serve(async (req) => {
       { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     );
 
-  } catch (error) {
+  } catch (error: any) {
     console.error('Content generation error:', error);
     return new Response(
       JSON.stringify({ 

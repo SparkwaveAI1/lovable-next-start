@@ -298,7 +298,7 @@ Deno.serve(async (req) => {
             platform: item.platform
           });
 
-        } catch (error) {
+        } catch (error: any) {
           console.error(`❌ Error posting ${item.platform}:`, error);
           
           // Only mark as failed if we haven't successfully posted
@@ -351,7 +351,7 @@ Deno.serve(async (req) => {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' }
     });
 
-  } catch (error) {
+  } catch (error: any) {
     console.error('Content scheduler error:', error);
     return new Response(JSON.stringify({
       success: false,
@@ -453,7 +453,7 @@ async function postContentViaGame(
       throw new Error(postResult.error || 'GAME worker posting failed');
     }
 
-  } catch (error) {
+  } catch (error: any) {
     console.error('❌ GAME SDK posting error:', error);
     return {
       success: false,
@@ -555,7 +555,7 @@ async function postViaLate(
       late_post_id: data?.postId,
       late_response: data
     };
-  } catch (error) {
+  } catch (error: any) {
     console.error('❌ Late API posting error:', error);
     return {
       success: false,
@@ -600,7 +600,7 @@ async function postToTwitter(args: any) {
       posted_at: new Date().toISOString(),
       game_response: data
     };
-  } catch (error) {
+  } catch (error: any) {
     console.error('❌ Twitter posting error:', error);
     return {
       success: false,
@@ -630,7 +630,7 @@ async function postToDiscord(args: any) {
       posted_at: new Date().toISOString(),
       channel_id: `channel_${args.businessId}_general`
     };
-  } catch (error) {
+  } catch (error: any) {
     return {
       success: false,
       platform: 'discord',
@@ -659,7 +659,7 @@ async function postToTelegram(args: any) {
       posted_at: new Date().toISOString(),
       chat_id: `chat_${args.businessId}_main`
     };
-  } catch (error) {
+  } catch (error: any) {
     return {
       success: false,
       platform: 'telegram',

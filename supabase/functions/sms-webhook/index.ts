@@ -53,6 +53,11 @@ serve(async (req) => {
       throw new Error(`Contact lookup error: ${contactError.message}`);
     }
 
+    // Ensure contact is defined
+    if (!contact) {
+      throw new Error('Contact not found and could not be created');
+    }
+
     // Find or create conversation thread
     let { data: thread, error: threadError } = await supabase
       .from('conversation_threads')
@@ -77,6 +82,13 @@ serve(async (req) => {
         throw new Error(`Failed to create thread: ${createThreadError.message}`);
       }
       thread = newThread;
+    } else if (threadError) {
+      throw new Error(`Thread lookup error: ${threadError.message}`);
+    }
+
+    // Ensure thread is defined
+    if (!thread) {
+      throw new Error('Thread not found and could not be created');
     }
 
     // Store incoming message
@@ -216,7 +228,7 @@ serve(async (req) => {
       }
     });
 
-  } catch (error) {
+  } catch (error: any) {
     console.error('SMS webhook error:', error);
     return new Response(
       JSON.stringify({ error: error.message }), 

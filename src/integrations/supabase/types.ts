@@ -2025,6 +2025,43 @@ export type Database = {
         Returns: undefined
       }
       set_default_sender: { Args: { p_sender_id: string }; Returns: undefined }
+      // Email queue functions
+      clear_campaign_queue: { Args: { p_campaign_id: string }; Returns: number }
+      get_email_queue_batch: {
+        Args: { p_campaign_id: string; p_batch_size?: number }
+        Returns: {
+          queue_id: string
+          contact_id: string
+          email: string
+          first_name: string | null
+          last_name: string | null
+        }[]
+      }
+      get_queue_progress: {
+        Args: { p_campaign_id: string }
+        Returns: {
+          total: number
+          pending: number
+          processing: number
+          sent: number
+          failed: number
+          skipped: number
+          percent_complete: number
+        }
+      }
+      mark_queue_failed: {
+        Args: {
+          p_queue_id: string
+          p_error_message?: string
+          p_should_retry?: boolean
+        }
+        Returns: undefined
+      }
+      mark_queue_sent: {
+        Args: { p_queue_id: string; p_resend_id?: string }
+        Returns: undefined
+      }
+      queue_campaign_emails: { Args: { p_campaign_id: string }; Returns: number }
     }
     Enums: {
       app_role:

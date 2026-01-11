@@ -99,7 +99,7 @@ serve(async (req) => {
           errorMessage,
         });
 
-      } catch (error) {
+      } catch (error: any) {
         console.error(`❌ Error checking ${business.name}:`, error);
         
         // Log error for this business
@@ -135,7 +135,7 @@ serve(async (req) => {
       }
     );
 
-  } catch (error) {
+  } catch (error: any) {
     console.error('❌ Error in token-health-check function:', error);
     
     return new Response(

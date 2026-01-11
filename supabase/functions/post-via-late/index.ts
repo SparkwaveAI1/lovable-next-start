@@ -37,7 +37,7 @@ async function uploadMediaToLate(mediaUrl: string, lateApiKey: string): Promise<
     const result = await uploadRes.json();
     console.log('Media uploaded to Late CDN:', result.url);
     return result.url;
-  } catch (error) {
+  } catch (error: any) {
     console.error('Media upload to Late failed:', error);
     throw error;
   }

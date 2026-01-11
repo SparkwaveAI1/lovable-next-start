@@ -69,7 +69,7 @@ serve(async (req) => {
             accountId
           });
         }
-      } catch (error) {
+      } catch (error: any) {
         console.error(`❌ Exception updating ${platform}:`, error);
         results.push({
           success: false,
@@ -88,7 +88,7 @@ serve(async (req) => {
       { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     );
 
-  } catch (error) {
+  } catch (error: any) {
     console.error('❌ Error in update-late-accounts:', error);
     return new Response(
       JSON.stringify({ 

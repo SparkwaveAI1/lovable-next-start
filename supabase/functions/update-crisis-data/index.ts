@@ -32,7 +32,7 @@ async function fetchFredSeries(seriesId: string, apiKey: string): Promise<number
       return isNaN(value) ? null : value
     }
     return null
-  } catch (error) {
+  } catch (error: any) {
     console.error(`Error fetching ${seriesId}:`, error)
     return null
   }
@@ -145,7 +145,7 @@ Deno.serve(async (req) => {
       { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     )
 
-  } catch (error) {
+  } catch (error: any) {
     console.error('Crisis data update error:', error)
     return new Response(
       JSON.stringify({ success: false, error: error.message }),

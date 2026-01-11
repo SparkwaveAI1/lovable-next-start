@@ -62,7 +62,7 @@ serve(async (req) => {
       }
     );
 
-  } catch (error) {
+  } catch (error: any) {
     console.error('❌ Error in fetch-late-accounts:', error);
     return new Response(
       JSON.stringify({

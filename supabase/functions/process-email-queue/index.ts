@@ -315,11 +315,17 @@ serve(async (req) => {
       }
     }
 
-    // Update campaign stats
+    // Update campaign stats - fetch current value and increment
+    const { data: currentCampaign } = await supabase
+      .from('email_campaigns')
+      .select('total_sent')
+      .eq('id', campaign_id)
+      .single();
+
     await supabase
       .from('email_campaigns')
       .update({
-        total_sent: supabase.sql`total_sent + ${sentCount}`,
+        total_sent: (currentCampaign?.total_sent || 0) + sentCount,
       })
       .eq('id', campaign_id);
 

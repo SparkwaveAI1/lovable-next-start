@@ -131,7 +131,7 @@ serve(async (req: Request) => {
         }), {
           headers: { ...corsHeaders, 'Content-Type': 'application/json' },
         });
-      } catch (error) {
+      } catch (error: any) {
         console.error('Discovery error:', error);
         return new Response(JSON.stringify({
           success: false,
@@ -168,7 +168,7 @@ serve(async (req: Request) => {
             stageValid = pipeline.stages?.some((stage: any) => stage.id === stageId) || false;
           }
         }
-      } catch (error) {
+      } catch (error: any) {
         console.warn('Pipeline validation failed:', error);
       }
     }
@@ -220,12 +220,12 @@ serve(async (req: Request) => {
                 },
               });
               console.log('Test contact deleted');
-            } catch (error) {
+            } catch (error: any) {
               console.warn('Failed to delete test contact:', error);
             }
           }
         }
-      } catch (error) {
+      } catch (error: any) {
         console.warn('Contact creation test failed:', error);
       }
     }
@@ -244,7 +244,7 @@ serve(async (req: Request) => {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
     });
 
-  } catch (error) {
+  } catch (error: any) {
     console.error('Connection test error:', error);
     return new Response(JSON.stringify({
       success: false,

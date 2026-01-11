@@ -393,7 +393,7 @@ serve(async (req: Request) => {
         const contact = await createContactDirectly(processedData, endpoint.business_id, endpoint.businesses, supabase);
         console.log('Contact created successfully:', contact);
         processedData.contact_id = contact.id;
-      } catch (error) {
+      } catch (error: any) {
         console.error('Contact creation failed:', error);
         throw error;
       }
@@ -407,7 +407,7 @@ serve(async (req: Request) => {
     try {
       console.log(`Processing ${automationType} for business: ${endpoint.businesses?.name}`);
       
-    } catch (error) {
+    } catch (error: any) {
       status = 'error';
       errorMessage = error.message;
       console.error('Processing error:', error);
@@ -452,7 +452,7 @@ serve(async (req: Request) => {
       }
     );
 
-  } catch (error) {
+  } catch (error: any) {
     console.error('Webhook processing error:', error);
     return new Response(
       JSON.stringify({ 

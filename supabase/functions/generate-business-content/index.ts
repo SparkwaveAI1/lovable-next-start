@@ -105,28 +105,28 @@ Topic: ${topic}`
           // Final fallback: split by lines and clean up
           tweets = cleanedContent
             .split('\n')
-            .filter(line => line.trim().length > 0)
-            .map(line => {
+            .filter((line: string) => line.trim().length > 0)
+            .map((line: string) => {
               // Remove quotes, commas, brackets, and line numbers
               return line
                 .replace(/^\d+\s*/, '') // Remove line numbers
                 .replace(/^["'\[\],-\s]+|["'\[\],-\s]+$/g, '') // Remove quotes, brackets, commas
                 .trim()
             })
-            .filter(tweet => tweet.length > 20) // Only keep substantial tweets
+            .filter((tweet: string) => tweet.length > 20) // Only keep substantial tweets
             .slice(0, quantity)
         }
       } else {
         // Last resort: split by lines
         tweets = cleanedContent
           .split('\n')
-          .filter(line => line.trim().length > 20)
+          .filter((line: string) => line.trim().length > 20)
           .slice(0, quantity)
       }
     }
 
     // Clean up individual tweets to remove any remaining quotes
-    tweets = tweets.map(tweet => {
+    tweets = tweets.map((tweet: any) => {
       if (typeof tweet === 'string') {
         return tweet
           .replace(/^["']+|["']+$/g, '') // Remove surrounding quotes
@@ -156,7 +156,7 @@ Topic: ${topic}`
       { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     )
 
-  } catch (error) {
+  } catch (error: any) {
     console.error('Error in generate-business-content:', error)
     return new Response(
       JSON.stringify({ error: error.message }),
