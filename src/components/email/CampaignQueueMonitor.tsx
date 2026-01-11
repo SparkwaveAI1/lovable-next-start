@@ -313,13 +313,13 @@ export function CampaignQueueMonitor({
 
       <CardContent className="space-y-4">
         {/* Progress Bar */}
-        {progress && progress.total > 0 && (
+        {progress && (progress.total ?? 0) > 0 && (
           <div className="space-y-2">
             <div className="flex justify-between text-sm">
               <span className="text-muted-foreground">Progress</span>
-              <span className="font-medium">{progress.percent_complete}%</span>
+              <span className="font-medium">{progress.percent_complete ?? 0}%</span>
             </div>
-            <Progress value={progress.percent_complete} className="h-2" />
+            <Progress value={progress.percent_complete ?? 0} className="h-2" />
           </div>
         )}
 
@@ -327,19 +327,19 @@ export function CampaignQueueMonitor({
         {progress && (
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
             <div className="text-center p-3 rounded-lg bg-muted/50">
-              <p className="text-2xl font-bold">{progress.total.toLocaleString()}</p>
+              <p className="text-2xl font-bold">{(progress.total ?? 0).toLocaleString()}</p>
               <p className="text-xs text-muted-foreground">Total</p>
             </div>
             <div className="text-center p-3 rounded-lg bg-green-50 dark:bg-green-950/30">
-              <p className="text-2xl font-bold text-green-600">{progress.sent.toLocaleString()}</p>
+              <p className="text-2xl font-bold text-green-600">{(progress.sent ?? 0).toLocaleString()}</p>
               <p className="text-xs text-muted-foreground">Sent</p>
             </div>
             <div className="text-center p-3 rounded-lg bg-blue-50 dark:bg-blue-950/30">
-              <p className="text-2xl font-bold text-blue-600">{progress.pending.toLocaleString()}</p>
+              <p className="text-2xl font-bold text-blue-600">{(progress.pending ?? 0).toLocaleString()}</p>
               <p className="text-xs text-muted-foreground">Pending</p>
             </div>
             <div className="text-center p-3 rounded-lg bg-red-50 dark:bg-red-950/30">
-              <p className="text-2xl font-bold text-red-600">{progress.failed.toLocaleString()}</p>
+              <p className="text-2xl font-bold text-red-600">{(progress.failed ?? 0).toLocaleString()}</p>
               <p className="text-xs text-muted-foreground">Failed</p>
             </div>
           </div>
