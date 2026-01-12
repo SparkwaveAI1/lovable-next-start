@@ -248,7 +248,12 @@ serve(async (req) => {
       content: body
     });
 
-    // Call AI service
+    // Get contact name if available
+    const contactName = contact.first_name && contact.first_name !== 'SMS Contact'
+      ? `${contact.first_name} ${contact.last_name || ''}`.trim()
+      : null;
+
+    // Call AI service with full context
     const aiResponse = await fetch(`${Deno.env.get('SUPABASE_URL')}/functions/v1/ai-response`, {
       method: 'POST',
       headers: {
@@ -257,8 +262,11 @@ serve(async (req) => {
       },
       body: JSON.stringify({
         messages: conversationMessages,
+        businessId: businessId,
         businessContext: business?.name || businessName,
-        classSchedule: classes || []
+        classSchedule: classes || [],
+        contactName: contactName,
+        threadId: thread.id
       })
     });
 
