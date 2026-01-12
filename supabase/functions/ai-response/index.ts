@@ -286,17 +286,18 @@ IMPORTANT: Respond ONLY with the message to send to the customer. No prefixes, n
       const newState = shouldBook ? 'class_scheduled' :
         (detectedIntents.includes('BOOK_TRIAL') ? 'collecting_booking_info' : 'answering_questions');
 
-      await supabase
-        .from('conversation_threads')
-        .update({
-          conversation_state: newState,
-          last_bot_message_at: new Date().toISOString(),
-          intent_history: supabase.sql`intent_history || ${JSON.stringify([{
-            intent: detectedIntents[0],
-            timestamp: new Date().toISOString()
-          }])}::jsonb`
-        })
-        .eq('id', threadId);
+      try {
+        await supabase
+          .from('conversation_threads')
+          .update({
+            conversation_state: newState,
+            last_bot_message_at: new Date().toISOString()
+          })
+          .eq('id', threadId);
+      } catch (updateError) {
+        console.error('Error updating conversation state:', updateError);
+        // Don't fail the whole request if state update fails
+      }
     }
 
     return new Response(JSON.stringify({

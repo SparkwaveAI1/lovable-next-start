@@ -119,7 +119,7 @@ serve(async (req) => {
     console.log('Incoming SMS:', { from, body, to });
 
     // STEP 1: Determine which business this SMS is for based on the Twilio phone number
-    const { data: smsConfig, error: configError } = await supabase
+    let { data: smsConfig, error: configError } = await supabase
       .from('sms_config')
       .select('business_id, businesses(id, name)')
       .eq('phone_number', to)
@@ -127,7 +127,7 @@ serve(async (req) => {
       .single();
 
     if (configError || !smsConfig) {
-      console.error('No SMS config found for Twilio number:', to);
+      console.error('No SMS config found for Twilio number:', to, 'Error:', configError?.message);
       // Fallback: try to find any business with this phone number
       // Or default to first business (for backwards compatibility)
       const { data: defaultBusiness } = await supabase
@@ -141,8 +141,10 @@ serve(async (req) => {
       }
 
       console.log(`Using default business: ${defaultBusiness.name} (${defaultBusiness.id})`);
-      smsConfig.business_id = defaultBusiness.id;
-      smsConfig.businesses = defaultBusiness;
+      smsConfig = {
+        business_id: defaultBusiness.id,
+        businesses: defaultBusiness
+      };
     }
 
     const businessId = smsConfig.business_id;
