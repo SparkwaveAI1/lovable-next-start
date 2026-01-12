@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react"
-import { Settings, Bell, Menu, Shield, Mail } from "lucide-react"
+import { Settings, Bell, Menu, Shield, Mail, Users } from "lucide-react"
 import { Link } from "react-router-dom"
 import { Button } from "@/components/ui/button"
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
@@ -56,6 +56,13 @@ export function DashboardHeader({ selectedBusinessId, onBusinessChange }: Dashbo
                 Dashboard
               </Link>
               <Link
+                to="/contacts"
+                className="text-sm font-medium text-muted-foreground hover:text-foreground transition-colors flex items-center gap-1"
+              >
+                <Users className="h-3 w-3" />
+                Contacts
+              </Link>
+              <Link
                 to="/content-center"
                 className="text-sm font-medium text-muted-foreground hover:text-foreground transition-colors"
               >
@@ -109,6 +116,12 @@ export function DashboardHeader({ selectedBusinessId, onBusinessChange }: Dashbo
                 <DropdownMenuContent align="end" className="w-48 bg-popover z-[60]">
                   <DropdownMenuItem asChild>
                     <Link to="/" className="w-full">Dashboard</Link>
+                  </DropdownMenuItem>
+                  <DropdownMenuItem asChild>
+                    <Link to="/contacts" className="w-full flex items-center gap-2">
+                      <Users className="h-3 w-3" />
+                      Contacts
+                    </Link>
                   </DropdownMenuItem>
                   <DropdownMenuItem asChild>
                     <Link to="/content-center" className="w-full">Content Center</Link>

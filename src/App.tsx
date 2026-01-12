@@ -6,6 +6,7 @@ import { BrowserRouter, Routes, Route } from "react-router-dom";
 import Index from "./pages/Index";
 import NotFound from "./pages/NotFound";
 import ContentCenter from "./pages/ContentCenter";
+import Contacts from "./pages/Contacts";
 import GameTestInterface from "./components/GameTestInterface";
 import MediaLibraryPage from "./pages/MediaLibraryPage";
 import EmployeeUpload from "./pages/EmployeeUpload";
@@ -38,6 +39,7 @@ const App = () => (
             <Route path="/crisis-monitor" element={<CrisisMonitor />} />
             <Route path="/upload" element={<EmployeeUpload />} />
             <Route path="/" element={<ProtectedRoute><ErrorBoundary><Index /></ErrorBoundary></ProtectedRoute>} />
+            <Route path="/contacts" element={<ProtectedRoute><ErrorBoundary><Contacts /></ErrorBoundary></ProtectedRoute>} />
             <Route path="/content-center" element={<ProtectedRoute><ErrorBoundary><ContentCenter /></ErrorBoundary></ProtectedRoute>} />
             <Route path="/game-test" element={<ProtectedRoute><ErrorBoundary><GameTestInterface /></ErrorBoundary></ProtectedRoute>} />
             <Route path="/media-library" element={<ProtectedRoute><ErrorBoundary><MediaLibraryPage /></ErrorBoundary></ProtectedRoute>} />
