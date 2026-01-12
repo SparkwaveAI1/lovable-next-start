@@ -6,6 +6,99 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
 
+// Phone normalization function for E.164 format
+function normalizePhoneNumber(phoneNumber: string): string | null {
+  if (!phoneNumber) return null;
+
+  // Remove all non-numeric characters except leading +
+  const cleaned = phoneNumber.replace(/[^\d+]/g, '');
+
+  // If already has +, keep it
+  if (cleaned.startsWith('+')) {
+    return cleaned;
+  }
+
+  // Remove all non-numeric characters
+  const digits = phoneNumber.replace(/\D/g, '');
+
+  if (digits.length === 10) {
+    // 10 digits: assume US number, add country code
+    return '+1' + digits;
+  } else if (digits.length === 11 && digits.startsWith('1')) {
+    // 11 digits starting with 1: already has US country code
+    return '+' + digits;
+  }
+
+  // Return as-is if we can't normalize
+  return phoneNumber;
+}
+
+/**
+ * Find or create a contact using HubSpot-style deduplication:
+ * 1. Try to find by phone within the business
+ * 2. If not found, create new contact with business_id
+ */
+async function findOrCreateContact(
+  supabase: any,
+  businessId: string,
+  phone: string
+): Promise<{ id: string; business_id: string; isNew: boolean }> {
+
+  const normalizedPhone = normalizePhoneNumber(phone);
+  console.log(`Looking up contact: phone=${normalizedPhone}, businessId=${businessId}`);
+
+  // Try to find existing contact by phone within this business
+  const { data: existingContact, error: lookupError } = await supabase
+    .from('contacts')
+    .select('id, business_id, first_name, last_name, email, phone')
+    .eq('business_id', businessId)
+    .eq('phone', normalizedPhone)
+    .single();
+
+  if (existingContact) {
+    console.log(`Found existing contact: ${existingContact.id} (${existingContact.first_name} ${existingContact.last_name})`);
+    return { ...existingContact, isNew: false };
+  }
+
+  // Also try without normalization in case stored format differs
+  if (normalizedPhone !== phone) {
+    const { data: altContact } = await supabase
+      .from('contacts')
+      .select('id, business_id, first_name, last_name, email, phone')
+      .eq('business_id', businessId)
+      .eq('phone', phone)
+      .single();
+
+    if (altContact) {
+      console.log(`Found existing contact (alt format): ${altContact.id}`);
+      return { ...altContact, isNew: false };
+    }
+  }
+
+  // No existing contact found - create new one
+  console.log(`No existing contact found, creating new contact for business ${businessId}`);
+
+  const { data: newContact, error: createError } = await supabase
+    .from('contacts')
+    .insert({
+      business_id: businessId,
+      phone: normalizedPhone,
+      source: 'sms_inbound',
+      status: 'new_lead',
+      first_name: 'SMS Contact',
+      sms_status: 'active'
+    })
+    .select('id, business_id')
+    .single();
+
+  if (createError) {
+    throw new Error(`Failed to create contact: ${createError.message}`);
+  }
+
+  console.log(`Created new contact: ${newContact.id}`);
+  return { ...newContact, isNew: true };
+}
+
 serve(async (req) => {
   if (req.method === 'OPTIONS') {
     return new Response('ok', { headers: corsHeaders });
@@ -25,40 +118,47 @@ serve(async (req) => {
 
     console.log('Incoming SMS:', { from, body, to });
 
-    // Find or create contact by phone number
-    let { data: contact, error: contactError } = await supabase
-      .from('contacts')
-      .select('id, business_id')
-      .eq('phone', from)
+    // STEP 1: Determine which business this SMS is for based on the Twilio phone number
+    const { data: smsConfig, error: configError } = await supabase
+      .from('sms_config')
+      .select('business_id, businesses(id, name)')
+      .eq('phone_number', to)
+      .eq('is_active', true)
       .single();
 
-    if (contactError && contactError.code === 'PGRST116') {
-      // Contact not found, create new one
-      const { data: newContact, error: createError } = await supabase
-        .from('contacts')
-        .insert({
-          phone: from,
-          source: 'sms_inbound',
-          status: 'new_lead',
-          first_name: 'SMS User'
-        })
-        .select('id, business_id')
+    if (configError || !smsConfig) {
+      console.error('No SMS config found for Twilio number:', to);
+      // Fallback: try to find any business with this phone number
+      // Or default to first business (for backwards compatibility)
+      const { data: defaultBusiness } = await supabase
+        .from('businesses')
+        .select('id, name')
+        .limit(1)
         .single();
 
-      if (createError) {
-        throw new Error(`Failed to create contact: ${createError.message}`);
+      if (!defaultBusiness) {
+        throw new Error(`No business configured for Twilio number: ${to}`);
       }
-      contact = newContact;
-    } else if (contactError) {
-      throw new Error(`Contact lookup error: ${contactError.message}`);
+
+      console.log(`Using default business: ${defaultBusiness.name} (${defaultBusiness.id})`);
+      smsConfig.business_id = defaultBusiness.id;
+      smsConfig.businesses = defaultBusiness;
     }
 
-    // Ensure contact is defined
-    if (!contact) {
-      throw new Error('Contact not found and could not be created');
+    const businessId = smsConfig.business_id;
+    const businessName = (smsConfig.businesses as any)?.name || 'Unknown Business';
+    console.log(`SMS for business: ${businessName} (${businessId})`);
+
+    // STEP 2: Find or create contact using proper deduplication
+    const contact = await findOrCreateContact(supabase, businessId, from);
+
+    if (contact.isNew) {
+      console.log(`New contact created from SMS: ${contact.id}`);
+    } else {
+      console.log(`Matched existing contact: ${contact.id}`);
     }
 
-    // Find or create conversation thread
+    // STEP 3: Find or create conversation thread
     let { data: thread, error: threadError } = await supabase
       .from('conversation_threads')
       .select('id')
@@ -72,7 +172,7 @@ serve(async (req) => {
         .from('conversation_threads')
         .insert({
           contact_id: contact.id,
-          business_id: contact.business_id,
+          business_id: businessId,
           status: 'active'
         })
         .select('id')
@@ -86,12 +186,11 @@ serve(async (req) => {
       throw new Error(`Thread lookup error: ${threadError.message}`);
     }
 
-    // Ensure thread is defined
     if (!thread) {
       throw new Error('Thread not found and could not be created');
     }
 
-    // Store incoming message
+    // STEP 4: Store incoming message
     const { error: messageError } = await supabase
       .from('sms_messages')
       .insert({
@@ -106,6 +205,12 @@ serve(async (req) => {
       throw new Error(`Failed to store message: ${messageError.message}`);
     }
 
+    // Update contact's last_activity_date
+    await supabase
+      .from('contacts')
+      .update({ last_activity_date: new Date().toISOString() })
+      .eq('id', contact.id);
+
     // Get conversation history for context
     const { data: messageHistory, error: historyError } = await supabase
       .from('sms_messages')
@@ -119,16 +224,16 @@ serve(async (req) => {
     }
 
     // Get business context and class schedule
-    const { data: business, error: businessError } = await supabase
+    const { data: business } = await supabase
       .from('businesses')
       .select('name')
-      .eq('id', contact.business_id)
+      .eq('id', businessId)
       .single();
 
-    const { data: classes, error: classError } = await supabase
+    const { data: classes } = await supabase
       .from('class_schedule')
       .select('*')
-      .eq('business_id', contact.business_id)
+      .eq('business_id', businessId)
       .eq('is_active', true);
 
     // Prepare conversation for AI
@@ -152,7 +257,7 @@ serve(async (req) => {
       },
       body: JSON.stringify({
         messages: conversationMessages,
-        businessContext: business?.name || 'Fight Flow Academy',
+        businessContext: business?.name || businessName,
         classSchedule: classes || []
       })
     });
@@ -162,40 +267,35 @@ serve(async (req) => {
 
     // Handle class booking if AI detected intent
     if (aiResult.shouldBook && aiResult.classDetails) {
-      // Find the specific class in schedule
-      const targetClass = classes?.find(cls => 
+      const targetClass = classes?.find((cls: any) =>
         cls.class_name.toLowerCase().includes(aiResult.classDetails.className.toLowerCase())
       );
-      
+
       if (targetClass) {
-        // Calculate next occurrence of this class day
         const today = new Date();
         const targetDay = targetClass.day_of_week;
         const daysUntilClass = (targetDay - today.getDay() + 7) % 7 || 7;
         const classDate = new Date(today);
         classDate.setDate(today.getDate() + daysUntilClass);
-        
-        // Book the class
+
         const { error: bookingError } = await supabase
           .from('class_bookings')
           .insert({
             contact_id: contact.id,
             class_schedule_id: targetClass.id,
-            booking_date: classDate.toISOString().split('T')[0], // YYYY-MM-DD format
+            booking_date: classDate.toISOString().split('T')[0],
             status: 'confirmed',
             notes: `Booked via AI SMS assistant`
           });
-        
+
         if (bookingError) {
           console.error('Booking failed:', bookingError);
-          // Update the response message to indicate booking issue
-          responseMessage = `I'd love to book that class for you, but there was a technical issue. Please call us at (555) 123-4567 to complete your booking.`;
+          responseMessage = `I'd love to book that class for you, but there was a technical issue. Please call us to complete your booking.`;
         } else {
-          // Log successful booking
           await supabase
             .from('automation_logs')
             .insert({
-              business_id: contact.business_id,
+              business_id: businessId,
               automation_type: 'class_booking',
               status: 'success',
               error_message: `Class booked: ${targetClass.class_name} on ${classDate.toDateString()}`
@@ -215,24 +315,24 @@ serve(async (req) => {
         ai_response: true
       });
 
-    // Replace the TwiML response with AI-generated message
+    // Return TwiML response
     const twimlResponse = `<?xml version="1.0" encoding="UTF-8"?>
       <Response>
         <Message>${responseMessage}</Message>
       </Response>`;
 
     return new Response(twimlResponse, {
-      headers: { 
-        ...corsHeaders, 
-        'Content-Type': 'application/xml' 
+      headers: {
+        ...corsHeaders,
+        'Content-Type': 'application/xml'
       }
     });
 
   } catch (error: any) {
     console.error('SMS webhook error:', error);
     return new Response(
-      JSON.stringify({ error: error.message }), 
-      { 
+      JSON.stringify({ error: error.message }),
+      {
         status: 500,
         headers: { ...corsHeaders, 'Content-Type': 'application/json' }
       }
