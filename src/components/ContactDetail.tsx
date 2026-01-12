@@ -4,6 +4,8 @@ import { supabase } from '@/integrations/supabase/client';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
+import { Input } from '@/components/ui/input';
+import { Textarea } from '@/components/ui/textarea';
 import {
   Select,
   SelectContent,
@@ -13,7 +15,7 @@ import {
 } from '@/components/ui/select';
 import {
   ArrowLeft, MessageSquare, Calendar, User, Activity,
-  Mail, Phone, Sparkles, X, Send, ChevronDown
+  Mail, Phone, Sparkles, X, Send, ChevronDown, Pencil, Save
 } from 'lucide-react';
 import { formatToEasternDateTime, formatToEasternDate } from '@/lib/dateUtils';
 import {
@@ -39,6 +41,53 @@ interface Contact {
   sms_status?: string;
   tags?: string[];
   preferred_channel?: string;
+  pipeline_stage?: string;
+  lead_type?: string;
+}
+
+// Status options for contacts
+const STATUS_OPTIONS = [
+  { value: 'new_lead', label: 'New Lead' },
+  { value: 'qualified', label: 'Qualified' },
+  { value: 'active_member', label: 'Active Member' },
+  { value: 'inactive', label: 'Inactive' },
+];
+
+// Pipeline stage options
+const PIPELINE_STAGE_OPTIONS = [
+  { value: 'new', label: 'New' },
+  { value: 'contacted', label: 'Contacted' },
+  { value: 'qualified', label: 'Qualified' },
+  { value: 'proposal', label: 'Proposal' },
+  { value: 'closed_won', label: 'Closed Won' },
+  { value: 'closed_lost', label: 'Closed Lost' },
+];
+
+// Phone normalization function for E.164 format
+function normalizePhoneNumber(phoneNumber: string): string | null {
+  if (!phoneNumber) return null;
+
+  // Remove all non-numeric characters except leading +
+  const cleaned = phoneNumber.replace(/[^\d+]/g, '');
+
+  // If already has +, keep it
+  if (cleaned.startsWith('+')) {
+    return cleaned;
+  }
+
+  // Remove all non-numeric characters
+  const digits = phoneNumber.replace(/\D/g, '');
+
+  if (digits.length === 10) {
+    // 10 digits: assume US number, add country code
+    return '+1' + digits;
+  } else if (digits.length === 11 && digits.startsWith('1')) {
+    // 11 digits starting with 1: already has US country code
+    return '+' + digits;
+  }
+
+  // Return as-is if we can't normalize
+  return phoneNumber;
 }
 
 interface SMSMessage {
@@ -108,6 +157,11 @@ export function ContactDetail({ contactId, onBack }: { contactId: string; onBack
   const [isLoading, setIsLoading] = useState(true);
   const [isGeneratingAI, setIsGeneratingAI] = useState(false);
   const [selectedChannel, setSelectedChannel] = useState<MessageChannel>('sms');
+
+  // Edit mode state
+  const [isEditMode, setIsEditMode] = useState(false);
+  const [editedContact, setEditedContact] = useState<Partial<Contact>>({});
+  const [isSaving, setIsSaving] = useState(false);
 
   // Fetch available tags from contact_tags table
   const { data: availableTags = [] } = useQuery({
@@ -407,7 +461,7 @@ export function ContactDetail({ contactId, onBack }: { contactId: string; onBack
   const formatDate = (dateString: string) => formatToEasternDateTime(dateString);
 
   const formatStatusLabel = (status: string) => {
-    return status?.split('_').map(word => 
+    return status?.split('_').map(word =>
       word.charAt(0).toUpperCase() + word.slice(1)
     ).join(' ') || '';
   };
@@ -426,6 +480,73 @@ export function ContactDetail({ contactId, onBack }: { contactId: string; onBack
       case 'sms': return <Phone className="h-3 w-3" />;
       case 'email': return <Mail className="h-3 w-3" />;
       default: return <Activity className="h-3 w-3" />;
+    }
+  };
+
+  // Edit mode handlers
+  const enterEditMode = () => {
+    if (!contact) return;
+    setEditedContact({
+      first_name: contact.first_name || '',
+      last_name: contact.last_name || '',
+      email: contact.email || '',
+      phone: contact.phone || '',
+      status: contact.status || 'new_lead',
+      pipeline_stage: contact.pipeline_stage || 'new',
+      lead_type: contact.lead_type || '',
+      comments: contact.comments || '',
+    });
+    setIsEditMode(true);
+  };
+
+  const handleCancel = () => {
+    setIsEditMode(false);
+    setEditedContact({});
+  };
+
+  const handleFieldChange = (field: keyof Contact, value: string) => {
+    setEditedContact(prev => ({ ...prev, [field]: value }));
+  };
+
+  const handleSave = async () => {
+    if (!contact) return;
+
+    setIsSaving(true);
+    try {
+      // Normalize phone number before saving
+      const normalizedPhone = editedContact.phone
+        ? normalizePhoneNumber(editedContact.phone)
+        : null;
+
+      const updateData = {
+        first_name: editedContact.first_name?.trim() || 'Unknown',
+        last_name: editedContact.last_name?.trim() || '',
+        email: editedContact.email?.trim().toLowerCase() || null,
+        phone: normalizedPhone,
+        status: editedContact.status || 'new_lead',
+        pipeline_stage: editedContact.pipeline_stage || null,
+        lead_type: editedContact.lead_type?.trim() || null,
+        comments: editedContact.comments?.trim() || null,
+        updated_at: new Date().toISOString(),
+      };
+
+      const { error } = await supabase
+        .from('contacts')
+        .update(updateData)
+        .eq('id', contact.id);
+
+      if (error) throw error;
+
+      // Update local state with saved values
+      setContact({ ...contact, ...updateData });
+      setIsEditMode(false);
+      setEditedContact({});
+      toast.success('Contact updated successfully');
+    } catch (error) {
+      console.error('Error saving contact:', error);
+      toast.error('Failed to save contact');
+    } finally {
+      setIsSaving(false);
     }
   };
 
@@ -528,37 +649,175 @@ export function ContactDetail({ contactId, onBack }: { contactId: string; onBack
         {/* Contact Information */}
         <Card>
           <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <User className="h-5 w-5" />
-              Contact Information
+            <CardTitle className="flex items-center justify-between">
+              <span className="flex items-center gap-2">
+                <User className="h-5 w-5" />
+                Contact Information
+              </span>
+              {!isEditMode ? (
+                <Button variant="outline" size="sm" onClick={enterEditMode}>
+                  <Pencil className="h-4 w-4 mr-1" />
+                  Edit
+                </Button>
+              ) : (
+                <div className="flex gap-2">
+                  <Button variant="outline" size="sm" onClick={handleCancel} disabled={isSaving}>
+                    Cancel
+                  </Button>
+                  <Button size="sm" onClick={handleSave} disabled={isSaving}>
+                    <Save className="h-4 w-4 mr-1" />
+                    {isSaving ? 'Saving...' : 'Save'}
+                  </Button>
+                </div>
+              )}
             </CardTitle>
           </CardHeader>
           <CardContent className="space-y-4">
-            <div>
-              <label className="text-sm font-medium text-muted-foreground">Email</label>
-              <div className="text-foreground">{contact.email || 'Not provided'}</div>
-            </div>
-            <div>
-              <label className="text-sm font-medium text-muted-foreground">Phone</label>
-              <div className="text-foreground">{contact.phone || 'Not provided'}</div>
-            </div>
-            <div>
-              <label className="text-sm font-medium text-muted-foreground">Source</label>
-              <div className="text-foreground">{formatStatusLabel(contact.source)}</div>
-            </div>
-            <div>
-              <label className="text-sm font-medium text-muted-foreground">Created</label>
-              <div className="text-foreground">{formatDate(contact.created_at)}</div>
-            </div>
-            <div>
-              <label className="text-sm font-medium text-muted-foreground">Preferred Channel</label>
-              <div className="text-foreground capitalize">{contact.preferred_channel || 'email'}</div>
-            </div>
-            {contact.comments && (
-              <div>
-                <label className="text-sm font-medium text-muted-foreground">Comments</label>
-                <div className="text-sm text-foreground">{contact.comments}</div>
-              </div>
+            {isEditMode ? (
+              <>
+                {/* Edit Mode Fields */}
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="text-sm font-medium text-muted-foreground">First Name</label>
+                    <Input
+                      value={editedContact.first_name || ''}
+                      onChange={(e) => handleFieldChange('first_name', e.target.value)}
+                      placeholder="First name"
+                    />
+                  </div>
+                  <div>
+                    <label className="text-sm font-medium text-muted-foreground">Last Name</label>
+                    <Input
+                      value={editedContact.last_name || ''}
+                      onChange={(e) => handleFieldChange('last_name', e.target.value)}
+                      placeholder="Last name"
+                    />
+                  </div>
+                </div>
+                <div>
+                  <label className="text-sm font-medium text-muted-foreground">Email</label>
+                  <Input
+                    type="email"
+                    value={editedContact.email || ''}
+                    onChange={(e) => handleFieldChange('email', e.target.value)}
+                    placeholder="email@example.com"
+                  />
+                </div>
+                <div>
+                  <label className="text-sm font-medium text-muted-foreground">Phone</label>
+                  <Input
+                    type="tel"
+                    value={editedContact.phone || ''}
+                    onChange={(e) => handleFieldChange('phone', e.target.value)}
+                    placeholder="+1 (555) 123-4567"
+                  />
+                </div>
+                <div>
+                  <label className="text-sm font-medium text-muted-foreground">Status</label>
+                  <Select
+                    value={editedContact.status || 'new_lead'}
+                    onValueChange={(value) => handleFieldChange('status', value)}
+                  >
+                    <SelectTrigger>
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {STATUS_OPTIONS.map((option) => (
+                        <SelectItem key={option.value} value={option.value}>
+                          {option.label}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div>
+                  <label className="text-sm font-medium text-muted-foreground">Pipeline Stage</label>
+                  <Select
+                    value={editedContact.pipeline_stage || 'new'}
+                    onValueChange={(value) => handleFieldChange('pipeline_stage', value)}
+                  >
+                    <SelectTrigger>
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {PIPELINE_STAGE_OPTIONS.map((option) => (
+                        <SelectItem key={option.value} value={option.value}>
+                          {option.label}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div>
+                  <label className="text-sm font-medium text-muted-foreground">Lead Type</label>
+                  <Input
+                    value={editedContact.lead_type || ''}
+                    onChange={(e) => handleFieldChange('lead_type', e.target.value)}
+                    placeholder="e.g., Referral, Website, Event"
+                  />
+                </div>
+                <div>
+                  <label className="text-sm font-medium text-muted-foreground">Comments / Notes</label>
+                  <Textarea
+                    value={editedContact.comments || ''}
+                    onChange={(e) => handleFieldChange('comments', e.target.value)}
+                    placeholder="Add notes about this contact..."
+                    rows={3}
+                  />
+                </div>
+              </>
+            ) : (
+              <>
+                {/* View Mode Fields */}
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="text-sm font-medium text-muted-foreground">First Name</label>
+                    <div className="text-foreground">{contact.first_name || 'Unknown'}</div>
+                  </div>
+                  <div>
+                    <label className="text-sm font-medium text-muted-foreground">Last Name</label>
+                    <div className="text-foreground">{contact.last_name || '-'}</div>
+                  </div>
+                </div>
+                <div>
+                  <label className="text-sm font-medium text-muted-foreground">Email</label>
+                  <div className="text-foreground">{contact.email || 'Not provided'}</div>
+                </div>
+                <div>
+                  <label className="text-sm font-medium text-muted-foreground">Phone</label>
+                  <div className="text-foreground">{contact.phone || 'Not provided'}</div>
+                </div>
+                <div>
+                  <label className="text-sm font-medium text-muted-foreground">Status</label>
+                  <div className="text-foreground">{formatStatusLabel(contact.status)}</div>
+                </div>
+                <div>
+                  <label className="text-sm font-medium text-muted-foreground">Pipeline Stage</label>
+                  <div className="text-foreground">{formatStatusLabel(contact.pipeline_stage || 'new')}</div>
+                </div>
+                <div>
+                  <label className="text-sm font-medium text-muted-foreground">Lead Type</label>
+                  <div className="text-foreground">{contact.lead_type || 'Not set'}</div>
+                </div>
+                <div>
+                  <label className="text-sm font-medium text-muted-foreground">Source</label>
+                  <div className="text-foreground">{formatStatusLabel(contact.source)}</div>
+                </div>
+                <div>
+                  <label className="text-sm font-medium text-muted-foreground">Created</label>
+                  <div className="text-foreground">{formatDate(contact.created_at)}</div>
+                </div>
+                <div>
+                  <label className="text-sm font-medium text-muted-foreground">Preferred Channel</label>
+                  <div className="text-foreground capitalize">{contact.preferred_channel || 'email'}</div>
+                </div>
+                {contact.comments && (
+                  <div>
+                    <label className="text-sm font-medium text-muted-foreground">Comments</label>
+                    <div className="text-sm text-foreground whitespace-pre-wrap">{contact.comments}</div>
+                  </div>
+                )}
+              </>
             )}
           </CardContent>
         </Card>
