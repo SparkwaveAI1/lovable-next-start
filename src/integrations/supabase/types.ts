@@ -62,6 +62,68 @@ export type Database = {
         }
         Relationships: []
       }
+      agent_config: {
+        Row: {
+          agent_name: string | null
+          auto_reply_enabled: boolean | null
+          booking_enabled: boolean | null
+          business_hours: Json | null
+          business_id: string
+          created_at: string | null
+          fallback_message: string | null
+          greeting_message: string | null
+          id: string
+          max_response_length: number | null
+          model: string | null
+          notification_emails: string[] | null
+          personality_prompt: string | null
+          temperature: number | null
+          updated_at: string | null
+        }
+        Insert: {
+          agent_name?: string | null
+          auto_reply_enabled?: boolean | null
+          booking_enabled?: boolean | null
+          business_hours?: Json | null
+          business_id: string
+          created_at?: string | null
+          fallback_message?: string | null
+          greeting_message?: string | null
+          id?: string
+          max_response_length?: number | null
+          model?: string | null
+          notification_emails?: string[] | null
+          personality_prompt?: string | null
+          temperature?: number | null
+          updated_at?: string | null
+        }
+        Update: {
+          agent_name?: string | null
+          auto_reply_enabled?: boolean | null
+          booking_enabled?: boolean | null
+          business_hours?: Json | null
+          business_id?: string
+          created_at?: string | null
+          fallback_message?: string | null
+          greeting_message?: string | null
+          id?: string
+          max_response_length?: number | null
+          model?: string | null
+          notification_emails?: string[] | null
+          personality_prompt?: string | null
+          temperature?: number | null
+          updated_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "agent_config_business_id_fkey"
+            columns: ["business_id"]
+            isOneToOne: true
+            referencedRelation: "businesses"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       agent_configurations: {
         Row: {
           business_id: string
@@ -233,6 +295,53 @@ export type Database = {
         Relationships: [
           {
             foreignKeyName: "automation_logs_business_id_fkey"
+            columns: ["business_id"]
+            isOneToOne: false
+            referencedRelation: "businesses"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      business_knowledge: {
+        Row: {
+          business_id: string
+          category: string
+          content: string
+          created_at: string | null
+          id: string
+          is_active: boolean | null
+          keywords: string[] | null
+          priority: number | null
+          title: string
+          updated_at: string | null
+        }
+        Insert: {
+          business_id: string
+          category: string
+          content: string
+          created_at?: string | null
+          id?: string
+          is_active?: boolean | null
+          keywords?: string[] | null
+          priority?: number | null
+          title: string
+          updated_at?: string | null
+        }
+        Update: {
+          business_id?: string
+          category?: string
+          content?: string
+          created_at?: string | null
+          id?: string
+          is_active?: boolean | null
+          keywords?: string[] | null
+          priority?: number | null
+          title?: string
+          updated_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "business_knowledge_business_id_fkey"
             columns: ["business_id"]
             isOneToOne: false
             referencedRelation: "businesses"
@@ -741,27 +850,42 @@ export type Database = {
           business_id: string | null
           contact_id: string | null
           context: Json | null
+          conversation_state: string | null
           created_at: string | null
           id: string
+          intent_history: Json | null
           last_activity: string | null
+          last_bot_message_at: string | null
+          needs_human_review: boolean | null
+          state_data: Json | null
           status: string | null
         }
         Insert: {
           business_id?: string | null
           contact_id?: string | null
           context?: Json | null
+          conversation_state?: string | null
           created_at?: string | null
           id?: string
+          intent_history?: Json | null
           last_activity?: string | null
+          last_bot_message_at?: string | null
+          needs_human_review?: boolean | null
+          state_data?: Json | null
           status?: string | null
         }
         Update: {
           business_id?: string | null
           contact_id?: string | null
           context?: Json | null
+          conversation_state?: string | null
           created_at?: string | null
           id?: string
+          intent_history?: Json | null
           last_activity?: string | null
+          last_bot_message_at?: string | null
+          needs_human_review?: boolean | null
+          state_data?: Json | null
           status?: string | null
         }
         Relationships: [
@@ -1043,6 +1167,72 @@ export type Database = {
             columns: ["business_id"]
             isOneToOne: false
             referencedRelation: "businesses"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      email_queue: {
+        Row: {
+          attempts: number | null
+          campaign_id: string
+          contact_id: string
+          created_at: string | null
+          email: string
+          error_message: string | null
+          first_name: string | null
+          id: string
+          last_name: string | null
+          max_attempts: number | null
+          next_retry_at: string | null
+          processed_at: string | null
+          resend_id: string | null
+          status: string | null
+        }
+        Insert: {
+          attempts?: number | null
+          campaign_id: string
+          contact_id: string
+          created_at?: string | null
+          email: string
+          error_message?: string | null
+          first_name?: string | null
+          id?: string
+          last_name?: string | null
+          max_attempts?: number | null
+          next_retry_at?: string | null
+          processed_at?: string | null
+          resend_id?: string | null
+          status?: string | null
+        }
+        Update: {
+          attempts?: number | null
+          campaign_id?: string
+          contact_id?: string
+          created_at?: string | null
+          email?: string
+          error_message?: string | null
+          first_name?: string | null
+          id?: string
+          last_name?: string | null
+          max_attempts?: number | null
+          next_retry_at?: string | null
+          processed_at?: string | null
+          resend_id?: string | null
+          status?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "email_queue_campaign_id_fkey"
+            columns: ["campaign_id"]
+            isOneToOne: false
+            referencedRelation: "email_campaigns"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "email_queue_contact_id_fkey"
+            columns: ["contact_id"]
+            isOneToOne: false
+            referencedRelation: "contacts"
             referencedColumns: ["id"]
           },
         ]
@@ -1911,6 +2101,7 @@ export type Database = {
         Args: { p_business_id: string; p_user_id?: string }
         Returns: boolean
       }
+      clear_campaign_queue: { Args: { p_campaign_id: string }; Returns: number }
       compute_segment_count: { Args: { p_segment_id: string }; Returns: number }
       contact_add_tag: {
         Args: { p_contact_id: string; p_tag: string }
@@ -1933,6 +2124,22 @@ export type Database = {
           p_name: string
         }
         Returns: string
+      }
+      find_or_create_contact: {
+        Args: {
+          p_business_id: string
+          p_email?: string
+          p_first_name?: string
+          p_last_name?: string
+          p_phone?: string
+          p_source?: string
+          p_status?: string
+        }
+        Returns: {
+          contact_id: string
+          is_new: boolean
+          matched_by: string
+        }[]
       }
       get_campaign_recipients: {
         Args: { p_campaign_id: string }
@@ -1981,6 +2188,28 @@ export type Database = {
           isSetofReturn: true
         }
       }
+      get_email_queue_batch: {
+        Args: { p_batch_size?: number; p_campaign_id: string }
+        Returns: {
+          contact_id: string
+          email: string
+          first_name: string
+          last_name: string
+          queue_id: string
+        }[]
+      }
+      get_queue_progress: {
+        Args: { p_campaign_id: string }
+        Returns: {
+          failed: number
+          pending: number
+          percent_complete: number
+          processing: number
+          sent: number
+          skipped: number
+          total: number
+        }[]
+      }
       get_user_business_permission: {
         Args: { p_business_id: string; p_user_id?: string }
         Returns: Database["public"]["Enums"]["business_permission_level"]
@@ -2011,6 +2240,18 @@ export type Database = {
         Returns: boolean
       }
       is_super_admin: { Args: never; Returns: boolean }
+      mark_queue_failed: {
+        Args: {
+          p_error_message?: string
+          p_queue_id: string
+          p_should_retry?: boolean
+        }
+        Returns: undefined
+      }
+      mark_queue_sent: {
+        Args: { p_queue_id: string; p_resend_id?: string }
+        Returns: undefined
+      }
       preview_campaign_recipients: {
         Args: { p_campaign_id: string; p_limit?: number }
         Returns: {
@@ -2020,48 +2261,25 @@ export type Database = {
           last_name: string
         }[]
       }
+      queue_campaign_emails: {
+        Args: { p_campaign_id: string }
+        Returns: number
+      }
       refresh_tag_counts: {
         Args: { p_business_id: string }
         Returns: undefined
       }
-      set_default_sender: { Args: { p_sender_id: string }; Returns: undefined }
-      // Email queue functions
-      clear_campaign_queue: { Args: { p_campaign_id: string }; Returns: number }
-      get_email_queue_batch: {
-        Args: { p_campaign_id: string; p_batch_size?: number }
+      search_business_knowledge: {
+        Args: { p_business_id: string; p_limit?: number; p_query: string }
         Returns: {
-          queue_id: string
-          contact_id: string
-          email: string
-          first_name: string | null
-          last_name: string | null
+          category: string
+          content: string
+          id: string
+          relevance_score: number
+          title: string
         }[]
       }
-      get_queue_progress: {
-        Args: { p_campaign_id: string }
-        Returns: {
-          total: number
-          pending: number
-          processing: number
-          sent: number
-          failed: number
-          skipped: number
-          percent_complete: number
-        }
-      }
-      mark_queue_failed: {
-        Args: {
-          p_queue_id: string
-          p_error_message?: string
-          p_should_retry?: boolean
-        }
-        Returns: undefined
-      }
-      mark_queue_sent: {
-        Args: { p_queue_id: string; p_resend_id?: string }
-        Returns: undefined
-      }
-      queue_campaign_emails: { Args: { p_campaign_id: string }; Returns: number }
+      set_default_sender: { Args: { p_sender_id: string }; Returns: undefined }
     }
     Enums: {
       app_role:

@@ -70,10 +70,11 @@ serve(async (req) => {
     try {
       requestBody = JSON.parse(rawBody);
       console.log('JSON parsing successful');
-    } catch (parseError) {
-      console.error('JSON parsing failed:', parseError.message);
+    } catch (parseError: unknown) {
+      const errorMessage = (parseError as Error).message;
+      console.error('JSON parsing failed:', errorMessage);
       console.error('Raw body content:', JSON.stringify(rawBody));
-      throw new Error(`Invalid JSON in request body: ${parseError.message}`);
+      throw new Error(`Invalid JSON in request body: ${errorMessage}`);
     }
     
     console.log('Request body received:', { 
