@@ -98,8 +98,8 @@ serve(async (req) => {
       agent = realAgent;
       constructorPattern = 'official_sdk_pattern';
       console.log('✅ Test 2 SUCCESS - Official GAME SDK pattern working!');
-    } catch (error2) {
-      console.log('❌ Official constructor failed:', error2.message);
+    } catch (error2: unknown) {
+      console.log('❌ Official constructor failed:', (error2 as Error).message);
       // Keep using mock agent from Test 1
     }
 

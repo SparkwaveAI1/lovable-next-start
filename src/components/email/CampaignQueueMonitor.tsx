@@ -88,11 +88,12 @@ export function CampaignQueueMonitor({
 
       if (error) throw error;
 
-      if (data) {
-        setProgress(data);
+      if (data && data.length > 0) {
+        const progressData = data[0];
+        setProgress(progressData);
 
         // Check if already complete
-        if (data.pending === 0 && data.processing === 0 && data.total > 0) {
+        if (progressData.pending === 0 && progressData.processing === 0 && progressData.total > 0) {
           setState('complete');
         }
       }

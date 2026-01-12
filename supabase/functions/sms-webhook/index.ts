@@ -42,7 +42,7 @@ async function findOrCreateContact(
   supabase: any,
   businessId: string,
   phone: string
-): Promise<{ id: string; business_id: string; isNew: boolean }> {
+): Promise<{ id: string; business_id: string; isNew: boolean; first_name?: string; last_name?: string }> {
 
   const normalizedPhone = normalizePhoneNumber(phone);
   console.log(`Looking up contact: phone=${normalizedPhone}, businessId=${businessId}`);
@@ -143,12 +143,12 @@ serve(async (req) => {
       console.log(`Using default business: ${defaultBusiness.name} (${defaultBusiness.id})`);
       smsConfig = {
         business_id: defaultBusiness.id,
-        businesses: defaultBusiness
-      };
+        businesses: [defaultBusiness]
+      } as typeof smsConfig;
     }
 
-    const businessId = smsConfig.business_id;
-    const businessName = (smsConfig.businesses as any)?.name || 'Unknown Business';
+    const businessId = smsConfig!.business_id;
+    const businessName = (smsConfig!.businesses as any)?.[0]?.name || (smsConfig!.businesses as any)?.name || 'Unknown Business';
     console.log(`SMS for business: ${businessName} (${businessId})`);
 
     // STEP 2: Find or create contact using proper deduplication
