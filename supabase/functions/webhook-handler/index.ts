@@ -33,21 +33,8 @@ function normalizePhoneNumber(phoneNumber: string): string | null {
   return phoneNumber;
 }
 
-// Welcome message helper function
-function getWelcomeMessage(businessName: string): string {
-  switch (businessName) {
-    case 'Fight Flow Academy':
-      return 'Welcome to Fight Flow Academy! Thanks for your interest in martial arts training. We\'ll be in touch soon to discuss your fitness goals. Reply STOP to opt-out.';
-    case 'Sparkwave AI':
-      return 'Welcome to Sparkwave AI! Thanks for reaching out about our automation services. We\'ll contact you soon to discuss your business needs. Reply STOP to opt-out.';
-    case 'PersonaAI':
-      return 'Welcome to PersonaAI! Thanks for your interest in AI market research. We\'ll be in touch about how we can help your business. Reply STOP to opt-out.';
-    case 'CharX World':
-      return 'Welcome to CharX World! Thanks for your interest in AI character building. We\'ll contact you soon to explore possibilities. Reply STOP to opt-out.';
-    default:
-      return 'Thank you for contacting us! We\'ll be in touch soon. Reply STOP to opt-out.';
-  }
-}
+// Default message when no specific inquiry is provided
+const DEFAULT_GREETING = "Thanks for your interest in our programs! Can I answer any questions for you or set you up with a free trial class?";
 
 interface ContactData {
   name: string;
@@ -205,89 +192,231 @@ async function findOrCreateContact(
 
   console.log(`Created new contact: ${newContact.id} (${newContact.first_name} ${newContact.last_name})`);
 
-  // Send welcome SMS if contact has phone number and is a new contact
-  if (newContact.phone) {
-    await sendWelcomeSMS(supabase, newContact, businessId, businessData);
-  }
-
   return { contact: newContact, isNew: true, matchedBy: null };
 }
 
 /**
- * Send welcome SMS to new contact
+ * Send initial outreach to new lead via SMS and/or Email
+ * Uses AI to personalize response if they included a comment/question
  */
-async function sendWelcomeSMS(supabase: any, contact: any, businessId: string, businessData: any) {
-  try {
-    console.log('Attempting to send welcome SMS...');
+async function sendInitialOutreach(
+  supabase: any,
+  contact: any,
+  businessId: string,
+  businessData: any,
+  inquiry: string | null
+) {
+  const contactName = contact.first_name && contact.first_name !== 'Unknown'
+    ? contact.first_name
+    : null;
+  const businessName = businessData?.name || 'the business';
 
-    // Get SMS configuration for this business
-    const { data: smsConfig } = await supabase
-      .from('sms_config')
-      .select('*')
-      .eq('business_id', businessId)
-      .eq('is_active', true)
-      .single();
+  console.log(`Sending initial outreach to ${contact.first_name} ${contact.last_name}`);
+  console.log(`Inquiry: ${inquiry || '(none)'}`);
 
-    if (smsConfig && smsConfig.phone_number) {
-      const welcomeMessage = getWelcomeMessage(businessData?.name || 'Unknown');
+  // Determine the response message
+  let responseMessage: string;
 
-      console.log('Sending welcome SMS to:', contact.phone);
+  if (inquiry && inquiry.trim().length > 0) {
+    // They included a question/comment - use AI to respond
+    console.log('Inquiry provided, generating AI response...');
 
-      // Send SMS using existing send-sms Edge Function
-      const smsResponse = await fetch(`${Deno.env.get('SUPABASE_URL')}/functions/v1/send-sms`, {
+    try {
+      const aiResponse = await fetch(`${Deno.env.get('SUPABASE_URL')}/functions/v1/ai-response`, {
         method: 'POST',
         headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')}`
+          'Authorization': `Bearer ${Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')}`,
+          'Content-Type': 'application/json'
         },
         body: JSON.stringify({
-          to: contact.phone,
-          message: welcomeMessage,
-          businessId: businessId
+          messages: [{ role: 'user', content: inquiry }],
+          businessId: businessId,
+          businessContext: businessName,
+          contactName: contactName,
+          classSchedule: []
         })
       });
 
-      const smsResult = await smsResponse.json();
-      console.log('SMS response:', smsResult);
+      if (aiResponse.ok) {
+        const aiResult = await aiResponse.json();
+        responseMessage = aiResult.message || DEFAULT_GREETING;
+        console.log('AI generated response:', responseMessage);
+      } else {
+        console.error('AI response failed, using default');
+        responseMessage = DEFAULT_GREETING;
+      }
+    } catch (aiError: any) {
+      console.error('AI response error:', aiError.message);
+      responseMessage = DEFAULT_GREETING;
+    }
+  } else {
+    // No inquiry - use simple default
+    responseMessage = DEFAULT_GREETING;
+    console.log('No inquiry, using default message');
+  }
 
-      // Log SMS sending attempt
+  // Create conversation thread for this contact
+  let threadId: string | null = null;
+  try {
+    const { data: thread, error: threadError } = await supabase
+      .from('conversation_threads')
+      .insert({
+        contact_id: contact.id,
+        business_id: businessId,
+        status: 'active',
+        conversation_state: 'initial'
+      })
+      .select('id')
+      .single();
+
+    if (thread) {
+      threadId = thread.id;
+      console.log('Created conversation thread:', threadId);
+    }
+  } catch (threadError: any) {
+    console.error('Failed to create thread:', threadError.message);
+  }
+
+  // Store the inquiry as inbound message if provided
+  if (threadId && inquiry && inquiry.trim().length > 0) {
+    await supabase.from('sms_messages').insert({
+      thread_id: threadId,
+      contact_id: contact.id,
+      direction: 'inbound',
+      message: inquiry,
+      ai_response: false
+    });
+  }
+
+  // Store the outbound response
+  if (threadId) {
+    await supabase.from('sms_messages').insert({
+      thread_id: threadId,
+      contact_id: contact.id,
+      direction: 'outbound',
+      message: responseMessage,
+      ai_response: true
+    });
+  }
+
+  // SEND SMS if contact has phone
+  if (contact.phone) {
+    try {
+      console.log('Sending SMS to:', contact.phone);
+
+      const accountSid = Deno.env.get('TWILIO_ACCOUNT_SID') || Deno.env.get('TWILIO_SID');
+      const authToken = Deno.env.get('TWILIO_AUTH_TOKEN');
+      const twilioFromNumber = Deno.env.get('TWILIO_PHONE_NUMBER');
+
+      if (accountSid && authToken && twilioFromNumber) {
+        const twilioResponse = await fetch(`https://api.twilio.com/2010-04-01/Accounts/${accountSid}/Messages.json`, {
+          method: 'POST',
+          headers: {
+            'Authorization': `Basic ${btoa(`${accountSid}:${authToken}`)}`,
+            'Content-Type': 'application/x-www-form-urlencoded'
+          },
+          body: new URLSearchParams({
+            From: twilioFromNumber,
+            To: contact.phone,
+            Body: responseMessage
+          })
+        });
+
+        if (twilioResponse.ok) {
+          const result = await twilioResponse.json();
+          console.log('SMS sent successfully, SID:', result.sid);
+        } else {
+          const error = await twilioResponse.text();
+          console.error('Twilio API error:', error);
+        }
+      } else {
+        console.warn('Twilio credentials not configured');
+      }
+
+      // Log SMS attempt
       await supabase.from('automation_logs').insert({
         business_id: businessId,
-        automation_type: 'sms_welcome_sent',
-        status: smsResponse.ok ? 'success' : 'error',
-        source_data: { contact_phone: contact.phone },
+        automation_type: 'initial_outreach_sms',
+        status: 'success',
         processed_data: {
           contact_id: contact.id,
           phone: contact.phone,
-          message: welcomeMessage,
-          sms_result: smsResult
-        },
-        error_message: smsResponse.ok ? null : `SMS sending failed: ${smsResult.error || 'Unknown error'}`
+          message: responseMessage,
+          had_inquiry: !!inquiry
+        }
       });
-
-      console.log(`Welcome SMS ${smsResponse.ok ? 'sent successfully' : 'failed'} to ${contact.phone}`);
-    } else {
-      console.log('No SMS configuration found for business, skipping welcome SMS');
-    }
-  } catch (smsError: any) {
-    console.error('SMS sending failed:', smsError);
-    // Log SMS failure but don't fail the entire webhook
-    try {
-      await supabase.from('automation_logs').insert({
-        business_id: businessId,
-        automation_type: 'sms_welcome_sent',
-        status: 'error',
-        source_data: { contact_phone: contact.phone },
-        processed_data: {
-          contact_id: contact.id,
-          error: smsError.message
-        },
-        error_message: `SMS sending failed: ${smsError.message}`
-      });
-    } catch (logError) {
-      console.error('Failed to log SMS error:', logError);
+    } catch (smsError: any) {
+      console.error('SMS sending failed:', smsError.message);
     }
   }
+
+  // SEND EMAIL if contact has email
+  if (contact.email) {
+    try {
+      console.log('Sending email to:', contact.email);
+
+      // Get agent config for email settings
+      const { data: agentConfig } = await supabase
+        .from('agent_config')
+        .select('from_email, from_name, email_greeting_subject')
+        .eq('business_id', businessId)
+        .single();
+
+      const fromEmail = agentConfig?.from_email || 'noreply@example.com';
+      const fromName = agentConfig?.from_name || businessName;
+      const subject = agentConfig?.email_greeting_subject || 'Thanks for reaching out!';
+
+      // Simple HTML email with the same message
+      const emailHtml = `
+        <div style="font-family: Arial, sans-serif; max-width: 600px;">
+          <p>Hey ${contactName || 'there'}!</p>
+          <p>${responseMessage}</p>
+          <p>Just reply to this email or text us back!</p>
+          <p>Talk soon,<br><strong>The ${businessName} Team</strong></p>
+        </div>
+      `;
+
+      const emailResponse = await fetch(`${Deno.env.get('SUPABASE_URL')}/functions/v1/send-email`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          to: contact.email,
+          subject: subject,
+          html: emailHtml,
+          from_email: fromEmail,
+          from_name: fromName,
+          contact_id: contact.id
+        })
+      });
+
+      if (emailResponse.ok) {
+        console.log('Email sent successfully to:', contact.email);
+      } else {
+        const error = await emailResponse.text();
+        console.error('Email sending failed:', error);
+      }
+
+      // Log email attempt
+      await supabase.from('automation_logs').insert({
+        business_id: businessId,
+        automation_type: 'initial_outreach_email',
+        status: emailResponse.ok ? 'success' : 'error',
+        processed_data: {
+          contact_id: contact.id,
+          email: contact.email,
+          subject: subject,
+          had_inquiry: !!inquiry
+        }
+      });
+    } catch (emailError: any) {
+      console.error('Email sending failed:', emailError.message);
+    }
+  }
+
+  console.log('Initial outreach complete');
 }
 
 serve(async (req: Request) => {
@@ -525,6 +654,17 @@ serve(async (req: Request) => {
         if (contactResult.isNew) {
           console.log(`New contact created: ${contactResult.contact.id}`);
           automationType = 'contact_created';
+
+          // Send initial outreach to new lead (SMS + Email)
+          // Pass the comments/inquiry from the form
+          const inquiry = processedData.comments || null;
+          await sendInitialOutreach(
+            supabase,
+            contactResult.contact,
+            endpoint.business_id,
+            endpoint.businesses,
+            inquiry
+          );
         } else {
           console.log(`Existing contact matched by ${contactResult.matchedBy}: ${contactResult.contact.id}`);
           automationType = 'contact_updated';

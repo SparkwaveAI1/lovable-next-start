@@ -42,7 +42,7 @@ async function findOrCreateContact(
   supabase: any,
   businessId: string,
   phone: string
-): Promise<{ id: string; business_id: string; isNew: boolean; first_name?: string; last_name?: string }> {
+): Promise<{ id: string; business_id: string; isNew: boolean; email?: string; first_name?: string; last_name?: string; preferred_channel?: string }> {
 
   const normalizedPhone = normalizePhoneNumber(phone);
   console.log(`Looking up contact: phone=${normalizedPhone}, businessId=${businessId}`);
@@ -50,7 +50,7 @@ async function findOrCreateContact(
   // Try to find existing contact by phone within this business
   const { data: existingContact, error: lookupError } = await supabase
     .from('contacts')
-    .select('id, business_id, first_name, last_name, email, phone')
+    .select('id, business_id, first_name, last_name, email, phone, preferred_channel')
     .eq('business_id', businessId)
     .eq('phone', normalizedPhone)
     .single();
@@ -64,7 +64,7 @@ async function findOrCreateContact(
   if (normalizedPhone !== phone) {
     const { data: altContact } = await supabase
       .from('contacts')
-      .select('id, business_id, first_name, last_name, email, phone')
+      .select('id, business_id, first_name, last_name, email, phone, preferred_channel')
       .eq('business_id', businessId)
       .eq('phone', phone)
       .single();
@@ -161,6 +161,7 @@ serve(async (req) => {
     }
 
     // STEP 3: Find or create conversation thread
+    let isNewThread = false;
     let { data: thread, error: threadError } = await supabase
       .from('conversation_threads')
       .select('id')
@@ -170,6 +171,7 @@ serve(async (req) => {
 
     if (threadError && threadError.code === 'PGRST116') {
       // Create new thread
+      isNewThread = true;
       const { data: newThread, error: createThreadError } = await supabase
         .from('conversation_threads')
         .insert({
@@ -207,10 +209,14 @@ serve(async (req) => {
       throw new Error(`Failed to store message: ${messageError.message}`);
     }
 
-    // Update contact's last_activity_date
+    // Update contact's last_activity_date and set preferred channel if not set
+    // If they're responding via SMS and we haven't set a preference yet, they prefer SMS
     await supabase
       .from('contacts')
-      .update({ last_activity_date: new Date().toISOString() })
+      .update({
+        last_activity_date: new Date().toISOString(),
+        preferred_channel: contact.preferred_channel || 'sms'
+      })
       .eq('id', contact.id);
 
     // Get conversation history for context
@@ -325,16 +331,99 @@ serve(async (req) => {
         ai_response: true
       });
 
-    // Return TwiML response
-    const twimlResponse = `<?xml version="1.0" encoding="UTF-8"?>
-      <Response>
-        <Message>${responseMessage}</Message>
-      </Response>`;
+    // Send SMS via Twilio API directly (more reliable than TwiML)
+    const accountSid = Deno.env.get('TWILIO_ACCOUNT_SID') || Deno.env.get('TWILIO_SID');
+    const authToken = Deno.env.get('TWILIO_AUTH_TOKEN');
+    const twilioFromNumber = Deno.env.get('TWILIO_PHONE_NUMBER');
+
+    if (accountSid && authToken && twilioFromNumber) {
+      console.log('Sending SMS via Twilio API...');
+
+      const twilioResponse = await fetch(`https://api.twilio.com/2010-04-01/Accounts/${accountSid}/Messages.json`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Basic ${btoa(`${accountSid}:${authToken}`)}`,
+          'Content-Type': 'application/x-www-form-urlencoded'
+        },
+        body: new URLSearchParams({
+          From: twilioFromNumber,
+          To: from, // Send back to the original sender
+          Body: responseMessage
+        })
+      });
+
+      if (!twilioResponse.ok) {
+        const errorData = await twilioResponse.text();
+        console.error('Twilio API error:', errorData);
+      } else {
+        const twilioResult = await twilioResponse.json();
+        console.log('SMS sent successfully, SID:', twilioResult.sid);
+      }
+    } else {
+      console.warn('Twilio credentials not configured, cannot send SMS');
+    }
+
+    // STEP 7: Send email greeting for new threads if contact has email
+    if (isNewThread && contact.email) {
+      console.log('New thread with email contact, sending email greeting...');
+
+      try {
+        // Get agent config with email greeting template
+        const { data: agentConfig } = await supabase
+          .from('agent_config')
+          .select('email_greeting_subject, email_greeting_body, from_email, from_name')
+          .eq('business_id', businessId)
+          .single();
+
+        if (agentConfig?.email_greeting_body && agentConfig?.from_email) {
+          // Personalize the email content
+          const personalizedHtml = agentConfig.email_greeting_body
+            .replace(/\{\{first_name\}\}/gi, contact.first_name || 'there')
+            .replace(/\{\{last_name\}\}/gi, contact.last_name || '')
+            .replace(/\{\{email\}\}/gi, contact.email || '');
+
+          const personalizedSubject = (agentConfig.email_greeting_subject || 'Thanks for reaching out!')
+            .replace(/\{\{first_name\}\}/gi, contact.first_name || 'there');
+
+          // Send email via the send-email function
+          const emailResponse = await fetch(`${Deno.env.get('SUPABASE_URL')}/functions/v1/send-email`, {
+            method: 'POST',
+            headers: {
+              'Authorization': `Bearer ${Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')}`,
+              'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+              to: contact.email,
+              subject: personalizedSubject,
+              html: personalizedHtml,
+              from_email: agentConfig.from_email,
+              from_name: agentConfig.from_name || businessName,
+              contact_id: contact.id
+            })
+          });
+
+          if (emailResponse.ok) {
+            console.log('Email greeting sent successfully to:', contact.email);
+          } else {
+            const emailError = await emailResponse.text();
+            console.error('Failed to send email greeting:', emailError);
+          }
+        } else {
+          console.log('No email greeting template configured for business');
+        }
+      } catch (emailErr: any) {
+        console.error('Error sending email greeting:', emailErr.message);
+        // Don't fail the whole request if email fails
+      }
+    }
+
+    // Return empty TwiML (just acknowledge receipt, we already sent the message via API)
+    const twimlResponse = `<?xml version="1.0" encoding="UTF-8"?><Response></Response>`;
 
     return new Response(twimlResponse, {
       headers: {
         ...corsHeaders,
-        'Content-Type': 'application/xml'
+        'Content-Type': 'text/xml; charset=utf-8'
       }
     });
 
