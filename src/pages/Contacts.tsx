@@ -665,8 +665,8 @@ export default function Contacts() {
                           )}
                         </div>
                       </TableCell>
-                      <TableCell>
-                        <Badge variant={getStatusBadgeVariant(contact.status)} className="text-center whitespace-nowrap">
+                      <TableCell className="text-center">
+                        <Badge variant={getStatusBadgeVariant(contact.status)} className="whitespace-nowrap">
                           {formatStatusLabel(contact.status)}
                         </Badge>
                       </TableCell>
