@@ -70,7 +70,11 @@ export type Database = {
           business_hours: Json | null
           business_id: string
           created_at: string | null
+          email_greeting_body: string | null
+          email_greeting_subject: string | null
           fallback_message: string | null
+          from_email: string | null
+          from_name: string | null
           greeting_message: string | null
           id: string
           max_response_length: number | null
@@ -87,7 +91,11 @@ export type Database = {
           business_hours?: Json | null
           business_id: string
           created_at?: string | null
+          email_greeting_body?: string | null
+          email_greeting_subject?: string | null
           fallback_message?: string | null
+          from_email?: string | null
+          from_name?: string | null
           greeting_message?: string | null
           id?: string
           max_response_length?: number | null
@@ -104,7 +112,11 @@ export type Database = {
           business_hours?: Json | null
           business_id?: string
           created_at?: string | null
+          email_greeting_body?: string | null
+          email_greeting_subject?: string | null
           fallback_message?: string | null
+          from_email?: string | null
+          from_name?: string | null
           greeting_message?: string | null
           id?: string
           max_response_length?: number | null
@@ -1358,6 +1370,59 @@ export type Database = {
             foreignKeyName: "email_subscribers_business_id_fkey"
             columns: ["business_id"]
             isOneToOne: false
+            referencedRelation: "businesses"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      follow_up_config: {
+        Row: {
+          business_id: string | null
+          created_at: string | null
+          first_follow_up_hours: number | null
+          first_follow_up_message: string | null
+          id: string
+          is_enabled: boolean | null
+          max_follow_ups: number | null
+          second_follow_up_hours: number | null
+          second_follow_up_message: string | null
+          third_follow_up_hours: number | null
+          third_follow_up_message: string | null
+          updated_at: string | null
+        }
+        Insert: {
+          business_id?: string | null
+          created_at?: string | null
+          first_follow_up_hours?: number | null
+          first_follow_up_message?: string | null
+          id?: string
+          is_enabled?: boolean | null
+          max_follow_ups?: number | null
+          second_follow_up_hours?: number | null
+          second_follow_up_message?: string | null
+          third_follow_up_hours?: number | null
+          third_follow_up_message?: string | null
+          updated_at?: string | null
+        }
+        Update: {
+          business_id?: string | null
+          created_at?: string | null
+          first_follow_up_hours?: number | null
+          first_follow_up_message?: string | null
+          id?: string
+          is_enabled?: boolean | null
+          max_follow_ups?: number | null
+          second_follow_up_hours?: number | null
+          second_follow_up_message?: string | null
+          third_follow_up_hours?: number | null
+          third_follow_up_message?: string | null
+          updated_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "follow_up_config_business_id_fkey"
+            columns: ["business_id"]
+            isOneToOne: true
             referencedRelation: "businesses"
             referencedColumns: ["id"]
           },
