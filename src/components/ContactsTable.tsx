@@ -7,6 +7,13 @@ import { Badge } from '@/components/ui/badge';
 import { ContactDetail } from './ContactDetail';
 import { Search, Users } from 'lucide-react';
 import { formatToEasternCompact } from '@/lib/dateUtils';
+import {
+  TableWrapper,
+  TableRow,
+  TableCell,
+  TableHeaderCell,
+  ContactStatusBadge
+} from '@/components/ui/data-table-styles';
 
 interface Contact {
   id: string;
@@ -35,7 +42,7 @@ export function ContactsTable({ businessId }: { businessId: string }) {
 
   const loadContacts = async () => {
     setIsLoading(true);
-    
+
     let query = supabase
       .from('contacts')
       .select('*')
@@ -51,7 +58,7 @@ export function ContactsTable({ businessId }: { businessId: string }) {
     }
 
     const { data, error } = await query;
-    
+
     if (error) {
       console.error('Error loading contacts:', error);
     } else {
@@ -60,21 +67,12 @@ export function ContactsTable({ businessId }: { businessId: string }) {
     setIsLoading(false);
   };
 
-  const getStatusBadgeVariant = (status: string) => {
-    switch (status) {
-      case 'new_lead': return 'default';
-      case 'qualified': return 'secondary';
-      case 'active_member': return 'outline';
-      default: return 'destructive';
-    }
-  };
-
   const formatDate = (dateString: string) => {
     return formatToEasternCompact(dateString);
   };
 
   const formatStatusLabel = (status: string) => {
-    return status.split('_').map(word => 
+    return status.split('_').map(word =>
       word.charAt(0).toUpperCase() + word.slice(1)
     ).join(' ');
   };
@@ -82,25 +80,27 @@ export function ContactsTable({ businessId }: { businessId: string }) {
   // Show ContactDetail if a contact is selected
   if (selectedContactId) {
     return (
-      <ContactDetail 
-        contactId={selectedContactId} 
-        onBack={() => setSelectedContactId(null)} 
+      <ContactDetail
+        contactId={selectedContactId}
+        onBack={() => setSelectedContactId(null)}
       />
     );
   }
 
   return (
-    <Card>
+    <Card variant="elevated">
       <CardHeader>
         <div className="flex justify-between items-center">
           <div className="flex items-center gap-2">
-            <Users className="h-5 w-5" />
+            <Users className="h-5 w-5 text-gray-500" />
             <CardTitle>Contact Management</CardTitle>
-            <Badge variant="secondary">{contacts.length} contacts</Badge>
+            <Badge variant="secondary" className="bg-gray-100 text-gray-700">
+              {contacts.length} contacts
+            </Badge>
           </div>
           <div className="flex gap-4">
             <div className="relative">
-              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
               <Input
                 placeholder="Search contacts..."
                 value={searchTerm}
@@ -111,7 +111,7 @@ export function ContactsTable({ businessId }: { businessId: string }) {
             <select
               value={statusFilter}
               onChange={(e) => setStatusFilter(e.target.value)}
-              className="px-3 py-2 border border-input bg-background rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-ring"
+              className="px-3 py-2 border border-gray-200 bg-white rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 text-gray-700"
             >
               <option value="all">All Status</option>
               <option value="new_lead">New Leads</option>
@@ -121,87 +121,84 @@ export function ContactsTable({ businessId }: { businessId: string }) {
           </div>
         </div>
       </CardHeader>
-      <CardContent>
+      <CardContent className="p-0">
         {isLoading ? (
           <div className="text-center py-12">
-            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary mx-auto"></div>
-            <p className="text-muted-foreground mt-2">Loading contacts...</p>
+            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-indigo-600 mx-auto"></div>
+            <p className="text-gray-500 mt-2">Loading contacts...</p>
           </div>
         ) : contacts.length === 0 ? (
           <div className="text-center py-12">
-            <Users className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
-            <h3 className="text-lg font-medium text-muted-foreground">No contacts found</h3>
-            <p className="text-sm text-muted-foreground">
-              {searchTerm || statusFilter !== 'all' 
-                ? 'Try adjusting your search or filters' 
+            <Users className="h-12 w-12 text-gray-300 mx-auto mb-4" />
+            <h3 className="text-lg font-medium text-gray-500">No contacts found</h3>
+            <p className="text-sm text-gray-400">
+              {searchTerm || statusFilter !== 'all'
+                ? 'Try adjusting your search or filters'
                 : 'Contacts will appear here when leads come in'
               }
             </p>
           </div>
         ) : (
-          <div className="overflow-x-auto">
+          <TableWrapper className="border-0 shadow-none rounded-none">
             <table className="w-full">
               <thead>
-                <tr className="border-b border-border">
-                  <th className="text-left p-4 font-medium text-muted-foreground">Name</th>
-                  <th className="text-left p-4 font-medium text-muted-foreground">Contact Info</th>
-                  <th className="text-left p-4 font-medium text-muted-foreground">Source</th>
-                  <th className="text-left p-4 font-medium text-muted-foreground">Status</th>
-                  <th className="text-left p-4 font-medium text-muted-foreground">Comments</th>
-                  <th className="text-left p-4 font-medium text-muted-foreground">Created</th>
-                  <th className="text-left p-4 font-medium text-muted-foreground">Actions</th>
+                <tr>
+                  <TableHeaderCell>Name</TableHeaderCell>
+                  <TableHeaderCell>Contact Info</TableHeaderCell>
+                  <TableHeaderCell>Source</TableHeaderCell>
+                  <TableHeaderCell>Status</TableHeaderCell>
+                  <TableHeaderCell>Comments</TableHeaderCell>
+                  <TableHeaderCell>Created</TableHeaderCell>
+                  <TableHeaderCell>Actions</TableHeaderCell>
                 </tr>
               </thead>
               <tbody>
                 {contacts.map((contact) => (
-                  <tr key={contact.id} className="border-b border-border hover:bg-muted/50 transition-colors">
-                    <td className="p-4">
-                      <div className="font-medium text-foreground">
-                        {contact.first_name} {contact.last_name}
-                      </div>
-                    </td>
-                    <td className="p-4">
-                      <div className="text-sm space-y-1">
+                  <TableRow key={contact.id}>
+                    <TableCell className="font-medium text-gray-900">
+                      {contact.first_name} {contact.last_name}
+                    </TableCell>
+                    <TableCell>
+                      <div className="space-y-1">
                         {contact.email && (
-                          <div className="text-foreground">{contact.email}</div>
+                          <div className="text-gray-700">{contact.email}</div>
                         )}
                         {contact.phone && (
-                          <div className="text-muted-foreground">{contact.phone}</div>
+                          <div className="text-gray-500">{contact.phone}</div>
                         )}
                       </div>
-                    </td>
-                    <td className="p-4">
-                      <Badge variant="outline">
+                    </TableCell>
+                    <TableCell>
+                      <Badge variant="outline" className="border-gray-200 text-gray-600">
                         {contact.source || 'Unknown'}
                       </Badge>
-                    </td>
-                    <td className="p-4">
-                      <Badge variant={getStatusBadgeVariant(contact.status)}>
-                        {formatStatusLabel(contact.status)}
-                      </Badge>
-                    </td>
-                    <td className="p-4">
-                      <div className="text-sm text-muted-foreground max-w-xs truncate">
+                    </TableCell>
+                    <TableCell>
+                      <ContactStatusBadge status={formatStatusLabel(contact.status)} />
+                    </TableCell>
+                    <TableCell>
+                      <div className="text-gray-500 max-w-xs truncate">
                         {contact.comments || 'No comments'}
                       </div>
-                    </td>
-                    <td className="p-4 text-sm text-muted-foreground">
+                    </TableCell>
+                    <TableCell className="text-gray-500">
                       {formatDate(contact.created_at)}
-                    </td>
-                    <td className="p-4">
-                      <Button 
-                        variant="outline" 
+                    </TableCell>
+                    <TableCell>
+                      <Button
+                        variant="outline"
                         size="sm"
+                        className="text-gray-600 hover:text-gray-900"
                         onClick={() => setSelectedContactId(contact.id)}
                       >
                         View Details
                       </Button>
-                    </td>
-                  </tr>
+                    </TableCell>
+                  </TableRow>
                 ))}
               </tbody>
             </table>
-          </div>
+          </TableWrapper>
         )}
       </CardContent>
     </Card>

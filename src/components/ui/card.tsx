@@ -1,20 +1,32 @@
 import * as React from "react"
-
 import { cn } from "@/lib/utils"
 
 const Card = React.forwardRef<
   HTMLDivElement,
-  React.HTMLAttributes<HTMLDivElement>
->(({ className, ...props }, ref) => (
-  <div
-    ref={ref}
-    className={cn(
-      "rounded-lg border bg-card text-card-foreground shadow-sm",
-      className
-    )}
-    {...props}
-  />
-))
+  React.HTMLAttributes<HTMLDivElement> & {
+    variant?: "default" | "elevated" | "interactive" | "warning" | "error"
+  }
+>(({ className, variant = "elevated", ...props }, ref) => {
+  const variantStyles = {
+    default: "border bg-card text-card-foreground",
+    elevated: "bg-white border border-border/50 shadow-[0_1px_3px_0_rgb(0_0_0/0.1),0_1px_2px_-1px_rgb(0_0_0/0.1)]",
+    interactive: "bg-white border border-border/50 shadow-[0_1px_3px_0_rgb(0_0_0/0.1),0_1px_2px_-1px_rgb(0_0_0/0.1)] transition-all duration-200 hover:shadow-[0_4px_6px_-1px_rgb(0_0_0/0.1),0_2px_4px_-2px_rgb(0_0_0/0.1)] hover:-translate-y-0.5 cursor-pointer",
+    warning: "bg-white border-l-4 border-l-amber-500 border border-amber-200 shadow-[0_1px_3px_0_rgb(0_0_0/0.1)]",
+    error: "bg-red-50/50 border-l-4 border-l-red-500 border border-red-200 shadow-[0_1px_3px_0_rgb(0_0_0/0.1)]",
+  }
+
+  return (
+    <div
+      ref={ref}
+      className={cn(
+        "rounded-xl",
+        variantStyles[variant],
+        className
+      )}
+      {...props}
+    />
+  )
+})
 Card.displayName = "Card"
 
 const CardHeader = React.forwardRef<
@@ -36,7 +48,7 @@ const CardTitle = React.forwardRef<
   <h3
     ref={ref}
     className={cn(
-      "text-2xl font-semibold leading-none tracking-tight",
+      "text-lg font-semibold leading-none tracking-tight text-gray-900",
       className
     )}
     {...props}
@@ -50,7 +62,7 @@ const CardDescription = React.forwardRef<
 >(({ className, ...props }, ref) => (
   <p
     ref={ref}
-    className={cn("text-sm text-muted-foreground", className)}
+    className={cn("text-sm text-gray-500", className)}
     {...props}
   />
 ))

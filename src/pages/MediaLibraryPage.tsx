@@ -10,11 +10,13 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/u
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Upload, Image as ImageIcon, Video, Trash2, Edit2, Search, Download, Play, RefreshCw, Calendar } from "lucide-react";
+import { Upload, Image as ImageIcon, Video, Search, RefreshCw } from "lucide-react";
 import { MediaViewerDialog } from "@/components/MediaViewerDialog";
+import { MediaCard } from "@/components/media/MediaCard";
 import { toast } from "sonner";
 import { useBusinessContext } from "@/contexts/BusinessContext";
 import { DashboardHeader } from "@/components/DashboardHeader";
+import { PageLayout, PageHeader, PageContent } from "@/components/layout/PageLayout";
 import { Progress } from "@/components/ui/progress";
 import { format } from "date-fns";
 import { useContentFilter } from "@/hooks/useContentFilter";
@@ -279,47 +281,90 @@ export default function MediaLibraryPage() {
   const generateVideoThumbnail = (file: File): Promise<{ blob: Blob; width: number; height: number }> => {
     return new Promise((resolve, reject) => {
       const video = document.createElement('video');
-      video.preload = 'metadata';
+      video.preload = 'auto';
       video.muted = true;
       video.playsInline = true;
-      
-      video.onloadedmetadata = () => {
-        video.currentTime = 1;
+      video.crossOrigin = 'anonymous';
+
+      // Timeout after 30 seconds
+      const timeout = setTimeout(() => {
+        cleanup();
+        reject(new Error('Thumbnail generation timed out'));
+      }, 30000);
+
+      const cleanup = () => {
+        clearTimeout(timeout);
+        URL.revokeObjectURL(video.src);
       };
-      
-      video.onseeked = () => {
+
+      const captureFrame = () => {
+        // Ensure video has valid dimensions
+        if (video.videoWidth === 0 || video.videoHeight === 0) {
+          cleanup();
+          reject(new Error('Video has no valid dimensions'));
+          return;
+        }
+
         const canvas = document.createElement('canvas');
         canvas.width = video.videoWidth;
         canvas.height = video.videoHeight;
-        
+
         const ctx = canvas.getContext('2d');
         if (!ctx) {
+          cleanup();
           reject(new Error('Could not get canvas context'));
           return;
         }
-        
+
         ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
-        
+
         canvas.toBlob((blob) => {
-          if (blob) {
-            resolve({ 
-              blob, 
-              width: video.videoWidth, 
-              height: video.videoHeight 
+          cleanup();
+          if (blob && blob.size > 0) {
+            resolve({
+              blob,
+              width: video.videoWidth,
+              height: video.videoHeight
             });
           } else {
-            reject(new Error('Failed to create thumbnail'));
+            reject(new Error('Failed to create thumbnail blob'));
           }
-        }, 'image/jpeg', 0.8);
-        
-        URL.revokeObjectURL(video.src);
+        }, 'image/jpeg', 0.85);
       };
-      
-      video.onerror = () => {
-        reject(new Error('Failed to load video'));
+
+      video.onloadeddata = () => {
+        // Video has enough data to show first frame
+        // Try to seek to a position that will have good content
+        const seekTime = Math.min(1, video.duration * 0.1); // 1 second or 10% of duration
+
+        if (video.duration > 0.1) {
+          video.currentTime = seekTime;
+        } else {
+          // Very short video, capture immediately
+          captureFrame();
+        }
       };
-      
+
+      video.onseeked = () => {
+        captureFrame();
+      };
+
+      video.onerror = (e) => {
+        cleanup();
+        console.error('Video load error:', e);
+        reject(new Error('Failed to load video for thumbnail'));
+      };
+
+      // Handle cases where seeking doesn't work (try to capture first frame after loading)
+      video.oncanplay = () => {
+        // If we haven't seeked yet and video is ready, try to seek
+        if (video.currentTime === 0 && video.duration > 0.1) {
+          video.currentTime = Math.min(1, video.duration * 0.1);
+        }
+      };
+
       video.src = URL.createObjectURL(file);
+      video.load();
     });
   };
 
@@ -518,20 +563,20 @@ export default function MediaLibraryPage() {
   };
 
   return (
-    <div className="min-h-screen bg-background overflow-x-hidden w-full">
-      <DashboardHeader 
+    <PageLayout>
+      <DashboardHeader
         selectedBusinessId={selectedBusiness?.id}
         onBusinessChange={(id) => {
           const business = BUSINESSES.find(b => b.id === id);
           if (business) setSelectedBusiness(business);
         }}
       />
-      
-      <main className="container mx-auto px-4 sm:px-6 py-4 sm:py-8 pt-2 sm:pt-4 md:pt-28">
-        <div className="mb-6 sm:mb-8">
-          <h1 className="text-2xl sm:text-3xl font-bold text-foreground mb-2">Media Library</h1>
-          <p className="text-sm sm:text-base text-muted-foreground">Manage images and videos for your content</p>
-        </div>
+
+      <PageContent className="pt-2 sm:pt-4 md:pt-28">
+        <PageHeader
+          title="Media Library"
+          description="Manage images and videos for your content"
+        />
 
         {selectedBusiness ? (
           <div className="space-y-3 sm:space-y-4">
@@ -699,113 +744,28 @@ export default function MediaLibraryPage() {
               <ScrollArea className="h-[calc(100vh-400px)] sm:h-[600px]">
                 <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-3 sm:gap-4 pr-2 sm:pr-4 items-start content-start">
                   {filteredMedia.map((item) => (
-                    <Card key={item.id} className="overflow-hidden cursor-pointer flex flex-col self-start h-fit" onClick={() => setSelectedMedia(item)}>
-                      <div className="aspect-square relative shrink-0">
-                        {item.file_type === 'image' ? (
-                          <img
-                            src={item.file_path}
-                            alt={item.file_name}
-                            className="w-full h-full object-cover"
-                          />
-                        ) : item.file_type === 'video' ? (
-                          <div className="relative w-full h-full">
-                            {item.thumbnail_path ? (
-                              <img
-                                src={item.thumbnail_path}
-                                alt={item.file_name}
-                                className="w-full h-full object-cover"
-                              />
-                            ) : (
-                              <div className="absolute inset-0 flex flex-col items-center justify-center bg-gray-100">
-                                <Video className="w-16 h-16 text-gray-400 mb-2" />
-                                <span className="text-xs text-gray-500">Video</span>
-                                <span className="text-xs text-gray-400 mt-1">No preview</span>
-                              </div>
-                            )}
-                            {item.thumbnail_path && (
-                              <div className="absolute inset-0 flex items-center justify-center bg-black/20 hover:bg-black/30 transition-colors">
-                                <div className="w-16 h-16 rounded-full bg-white/90 flex items-center justify-center shadow-lg">
-                                  <Play className="w-8 h-8 text-gray-900 ml-1" fill="currentColor" />
-                                </div>
-                              </div>
-                            )}
-                          </div>
-                        ) : null}
-                        <div className="absolute top-2 right-2 flex gap-1">
-                          <Button
-                            size="sm"
-                            variant="secondary"
-                            className="h-8 w-8 p-0"
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              handleDownload(item);
-                            }}
-                          >
-                            <Download className="w-4 h-4" />
-                          </Button>
-                          <Button
-                            size="sm"
-                            variant="secondary"
-                            className="h-8 w-8 p-0"
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              setEditingMedia(item);
-                              setEditDescription(item.description || '');
-                              setEditTags(item.tags?.join(', ') || '');
-                            }}
-                          >
-                            <Edit2 className="w-4 h-4" />
-                          </Button>
-                          <Button
-                            size="sm"
-                            variant="destructive"
-                            className="h-8 w-8 p-0"
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              handleDelete(item.id);
-                            }}
-                          >
-                            <Trash2 className="w-4 h-4" />
-                          </Button>
-                        </div>
-                      </div>
-                      <div className="p-3 space-y-2 min-h-[120px] flex flex-col">
-                        <p className="text-xs font-medium truncate">{item.file_name}</p>
-                        {!item.description ? (
-                          <Badge variant="outline" className="text-xs">
-                            🤖 AI analyzing...
-                          </Badge>
-                        ) : (
-                          <p className="text-xs text-muted-foreground line-clamp-2">
-                            {item.description}
-                          </p>
-                        )}
-                        <div className="flex items-center gap-1 text-xs text-muted-foreground">
-                          <Calendar className="w-3 h-3" />
-                          <span>{format(new Date(item.uploaded_at || item.created_at), 'MMM d, yyyy')}</span>
-                        </div>
-                        <div className="flex justify-between items-center text-xs text-muted-foreground">
-                          <span>{formatFileSize(item.file_size)}</span>
-                          {item.width && item.height && (
-                            <span>{item.width}×{item.height}</span>
-                          )}
-                        </div>
-                        {item.tags && item.tags.length > 0 && (
-                          <div className="flex flex-wrap gap-1">
-                            {item.tags.slice(0, 3).map((tag, idx) => (
-                              <Badge key={idx} variant="secondary" className="text-xs">
-                                {tag}
-                              </Badge>
-                            ))}
-                            {item.tags.length > 3 && (
-                              <Badge variant="secondary" className="text-xs">
-                                +{item.tags.length - 3}
-                              </Badge>
-                            )}
-                          </div>
-                        )}
-                      </div>
-                    </Card>
+                    <MediaCard
+                      key={item.id}
+                      id={item.id}
+                      title={item.file_name}
+                      description={item.description}
+                      thumbnailUrl={item.thumbnail_path}
+                      filePath={item.file_path}
+                      fileType={item.file_type as "image" | "video"}
+                      createdAt={format(new Date(item.uploaded_at || item.created_at), 'MMM d, yyyy')}
+                      fileSize={formatFileSize(item.file_size)}
+                      dimensions={item.width && item.height ? `${item.width}×${item.height}` : undefined}
+                      tags={item.tags || []}
+                      isAnalyzing={!item.description}
+                      onClick={() => setSelectedMedia(item)}
+                      onDownload={() => handleDownload(item)}
+                      onEdit={() => {
+                        setEditingMedia(item);
+                        setEditDescription(item.description || '');
+                        setEditTags(item.tags?.join(', ') || '');
+                      }}
+                      onDelete={() => handleDelete(item.id)}
+                    />
                   ))}
                 </div>
               </ScrollArea>
@@ -820,7 +780,7 @@ export default function MediaLibraryPage() {
             </CardContent>
           </Card>
         )}
-      </main>
+      </PageContent>
 
       {/* Media Viewer Dialog */}
       <MediaViewerDialog
@@ -879,6 +839,6 @@ export default function MediaLibraryPage() {
           </div>
         </DialogContent>
       </Dialog>
-    </div>
+    </PageLayout>
   );
 }

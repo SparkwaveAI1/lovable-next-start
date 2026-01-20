@@ -1,12 +1,43 @@
 import { useState, useEffect } from "react"
-import { Settings, Bell, Menu, Shield, Mail, Users } from "lucide-react"
-import { Link } from "react-router-dom"
+import { Link, useLocation } from "react-router-dom"
+import {
+  LayoutDashboard,
+  Users,
+  FileText,
+  Image,
+  Headphones,
+  Mail,
+  Shield,
+  Bell,
+  Settings,
+  Menu,
+  CalendarDays,
+} from "lucide-react"
+import { cn } from "@/lib/utils"
 import { Button } from "@/components/ui/button"
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
 import { BusinessSwitcher } from "./BusinessSwitcher"
 import LogoutButton from "./LogoutButton"
 import sparkwaveIcon from "@/assets/sparkwave-icon.png"
 import { supabase } from "@/integrations/supabase/client"
+
+interface NavItem {
+  label: string
+  href: string
+  icon: React.ComponentType<{ className?: string }>
+  adminOnly?: boolean
+}
+
+const navItems: NavItem[] = [
+  { label: "Dashboard", href: "/", icon: LayoutDashboard },
+  { label: "Contacts", href: "/contacts", icon: Users },
+  { label: "Bookings", href: "/bookings", icon: CalendarDays },
+  { label: "Content Center", href: "/content-center", icon: FileText },
+  { label: "Media Library", href: "/media-library", icon: Image },
+  { label: "Service Requests", href: "/service-requests", icon: Headphones },
+  { label: "Email", href: "/email-marketing", icon: Mail },
+  { label: "Admin", href: "/admin", icon: Shield, adminOnly: true },
+]
 
 interface DashboardHeaderProps {
   selectedBusinessId?: string
@@ -15,6 +46,7 @@ interface DashboardHeaderProps {
 
 export function DashboardHeader({ selectedBusinessId, onBusinessChange }: DashboardHeaderProps) {
   const [isSuperAdmin, setIsSuperAdmin] = useState(false)
+  const location = useLocation()
 
   useEffect(() => {
     const checkSuperAdmin = async () => {
@@ -29,8 +61,18 @@ export function DashboardHeader({ selectedBusinessId, onBusinessChange }: Dashbo
     }
     checkSuperAdmin()
   }, [])
+
+  const isActiveRoute = (href: string) => {
+    if (href === "/") {
+      return location.pathname === "/"
+    }
+    return location.pathname === href || location.pathname.startsWith(href + "/")
+  }
+
+  const visibleNavItems = navItems.filter(item => !item.adminOnly || isSuperAdmin)
+
   return (
-    <header className="sticky top-0 md:fixed md:top-0 md:left-0 md:right-0 z-50 border-b border-border bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60 min-h-[100px] md:min-h-[72px] w-full">
+    <header className="sticky top-0 md:fixed md:top-0 md:left-0 md:right-0 z-50 border-b border-gray-200 bg-white/95 backdrop-blur supports-[backdrop-filter]:bg-white/80 min-h-[100px] md:min-h-[72px] w-full">
       <div className="container mx-auto px-4 md:px-6 py-2 md:py-4 max-w-full">
         <div className="flex flex-col md:flex-row items-center justify-between gap-3 md:gap-0">
           {/* Left side - Logo */}
@@ -40,7 +82,7 @@ export function DashboardHeader({ selectedBusinessId, onBusinessChange }: Dashbo
 
           {/* Center - Business Switcher */}
           <div className="w-full md:flex-1 md:max-w-[280px] lg:max-w-sm md:mx-4 lg:mx-8">
-            <BusinessSwitcher 
+            <BusinessSwitcher
               selectedBusinessId={selectedBusinessId}
               onBusinessChange={onBusinessChange}
             />
@@ -48,63 +90,44 @@ export function DashboardHeader({ selectedBusinessId, onBusinessChange }: Dashbo
 
           {/* Right side - Navigation & Actions */}
           <div className="flex items-center gap-2 md:gap-4 w-full md:w-auto justify-end">
-          <nav className="hidden lg:flex items-center gap-2 md:gap-4">
-              <Link
-                to="/"
-                className="text-sm font-medium text-muted-foreground hover:text-foreground transition-colors"
-              >
-                Dashboard
-              </Link>
-              <Link
-                to="/contacts"
-                className="text-sm font-medium text-muted-foreground hover:text-foreground transition-colors flex items-center gap-1"
-              >
-                <Users className="h-3 w-3" />
-                Contacts
-              </Link>
-              <Link
-                to="/content-center"
-                className="text-sm font-medium text-muted-foreground hover:text-foreground transition-colors"
-              >
-                Content Center
-              </Link>
-              <Link
-                to="/media-library"
-                className="text-sm font-medium text-muted-foreground hover:text-foreground transition-colors"
-              >
-                Media Library
-              </Link>
-              <Link
-                to="/service-requests"
-                className="text-sm font-medium text-muted-foreground hover:text-foreground transition-colors"
-              >
-                Service Requests
-              </Link>
-              <Link
-                to="/email-marketing"
-                className="text-sm font-medium text-muted-foreground hover:text-foreground transition-colors flex items-center gap-1"
-              >
-                <Mail className="h-3 w-3" />
-                Email
-              </Link>
-              {isSuperAdmin && (
-                <Link
-                  to="/admin"
-                  className="text-sm font-medium text-muted-foreground hover:text-foreground transition-colors flex items-center gap-1"
-                >
-                  <Shield className="h-3 w-3" />
-                  Admin
-                </Link>
-              )}
+            <nav className="hidden lg:flex items-center gap-1">
+              {visibleNavItems.map((item) => {
+                const isActive = isActiveRoute(item.href)
+                const Icon = item.icon
+
+                return (
+                  <Link
+                    key={item.href}
+                    to={item.href}
+                    className={cn(
+                      "flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-medium transition-all duration-200",
+                      isActive
+                        ? "bg-indigo-50 text-indigo-700"
+                        : "text-gray-600 hover:text-gray-900 hover:bg-gray-100"
+                    )}
+                  >
+                    <Icon className={cn(
+                      "h-4 w-4",
+                      isActive ? "text-indigo-600" : "text-gray-500"
+                    )} />
+                    {item.label}
+                  </Link>
+                )
+              })}
             </nav>
+
             <div className="flex items-center gap-1 md:gap-2">
-              <Button variant="ghost" size="sm" className="h-8 w-8 p-0 hidden lg:inline-flex">
+              {/* Notification Bell with Badge */}
+              <Button variant="ghost" size="sm" className="relative h-8 w-8 p-0 hidden lg:inline-flex text-gray-500 hover:text-gray-900 hover:bg-gray-100">
                 <Bell className="h-4 w-4" />
+                <span className="absolute top-1 right-1 h-2 w-2 bg-red-500 rounded-full" />
               </Button>
-              <Button variant="ghost" size="sm" className="h-8 w-8 p-0 hidden lg:inline-flex">
+
+              {/* Settings Button */}
+              <Button variant="ghost" size="sm" className="h-8 w-8 p-0 hidden lg:inline-flex text-gray-500 hover:text-gray-900 hover:bg-gray-100">
                 <Settings className="h-4 w-4" />
               </Button>
-              
+
               {/* Mobile Navigation Menu */}
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
@@ -113,42 +136,32 @@ export function DashboardHeader({ selectedBusinessId, onBusinessChange }: Dashbo
                     <span className="sr-only">Open menu</span>
                   </Button>
                 </DropdownMenuTrigger>
-                <DropdownMenuContent align="end" className="w-48 bg-popover z-[60]">
-                  <DropdownMenuItem asChild>
-                    <Link to="/" className="w-full">Dashboard</Link>
-                  </DropdownMenuItem>
-                  <DropdownMenuItem asChild>
-                    <Link to="/contacts" className="w-full flex items-center gap-2">
-                      <Users className="h-3 w-3" />
-                      Contacts
-                    </Link>
-                  </DropdownMenuItem>
-                  <DropdownMenuItem asChild>
-                    <Link to="/content-center" className="w-full">Content Center</Link>
-                  </DropdownMenuItem>
-                  <DropdownMenuItem asChild>
-                    <Link to="/media-library" className="w-full">Media Library</Link>
-                  </DropdownMenuItem>
-                  <DropdownMenuItem asChild>
-                    <Link to="/service-requests" className="w-full">Service Requests</Link>
-                  </DropdownMenuItem>
-                  <DropdownMenuItem asChild>
-                    <Link to="/email-marketing" className="w-full flex items-center gap-2">
-                      <Mail className="h-3 w-3" />
-                      Email Marketing
-                    </Link>
-                  </DropdownMenuItem>
-                  {isSuperAdmin && (
-                    <DropdownMenuItem asChild>
-                      <Link to="/admin" className="w-full flex items-center gap-2">
-                        <Shield className="h-3 w-3" />
-                        Admin
-                      </Link>
-                    </DropdownMenuItem>
-                  )}
+                <DropdownMenuContent align="end" className="w-48 bg-white z-[60]">
+                  {visibleNavItems.map((item) => {
+                    const Icon = item.icon
+                    const isActive = isActiveRoute(item.href)
+
+                    return (
+                      <DropdownMenuItem key={item.href} asChild>
+                        <Link
+                          to={item.href}
+                          className={cn(
+                            "w-full flex items-center gap-2",
+                            isActive && "bg-indigo-50 text-indigo-700"
+                          )}
+                        >
+                          <Icon className={cn(
+                            "h-4 w-4",
+                            isActive ? "text-indigo-600" : "text-gray-500"
+                          )} />
+                          {item.label}
+                        </Link>
+                      </DropdownMenuItem>
+                    )
+                  })}
                 </DropdownMenuContent>
               </DropdownMenu>
-              
+
               <LogoutButton />
             </div>
           </div>

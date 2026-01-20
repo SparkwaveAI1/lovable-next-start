@@ -3,6 +3,7 @@ import { Activity, AlertCircle, Zap, TrendingUp, Sparkles } from "lucide-react"
 import { Link } from "react-router-dom"
 import { DashboardHeader } from "@/components/DashboardHeader"
 import { StatsCard } from "@/components/StatsCard"
+import { PageLayout, PageHeader, PageContent } from "@/components/layout/PageLayout"
 
 import { getDashboardStats } from "@/lib/supabase"
 import { ActivityLog } from "@/components/ActivityLog"
@@ -12,6 +13,7 @@ import { ContactsTable } from '@/components/ContactsTable'
 import { useBusinessContext } from "@/contexts/BusinessContext"
 import { useBusinesses } from "@/hooks/useBusinesses"
 import { TokenHealthDashboard } from "@/components/TokenHealthDashboard"
+import { Card } from "@/components/ui/card"
 // import { GoHighLevelConfig } from "@/components/GoHighLevelConfig"
 
 const Index = () => {
@@ -38,34 +40,30 @@ const Index = () => {
   }, [selectedBusiness])
 
   return (
-    <div className="min-h-screen bg-background overflow-x-hidden w-full">
-      <DashboardHeader 
+    <PageLayout>
+      <DashboardHeader
         selectedBusinessId={selectedBusiness?.id}
         onBusinessChange={(id) => {
           const business = businesses.find(b => b.id === id);
           if (business) setSelectedBusiness(business);
         }}
       />
-      
-      <main className="container mx-auto px-4 sm:px-6 py-4 md:py-8 pt-2 md:pt-28">
+
+      <PageContent className="pt-2 md:pt-28">
         {/* Welcome Section */}
-        <div className="mb-8">
-          <h2 className="text-3xl font-bold text-foreground mb-2">
-            Welcome to Automation Center
-          </h2>
-          <p className="text-muted-foreground">
-            Manage your business automations across all your companies
-          </p>
-          <div className="mt-4">
-            <Link 
-              to="/content-center" 
-              className="inline-flex items-center px-4 py-2 bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 transition-colors"
+        <PageHeader
+          title="Welcome to Automation Center"
+          description="Manage your business automations across all your companies"
+          actions={
+            <Link
+              to="/content-center"
+              className="inline-flex items-center px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition-colors shadow-sm"
             >
               <Sparkles className="h-4 w-4 mr-2" />
               Content Creation Center
             </Link>
-          </div>
-        </div>
+          }
+        />
 
         {/* Stats Grid */}
         <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4 mb-12">
@@ -73,25 +71,27 @@ const Index = () => {
             title="Active Automations"
             value={isLoadingStats ? 0 : stats.activeAutomations}
             icon={Zap}
-            description="Running workflows"
+            subtitle="Running workflows"
           />
           <StatsCard
             title="Today's Activity"
             value={isLoadingStats ? 0 : stats.todayActivity}
             icon={Activity}
-            description="Executions today"
+            subtitle="Executions today"
           />
           <StatsCard
             title="Errors"
             value={isLoadingStats ? 0 : stats.errors}
             icon={AlertCircle}
-            description="Failed executions"
+            subtitle="Failed executions"
+            variant={stats.errors > 0 ? "error" : "default"}
           />
           <StatsCard
             title="Success Rate"
-            value={isLoadingStats ? 0 : stats.successRate}
+            value={isLoadingStats ? 0 : `${stats.successRate}%`}
             icon={TrendingUp}
-            description="Overall performance (%)"
+            subtitle="Overall performance"
+            variant={stats.successRate >= 90 ? "success" : stats.successRate >= 70 ? "warning" : "error"}
           />
         </div>
 
@@ -125,22 +125,24 @@ const Index = () => {
         </div>
 
         {/* Placeholder for future content */}
-        <div className="bg-card rounded-lg border border-border p-8 text-center shadow-card">
+        <Card variant="elevated" className="p-8 text-center">
           <div className="max-w-md mx-auto">
-            <Zap className="h-12 w-12 text-primary mx-auto mb-4" />
-            <h3 className="text-lg font-semibold text-foreground mb-2">
+            <div className="p-3 bg-indigo-50 rounded-xl w-fit mx-auto mb-4">
+              <Zap className="h-8 w-8 text-indigo-600" />
+            </div>
+            <h3 className="text-lg font-semibold text-gray-900 mb-2">
               Ready to automate?
             </h3>
-            <p className="text-muted-foreground mb-4">
-              {selectedBusiness 
+            <p className="text-gray-500">
+              {selectedBusiness
                 ? "Your automation monitoring dashboard is ready. Your CRM system is active and processing form submissions."
                 : "Select a business above to start managing your automations."
               }
             </p>
           </div>
-        </div>
-      </main>
-    </div>
+        </Card>
+      </PageContent>
+    </PageLayout>
   );
 };
 
