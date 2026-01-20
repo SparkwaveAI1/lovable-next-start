@@ -555,10 +555,16 @@ serve(async (req) => {
       console.log('📧 Loaded class schedule:', classSchedule.length, 'classes');
     }
 
-    // Get current day of week for context
-    const today = new Date();
-    const currentDay = today.getDay(); // 0 = Sunday, 1 = Monday, etc.
+    // Get current day of week for context (use Eastern Time for the business)
+    const now = new Date();
+    // Convert to Eastern Time to get the correct local day
+    const easternTime = new Date(now.toLocaleString('en-US', { timeZone: 'America/New_York' }));
+    const currentDay = easternTime.getDay(); // 0 = Sunday, 1 = Monday, etc.
     const currentDayName = dayNames[currentDay];
+    const currentHour = easternTime.getHours();
+    const currentMinute = easternTime.getMinutes();
+
+    console.log(`📧 Current time (Eastern): ${currentDayName} ${currentHour}:${currentMinute.toString().padStart(2, '0')}`);
 
     // Filter today's classes
     const todaysClasses = classSchedule?.filter(c => c.day_of_week === currentDay) || [];

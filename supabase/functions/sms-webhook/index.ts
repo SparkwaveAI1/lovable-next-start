@@ -300,10 +300,16 @@ serve(async (req) => {
       console.log('📱 Loaded class schedule:', classes.length, 'classes');
     }
 
-    // Get current day of week for context
-    const today = new Date();
-    const currentDay = today.getDay();
+    // Get current day of week for context (use Eastern Time for the business)
+    const now = new Date();
+    // Convert to Eastern Time to get the correct local day
+    const easternTime = new Date(now.toLocaleString('en-US', { timeZone: 'America/New_York' }));
+    const currentDay = easternTime.getDay(); // 0 = Sunday, 1 = Monday, etc.
     const currentDayName = dayNames[currentDay];
+    const currentHour = easternTime.getHours();
+    const currentMinute = easternTime.getMinutes();
+
+    console.log(`📱 Current time (Eastern): ${currentDayName} ${currentHour}:${currentMinute.toString().padStart(2, '0')}`);
 
     // Filter today's classes
     const todaysClasses = classes?.filter(c => c.day_of_week === currentDay) || [];
@@ -384,21 +390,22 @@ serve(async (req) => {
       }
 
       if (targetClass) {
-        // Calculate the next occurrence of this class
-        const today = new Date();
+        // Calculate the next occurrence of this class (use Eastern Time)
+        const nowUtc = new Date();
+        const easternNow = new Date(nowUtc.toLocaleString('en-US', { timeZone: 'America/New_York' }));
         const targetDay = aiResult.classDetails.dayOfWeek ?? targetClass.day_of_week;
-        let daysUntilClass = (targetDay - today.getDay() + 7) % 7;
+        let daysUntilClass = (targetDay - easternNow.getDay() + 7) % 7;
         // If it's today but the class time has passed, schedule for next week
         if (daysUntilClass === 0) {
           const [hours, minutes] = targetClass.start_time.split(':').map(Number);
-          const classTime = new Date(today);
-          classTime.setHours(hours, minutes, 0, 0);
-          if (today > classTime) {
+          const classTimeToday = new Date(easternNow);
+          classTimeToday.setHours(hours, minutes, 0, 0);
+          if (easternNow > classTimeToday) {
             daysUntilClass = 7;
           }
         }
-        const classDate = new Date(today);
-        classDate.setDate(today.getDate() + daysUntilClass);
+        const classDate = new Date(easternNow);
+        classDate.setDate(easternNow.getDate() + daysUntilClass);
 
         const { error: bookingError } = await supabase
           .from('class_bookings')
