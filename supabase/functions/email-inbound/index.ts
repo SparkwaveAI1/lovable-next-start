@@ -518,7 +518,62 @@ serve(async (req) => {
       ? `${contact.first_name} ${contact.last_name || ''}`.trim()
       : null;
 
-    // Call AI for response with full conversation context
+    // Load business knowledge base
+    const { data: knowledgeBase } = await supabase
+      .from('business_knowledge')
+      .select('category, title, content')
+      .eq('business_id', businessId)
+      .eq('is_active', true)
+      .order('priority', { ascending: false });
+
+    // Format knowledge for AI
+    let knowledgeText = '';
+    if (knowledgeBase && knowledgeBase.length > 0) {
+      knowledgeText = knowledgeBase.map(k => `${k.title}: ${k.content}`).join('\n');
+      console.log('📧 Loaded knowledge base:', knowledgeBase.length, 'entries');
+    }
+
+    // Load class schedule
+    const { data: classSchedule } = await supabase
+      .from('class_schedule')
+      .select('id, class_name, instructor, day_of_week, start_time, end_time')
+      .eq('business_id', businessId)
+      .eq('is_active', true)
+      .order('day_of_week', { ascending: true })
+      .order('start_time', { ascending: true });
+
+    // Format schedule for AI (convert day_of_week number to day name)
+    const dayNames = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+    let scheduleText = '';
+    if (classSchedule && classSchedule.length > 0) {
+      scheduleText = classSchedule.map(c => {
+        const day = dayNames[c.day_of_week];
+        const startTime = c.start_time?.substring(0, 5) || ''; // "16:30:00" -> "16:30"
+        const endTime = c.end_time?.substring(0, 5) || '';
+        return `${day}: ${c.class_name} with ${c.instructor} (${startTime}-${endTime})`;
+      }).join('\n');
+      console.log('📧 Loaded class schedule:', classSchedule.length, 'classes');
+    }
+
+    // Get current day of week for context
+    const today = new Date();
+    const currentDay = today.getDay(); // 0 = Sunday, 1 = Monday, etc.
+    const currentDayName = dayNames[currentDay];
+
+    // Filter today's classes
+    const todaysClasses = classSchedule?.filter(c => c.day_of_week === currentDay) || [];
+    let todaysScheduleText = 'No classes scheduled today.';
+    if (todaysClasses.length > 0) {
+      todaysScheduleText = todaysClasses.map(c => {
+        const startTime = c.start_time?.substring(0, 5) || '';
+        const endTime = c.end_time?.substring(0, 5) || '';
+        return `${c.class_name} with ${c.instructor} (${startTime}-${endTime})`;
+      }).join('\n');
+    }
+
+    console.log('📧 Today is', currentDayName, '- classes today:', todaysClasses.length);
+
+    // Call AI for response with full conversation context and business knowledge
     const aiResponse = await fetch(`${supabaseUrl}/functions/v1/ai-response`, {
       method: 'POST',
       headers: {
@@ -530,8 +585,12 @@ serve(async (req) => {
         businessId: businessId,
         businessContext: businessName,
         contactName: contactName,
-        conversationHistory: historyText, // Include formatted history for additional context
-        classSchedule: [],
+        conversationHistory: historyText,
+        classSchedule: classSchedule || [],
+        knowledgeBase: knowledgeText,
+        scheduleText: scheduleText,
+        todaysSchedule: todaysScheduleText,
+        currentDay: currentDayName,
         threadId: threadId
       })
     });
