@@ -132,13 +132,18 @@ serve(async (req) => {
     console.log('To:', toAddress);
     console.log('Subject:', emailData.subject);
 
-    // Detailed logging for body fields
-    console.log('📧 Full data object keys:', Object.keys(emailData));
-    console.log('📧 Text field:', emailData.text ? `${emailData.text.substring(0, 100)}...` : 'undefined');
-    console.log('📧 Html field:', emailData.html ? `${emailData.html.substring(0, 100)}...` : 'undefined');
-    console.log('📧 Body field:', (emailData as any).body ? 'present' : 'undefined');
-    console.log('📧 Content field:', (emailData as any).content ? 'present' : 'undefined');
-    console.log('📧 Plain field:', (emailData as any).plain ? 'present' : 'undefined');
+    // Detailed logging for ALL fields - helps debug where Resend puts the body
+    console.log('📧 Full emailData object:', JSON.stringify(emailData, null, 2));
+    console.log('📧 All emailData keys:', Object.keys(emailData));
+
+    // Check each possible body field
+    const possibleBodyFields = ['text', 'html', 'body', 'content', 'plain', 'plainText', 'textBody', 'htmlBody', 'rawBody'];
+    for (const field of possibleBodyFields) {
+      const value = (emailData as any)[field];
+      if (value) {
+        console.log(`📧 Found body in "${field}" field, length: ${value.length}, preview: ${String(value).substring(0, 150)}`);
+      }
+    }
 
     // Validate required fields
     if (!emailData.from) {
@@ -303,16 +308,23 @@ serve(async (req) => {
       .eq('id', contact.id);
     console.log('Updated contact activity and preferred channel');
 
-    // Find or create conversation thread
-    let { data: thread, error: threadError } = await supabase
+    // Find existing active thread for this contact (get most recent one)
+    const { data: existingThreads, error: threadLookupError } = await supabase
       .from('conversation_threads')
       .select('id')
       .eq('contact_id', contact.id)
       .eq('status', 'active')
-      .single();
+      .order('created_at', { ascending: false })
+      .limit(1);
 
-    if (threadError && threadError.code === 'PGRST116') {
-      // Create new thread
+    let threadId: string;
+
+    if (existingThreads && existingThreads.length > 0) {
+      threadId = existingThreads[0].id;
+      console.log('📧 Found existing active thread:', threadId);
+    } else {
+      // No active thread exists - create a new one
+      console.log('📧 No active thread found, creating new one');
       const { data: newThread, error: createError } = await supabase
         .from('conversation_threads')
         .insert({
@@ -324,32 +336,46 @@ serve(async (req) => {
         .select('id')
         .single();
 
-      if (createError) {
+      if (createError || !newThread) {
         console.error('Failed to create thread:', createError);
-        throw createError;
+        throw createError || new Error('Failed to create thread');
       }
-      thread = newThread;
-      console.log('Created new thread:', thread.id);
+      threadId = newThread.id;
+      console.log('📧 Created new thread:', threadId);
     }
 
-    if (!thread) {
-      throw new Error('Could not find or create thread');
-    }
-
-    // Try multiple possible field names for email body
+    // Try multiple possible field names for email body (Resend may use different field names)
+    const ed = emailData as any;
     const rawEmailBody = emailData.text ||
-                         (emailData as any).plain ||
-                         (emailData as any).body ||
-                         (emailData as any).content ||
+                         ed.plain ||
+                         ed.plainText ||
+                         ed.text_body ||
+                         ed.textBody ||
+                         ed.body ||
+                         ed.content ||
+                         ed.message ||
                          emailData.html ||
+                         ed.html_body ||
+                         ed.htmlBody ||
                          '';
 
+    // Determine which field the body came from
+    let bodySource = 'none';
+    if (emailData.text) bodySource = 'text';
+    else if (ed.plain) bodySource = 'plain';
+    else if (ed.plainText) bodySource = 'plainText';
+    else if (ed.text_body) bodySource = 'text_body';
+    else if (ed.textBody) bodySource = 'textBody';
+    else if (ed.body) bodySource = 'body';
+    else if (ed.content) bodySource = 'content';
+    else if (ed.message) bodySource = 'message';
+    else if (emailData.html) bodySource = 'html';
+    else if (ed.html_body) bodySource = 'html_body';
+    else if (ed.htmlBody) bodySource = 'htmlBody';
+
     console.log('📧 Raw body length:', rawEmailBody.length);
-    console.log('📧 Raw body source:', emailData.text ? 'text' :
-                                       (emailData as any).plain ? 'plain' :
-                                       (emailData as any).body ? 'body' :
-                                       (emailData as any).content ? 'content' :
-                                       emailData.html ? 'html' : 'none');
+    console.log('📧 Raw body source field:', bodySource);
+    console.log('📧 Raw body preview:', rawEmailBody.substring(0, 300));
 
     // Strip HTML tags if we got HTML content
     let plainTextBody = rawEmailBody;
@@ -378,7 +404,7 @@ serve(async (req) => {
 
     // Store the inbound message
     await supabase.from('sms_messages').insert({
-      thread_id: thread.id,
+      thread_id: threadId,
       contact_id: contact.id,
       direction: 'inbound',
       message: replyText,
@@ -389,7 +415,7 @@ serve(async (req) => {
     const { data: messageHistory } = await supabase
       .from('sms_messages')
       .select('direction, message')
-      .eq('thread_id', thread.id)
+      .eq('thread_id', threadId)
       .order('created_at', { ascending: true })
       .limit(10);
 
@@ -417,7 +443,7 @@ serve(async (req) => {
         businessContext: businessName,
         contactName: contactName,
         classSchedule: [],
-        threadId: thread.id
+        threadId: threadId
       })
     });
 
@@ -428,7 +454,7 @@ serve(async (req) => {
 
     // Store outbound response
     await supabase.from('sms_messages').insert({
-      thread_id: thread.id,
+      thread_id: threadId,
       contact_id: contact.id,
       direction: 'outbound',
       message: responseMessage,
@@ -484,7 +510,7 @@ serve(async (req) => {
       status: 'success',
       processed_data: {
         contact_id: contact.id,
-        thread_id: thread.id,
+        thread_id: threadId,
         from_email: senderEmail,
         reply_preview: replyText.substring(0, 100),
         contact_was_new: contact.source === 'email_inbound'
