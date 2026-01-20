@@ -136,12 +136,62 @@ serve(async (req) => {
     console.log('📧 Full emailData object:', JSON.stringify(emailData, null, 2));
     console.log('📧 All emailData keys:', Object.keys(emailData));
 
-    // Check each possible body field
+    // Resend inbound webhooks only send metadata, NOT the email body
+    // We need to fetch the full email content using the email_id
+    const emailId = (emailData as any).email_id || (emailData as any).id || (rawPayload.data as any)?.email_id;
+    console.log('📧 Email ID from webhook:', emailId);
+
+    let fetchedEmailBody = '';
+
+    if (emailId) {
+      const resendApiKey = Deno.env.get('RESEND_API_KEY');
+
+      if (!resendApiKey) {
+        console.error('📧 RESEND_API_KEY not configured - cannot fetch email body');
+      } else {
+        // Try the receiving endpoint first (for inbound emails)
+        console.log('📧 Fetching full email content from Resend API...');
+
+        let emailContentResponse = await fetch(`https://api.resend.com/emails/receiving/${emailId}`, {
+          method: 'GET',
+          headers: {
+            'Authorization': `Bearer ${resendApiKey}`,
+          },
+        });
+
+        // If receiving endpoint fails, try the regular emails endpoint
+        if (!emailContentResponse.ok) {
+          console.log('📧 Receiving endpoint failed, trying regular emails endpoint...');
+          emailContentResponse = await fetch(`https://api.resend.com/emails/${emailId}`, {
+            method: 'GET',
+            headers: {
+              'Authorization': `Bearer ${resendApiKey}`,
+            },
+          });
+        }
+
+        if (!emailContentResponse.ok) {
+          console.error('📧 Failed to fetch email content from Resend:', emailContentResponse.status, await emailContentResponse.text());
+        } else {
+          const emailContent = await emailContentResponse.json();
+          console.log('📧 Full email content from API:', JSON.stringify(emailContent, null, 2));
+
+          // Extract the body from the API response
+          fetchedEmailBody = emailContent.text || emailContent.html || emailContent.body || emailContent.content || '';
+          console.log('📧 Fetched email body length:', fetchedEmailBody.length);
+          console.log('📧 Fetched email body preview:', fetchedEmailBody.substring(0, 300));
+        }
+      }
+    } else {
+      console.log('📧 No email_id in webhook - checking inline body fields');
+    }
+
+    // Check each possible body field in the webhook payload as fallback
     const possibleBodyFields = ['text', 'html', 'body', 'content', 'plain', 'plainText', 'textBody', 'htmlBody', 'rawBody'];
     for (const field of possibleBodyFields) {
       const value = (emailData as any)[field];
       if (value) {
-        console.log(`📧 Found body in "${field}" field, length: ${value.length}, preview: ${String(value).substring(0, 150)}`);
+        console.log(`📧 Found body in webhook "${field}" field, length: ${value.length}, preview: ${String(value).substring(0, 150)}`);
       }
     }
 
@@ -344,38 +394,48 @@ serve(async (req) => {
       console.log('📧 Created new thread:', threadId);
     }
 
-    // Try multiple possible field names for email body (Resend may use different field names)
+    // Use fetched email body first (from Resend API), then fall back to webhook fields
     const ed = emailData as any;
-    const rawEmailBody = emailData.text ||
-                         ed.plain ||
-                         ed.plainText ||
-                         ed.text_body ||
-                         ed.textBody ||
-                         ed.body ||
-                         ed.content ||
-                         ed.message ||
-                         emailData.html ||
-                         ed.html_body ||
-                         ed.htmlBody ||
-                         '';
-
-    // Determine which field the body came from
+    let rawEmailBody = '';
     let bodySource = 'none';
-    if (emailData.text) bodySource = 'text';
-    else if (ed.plain) bodySource = 'plain';
-    else if (ed.plainText) bodySource = 'plainText';
-    else if (ed.text_body) bodySource = 'text_body';
-    else if (ed.textBody) bodySource = 'textBody';
-    else if (ed.body) bodySource = 'body';
-    else if (ed.content) bodySource = 'content';
-    else if (ed.message) bodySource = 'message';
-    else if (emailData.html) bodySource = 'html';
-    else if (ed.html_body) bodySource = 'html_body';
-    else if (ed.htmlBody) bodySource = 'htmlBody';
 
-    console.log('📧 Raw body length:', rawEmailBody.length);
-    console.log('📧 Raw body source field:', bodySource);
-    console.log('📧 Raw body preview:', rawEmailBody.substring(0, 300));
+    // Priority 1: Body fetched from Resend API
+    if (fetchedEmailBody && fetchedEmailBody.length > 0) {
+      rawEmailBody = fetchedEmailBody;
+      bodySource = 'resend_api';
+      console.log('📧 Using body from Resend API fetch');
+    }
+    // Priority 2: Check webhook payload fields as fallback
+    else {
+      rawEmailBody = emailData.text ||
+                     ed.plain ||
+                     ed.plainText ||
+                     ed.text_body ||
+                     ed.textBody ||
+                     ed.body ||
+                     ed.content ||
+                     ed.message ||
+                     emailData.html ||
+                     ed.html_body ||
+                     ed.htmlBody ||
+                     '';
+
+      if (emailData.text) bodySource = 'webhook_text';
+      else if (ed.plain) bodySource = 'webhook_plain';
+      else if (ed.plainText) bodySource = 'webhook_plainText';
+      else if (ed.text_body) bodySource = 'webhook_text_body';
+      else if (ed.textBody) bodySource = 'webhook_textBody';
+      else if (ed.body) bodySource = 'webhook_body';
+      else if (ed.content) bodySource = 'webhook_content';
+      else if (ed.message) bodySource = 'webhook_message';
+      else if (emailData.html) bodySource = 'webhook_html';
+      else if (ed.html_body) bodySource = 'webhook_html_body';
+      else if (ed.htmlBody) bodySource = 'webhook_htmlBody';
+    }
+
+    console.log('📧 Final body length:', rawEmailBody.length);
+    console.log('📧 Body source:', bodySource);
+    console.log('📧 Body preview:', rawEmailBody.substring(0, 300));
 
     // Strip HTML tags if we got HTML content
     let plainTextBody = rawEmailBody;
