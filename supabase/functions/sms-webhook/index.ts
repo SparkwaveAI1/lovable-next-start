@@ -160,38 +160,62 @@ serve(async (req) => {
       console.log(`Matched existing contact: ${contact.id}`);
     }
 
-    // STEP 3: Find or create conversation thread
+    // STEP 3: Find or create conversation thread (handle duplicates)
     let isNewThread = false;
-    let { data: thread, error: threadError } = await supabase
-      .from('conversation_threads')
-      .select('id')
-      .eq('contact_id', contact.id)
-      .eq('status', 'active')
-      .single();
 
-    if (threadError && threadError.code === 'PGRST116') {
-      // Create new thread
+    // Get ALL threads for this contact to handle duplicates
+    const { data: existingThreads } = await supabase
+      .from('conversation_threads')
+      .select('id, status, created_at')
+      .eq('contact_id', contact.id)
+      .eq('business_id', businessId)
+      .order('created_at', { ascending: false });
+
+    let thread: { id: string } | null = null;
+
+    if (existingThreads && existingThreads.length > 0) {
+      // Use the most recent thread regardless of status
+      thread = { id: existingThreads[0].id };
+      console.log('📱 Using existing thread:', thread.id, '(found', existingThreads.length, 'total)');
+
+      // Ensure the thread is active
+      if (existingThreads[0].status !== 'active') {
+        await supabase
+          .from('conversation_threads')
+          .update({ status: 'active', conversation_state: 'answering_questions' })
+          .eq('id', thread.id);
+        console.log('📱 Reactivated thread:', thread.id);
+      }
+
+      // Close any duplicate threads (keep only the most recent one active)
+      if (existingThreads.length > 1) {
+        const oldThreadIds = existingThreads.slice(1).map(t => t.id);
+        await supabase
+          .from('conversation_threads')
+          .update({ status: 'closed' })
+          .in('id', oldThreadIds);
+        console.log('📱 Closed', oldThreadIds.length, 'duplicate threads');
+      }
+    } else {
+      // No thread exists - create a new one
       isNewThread = true;
+      console.log('📱 No existing thread found, creating new one');
       const { data: newThread, error: createThreadError } = await supabase
         .from('conversation_threads')
         .insert({
           contact_id: contact.id,
           business_id: businessId,
-          status: 'active'
+          status: 'active',
+          conversation_state: 'answering_questions'
         })
         .select('id')
         .single();
 
-      if (createThreadError) {
-        throw new Error(`Failed to create thread: ${createThreadError.message}`);
+      if (createThreadError || !newThread) {
+        throw new Error(`Failed to create thread: ${createThreadError?.message}`);
       }
       thread = newThread;
-    } else if (threadError) {
-      throw new Error(`Thread lookup error: ${threadError.message}`);
-    }
-
-    if (!thread) {
-      throw new Error('Thread not found and could not be created');
+      console.log('📱 Created new thread:', thread.id);
     }
 
     // STEP 4: Store incoming message
@@ -219,17 +243,18 @@ serve(async (req) => {
       })
       .eq('id', contact.id);
 
-    // Get conversation history for context
+    // Get FULL conversation history for context (no limit - AI needs full context)
     const { data: messageHistory, error: historyError } = await supabase
       .from('sms_messages')
-      .select('direction, message')
+      .select('direction, message, created_at')
       .eq('thread_id', thread.id)
-      .order('created_at', { ascending: true })
-      .limit(10);
+      .order('created_at', { ascending: true });
 
     if (historyError) {
       console.error('Failed to get message history:', historyError);
     }
+
+    console.log('📱 Loaded conversation history:', messageHistory?.length || 0, 'messages');
 
     // Get business context and class schedule
     const { data: business } = await supabase
@@ -256,6 +281,14 @@ serve(async (req) => {
       content: body
     });
 
+    // Also format as readable text for context
+    const historyText = messageHistory?.map(msg => {
+      const role = msg.direction === 'inbound' ? 'Customer' : 'You (AI)';
+      return `${role}: ${msg.message}`;
+    }).join('\n') || 'No previous messages';
+
+    console.log('📱 Conversation history preview:', historyText.substring(0, 300));
+
     // Get contact name if available
     const contactName = contact.first_name && contact.first_name !== 'SMS Contact'
       ? `${contact.first_name} ${contact.last_name || ''}`.trim()
@@ -274,7 +307,8 @@ serve(async (req) => {
         businessContext: business?.name || businessName,
         classSchedule: classes || [],
         contactName: contactName,
-        threadId: thread.id
+        threadId: thread.id,
+        conversationHistory: historyText // Include formatted history for additional context
       })
     });
 
@@ -283,14 +317,33 @@ serve(async (req) => {
 
     // Handle class booking if AI detected intent
     if (aiResult.shouldBook && aiResult.classDetails) {
-      const targetClass = classes?.find((cls: any) =>
-        cls.class_name.toLowerCase().includes(aiResult.classDetails.className.toLowerCase())
-      );
+      console.log('Processing booking:', aiResult.classDetails);
+
+      // Use classScheduleId if provided, otherwise find by name
+      let targetClass = null;
+      if (aiResult.classDetails.classScheduleId) {
+        targetClass = classes?.find((cls: any) => cls.id === aiResult.classDetails.classScheduleId);
+      }
+      if (!targetClass) {
+        targetClass = classes?.find((cls: any) =>
+          cls.class_name.toLowerCase().includes(aiResult.classDetails.className.toLowerCase())
+        );
+      }
 
       if (targetClass) {
+        // Calculate the next occurrence of this class
         const today = new Date();
-        const targetDay = targetClass.day_of_week;
-        const daysUntilClass = (targetDay - today.getDay() + 7) % 7 || 7;
+        const targetDay = aiResult.classDetails.dayOfWeek ?? targetClass.day_of_week;
+        let daysUntilClass = (targetDay - today.getDay() + 7) % 7;
+        // If it's today but the class time has passed, schedule for next week
+        if (daysUntilClass === 0) {
+          const [hours, minutes] = targetClass.start_time.split(':').map(Number);
+          const classTime = new Date(today);
+          classTime.setHours(hours, minutes, 0, 0);
+          if (today > classTime) {
+            daysUntilClass = 7;
+          }
+        }
         const classDate = new Date(today);
         classDate.setDate(today.getDate() + daysUntilClass);
 
@@ -301,22 +354,80 @@ serve(async (req) => {
             class_schedule_id: targetClass.id,
             booking_date: classDate.toISOString().split('T')[0],
             status: 'confirmed',
-            notes: `Booked via AI SMS assistant`
+            notes: `Booked via AI SMS assistant - ${targetClass.class_name} at ${targetClass.start_time}`
           });
 
         if (bookingError) {
           console.error('Booking failed:', bookingError);
-          responseMessage = `I'd love to book that class for you, but there was a technical issue. Please call us to complete your booking.`;
+          // Don't override AI response, just log the error
         } else {
+          console.log(`Booking created: ${targetClass.class_name} on ${classDate.toDateString()}`);
+
+          // Update contact pipeline stage to 'qualified'
+          await supabase
+            .from('contacts')
+            .update({
+              pipeline_stage: 'qualified',
+              status: 'qualified'
+            })
+            .eq('id', contact.id);
+
+          // Get the booking ID for notification
+          const { data: newBooking } = await supabase
+            .from('class_bookings')
+            .select('id')
+            .eq('contact_id', contact.id)
+            .eq('class_schedule_id', targetClass.id)
+            .eq('booking_date', classDate.toISOString().split('T')[0])
+            .order('created_at', { ascending: false })
+            .limit(1)
+            .single();
+
+          // Send booking notification email
+          if (newBooking?.id) {
+            try {
+              // Build conversation summary from recent messages
+              const conversationSummary = messageHistory
+                ?.filter((msg: any) => msg.direction === 'inbound')
+                .map((msg: any) => msg.message)
+                .slice(-3)
+                .join(' | ') || '';
+
+              await fetch(`${Deno.env.get('SUPABASE_URL')}/functions/v1/send-booking-notification`, {
+                method: 'POST',
+                headers: {
+                  'Authorization': `Bearer ${Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')}`,
+                  'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({
+                  booking_id: newBooking.id,
+                  conversation_summary: conversationSummary
+                })
+              });
+              console.log('Booking notification triggered');
+            } catch (notifyError) {
+              console.error('Failed to send booking notification:', notifyError);
+              // Don't fail the booking if notification fails
+            }
+          }
+
           await supabase
             .from('automation_logs')
             .insert({
               business_id: businessId,
               automation_type: 'class_booking',
               status: 'success',
-              error_message: `Class booked: ${targetClass.class_name} on ${classDate.toDateString()}`
+              processed_data: {
+                contact_id: contact.id,
+                class_name: targetClass.class_name,
+                class_date: classDate.toISOString().split('T')[0],
+                class_time: targetClass.start_time,
+                instructor: targetClass.instructor
+              }
             });
         }
+      } else {
+        console.log('Could not find matching class for booking:', aiResult.classDetails);
       }
     }
 

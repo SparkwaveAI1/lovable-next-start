@@ -358,23 +358,42 @@ serve(async (req) => {
       .eq('id', contact.id);
     console.log('Updated contact activity and preferred channel');
 
-    // Find existing active thread for this contact (get most recent one)
-    const { data: existingThreads, error: threadLookupError } = await supabase
+    // Find existing thread for this contact - get ALL threads to handle duplicates
+    const { data: existingThreads } = await supabase
       .from('conversation_threads')
-      .select('id')
+      .select('id, status, created_at')
       .eq('contact_id', contact.id)
-      .eq('status', 'active')
-      .order('created_at', { ascending: false })
-      .limit(1);
+      .eq('business_id', businessId)
+      .order('created_at', { ascending: false });
 
     let threadId: string;
 
     if (existingThreads && existingThreads.length > 0) {
+      // Use the most recent thread regardless of status
       threadId = existingThreads[0].id;
-      console.log('📧 Found existing active thread:', threadId);
+      console.log('📧 Using existing thread:', threadId, '(found', existingThreads.length, 'total)');
+
+      // Ensure the thread is active
+      if (existingThreads[0].status !== 'active') {
+        await supabase
+          .from('conversation_threads')
+          .update({ status: 'active', conversation_state: 'answering_questions' })
+          .eq('id', threadId);
+        console.log('📧 Reactivated thread:', threadId);
+      }
+
+      // Close any duplicate threads (keep only the most recent one active)
+      if (existingThreads.length > 1) {
+        const oldThreadIds = existingThreads.slice(1).map(t => t.id);
+        await supabase
+          .from('conversation_threads')
+          .update({ status: 'closed' })
+          .in('id', oldThreadIds);
+        console.log('📧 Closed', oldThreadIds.length, 'duplicate threads');
+      }
     } else {
-      // No active thread exists - create a new one
-      console.log('📧 No active thread found, creating new one');
+      // No thread exists - create a new one
+      console.log('📧 No existing thread found, creating new one');
       const { data: newThread, error: createError } = await supabase
         .from('conversation_threads')
         .insert({
@@ -471,26 +490,35 @@ serve(async (req) => {
       ai_response: false
     });
 
-    // Get conversation history
+    // Get FULL conversation history (no limit - AI needs full context)
     const { data: messageHistory } = await supabase
       .from('sms_messages')
-      .select('direction, message')
+      .select('direction, message, created_at')
       .eq('thread_id', threadId)
-      .order('created_at', { ascending: true })
-      .limit(10);
+      .order('created_at', { ascending: true });
 
-    // Prepare conversation for AI
+    console.log('📧 Loaded conversation history:', messageHistory?.length || 0, 'messages');
+
+    // Prepare conversation for AI (as message array)
     const conversationMessages = messageHistory?.map(msg => ({
       role: msg.direction === 'inbound' ? 'user' : 'assistant',
       content: msg.message
     })) || [];
+
+    // Also format as readable text for context
+    const historyText = messageHistory?.map(msg => {
+      const role = msg.direction === 'inbound' ? 'Customer' : 'You (AI)';
+      return `${role}: ${msg.message}`;
+    }).join('\n') || 'No previous messages';
+
+    console.log('📧 Conversation history preview:', historyText.substring(0, 300));
 
     // Get contact name
     const contactName = contact.first_name && contact.first_name !== 'Unknown' && contact.first_name !== 'Email'
       ? `${contact.first_name} ${contact.last_name || ''}`.trim()
       : null;
 
-    // Call AI for response
+    // Call AI for response with full conversation context
     const aiResponse = await fetch(`${supabaseUrl}/functions/v1/ai-response`, {
       method: 'POST',
       headers: {
@@ -502,6 +530,7 @@ serve(async (req) => {
         businessId: businessId,
         businessContext: businessName,
         contactName: contactName,
+        conversationHistory: historyText, // Include formatted history for additional context
         classSchedule: [],
         threadId: threadId
       })
