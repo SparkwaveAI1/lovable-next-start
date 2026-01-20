@@ -173,8 +173,10 @@ export function ContactsTable({ businessId }: { businessId: string }) {
                         {contact.source || 'Unknown'}
                       </Badge>
                     </TableCell>
-                    <TableCell>
-                      <ContactStatusBadge status={formatStatusLabel(contact.status)} />
+                    <TableCell className="text-center">
+                      <div className="flex justify-center">
+                        <ContactStatusBadge status={formatStatusLabel(contact.status)} />
+                      </div>
                     </TableCell>
                     <TableCell>
                       <div className="text-gray-500 max-w-xs truncate">
