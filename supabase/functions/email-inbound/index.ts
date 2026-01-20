@@ -106,35 +106,145 @@ serve(async (req) => {
 
     console.log('Sender email:', senderEmail);
 
-    // Find the contact by email
-    const { data: contact, error: contactError } = await supabase
-      .from('contacts')
-      .select('id, business_id, first_name, last_name, email, phone, preferred_channel')
-      .eq('email', senderEmail)
+    // Determine business from the "to" address by looking up agent_config
+    // The "to" address should match a from_email in agent_config
+    const toEmailMatch = toAddress?.match(/<([^>]+)>/) || [null, toAddress];
+    const toEmail = toEmailMatch[1]?.toLowerCase().trim() || toAddress?.toLowerCase().trim();
+    console.log('Looking up business for to address:', toEmail);
+
+    let businessId: string | null = null;
+    let businessName: string = 'the business';
+
+    // Try to find business by the receiving email address
+    const { data: agentConfigMatch } = await supabase
+      .from('agent_config')
+      .select('business_id, businesses(name)')
+      .ilike('from_email', toEmail || '')
       .single();
 
-    if (contactError || !contact) {
-      console.log('Contact not found for email:', senderEmail);
-      // Could create new contact here, but for now just acknowledge
+    if (agentConfigMatch) {
+      businessId = agentConfigMatch.business_id;
+      businessName = (agentConfigMatch.businesses as any)?.name || 'the business';
+      console.log('Found business from to address:', businessId, businessName);
+    } else {
+      // Fallback: get the first/default business
+      const { data: defaultBusiness } = await supabase
+        .from('businesses')
+        .select('id, name')
+        .limit(1)
+        .single();
+
+      if (defaultBusiness) {
+        businessId = defaultBusiness.id;
+        businessName = defaultBusiness.name;
+        console.log('Using default business:', businessId, businessName);
+      }
+    }
+
+    if (!businessId) {
+      console.error('Could not determine business for inbound email');
+      // Log the failed attempt
+      await supabase.from('automation_logs').insert({
+        automation_type: 'email_inbound_failed',
+        status: 'error',
+        error_message: 'Could not determine business from to address',
+        processed_data: {
+          from_email: senderEmail,
+          to_email: toEmail,
+          subject: emailData.subject
+        }
+      });
       return new Response(
-        JSON.stringify({ received: true, matched: false }),
+        JSON.stringify({ error: 'Could not determine business' }),
+        { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
+
+    // Find the contact by email (case-insensitive)
+    let { data: contact, error: contactError } = await supabase
+      .from('contacts')
+      .select('id, business_id, first_name, last_name, email, phone, preferred_channel')
+      .eq('business_id', businessId)
+      .ilike('email', senderEmail)
+      .single();
+
+    // If contact not found, create a new one
+    if (contactError || !contact) {
+      console.log('Contact not found for email:', senderEmail, '- creating new contact');
+
+      // Extract name from the "from" field if available (e.g., "John Doe <john@example.com>")
+      const nameMatch = emailData.from.match(/^([^<]+)</);
+      const fromName = nameMatch ? nameMatch[1].trim() : '';
+      const nameParts = fromName.split(' ');
+      const firstName = nameParts[0] || 'Email';
+      const lastName = nameParts.slice(1).join(' ') || 'Lead';
+
+      const { data: newContact, error: createError } = await supabase
+        .from('contacts')
+        .insert({
+          email: senderEmail,
+          first_name: firstName,
+          last_name: lastName,
+          source: 'email_inbound',
+          status: 'new_lead',
+          business_id: businessId,
+          preferred_channel: 'email',
+          last_activity_date: new Date().toISOString()
+        })
+        .select('id, business_id, first_name, last_name, email, phone, preferred_channel')
+        .single();
+
+      if (createError) {
+        console.error('Failed to create contact:', createError);
+        // Log the error but continue to process the email
+        await supabase.from('automation_logs').insert({
+          business_id: businessId,
+          automation_type: 'email_inbound_contact_creation_failed',
+          status: 'error',
+          error_message: createError.message,
+          processed_data: {
+            from_email: senderEmail,
+            subject: emailData.subject
+          }
+        });
+      } else {
+        contact = newContact;
+        console.log('Created new contact:', contact.id, contact.first_name, contact.last_name);
+      }
+    } else {
+      console.log('Found existing contact:', contact.id, contact.first_name, contact.last_name);
+    }
+
+    // If we still don't have a contact, we can't continue with the conversation
+    if (!contact) {
+      console.error('Could not find or create contact, logging email anyway');
+      await supabase.from('automation_logs').insert({
+        business_id: businessId,
+        automation_type: 'email_inbound_no_contact',
+        status: 'error',
+        error_message: 'Could not find or create contact',
+        processed_data: {
+          from_email: senderEmail,
+          to_email: toEmail,
+          subject: emailData.subject,
+          text_preview: (emailData.text || '').substring(0, 200)
+        }
+      });
+      return new Response(
+        JSON.stringify({ received: true, logged: true, contact_created: false }),
         { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
 
-    console.log('Found contact:', contact.id, contact.first_name, contact.last_name);
-
-    // Update preferred channel to email (they responded via email)
-    if (!contact.preferred_channel) {
-      await supabase
-        .from('contacts')
-        .update({
-          preferred_channel: 'email',
-          last_activity_date: new Date().toISOString()
-        })
-        .eq('id', contact.id);
-      console.log('Set preferred channel to email');
-    }
+    // Update preferred channel to email and last activity (they responded via email)
+    await supabase
+      .from('contacts')
+      .update({
+        preferred_channel: 'email',
+        last_activity_date: new Date().toISOString()
+      })
+      .eq('id', contact.id);
+    console.log('Updated contact activity and preferred channel');
 
     // Find or create conversation thread
     let { data: thread, error: threadError } = await supabase
@@ -150,7 +260,7 @@ serve(async (req) => {
         .from('conversation_threads')
         .insert({
           contact_id: contact.id,
-          business_id: contact.business_id,
+          business_id: businessId,
           status: 'active',
           conversation_state: 'answering_questions'
         })
@@ -215,13 +325,6 @@ serve(async (req) => {
       .order('created_at', { ascending: true })
       .limit(10);
 
-    // Get business info
-    const { data: business } = await supabase
-      .from('businesses')
-      .select('name')
-      .eq('id', contact.business_id)
-      .single();
-
     // Prepare conversation for AI
     const conversationMessages = messageHistory?.map(msg => ({
       role: msg.direction === 'inbound' ? 'user' : 'assistant',
@@ -229,7 +332,7 @@ serve(async (req) => {
     })) || [];
 
     // Get contact name
-    const contactName = contact.first_name && contact.first_name !== 'Unknown'
+    const contactName = contact.first_name && contact.first_name !== 'Unknown' && contact.first_name !== 'Email'
       ? `${contact.first_name} ${contact.last_name || ''}`.trim()
       : null;
 
@@ -242,8 +345,8 @@ serve(async (req) => {
       },
       body: JSON.stringify({
         messages: conversationMessages,
-        businessId: contact.business_id,
-        businessContext: business?.name || 'the business',
+        businessId: businessId,
+        businessContext: businessName,
         contactName: contactName,
         classSchedule: [],
         threadId: thread.id
@@ -268,10 +371,9 @@ serve(async (req) => {
     const { data: agentConfig } = await supabase
       .from('agent_config')
       .select('from_email, from_name')
-      .eq('business_id', contact.business_id)
+      .eq('business_id', businessId)
       .single();
 
-    const businessName = business?.name || 'the business';
     const fromEmail = agentConfig?.from_email || 'noreply@example.com';
     const fromName = agentConfig?.from_name || businessName;
 
@@ -309,14 +411,15 @@ serve(async (req) => {
 
     // Log the interaction
     await supabase.from('automation_logs').insert({
-      business_id: contact.business_id,
+      business_id: businessId,
       automation_type: 'email_reply_processed',
       status: 'success',
       processed_data: {
         contact_id: contact.id,
         thread_id: thread.id,
         from_email: senderEmail,
-        reply_preview: replyText.substring(0, 100)
+        reply_preview: replyText.substring(0, 100),
+        contact_was_new: contact.source === 'email_inbound'
       }
     });
 
