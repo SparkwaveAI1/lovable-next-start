@@ -18,13 +18,26 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
 
-interface InboundEmail {
+// Resend webhook payload structure
+interface ResendWebhookPayload {
+  type: string;
+  data: {
+    from: string;
+    to: string | string[];
+    subject: string;
+    text?: string;
+    html?: string;
+    headers?: Record<string, string>;
+  };
+}
+
+// Also support direct email format for backwards compatibility
+interface DirectEmailPayload {
   from: string;
-  to: string;
+  to: string | string[];
   subject: string;
-  text: string;
+  text?: string;
   html?: string;
-  headers?: Record<string, string>;
 }
 
 serve(async (req) => {
@@ -39,15 +52,48 @@ serve(async (req) => {
     const supabaseKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
     const supabase = createClient(supabaseUrl, supabaseKey);
 
-    // Parse the inbound email
-    const email: InboundEmail = await req.json();
+    // Parse the raw payload first for debugging
+    const rawPayload = await req.json();
+    console.log('📧 Raw payload:', JSON.stringify(rawPayload, null, 2));
 
-    console.log('From:', email.from);
-    console.log('To:', email.to);
-    console.log('Subject:', email.subject);
+    // Handle Resend's webhook format: { type: "email.received", data: { from, to, subject, text } }
+    // Also handle direct format for backwards compatibility: { from, to, subject, text }
+    let emailData: DirectEmailPayload;
+
+    if (rawPayload.type && rawPayload.data) {
+      // Resend webhook format
+      console.log('Detected Resend webhook format, type:', rawPayload.type);
+      emailData = rawPayload.data;
+    } else if (rawPayload.from) {
+      // Direct format (backwards compatible)
+      console.log('Detected direct email format');
+      emailData = rawPayload;
+    } else {
+      console.error('Unknown payload format:', Object.keys(rawPayload));
+      return new Response(
+        JSON.stringify({ error: 'Unknown payload format', keys: Object.keys(rawPayload) }),
+        { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
+
+    // Handle 'to' being an array (Resend sends it as array)
+    const toAddress = Array.isArray(emailData.to) ? emailData.to[0] : emailData.to;
+
+    console.log('From:', emailData.from);
+    console.log('To:', toAddress);
+    console.log('Subject:', emailData.subject);
+
+    // Validate required fields
+    if (!emailData.from) {
+      console.error('Missing from field in payload');
+      return new Response(
+        JSON.stringify({ error: 'Missing from field' }),
+        { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
 
     // Extract sender email address (handle "Name <email@domain.com>" format)
-    const fromMatch = email.from.match(/<([^>]+)>/) || [null, email.from];
+    const fromMatch = emailData.from.match(/<([^>]+)>/) || [null, emailData.from];
     const senderEmail = fromMatch[1]?.toLowerCase().trim();
 
     if (!senderEmail) {
@@ -124,7 +170,7 @@ serve(async (req) => {
     }
 
     // Extract the reply text (strip quoted content)
-    let replyText = email.text || '';
+    let replyText = emailData.text || '';
 
     // Remove common reply indicators and quoted content
     // Look for lines starting with > or "On ... wrote:"
@@ -247,7 +293,7 @@ serve(async (req) => {
       },
       body: JSON.stringify({
         to: senderEmail,
-        subject: `Re: ${email.subject}`,
+        subject: `Re: ${emailData.subject || 'Your inquiry'}`,
         html: emailHtml,
         from_email: fromEmail,
         from_name: fromName,

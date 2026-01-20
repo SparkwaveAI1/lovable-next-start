@@ -353,67 +353,97 @@ async function sendInitialOutreach(
   // SEND EMAIL if contact has email
   if (contact.email) {
     try {
-      console.log('Sending email to:', contact.email);
+      console.log('Attempting to send email to:', contact.email);
 
       // Get agent config for email settings
-      const { data: agentConfig } = await supabase
+      const { data: agentConfig, error: configError } = await supabase
         .from('agent_config')
         .select('from_email, from_name, email_greeting_subject')
         .eq('business_id', businessId)
         .single();
 
-      const fromEmail = agentConfig?.from_email || 'noreply@example.com';
+      if (configError) {
+        console.error('Failed to get agent config:', configError.message);
+      }
+
+      const fromEmail = agentConfig?.from_email;
       const fromName = agentConfig?.from_name || businessName;
       const subject = agentConfig?.email_greeting_subject || 'Thanks for reaching out!';
 
-      // Simple HTML email with the same message
-      const emailHtml = `
-        <div style="font-family: Arial, sans-serif; max-width: 600px;">
-          <p>Hey ${contactName || 'there'}!</p>
-          <p>${responseMessage}</p>
-          <p>Just reply to this email or text us back!</p>
-          <p>Talk soon,<br><strong>The ${businessName} Team</strong></p>
-        </div>
-      `;
+      console.log('Email config:', { fromEmail, fromName, subject, toEmail: contact.email });
 
-      const emailResponse = await fetch(`${Deno.env.get('SUPABASE_URL')}/functions/v1/send-email`, {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')}`,
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify({
+      if (!fromEmail) {
+        console.error('No from_email configured in agent_config - skipping email');
+      } else {
+        // Simple HTML email with the same message
+        const emailHtml = `
+          <div style="font-family: Arial, sans-serif; max-width: 600px;">
+            <p>Hey ${contactName || 'there'}!</p>
+            <p>${responseMessage}</p>
+            <p>Just reply to this email or text us back!</p>
+            <p>Talk soon,<br><strong>The ${businessName} Team</strong></p>
+          </div>
+        `;
+
+        const emailPayload = {
           to: contact.email,
           subject: subject,
           html: emailHtml,
           from_email: fromEmail,
           from_name: fromName,
           contact_id: contact.id
-        })
-      });
+        };
+        console.log('Sending email with payload:', JSON.stringify(emailPayload));
 
-      if (emailResponse.ok) {
-        console.log('Email sent successfully to:', contact.email);
-      } else {
-        const error = await emailResponse.text();
-        console.error('Email sending failed:', error);
+        const emailResponse = await fetch(`${Deno.env.get('SUPABASE_URL')}/functions/v1/send-email`, {
+          method: 'POST',
+          headers: {
+            'Authorization': `Bearer ${Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')}`,
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify(emailPayload)
+        });
+
+        const emailResult = await emailResponse.text();
+        console.log('Email API response:', emailResponse.status, emailResult);
+
+        if (emailResponse.ok) {
+          console.log('Email sent successfully to:', contact.email);
+        } else {
+          console.error('Email sending failed:', emailResult);
+        }
+
+        // Log email attempt
+        await supabase.from('automation_logs').insert({
+          business_id: businessId,
+          automation_type: 'initial_outreach_email',
+          status: emailResponse.ok ? 'success' : 'error',
+          processed_data: {
+            contact_id: contact.id,
+            email: contact.email,
+            from_email: fromEmail,
+            subject: subject,
+            had_inquiry: !!inquiry,
+            response: emailResult
+          }
+        });
       }
-
-      // Log email attempt
+    } catch (emailError: any) {
+      console.error('Email sending error:', emailError.message);
+      // Log the error
       await supabase.from('automation_logs').insert({
         business_id: businessId,
         automation_type: 'initial_outreach_email',
-        status: emailResponse.ok ? 'success' : 'error',
+        status: 'error',
+        error_message: emailError.message,
         processed_data: {
           contact_id: contact.id,
-          email: contact.email,
-          subject: subject,
-          had_inquiry: !!inquiry
+          email: contact.email
         }
       });
-    } catch (emailError: any) {
-      console.error('Email sending failed:', emailError.message);
     }
+  } else {
+    console.log('No email address for contact, skipping email outreach');
   }
 
   console.log('Initial outreach complete');
@@ -595,21 +625,73 @@ serve(async (req: Request) => {
         }
       }
 
-      // Detect if this is a freeze or cancellation request
+      // Detect if this is a freeze or cancellation request based on FORM NAME only
+      // (not contact labels which can be misleading)
       let leadType = 'sales_lead';
       let pipelineStage = 'new';
 
-      const labels = contactData.labelKeys?.items || [];
-      const isServiceRequest = labels.some((label: string) =>
-        label.includes('freeze-or-cancellation-request') ||
-        label.includes('freeze') ||
-        label.includes('cancellation')
-      );
+      const formName = (formData.formName || formData.formType || '').toLowerCase();
+      const isServiceRequest = formName.includes('freeze') ||
+                               formName.includes('cancel') ||
+                               formName.includes('cancellation');
 
       if (isServiceRequest) {
         leadType = 'cancellation_request';
         pipelineStage = 'pending_review';
-        console.log('Detected service request - setting lead_type to cancellation_request');
+        console.log('Detected service request form - setting lead_type to cancellation_request');
+      }
+
+      // Extract comments from various possible field names
+      let leadComments = '';
+
+      // First check the submissions array which has labeled fields
+      if (formData.submissions && Array.isArray(formData.submissions)) {
+        const messageField = formData.submissions.find((s: any) =>
+          s.label?.toLowerCase().includes('message') ||
+          s.label?.toLowerCase().includes('comment') ||
+          s.label?.toLowerCase().includes('inquiry') ||
+          s.label?.toLowerCase().includes('question')
+        );
+        if (messageField?.value) {
+          leadComments = messageField.value.trim();
+          console.log(`Found comments in submissions array, label: ${messageField.label}`);
+        }
+      }
+
+      // If not found in submissions, try common Wix field patterns
+      if (!leadComments) {
+        const possibleCommentFields = [
+          'comments', 'message', 'comment', 'notes', 'inquiry',
+          'field:comp-l141wv4v', // Home Contact form message field
+          'field:comp-l3j29uww',
+        ];
+        for (const field of possibleCommentFields) {
+          if (formData[field] && typeof formData[field] === 'string' && formData[field].trim()) {
+            leadComments = formData[field].trim();
+            console.log(`Found comments in field: ${field}`);
+            break;
+          }
+        }
+      }
+
+      // Also check all field: prefixed properties - skip obvious non-comment fields
+      if (!leadComments) {
+        for (const [key, value] of Object.entries(formData)) {
+          if (key.startsWith('field:') && typeof value === 'string' && value.trim()) {
+            const val = value.trim();
+            // Skip if it looks like: email, phone, checkbox, or very short single word (likely a name)
+            if (val.includes('@') ||                    // email
+                /^[\d\s\-\+\(\)]+$/.test(val) ||       // phone number
+                val === 'Checked' ||                    // checkbox
+                val === 'Unchecked' ||
+                (val.split(' ').length === 1 && val.length < 10)) {  // single short word (name)
+              continue;
+            }
+            leadComments = val;
+            console.log(`Found comments in text field: ${key}`);
+            break;
+          }
+        }
       }
 
       // Enhanced logging to show data sources
@@ -617,19 +699,23 @@ serve(async (req: Request) => {
         name: { value: leadName, source: nameSource },
         email: { value: leadEmail, source: emailSource },
         phone: { value: `${originalPhone} -> ${leadPhone}`, source: phoneSource },
+        comments: { value: leadComments.substring(0, 50) + '...', found: !!leadComments },
         submissionId: submissionId,
+        formName: formName,
         leadType: leadType,
         pipelineStage: pipelineStage,
-        isServiceRequest: isServiceRequest,
-        labels: labels
+        isServiceRequest: isServiceRequest
       });
+
+      // Log all form fields for debugging
+      console.log('All form fields received:', Object.keys(formData).filter(k => k.startsWith('field:')));
 
       processedData = {
         name: leadName,
         email: leadEmail,
         phone: leadPhone,
         formType: formData.formType || formData.formName || 'contact',
-        comments: formData.comments || formData.message || '',
+        comments: leadComments,
         source: 'wix_form',
         timestamp: new Date().toISOString(),
         leadType: leadType,
@@ -654,10 +740,17 @@ serve(async (req: Request) => {
         if (contactResult.isNew) {
           console.log(`New contact created: ${contactResult.contact.id}`);
           automationType = 'contact_created';
+        } else {
+          console.log(`Existing contact matched by ${contactResult.matchedBy}: ${contactResult.contact.id}`);
+          automationType = 'contact_updated';
+        }
 
-          // Send initial outreach to new lead (SMS + Email)
-          // Pass the comments/inquiry from the form
-          const inquiry = processedData.comments || null;
+        // Send outreach for BOTH new contacts AND existing contacts with a new inquiry
+        const inquiry = processedData.comments || null;
+        const hasInquiry = inquiry && inquiry.trim().length > 0;
+
+        if (contactResult.isNew || hasInquiry) {
+          console.log(`Sending outreach: isNew=${contactResult.isNew}, hasInquiry=${hasInquiry}`);
           await sendInitialOutreach(
             supabase,
             contactResult.contact,
@@ -665,9 +758,6 @@ serve(async (req: Request) => {
             endpoint.businesses,
             inquiry
           );
-        } else {
-          console.log(`Existing contact matched by ${contactResult.matchedBy}: ${contactResult.contact.id}`);
-          automationType = 'contact_updated';
         }
       } catch (error: any) {
         console.error('Contact find/create failed:', error);
