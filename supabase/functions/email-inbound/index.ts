@@ -38,6 +38,55 @@ interface DirectEmailPayload {
   subject: string;
   text?: string;
   html?: string;
+  body?: string;
+  content?: string;
+  plain?: string;
+}
+
+/**
+ * Extract just the new reply content, removing quoted original messages
+ */
+function extractReplyContent(fullBody: string): string {
+  if (!fullBody) return '';
+
+  // Common reply separators
+  const separators = [
+    /On .+ wrote:/i,
+    /^From:/im,
+    /^Sent:/im,
+    /-----Original Message-----/i,
+    /________________________________/,
+    /^>/m  // Quoted lines starting with >
+  ];
+
+  let content = fullBody;
+  for (const separator of separators) {
+    const match = content.search(separator);
+    if (match > 0) {
+      content = content.substring(0, match);
+      break;
+    }
+  }
+
+  return content.trim();
+}
+
+/**
+ * Strip HTML tags and decode entities
+ */
+function stripHtml(html: string): string {
+  if (!html) return '';
+  return html
+    .replace(/<style[^>]*>[\s\S]*?<\/style>/gi, '') // Remove style tags
+    .replace(/<script[^>]*>[\s\S]*?<\/script>/gi, '') // Remove script tags
+    .replace(/<[^>]*>/g, ' ') // Remove HTML tags
+    .replace(/&nbsp;/g, ' ')
+    .replace(/&amp;/g, '&')
+    .replace(/&lt;/g, '<')
+    .replace(/&gt;/g, '>')
+    .replace(/&quot;/g, '"')
+    .replace(/\s+/g, ' ') // Collapse whitespace
+    .trim();
 }
 
 serve(async (req) => {
@@ -82,6 +131,14 @@ serve(async (req) => {
     console.log('From:', emailData.from);
     console.log('To:', toAddress);
     console.log('Subject:', emailData.subject);
+
+    // Detailed logging for body fields
+    console.log('📧 Full data object keys:', Object.keys(emailData));
+    console.log('📧 Text field:', emailData.text ? `${emailData.text.substring(0, 100)}...` : 'undefined');
+    console.log('📧 Html field:', emailData.html ? `${emailData.html.substring(0, 100)}...` : 'undefined');
+    console.log('📧 Body field:', (emailData as any).body ? 'present' : 'undefined');
+    console.log('📧 Content field:', (emailData as any).content ? 'present' : 'undefined');
+    console.log('📧 Plain field:', (emailData as any).plain ? 'present' : 'undefined');
 
     // Validate required fields
     if (!emailData.from) {
@@ -279,34 +336,45 @@ serve(async (req) => {
       throw new Error('Could not find or create thread');
     }
 
-    // Extract the reply text (strip quoted content)
-    let replyText = emailData.text || '';
+    // Try multiple possible field names for email body
+    const rawEmailBody = emailData.text ||
+                         (emailData as any).plain ||
+                         (emailData as any).body ||
+                         (emailData as any).content ||
+                         emailData.html ||
+                         '';
 
-    // Remove common reply indicators and quoted content
-    // Look for lines starting with > or "On ... wrote:"
-    const lines = replyText.split('\n');
-    const cleanLines: string[] = [];
-    for (const line of lines) {
-      // Stop at quoted content indicators
-      if (line.match(/^>/) ||
-          line.match(/^On .* wrote:$/i) ||
-          line.match(/^-{3,}/) ||
-          line.match(/^From:.*@/i)) {
-        break;
+    console.log('📧 Raw body length:', rawEmailBody.length);
+    console.log('📧 Raw body source:', emailData.text ? 'text' :
+                                       (emailData as any).plain ? 'plain' :
+                                       (emailData as any).body ? 'body' :
+                                       (emailData as any).content ? 'content' :
+                                       emailData.html ? 'html' : 'none');
+
+    // Strip HTML tags if we got HTML content
+    let plainTextBody = rawEmailBody;
+    if (rawEmailBody.includes('<') && rawEmailBody.includes('>')) {
+      plainTextBody = stripHtml(rawEmailBody);
+      console.log('📧 Stripped HTML, new length:', plainTextBody.length);
+    }
+
+    // Extract just the reply (not the quoted original message)
+    let replyText = extractReplyContent(plainTextBody);
+    console.log('📧 After extracting reply, length:', replyText.length);
+    console.log('📧 Reply content preview:', replyText.substring(0, 200));
+
+    // If body is still empty, use the subject line as context
+    if (!replyText || replyText.trim().length === 0) {
+      if (emailData.subject) {
+        console.log('📧 No body content, using subject as message:', emailData.subject);
+        replyText = `Subject: ${emailData.subject}`;
+      } else {
+        console.log('📧 No reply content and no subject, using generic message');
+        replyText = 'I have a question about your services.';
       }
-      cleanLines.push(line);
-    }
-    replyText = cleanLines.join('\n').trim();
-
-    if (!replyText) {
-      console.log('No reply content extracted');
-      return new Response(
-        JSON.stringify({ received: true, empty_reply: true }),
-        { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-      );
     }
 
-    console.log('Reply content:', replyText.substring(0, 100) + '...');
+    console.log('📧 Final reply text:', replyText.substring(0, 100) + (replyText.length > 100 ? '...' : ''));
 
     // Store the inbound message
     await supabase.from('sms_messages').insert({
