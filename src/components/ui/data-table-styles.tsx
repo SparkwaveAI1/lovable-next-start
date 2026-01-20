@@ -90,7 +90,7 @@ export function ContactStatusBadge({ status }: { status: string }) {
   const variant = statusMap[status.toLowerCase()] || "neutral"
 
   return (
-    <StatusBadge variant={variant} showDot>
+    <StatusBadge variant={variant}>
       {status}
     </StatusBadge>
   )
