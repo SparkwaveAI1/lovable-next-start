@@ -1,43 +1,41 @@
-import { useState, useEffect } from "react"
-import { Activity, AlertCircle, Zap, TrendingUp, Sparkles } from "lucide-react"
-import { Link } from "react-router-dom"
+import { useState } from "react"
 import { DashboardHeader } from "@/components/DashboardHeader"
-import { StatsCard } from "@/components/StatsCard"
 import { PageLayout, PageHeader, PageContent } from "@/components/layout/PageLayout"
-
-import { getDashboardStats } from "@/lib/supabase"
-import { ActivityLog } from "@/components/ActivityLog"
-import { supabase } from "@/integrations/supabase/client"
-import { sendSMS } from '@/lib/smsService'
-import { ContactsTable } from '@/components/ContactsTable'
+import { ContactDetail } from "@/components/ContactDetail"
 import { useBusinessContext } from "@/contexts/BusinessContext"
 import { useBusinesses } from "@/hooks/useBusinesses"
-import { TokenHealthDashboard } from "@/components/TokenHealthDashboard"
-import { Card } from "@/components/ui/card"
-// import { GoHighLevelConfig } from "@/components/GoHighLevelConfig"
+
+// Dashboard components
+import { TodaysConversations } from "@/components/dashboard/TodaysConversations"
+import { TodaysClasses } from "@/components/dashboard/TodaysClasses"
+import { RecentBookings } from "@/components/dashboard/RecentBookings"
+import { QuickActions } from "@/components/dashboard/QuickActions"
 
 const Index = () => {
   const { selectedBusiness, setSelectedBusiness } = useBusinessContext();
   const { data: businesses = [] } = useBusinesses();
-  const [stats, setStats] = useState({
-    activeAutomations: 0,
-    todayActivity: 0,
-    errors: 0,
-    totalRuns: 0,
-    successRate: 0
-  })
-  const [isLoadingStats, setIsLoadingStats] = useState(true)
-  // Load dashboard stats
-  useEffect(() => {
-    const loadStats = async () => {
-      setIsLoadingStats(true)
-      const dashboardStats = await getDashboardStats(selectedBusiness?.id)
-      setStats(dashboardStats)
-      setIsLoadingStats(false)
-    }
+  const [selectedContactId, setSelectedContactId] = useState<string | null>(null);
 
-    loadStats()
-  }, [selectedBusiness])
+  // If a contact is selected, show the contact detail view
+  if (selectedContactId) {
+    return (
+      <PageLayout>
+        <DashboardHeader
+          selectedBusinessId={selectedBusiness?.id}
+          onBusinessChange={(id) => {
+            const business = businesses.find(b => b.id === id);
+            if (business) setSelectedBusiness(business);
+          }}
+        />
+        <PageContent className="pt-2 md:pt-28">
+          <ContactDetail
+            contactId={selectedContactId}
+            onBack={() => setSelectedContactId(null)}
+          />
+        </PageContent>
+      </PageLayout>
+    );
+  }
 
   return (
     <PageLayout>
@@ -52,95 +50,59 @@ const Index = () => {
       <PageContent className="pt-2 md:pt-28">
         {/* Welcome Section */}
         <PageHeader
-          title="Welcome to Automation Center"
-          description="Manage your business automations across all your companies"
-          actions={
-            <Link
-              to="/content-center"
-              className="inline-flex items-center px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition-colors shadow-sm"
-            >
-              <Sparkles className="h-4 w-4 mr-2" />
-              Content Creation Center
-            </Link>
+          title={selectedBusiness ? `${selectedBusiness.name} Dashboard` : "Automation Center"}
+          description={selectedBusiness
+            ? "Monitor conversations, bookings, and class enrollments"
+            : "Select a business above to get started"
           }
         />
 
-        {/* Stats Grid */}
-        <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4 mb-12">
-          <StatsCard
-            title="Active Automations"
-            value={isLoadingStats ? 0 : stats.activeAutomations}
-            icon={Zap}
-            subtitle="Running workflows"
-          />
-          <StatsCard
-            title="Today's Activity"
-            value={isLoadingStats ? 0 : stats.todayActivity}
-            icon={Activity}
-            subtitle="Executions today"
-          />
-          <StatsCard
-            title="Errors"
-            value={isLoadingStats ? 0 : stats.errors}
-            icon={AlertCircle}
-            subtitle="Failed executions"
-            variant={stats.errors > 0 ? "error" : "default"}
-          />
-          <StatsCard
-            title="Success Rate"
-            value={isLoadingStats ? 0 : `${stats.successRate}%`}
-            icon={TrendingUp}
-            subtitle="Overall performance"
-            variant={stats.successRate >= 90 ? "success" : stats.successRate >= 70 ? "warning" : "error"}
-          />
-        </div>
-
-        {/* Token Health Monitoring */}
-        <div className="mb-12">
-          <TokenHealthDashboard />
-        </div>
-
-        {/* Contacts Management - Show when business is selected */}
-        {selectedBusiness && (
-          <div className="mb-8">
-            <ContactsTable businessId={selectedBusiness.id} />
-          </div>
-        )}
-
-        {/* Configuration - Show when business is selected */}
-        {/* Temporarily hidden - GoHighLevel Configuration
-        {selectedBusinessId && (
-          <div className="mb-8">
-            <h3 className="text-xl font-semibold text-foreground mb-4">
-              GoHighLevel Configuration
-            </h3>
-            <GoHighLevelConfig businessId={selectedBusinessId} />
-          </div>
-        )}
-        */}
-
-        {/* Activity Log */}
-        <div className="mb-8">
-          <ActivityLog businessId={selectedBusiness?.id} />
-        </div>
-
-        {/* Placeholder for future content */}
-        <Card variant="elevated" className="p-8 text-center">
-          <div className="max-w-md mx-auto">
-            <div className="p-3 bg-indigo-50 rounded-xl w-fit mx-auto mb-4">
-              <Zap className="h-8 w-8 text-indigo-600" />
+        {selectedBusiness ? (
+          <>
+            {/* Quick Actions Row */}
+            <div className="mb-8">
+              <QuickActions />
             </div>
-            <h3 className="text-lg font-semibold text-gray-900 mb-2">
-              Ready to automate?
+
+            {/* Main Content Grid */}
+            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-8">
+              {/* Today's Conversations - Takes 2 columns */}
+              <div className="lg:col-span-2">
+                <TodaysConversations
+                  businessId={selectedBusiness.id}
+                  onContactClick={(contactId) => setSelectedContactId(contactId)}
+                />
+              </div>
+
+              {/* Today's Classes - Takes 1 column */}
+              <div className="lg:col-span-1">
+                <TodaysClasses businessId={selectedBusiness.id} />
+              </div>
+            </div>
+
+            {/* Recent Bookings - Full Width */}
+            <div className="mb-8">
+              <RecentBookings
+                businessId={selectedBusiness.id}
+                onContactClick={(contactId) => setSelectedContactId(contactId)}
+              />
+            </div>
+          </>
+        ) : (
+          <div className="text-center py-16 bg-white rounded-xl border border-gray-200">
+            <div className="p-4 bg-indigo-50 rounded-xl w-fit mx-auto mb-4">
+              <svg className="h-10 w-10 text-indigo-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" />
+              </svg>
+            </div>
+            <h3 className="text-xl font-semibold text-gray-900 mb-2">
+              Select a Business
             </h3>
-            <p className="text-gray-500">
-              {selectedBusiness
-                ? "Your automation monitoring dashboard is ready. Your CRM system is active and processing form submissions."
-                : "Select a business above to start managing your automations."
-              }
+            <p className="text-gray-500 max-w-md mx-auto">
+              Choose a business from the dropdown above to view your dashboard with conversations, bookings, and class schedules.
             </p>
           </div>
-        </Card>
+        )}
       </PageContent>
     </PageLayout>
   );

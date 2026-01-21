@@ -5,6 +5,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Button } from "@/components/ui/button";
 import { ManualIndicatorEntry } from "@/components/ManualIndicatorEntry";
 import { DashboardHeader } from "@/components/DashboardHeader";
+import { TokenHealthDashboard } from "@/components/TokenHealthDashboard";
 import { Shield, Users, Link2, Settings, AlertTriangle } from "lucide-react";
 
 export default function AdminDashboard() {
@@ -83,6 +84,11 @@ export default function AdminDashboard() {
           <p className="text-muted-foreground mt-1">
             System administration and configuration
           </p>
+        </div>
+
+        {/* Token Health Monitoring - Full Width */}
+        <div className="mb-6">
+          <TokenHealthDashboard />
         </div>
 
         <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">

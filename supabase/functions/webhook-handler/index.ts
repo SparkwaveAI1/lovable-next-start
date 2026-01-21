@@ -214,12 +214,107 @@ async function sendInitialOutreach(
   console.log(`Sending initial outreach to ${contact.first_name} ${contact.last_name}`);
   console.log(`Inquiry: ${inquiry || '(none)'}`);
 
+  // Load business knowledge base
+  let knowledgeBase: any[] = [];
+  try {
+    const { data: kbData } = await supabase
+      .from('business_knowledge')
+      .select('category, question, answer')
+      .eq('business_id', businessId)
+      .eq('is_active', true);
+    knowledgeBase = kbData || [];
+    console.log(`Loaded ${knowledgeBase.length} knowledge base items`);
+  } catch (kbError: any) {
+    console.error('Failed to load knowledge base:', kbError.message);
+  }
+
+  // Load class schedule with day mapping
+  let classSchedule: any[] = [];
+  const dayNames = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+  try {
+    const { data: scheduleData } = await supabase
+      .from('class_schedule')
+      .select('*')
+      .eq('business_id', businessId)
+      .eq('is_active', true)
+      .order('day_of_week')
+      .order('start_time');
+
+    if (scheduleData) {
+      classSchedule = scheduleData.map((cls: any) => ({
+        ...cls,
+        day_name: dayNames[cls.day_of_week] || `Day ${cls.day_of_week}`
+      }));
+    }
+    console.log(`Loaded ${classSchedule.length} class schedule items`);
+  } catch (schedError: any) {
+    console.error('Failed to load class schedule:', schedError.message);
+  }
+
+  // Get current day in Eastern Time for accurate class suggestions
+  const now = new Date();
+  const easternTime = new Date(now.toLocaleString('en-US', { timeZone: 'America/New_York' }));
+  const currentDay = easternTime.getDay();
+  const currentDayName = dayNames[currentDay];
+
+  // Build knowledge context for AI
+  let knowledgeContext = '';
+  if (knowledgeBase.length > 0) {
+    knowledgeContext = '\n\nBusiness Knowledge Base:\n' +
+      knowledgeBase.map(kb => `Q: ${kb.question}\nA: ${kb.answer}`).join('\n\n');
+  }
+
+  let scheduleContext = '';
+  if (classSchedule.length > 0) {
+    scheduleContext = `\n\nToday is ${currentDayName}.\nClass Schedule:\n` +
+      classSchedule.map(c => `${c.day_name} ${c.start_time}: ${c.class_name}${c.instructor ? ` with ${c.instructor}` : ''}`).join('\n');
+  }
+
+  const fullBusinessContext = `${businessName}${knowledgeContext}${scheduleContext}`;
+
+  // Junk message patterns - skip checkbox values and non-substantive messages
+  const junkMessages = ['checked', 'unchecked', 'yes', 'no', 'true', 'false', 'n/a', 'na', 'none', '-', '.', '..', '...'];
+  const isJunkMessage = inquiry && junkMessages.includes(inquiry.toLowerCase().trim());
+
+  if (isJunkMessage) {
+    console.log('Skipping junk/checkbox message:', inquiry);
+  }
+
   // Determine the response message
   let responseMessage: string;
 
-  if (inquiry && inquiry.trim().length > 0) {
-    // They included a question/comment - use AI to respond
+  if (inquiry && inquiry.trim().length > 0 && !isJunkMessage) {
+    // They included a real question/comment - use AI to respond
     console.log('Inquiry provided, generating AI response...');
+
+    // === AI REQUEST DEBUG ===
+    console.log('=== AI REQUEST DEBUG ===');
+    console.log('Contact name:', contact.first_name, contact.last_name);
+    console.log('Contact email:', contact.email);
+    console.log('Contact phone:', contact.phone);
+    console.log('Business ID:', businessId);
+    console.log('Inquiry/Message:', inquiry);
+    console.log('Knowledge base loaded:', knowledgeBase.length, 'items');
+    if (knowledgeBase.length > 0) {
+      console.log('Knowledge categories:', [...new Set(knowledgeBase.map(kb => kb.category))]);
+      // Log any pricing-related knowledge
+      const pricingKb = knowledgeBase.filter(kb =>
+        kb.category?.toLowerCase().includes('pricing') ||
+        kb.question?.toLowerCase().includes('price') ||
+        kb.question?.toLowerCase().includes('cost') ||
+        kb.question?.toLowerCase().includes('membership')
+      );
+      if (pricingKb.length > 0) {
+        console.log('Pricing knowledge found:', pricingKb.length, 'items');
+        pricingKb.forEach(p => console.log(`  - ${p.question}: ${p.answer?.substring(0, 100)}...`));
+      }
+    }
+    console.log('Class schedule loaded:', classSchedule.length, 'items');
+    console.log('Current day (Eastern):', currentDayName);
+    console.log('Full business context length:', fullBusinessContext.length, 'chars');
+    console.log('=== FULL CONTEXT BEING SENT ===');
+    console.log(fullBusinessContext);
+    console.log('=== END DEBUG ===');
 
     try {
       const aiResponse = await fetch(`${Deno.env.get('SUPABASE_URL')}/functions/v1/ai-response`, {
@@ -231,18 +326,24 @@ async function sendInitialOutreach(
         body: JSON.stringify({
           messages: [{ role: 'user', content: inquiry }],
           businessId: businessId,
-          businessContext: businessName,
+          businessContext: fullBusinessContext,
           contactName: contactName,
-          classSchedule: []
+          classSchedule: classSchedule
         })
       });
 
       if (aiResponse.ok) {
         const aiResult = await aiResponse.json();
         responseMessage = aiResult.message || DEFAULT_GREETING;
-        console.log('AI generated response:', responseMessage);
+        console.log('=== AI RESPONSE DEBUG ===');
+        console.log('AI message:', responseMessage);
+        console.log('Knowledge used:', aiResult.knowledgeUsed || 'none');
+        console.log('Detected intents:', aiResult.detectedIntents || 'none');
+        console.log('Booking state:', JSON.stringify(aiResult.bookingState || {}));
+        console.log('=== END AI RESPONSE ===');
       } else {
-        console.error('AI response failed, using default');
+        const errorText = await aiResponse.text();
+        console.error('AI response failed:', aiResponse.status, errorText);
         responseMessage = DEFAULT_GREETING;
       }
     } catch (aiError: any) {
@@ -746,18 +847,48 @@ serve(async (req: Request) => {
         }
 
         // Send outreach for BOTH new contacts AND existing contacts with a new inquiry
+        // BUT skip outreach for service requests (cancellation/freeze forms)
         const inquiry = processedData.comments || null;
         const hasInquiry = inquiry && inquiry.trim().length > 0;
 
-        if (contactResult.isNew || hasInquiry) {
-          console.log(`Sending outreach: isNew=${contactResult.isNew}, hasInquiry=${hasInquiry}`);
-          await sendInitialOutreach(
-            supabase,
-            contactResult.contact,
-            endpoint.business_id,
-            endpoint.businesses,
-            inquiry
-          );
+        if (isServiceRequest) {
+          console.log(`Service request (${leadType}) - skipping AI outreach, logging only`);
+          // Log the service request for staff follow-up
+          await supabase.from('automation_logs').insert({
+            business_id: endpoint.business_id,
+            automation_type: 'service_request_received',
+            status: 'success',
+            processed_data: {
+              contact_id: contactResult.contact.id,
+              request_type: leadType,
+              form_name: formName,
+              comments: inquiry?.substring(0, 500) || null,
+              requires_staff_action: true
+            }
+          });
+        } else if (contactResult.isNew || hasInquiry) {
+          // Check if we already sent outreach to this contact in the last 60 seconds
+          // This prevents duplicate outreach when Wix sends both contact_created and contact_updated webhooks
+          const { data: recentSms } = await supabase
+            .from('sms_messages')
+            .select('id')
+            .eq('contact_id', contactResult.contact.id)
+            .eq('direction', 'outbound')
+            .gte('created_at', new Date(Date.now() - 60000).toISOString())
+            .limit(1);
+
+          if (recentSms && recentSms.length > 0) {
+            console.log(`Deduplication: Already sent outreach to contact ${contactResult.contact.id} in last 60 seconds, skipping duplicate`);
+          } else {
+            console.log(`Sending outreach: isNew=${contactResult.isNew}, hasInquiry=${hasInquiry}`);
+            await sendInitialOutreach(
+              supabase,
+              contactResult.contact,
+              endpoint.business_id,
+              endpoint.businesses,
+              inquiry
+            );
+          }
         }
       } catch (error: any) {
         console.error('Contact find/create failed:', error);
