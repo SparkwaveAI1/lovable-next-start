@@ -219,9 +219,10 @@ async function sendInitialOutreach(
   try {
     const { data: kbData } = await supabase
       .from('business_knowledge')
-      .select('category, question, answer')
+      .select('category, title, content')
       .eq('business_id', businessId)
-      .eq('is_active', true);
+      .eq('is_active', true)
+      .order('priority', { ascending: false });
     knowledgeBase = kbData || [];
     console.log(`Loaded ${knowledgeBase.length} knowledge base items`);
   } catch (kbError: any) {
@@ -257,20 +258,11 @@ async function sendInitialOutreach(
   const currentDay = easternTime.getDay();
   const currentDayName = dayNames[currentDay];
 
-  // Build knowledge context for AI
-  let knowledgeContext = '';
+  // Format knowledge base for AI
+  let knowledgeText = '';
   if (knowledgeBase.length > 0) {
-    knowledgeContext = '\n\nBusiness Knowledge Base:\n' +
-      knowledgeBase.map(kb => `Q: ${kb.question}\nA: ${kb.answer}`).join('\n\n');
+    knowledgeText = knowledgeBase.map(kb => `${kb.title}: ${kb.content}`).join('\n');
   }
-
-  let scheduleContext = '';
-  if (classSchedule.length > 0) {
-    scheduleContext = `\n\nToday is ${currentDayName}.\nClass Schedule:\n` +
-      classSchedule.map(c => `${c.day_name} ${c.start_time}: ${c.class_name}${c.instructor ? ` with ${c.instructor}` : ''}`).join('\n');
-  }
-
-  const fullBusinessContext = `${businessName}${knowledgeContext}${scheduleContext}`;
 
   // Junk message patterns - skip checkbox values and non-substantive messages
   const junkMessages = ['checked', 'unchecked', 'yes', 'no', 'true', 'false', 'n/a', 'na', 'none', '-', '.', '..', '...'];
@@ -287,34 +279,8 @@ async function sendInitialOutreach(
     // They included a real question/comment - use AI to respond
     console.log('Inquiry provided, generating AI response...');
 
-    // === AI REQUEST DEBUG ===
-    console.log('=== AI REQUEST DEBUG ===');
-    console.log('Contact name:', contact.first_name, contact.last_name);
-    console.log('Contact email:', contact.email);
-    console.log('Contact phone:', contact.phone);
-    console.log('Business ID:', businessId);
-    console.log('Inquiry/Message:', inquiry);
     console.log('Knowledge base loaded:', knowledgeBase.length, 'items');
-    if (knowledgeBase.length > 0) {
-      console.log('Knowledge categories:', [...new Set(knowledgeBase.map(kb => kb.category))]);
-      // Log any pricing-related knowledge
-      const pricingKb = knowledgeBase.filter(kb =>
-        kb.category?.toLowerCase().includes('pricing') ||
-        kb.question?.toLowerCase().includes('price') ||
-        kb.question?.toLowerCase().includes('cost') ||
-        kb.question?.toLowerCase().includes('membership')
-      );
-      if (pricingKb.length > 0) {
-        console.log('Pricing knowledge found:', pricingKb.length, 'items');
-        pricingKb.forEach(p => console.log(`  - ${p.question}: ${p.answer?.substring(0, 100)}...`));
-      }
-    }
     console.log('Class schedule loaded:', classSchedule.length, 'items');
-    console.log('Current day (Eastern):', currentDayName);
-    console.log('Full business context length:', fullBusinessContext.length, 'chars');
-    console.log('=== FULL CONTEXT BEING SENT ===');
-    console.log(fullBusinessContext);
-    console.log('=== END DEBUG ===');
 
     try {
       const aiResponse = await fetch(`${Deno.env.get('SUPABASE_URL')}/functions/v1/ai-response`, {
@@ -326,9 +292,10 @@ async function sendInitialOutreach(
         body: JSON.stringify({
           messages: [{ role: 'user', content: inquiry }],
           businessId: businessId,
-          businessContext: fullBusinessContext,
+          businessContext: businessName,
           contactName: contactName,
-          classSchedule: classSchedule
+          classSchedule: classSchedule,
+          knowledgeBase: knowledgeText
         })
       });
 
