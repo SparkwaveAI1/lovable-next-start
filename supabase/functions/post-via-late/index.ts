@@ -1,5 +1,6 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { withRetry, SOCIAL_RETRY_OPTIONS } from "../_shared/retry.ts";
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -121,26 +122,29 @@ serve(async (req) => {
 
     console.log(`📡 Calling Late API for ${platform}...`);
     console.log(`   Account ID: ${accountId}`);
-    console.log(`   Payload:`, JSON.stringify(latePayload, null, 2));
 
-    // Call Late API (let it take as long as needed)
-    console.log('📡 Calling Late API...');
-
-    let response;
-    try {
-      response = await fetch('https://getlate.dev/api/v1/posts', {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${lateApiKey}`,
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify(latePayload)
-        // No timeout - Late API will handle it
-      });
-    } catch (fetchError: any) {
-      console.error('❌ Late API fetch error:', fetchError);
-      throw new Error(`Network error calling Late API: ${fetchError.message}`);
-    }
+    // Call Late API with retry for transient network errors
+    // Note: Auth errors are NOT retried (handled by SOCIAL_RETRY_OPTIONS)
+    const response = await withRetry(
+      async () => {
+        const res = await fetch('https://getlate.dev/api/v1/posts', {
+          method: 'POST',
+          headers: {
+            'Authorization': `Bearer ${lateApiKey}`,
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify(latePayload)
+        });
+        
+        // Only throw on network errors or 5xx, let 4xx through for detailed handling
+        if (!res.ok && res.status >= 500) {
+          throw new Error(`Late API server error (${res.status})`);
+        }
+        
+        return res;
+      },
+      SOCIAL_RETRY_OPTIONS
+    );
 
     console.log('✅ Late API responded');
 
