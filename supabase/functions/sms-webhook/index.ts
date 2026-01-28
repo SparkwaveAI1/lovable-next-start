@@ -1,5 +1,6 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
+import { withRetry, SMS_RETRY_OPTIONS } from "../_shared/retry.ts";
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -502,36 +503,56 @@ serve(async (req) => {
         ai_response: true
       });
 
-    // Send SMS via Twilio API directly (more reliable than TwiML)
+    // Send SMS via Twilio API with retry for reliability
     const accountSid = Deno.env.get('TWILIO_ACCOUNT_SID') || Deno.env.get('TWILIO_SID');
     const authToken = Deno.env.get('TWILIO_AUTH_TOKEN');
     const twilioFromNumber = Deno.env.get('TWILIO_PHONE_NUMBER');
 
     if (accountSid && authToken && twilioFromNumber) {
-      console.log('Sending SMS via Twilio API...');
+      console.log('📱 Sending SMS via Twilio API...');
 
-      const twilioResponse = await fetch(`https://api.twilio.com/2010-04-01/Accounts/${accountSid}/Messages.json`, {
-        method: 'POST',
-        headers: {
-          'Authorization': `Basic ${btoa(`${accountSid}:${authToken}`)}`,
-          'Content-Type': 'application/x-www-form-urlencoded'
-        },
-        body: new URLSearchParams({
-          From: twilioFromNumber,
-          To: from, // Send back to the original sender
-          Body: responseMessage
-        })
-      });
+      try {
+        const twilioResult = await withRetry(async () => {
+          const response = await fetch(`https://api.twilio.com/2010-04-01/Accounts/${accountSid}/Messages.json`, {
+            method: 'POST',
+            headers: {
+              'Authorization': `Basic ${btoa(`${accountSid}:${authToken}`)}`,
+              'Content-Type': 'application/x-www-form-urlencoded'
+            },
+            body: new URLSearchParams({
+              From: twilioFromNumber,
+              To: from,
+              Body: responseMessage
+            })
+          });
 
-      if (!twilioResponse.ok) {
-        const errorData = await twilioResponse.text();
-        console.error('Twilio API error:', errorData);
-      } else {
-        const twilioResult = await twilioResponse.json();
-        console.log('SMS sent successfully, SID:', twilioResult.sid);
+          if (!response.ok) {
+            const errorData = await response.text();
+            throw new Error(`Twilio API error (${response.status}): ${errorData}`);
+          }
+
+          return response.json();
+        }, SMS_RETRY_OPTIONS);
+
+        console.log('📱 SMS sent successfully, SID:', twilioResult.sid);
+      } catch (smsError: any) {
+        console.error('📱 SMS sending failed after retries:', smsError.message);
+        // Log the failure for monitoring
+        await supabase.from('automation_logs').insert({
+          business_id: businessId,
+          automation_type: 'sms_response_failed',
+          status: 'error',
+          error_message: smsError.message,
+          processed_data: {
+            contact_id: contact.id,
+            thread_id: thread.id,
+            to_phone: from,
+            message_preview: responseMessage.substring(0, 100)
+          }
+        });
       }
     } else {
-      console.warn('Twilio credentials not configured, cannot send SMS');
+      console.warn('📱 Twilio credentials not configured, cannot send SMS');
     }
 
     // STEP 7: Send email greeting for new threads if contact has email
