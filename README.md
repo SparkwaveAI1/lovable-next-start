@@ -1,73 +1,96 @@
-# Welcome to your Lovable project
+# Sparkwave Automation
 
-## Project info
+Central automation/CRM platform for managing multiple businesses.
 
-**URL**: https://lovable.dev/projects/f97adaaf-ee4f-485f-bffc-6f3affc80d54
+## 🏢 Supported Businesses
 
-## How can I edit this code?
+- **Fight Flow Academy** — Martial arts gym
+- **Sparkwave AI** — AI automation solutions
+- **PersonaAI** — AI persona generation
+- **CharX World** — Character creation platform
 
-There are several ways of editing your application.
+## 🚀 Features
 
-**Use Lovable**
+### Content Management
+- AI-powered content generation
+- Multi-platform scheduling (Twitter, Instagram, TikTok, LinkedIn, Facebook)
+- Media library with tagging
+- Later.com (Late.dev) integration
 
-Simply visit the [Lovable Project](https://lovable.dev/projects/f97adaaf-ee4f-485f-bffc-6f3affc80d54) and start prompting.
+### CRM & Contacts
+- Lead capture and management
+- Contact deduplication (HubSpot-style)
+- Tag-based segmentation
+- Pipeline stages
 
-Changes made via Lovable will be committed automatically to this repo.
+### Communications
+- SMS (Twilio) with AI responses
+- Email campaigns (Resend)
+- Conversation threading
+- Automated follow-ups
 
-**Use your preferred IDE**
+### Lead Capture
+- Native form components (replacing Wix dependency)
+- Webhook support for external forms
+- SMS consent management
 
-If you want to work locally using your own IDE, you can clone this repo and push changes. Pushed changes will also be reflected in Lovable.
+## 🛠️ Tech Stack
 
-The only requirement is having Node.js & npm installed - [install with nvm](https://github.com/nvm-sh/nvm#installing-and-updating)
+- **Frontend**: React, TypeScript, Vite, Tailwind CSS, shadcn/ui
+- **Backend**: Supabase (Auth, Database, Edge Functions)
+- **Integrations**: Twilio, Resend, Late.dev
 
-Follow these steps:
+## 📁 Project Structure
 
-```sh
-# Step 1: Clone the repository using the project's Git URL.
-git clone <YOUR_GIT_URL>
+```
+src/
+├── components/
+│   ├── forms/           # Native form components
+│   ├── email/           # Email campaign UI
+│   ├── media/           # Media library components
+│   └── ui/              # shadcn components
+├── pages/
+│   ├── ContentCenter    # Content generation/scheduling
+│   ├── Contacts         # CRM
+│   ├── EmailMarketing   # Campaigns
+│   ├── MediaLibraryPage # Asset management
+│   └── ...
+├── hooks/               # Custom React hooks
+├── contexts/            # React contexts
+└── integrations/        # Supabase client
 
-# Step 2: Navigate to the project directory.
-cd <YOUR_PROJECT_NAME>
-
-# Step 3: Install the necessary dependencies.
-npm i
-
-# Step 4: Start the development server with auto-reloading and an instant preview.
-npm run dev
+supabase/functions/
+├── send-sms/           # Twilio SMS with retry
+├── send-email/         # Resend email with retry
+├── post-via-late/      # Social posting with retry
+├── sms-webhook/        # Inbound SMS handling
+├── webhook-handler/    # Form submission processing
+├── ai-response/        # AI conversation responses
+├── content-scheduler/  # Scheduled posting
+└── _shared/            # Shared utilities (retry, crypto)
 ```
 
-**Edit a file directly in GitHub**
+## 🔧 Development
 
-- Navigate to the desired file(s).
-- Click the "Edit" button (pencil icon) at the top right of the file view.
-- Make your changes and commit the changes.
+```bash
+# Install dependencies
+npm install
 
-**Use GitHub Codespaces**
+# Start dev server
+npm run dev
 
-- Navigate to the main page of your repository.
-- Click on the "Code" button (green button) near the top right.
-- Select the "Codespaces" tab.
-- Click on "New codespace" to launch a new Codespace environment.
-- Edit files directly within the Codespace and commit and push your changes once you're done.
+# Deploy edge functions
+supabase functions deploy
+```
 
-## What technologies are used for this project?
+## 📝 Recent Improvements (2026-01-28)
 
-This project is built with:
+- Added retry logic with exponential backoff to SMS, email, and social posting
+- Fixed conversation dropping issue (SMS responses now retry)
+- Migrated from hardcoded businesses to dynamic database loading
+- Created LeadCaptureForm component as foundation for Wix replacement
 
-- Vite
-- TypeScript
-- React
-- shadcn-ui
-- Tailwind CSS
+## 🔗 Links
 
-## How can I deploy this project?
-
-Simply open [Lovable](https://lovable.dev/projects/f97adaaf-ee4f-485f-bffc-6f3affc80d54) and click on Share -> Publish.
-
-## Can I connect a custom domain to my Lovable project?
-
-Yes, you can!
-
-To connect a domain, navigate to Project > Settings > Domains and click Connect Domain.
-
-Read more here: [Setting up a custom domain](https://docs.lovable.dev/tips-tricks/custom-domain#step-by-step-guide)
+- **Lovable Project**: https://lovable.dev/projects/f97adaaf-ee4f-485f-bffc-6f3affc80d54
+- **Live App**: sparkwaveai.app
