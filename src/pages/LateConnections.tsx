@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { BUSINESSES } from '@/constants/businesses';
+import { useBusinesses } from '@/hooks/useBusinesses';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -35,6 +35,7 @@ interface PlatformConnection {
 
 export default function LateConnections() {
   const { selectedBusiness, setSelectedBusiness } = useBusinessContext();
+  const { data: businesses = [] } = useBusinesses();
   const [platforms, setPlatforms] = useState<PlatformConnection[]>([]);
   const [loading, setLoading] = useState(false);
   const [syncing, setSyncing] = useState(false);
@@ -120,7 +121,7 @@ export default function LateConnections() {
   };
 
   const handleBusinessChange = (id: string) => {
-    const business = BUSINESSES.find(b => b.id === id);
+    const business = businesses.find(b => b.id === id);
     if (business) {
       setSelectedBusiness(business);
     }

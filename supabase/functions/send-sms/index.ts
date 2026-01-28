@@ -1,10 +1,13 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
+import { withRetry, SMS_RETRY_OPTIONS } from "../_shared/retry.ts";
 
 /**
- * REQUIRED ENVIRONMENT SECRETS (set in Supabase Dashboard -> Edge Functions -> Secrets):
+ * Send SMS Edge Function (v5.0 - with retry logic)
+ * 
+ * REQUIRED ENVIRONMENT SECRETS:
  * - TWILIO_ACCOUNT_SID (or TWILIO_SID): Your Twilio Account SID
  * - TWILIO_AUTH_TOKEN: Your Twilio Auth Token  
- * - TWILIO_PHONE_NUMBER: Your Twilio phone number in E.164 format (e.g., +1234567890)
+ * - TWILIO_PHONE_NUMBER: Your Twilio phone number in E.164 format
  */
 
 const corsHeaders = {
@@ -16,128 +19,29 @@ const corsHeaders = {
 function normalizePhoneNumber(phoneNumber: string): string | null {
   if (!phoneNumber) return null;
   
-  // Remove all non-numeric characters
   const digits = phoneNumber.replace(/\D/g, '');
   
-  // Handle different digit lengths
-  let normalizedDigits = '';
-  
   if (digits.length === 10) {
-    // 10 digits: assume US number, add country code
-    normalizedDigits = '1' + digits;
+    return '+1' + digits;
   } else if (digits.length === 11 && digits.startsWith('1')) {
-    // 11 digits starting with 1: already has US country code
-    normalizedDigits = digits;
-  } else {
-    // Invalid length for US phone number
-    console.warn(`Invalid phone number format: ${phoneNumber}`);
-    return null;
+    return '+' + digits;
   }
   
-  // Validate US phone number (must be 11 digits starting with 1)
-  if (normalizedDigits.length !== 11 || !normalizedDigits.startsWith('1')) {
-    console.warn(`Invalid US phone number: ${phoneNumber}`);
-    return null;
-  }
-  
-  // Return E.164 format with + prefix
-  return '+' + normalizedDigits;
+  console.warn(`Invalid phone number format: ${phoneNumber}`);
+  return null;
 }
 
-serve(async (req) => {
-  // Add debug logging immediately at function start
-  console.log('=== SMS FUNCTION STARTED ===');
-  console.log('Request method:', req.method);
-  console.log('Request URL:', req.url);
-  console.log('Timestamp:', new Date().toISOString());
-  
-  if (req.method === 'OPTIONS') {
-    console.log('Handling CORS preflight');
-    return new Response('ok', { headers: corsHeaders });
-  }
-
-  try {
-    console.log('=== PARSING REQUEST BODY ===');
-    
-    // Get raw request body first for debugging
-    const rawBody = await req.text();
-    console.log('Raw request body:', rawBody);
-    console.log('Raw body length:', rawBody.length);
-    console.log('Raw body type:', typeof rawBody);
-    
-    // Try to parse as JSON with better error handling
-    let requestBody;
-    try {
-      requestBody = JSON.parse(rawBody);
-      console.log('JSON parsing successful');
-    } catch (parseError: unknown) {
-      const errorMessage = (parseError as Error).message;
-      console.error('JSON parsing failed:', errorMessage);
-      console.error('Raw body content:', JSON.stringify(rawBody));
-      throw new Error(`Invalid JSON in request body: ${errorMessage}`);
-    }
-    
-    console.log('Request body received:', { 
-      hasTo: !!requestBody.to, 
-      hasMessage: !!requestBody.message, 
-      hasBusinessId: !!requestBody.businessId 
-    });
-    
-    const { to, message, businessId } = requestBody;
-    console.log('Extracted parameters:', { to: to?.substring(0, 3) + '...', messageLength: message?.length });
-
-    console.log('=== CHECKING ENVIRONMENT VARIABLES INDIVIDUALLY ===');
-    // Support both naming conventions for account SID
-    const accountSid = Deno.env.get('TWILIO_ACCOUNT_SID') || Deno.env.get('TWILIO_SID');
-    const authToken = Deno.env.get('TWILIO_AUTH_TOKEN');
-    const fromNumber = Deno.env.get('TWILIO_PHONE_NUMBER');
-
-    console.log('TWILIO_SID check:', {
-      exists: !!accountSid,
-      length: accountSid?.length || 0,
-      startsWithAC: accountSid?.startsWith('AC') || false
-    });
-
-    console.log('TWILIO_AUTH_TOKEN check:', {
-      exists: !!authToken,
-      length: authToken?.length || 0
-    });
-
-    console.log('TWILIO_PHONE_NUMBER check:', {
-      exists: !!fromNumber,
-      length: fromNumber?.length || 0,
-      value: fromNumber
-    });
-
-    // Test each credential separately
-    if (!accountSid) {
-      throw new Error('TWILIO_SID is missing or null');
-    }
-    if (!authToken) {
-      throw new Error('TWILIO_AUTH_TOKEN is missing or null');
-    }
-    if (!fromNumber) {
-      throw new Error('TWILIO_PHONE_NUMBER is missing or null');
-    }
-
-    console.log('All Twilio credentials verified successfully');
-
-    // Normalize phone number to E.164 format
-    const normalizedPhone = normalizePhoneNumber(to);
-    
-    if (!normalizedPhone) {
-      throw new Error(`Invalid phone number format: ${to}`);
-    }
-    
-    console.log(`Normalized phone: ${to} -> ${normalizedPhone}`);
-
-    // Get Twilio credentials from environment
-    if (!accountSid || !authToken || !fromNumber) {
-      throw new Error('Twilio credentials not configured');
-    }
-
-    // Send SMS via Twilio API
-    const twilioResponse = await fetch(`https://api.twilio.com/2010-04-01/Accounts/${accountSid}/Messages.json`, {
+// Twilio API call with retry
+async function sendViaTwilio(
+  accountSid: string,
+  authToken: string,
+  fromNumber: string,
+  toNumber: string,
+  message: string
+): Promise<{ sid: string }> {
+  const response = await fetch(
+    `https://api.twilio.com/2010-04-01/Accounts/${accountSid}/Messages.json`,
+    {
       method: 'POST',
       headers: {
         'Authorization': `Basic ${btoa(`${accountSid}:${authToken}`)}`,
@@ -145,27 +49,80 @@ serve(async (req) => {
       },
       body: new URLSearchParams({
         From: fromNumber,
-        To: normalizedPhone,
+        To: toNumber,
         Body: message
       })
+    }
+  );
+
+  if (!response.ok) {
+    const errorText = await response.text();
+    throw new Error(`Twilio API error (${response.status}): ${errorText}`);
+  }
+
+  return response.json();
+}
+
+serve(async (req) => {
+  const requestId = crypto.randomUUID().slice(0, 8);
+  console.log(`[${requestId}] SMS function started`);
+  
+  if (req.method === 'OPTIONS') {
+    return new Response('ok', { headers: corsHeaders });
+  }
+
+  try {
+    // Parse request
+    const rawBody = await req.text();
+    const requestBody = JSON.parse(rawBody);
+    const { to, message, businessId } = requestBody;
+    
+    console.log(`[${requestId}] Request:`, { 
+      to: to?.slice(0, 3) + '***', 
+      messageLength: message?.length,
+      businessId 
     });
 
-    if (!twilioResponse.ok) {
-      const errorData = await twilioResponse.text();
-      throw new Error(`Twilio API error: ${errorData}`);
+    // Validate credentials
+    const accountSid = Deno.env.get('TWILIO_ACCOUNT_SID') || Deno.env.get('TWILIO_SID');
+    const authToken = Deno.env.get('TWILIO_AUTH_TOKEN');
+    const fromNumber = Deno.env.get('TWILIO_PHONE_NUMBER');
+
+    if (!accountSid || !authToken || !fromNumber) {
+      throw new Error('Twilio credentials not configured');
     }
 
-    const twilioResult = await twilioResponse.json();
+    // Normalize phone number
+    const normalizedPhone = normalizePhoneNumber(to);
+    if (!normalizedPhone) {
+      throw new Error(`Invalid phone number format: ${to}`);
+    }
+
+    console.log(`[${requestId}] Sending to ${normalizedPhone.slice(0, 5)}***`);
+
+    // Send with retry logic
+    const result = await withRetry(
+      () => sendViaTwilio(accountSid, authToken, fromNumber, normalizedPhone, message),
+      {
+        ...SMS_RETRY_OPTIONS,
+        onRetry: (error, attempt) => {
+          console.log(`[${requestId}] Retry ${attempt}: ${error.message}`);
+        }
+      }
+    );
+
+    console.log(`[${requestId}] SMS sent successfully: ${result.sid}`);
 
     return new Response(JSON.stringify({
       success: true,
-      messageSid: twilioResult.sid
+      messageSid: result.sid
     }), {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' }
     });
 
   } catch (error: any) {
-    console.error('SMS sending error:', error);
+    console.error(`[${requestId}] SMS failed:`, error.message);
+    
     return new Response(JSON.stringify({
       success: false,
       error: error.message
@@ -176,4 +133,4 @@ serve(async (req) => {
   }
 });
 
-// Deployment v4.0 - Using TWILIO_SID to bypass secret access issue
+// Deployment v5.0 - Added retry logic with exponential backoff

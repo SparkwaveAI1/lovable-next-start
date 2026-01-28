@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { BUSINESSES } from '@/constants/businesses';
+import { useBusinesses } from '@/hooks/useBusinesses';
 import { Link } from "react-router-dom";
 import { Sparkles, FileText, Send, Calendar, TrendingUp, RefreshCw, Edit, Trash2, Rocket, CheckCircle, Copy, ImageIcon, Settings, Video } from "lucide-react";
 import { AgentPromptEditor } from '@/components/AgentPromptEditor';
@@ -26,6 +26,7 @@ const TIME_RE = /^([01]\d|2[0-3]):([0-5]\d)$/;
 
 const ContentCenter = () => {
   const { selectedBusiness, setSelectedBusiness } = useBusinessContext();
+  const { data: businesses = [] } = useBusinesses();
   const [selectedPlatform, setSelectedPlatform] = useState("twitter");
   const [selectedContentType, setSelectedContentType] = useState("medium");
   const [topic, setTopic] = useState("");
@@ -83,8 +84,6 @@ const ContentCenter = () => {
       });
     }
   };
-
-  const businesses = BUSINESSES;
 
   const platforms = [
     {

@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { BUSINESSES } from '@/constants/businesses';
+import { useBusinesses } from '@/hooks/useBusinesses';
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -41,6 +41,7 @@ interface MediaAsset {
 
 export default function MediaLibraryPage() {
   const { selectedBusiness, setSelectedBusiness } = useBusinessContext();
+  const { data: businesses = [] } = useBusinesses();
   const [media, setMedia] = useState<MediaAsset[]>([]);
   const [loading, setLoading] = useState(false);
   const [uploading, setUploading] = useState(false);
@@ -567,7 +568,7 @@ export default function MediaLibraryPage() {
       <DashboardHeader
         selectedBusinessId={selectedBusiness?.id}
         onBusinessChange={(id) => {
-          const business = BUSINESSES.find(b => b.id === id);
+          const business = businesses.find(b => b.id === id);
           if (business) setSelectedBusiness(business);
         }}
       />

@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { BUSINESSES } from '@/constants/businesses';
+import { useBusinesses } from '@/hooks/useBusinesses';
 import { supabase } from "@/integrations/supabase/client";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -29,6 +29,7 @@ interface ServiceRequest {
 export default function ServiceRequests() {
   const [requests, setRequests] = useState<ServiceRequest[]>([]);
   const { selectedBusiness, setSelectedBusiness } = useBusinessContext();
+  const { data: businesses = [] } = useBusinesses();
   const [statusFilter, setStatusFilter] = useState<string>("all");
   const [isLoading, setIsLoading] = useState(true);
   const [expandedRequest, setExpandedRequest] = useState<string | null>(null);
@@ -136,7 +137,7 @@ export default function ServiceRequests() {
       <DashboardHeader 
         selectedBusinessId={selectedBusiness?.id}
         onBusinessChange={(id) => {
-          const business = BUSINESSES.find(b => b.id === id);
+          const business = businesses.find(b => b.id === id);
           if (business) setSelectedBusiness(business);
         }}
       />
