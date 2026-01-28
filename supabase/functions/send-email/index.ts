@@ -1,8 +1,9 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { withRetry, EMAIL_RETRY_OPTIONS } from "../_shared/retry.ts";
 
 /**
- * Send Email Edge Function
+ * Send Email Edge Function (v2.0 - with retry logic)
  * 
  * Sends emails via Resend API. Supports both single emails and campaign batch sending.
  * 
@@ -16,7 +17,6 @@ const corsHeaders = {
 };
 
 interface SendEmailRequest {
-  // For single email
   to?: string;
   subject?: string;
   html?: string;
@@ -24,49 +24,72 @@ interface SendEmailRequest {
   from_name?: string;
   from_email?: string;
   reply_to?: string;
-  
-  // For campaign sending
   campaign_id?: string;
-  
-  // For transactional emails
   template?: 'welcome' | 'password_reset' | 'notification';
   template_data?: Record<string, any>;
   business_id?: string;
-  
-  // For linking to contact
   contact_id?: string;
-  
-  // For test send mode
   test_email?: string;
 }
 
+interface EmailPayload {
+  from: string;
+  to: string[];
+  subject: string;
+  html: string;
+  text?: string;
+  reply_to?: string;
+  headers?: Record<string, string>;
+}
+
+// Send single email via Resend API with retry
+async function sendViaResend(
+  apiKey: string,
+  payload: EmailPayload
+): Promise<{ id: string }> {
+  const response = await fetch('https://api.resend.com/emails', {
+    method: 'POST',
+    headers: {
+      'Authorization': `Bearer ${apiKey}`,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify(payload),
+  });
+
+  const result = await response.json();
+
+  if (!response.ok) {
+    throw new Error(result.message || `Resend API error (${response.status})`);
+  }
+
+  return result;
+}
+
 serve(async (req) => {
-  // Handle CORS preflight
   if (req.method === 'OPTIONS') {
     return new Response(null, { headers: corsHeaders });
   }
 
-  try {
-    console.log('📧 send-email function started');
+  const requestId = crypto.randomUUID().slice(0, 8);
 
-    // Get Resend API key
+  try {
+    console.log(`[${requestId}] send-email started`);
+
     const resendApiKey = Deno.env.get('RESEND_API_KEY');
     if (!resendApiKey) {
-      console.error('❌ RESEND_API_KEY not configured');
       throw new Error('Email service not configured');
     }
 
-    // Initialize Supabase
     const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
     const supabaseKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
     const supabase = createClient(supabaseUrl, supabaseKey);
 
     const body: SendEmailRequest = await req.json();
-    console.log('📧 Request type:', body.test_email ? 'test' : body.campaign_id ? 'campaign' : 'single');
+    console.log(`[${requestId}] Request type:`, body.test_email ? 'test' : body.campaign_id ? 'campaign' : 'single');
 
-    // Test send mode - send to a single email for verification without affecting stats
+    // Test send mode
     if (body.test_email && body.campaign_id) {
-      console.log('📧 Test send mode to:', body.test_email);
+      console.log(`[${requestId}] Test send to:`, body.test_email);
       
       const { data: campaign, error: campaignError } = await supabase
         .from('email_campaigns')
@@ -75,66 +98,40 @@ serve(async (req) => {
         .single();
 
       if (campaignError || !campaign) {
-        console.error('❌ Campaign not found for test send:', campaignError);
         return new Response(
           JSON.stringify({ success: false, error: 'Campaign not found' }),
           { status: 404, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
         );
       }
 
-      // Personalize content with test values
-      const personalizedSubject = (campaign.subject || 'Test Email')
-        .replace(/\{\{first_name\}\}/gi, 'Test')
-        .replace(/\{\{last_name\}\}/gi, 'User')
-        .replace(/\{\{email\}\}/gi, body.test_email)
-        .replace(/\{\{name\}\}/gi, 'Test User');
+      const personalizedSubject = personalizeContent(campaign.subject || 'Test Email', {
+        first_name: 'Test', last_name: 'User', email: body.test_email
+      });
+      const personalizedHtml = personalizeContent(campaign.content_html || '', {
+        first_name: 'Test', last_name: 'User', email: body.test_email
+      });
 
-      const personalizedHtml = (campaign.content_html || '')
-        .replace(/\{\{first_name\}\}/gi, 'Test')
-        .replace(/\{\{last_name\}\}/gi, 'User')
-        .replace(/\{\{email\}\}/gi, body.test_email)
-        .replace(/\{\{name\}\}/gi, 'Test User');
-
-      // Send test email via Resend
-      const response = await fetch('https://api.resend.com/emails', {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${resendApiKey}`,
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
+      const result = await withRetry(
+        () => sendViaResend(resendApiKey, {
           from: `${campaign.from_name || 'Test'} <${campaign.from_email || 'noreply@example.com'}>`,
-          to: [body.test_email],
+          to: [body.test_email!],
           subject: `[TEST] ${personalizedSubject}`,
           html: personalizedHtml,
           reply_to: campaign.reply_to,
         }),
-      });
+        EMAIL_RETRY_OPTIONS
+      );
 
-      const result = await response.json();
-
-      if (!response.ok) {
-        console.error('❌ Test send failed:', result);
-        return new Response(
-          JSON.stringify({ success: false, error: result.message || 'Failed to send test email', details: result }),
-          { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-        );
-      }
-
-      console.log('✅ Test email sent successfully:', result.id);
+      console.log(`[${requestId}] Test email sent:`, result.id);
       return new Response(
-        JSON.stringify({ 
-          success: true, 
-          message: `Test email sent to ${body.test_email}`,
-          resend_id: result.id 
-        }),
+        JSON.stringify({ success: true, message: `Test email sent to ${body.test_email}`, resend_id: result.id }),
         { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
 
     // Campaign sending mode
     if (body.campaign_id) {
-      return await sendCampaign(body.campaign_id, supabase, resendApiKey);
+      return await sendCampaign(body.campaign_id, supabase, resendApiKey, requestId);
     }
 
     // Single email mode
@@ -145,92 +142,65 @@ serve(async (req) => {
     const fromEmail = body.from_email || 'noreply@yourdomain.com';
     const fromName = body.from_name || 'Your Company';
 
-    const emailPayload = {
-      from: `${fromName} <${fromEmail}>`,
-      to: [body.to],
-      subject: body.subject,
-      html: body.html,
-      text: body.text,
-      reply_to: body.reply_to,
-    };
+    console.log(`[${requestId}] Sending to:`, body.to);
 
-    console.log('📧 Sending single email to:', body.to);
+    const result = await withRetry(
+      () => sendViaResend(resendApiKey, {
+        from: `${fromName} <${fromEmail}>`,
+        to: [body.to!],
+        subject: body.subject!,
+        html: body.html!,
+        text: body.text,
+        reply_to: body.reply_to,
+      }),
+      EMAIL_RETRY_OPTIONS
+    );
 
-    const response = await fetch('https://api.resend.com/emails', {
-      method: 'POST',
-      headers: {
-        'Authorization': `Bearer ${resendApiKey}`,
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify(emailPayload),
-    });
+    console.log(`[${requestId}] Email sent:`, result.id);
 
-    const result = await response.json();
-
-    if (!response.ok) {
-      console.error('❌ Resend API error:', result);
-      throw new Error(result.message || 'Failed to send email');
-    }
-
-    console.log('✅ Email sent successfully:', result.id);
-
-    // If contact_id is provided, create email_sends record and update contact
+    // Link to contact if provided
     if (body.contact_id) {
-      // Create email_sends record linked to contact
       await supabase.from('email_sends').insert({
         contact_id: body.contact_id,
         resend_id: result.id,
         status: 'sent',
         sent_at: new Date().toISOString(),
-        campaign_id: null, // Direct email, not campaign
-        subscriber_id: null, // Using contact_id instead
+        campaign_id: null,
+        subscriber_id: null,
       });
 
-      // Update contact's last_activity_date
       await supabase.from('contacts').update({
         last_activity_date: new Date().toISOString(),
       }).eq('id', body.contact_id);
 
-      console.log('📧 Email linked to contact:', body.contact_id);
+      console.log(`[${requestId}] Linked to contact:`, body.contact_id);
     }
 
     return new Response(
-      JSON.stringify({
-        success: true,
-        message_id: result.id,
-      }),
-      {
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-        status: 200,
-      }
+      JSON.stringify({ success: true, message_id: result.id }),
+      { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 200 }
     );
 
   } catch (error: any) {
-    console.error('❌ Error in send-email:', error);
+    console.error(`[${requestId}] Error:`, error.message);
     return new Response(
-      JSON.stringify({
-        success: false,
-        error: error.message || 'Unknown error',
-      }),
-      {
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-        status: 500,
-      }
+      JSON.stringify({ success: false, error: error.message }),
+      { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 500 }
     );
   }
 });
 
 /**
- * Send a campaign to contacts based on targeting criteria
+ * Send campaign to recipients with batching
  */
 async function sendCampaign(
   campaignId: string,
   supabase: any,
-  resendApiKey: string
+  resendApiKey: string,
+  requestId: string
 ): Promise<Response> {
-  console.log('📧 Starting campaign send:', campaignId);
+  console.log(`[${requestId}] Campaign send:`, campaignId);
 
-  // Get campaign details
   const { data: campaign, error: campaignError } = await supabase
     .from('email_campaigns')
     .select('*')
@@ -249,33 +219,23 @@ async function sendCampaign(
     throw new Error('Campaign is already being sent');
   }
 
-  // Update campaign status to sending
-  await supabase
-    .from('email_campaigns')
-    .update({ status: 'sending' })
-    .eq('id', campaignId);
+  await supabase.from('email_campaigns').update({ status: 'sending' }).eq('id', campaignId);
 
   try {
-    // Get recipients using the database function
     const { data: recipients, error: recipientsError } = await supabase
       .rpc('get_campaign_recipients', { p_campaign_id: campaignId });
 
     if (recipientsError) {
-      console.error('❌ Error fetching recipients:', recipientsError);
       throw new Error('Failed to fetch campaign recipients');
     }
 
     if (!recipients || recipients.length === 0) {
-      // No recipients - mark as sent with 0 count
-      await supabase
-        .from('email_campaigns')
-        .update({
-          status: 'sent',
-          sent_at: new Date().toISOString(),
-          total_recipients: 0,
-          total_sent: 0,
-        })
-        .eq('id', campaignId);
+      await supabase.from('email_campaigns').update({
+        status: 'sent',
+        sent_at: new Date().toISOString(),
+        total_recipients: 0,
+        total_sent: 0,
+      }).eq('id', campaignId);
 
       return new Response(
         JSON.stringify({
@@ -286,69 +246,40 @@ async function sendCampaign(
           errors: 0,
           message: 'No recipients matched the targeting criteria',
         }),
-        {
-          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-          status: 200,
-        }
+        { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 200 }
       );
     }
 
-    console.log(`📧 Sending to ${recipients.length} contacts`);
-
-    // Update total recipients
-    await supabase
-      .from('email_campaigns')
-      .update({ total_recipients: recipients.length })
-      .eq('id', campaignId);
+    console.log(`[${requestId}] Sending to ${recipients.length} contacts`);
+    await supabase.from('email_campaigns').update({ total_recipients: recipients.length }).eq('id', campaignId);
 
     let sentCount = 0;
     let errorCount = 0;
-
-    // Send emails in batches of 10 to avoid rate limits
     const BATCH_SIZE = 10;
+
     for (let i = 0; i < recipients.length; i += BATCH_SIZE) {
       const batch = recipients.slice(i, i + BATCH_SIZE);
 
       await Promise.all(batch.map(async (contact: any) => {
         try {
-          // Personalize content
-          const personalizedHtml = personalizeContent(
-            campaign.content_html,
-            contact
-          );
-          const personalizedText = campaign.content_text
-            ? personalizeContent(campaign.content_text, contact)
-            : undefined;
-          const personalizedSubject = personalizeContent(
-            campaign.subject,
-            contact
-          );
+          const personalizedHtml = personalizeContent(campaign.content_html, contact);
+          const personalizedText = campaign.content_text ? personalizeContent(campaign.content_text, contact) : undefined;
+          const personalizedSubject = personalizeContent(campaign.subject, contact);
 
-          // Create send record first (linked to contact)
           const { data: sendRecord, error: sendRecordError } = await supabase
             .from('email_sends')
-            .insert({
-              campaign_id: campaignId,
-              contact_id: contact.contact_id,
-              status: 'pending',
-            })
+            .insert({ campaign_id: campaignId, contact_id: contact.contact_id, status: 'pending' })
             .select('id')
             .single();
 
           if (sendRecordError) {
-            console.error(`❌ Failed to create send record for ${contact.email}:`, sendRecordError);
             errorCount++;
             return;
           }
 
-          // Send via Resend
-          const response = await fetch('https://api.resend.com/emails', {
-            method: 'POST',
-            headers: {
-              'Authorization': `Bearer ${resendApiKey}`,
-              'Content-Type': 'application/json',
-            },
-            body: JSON.stringify({
+          // Use retry for each email send
+          const result = await withRetry(
+            () => sendViaResend(resendApiKey, {
               from: `${campaign.from_name} <${campaign.from_email}>`,
               to: [contact.email],
               subject: personalizedSubject,
@@ -361,66 +292,42 @@ async function sendCampaign(
                 'X-Contact-Id': contact.contact_id,
               },
             }),
-          });
+            { ...EMAIL_RETRY_OPTIONS, maxAttempts: 2 } // Fewer retries in batch mode
+          );
 
-          const result = await response.json();
+          await supabase.from('email_sends').update({
+            resend_id: result.id,
+            status: 'sent',
+            sent_at: new Date().toISOString(),
+          }).eq('id', sendRecord.id);
 
-          if (response.ok) {
-            // Update send record with success
-            await supabase
-              .from('email_sends')
-              .update({
-                resend_id: result.id,
-                status: 'sent',
-                sent_at: new Date().toISOString(),
-              })
-              .eq('id', sendRecord.id);
+          await supabase.rpc('contact_touch', { p_contact_id: contact.contact_id });
+          sentCount++;
 
-            // Update contact's last activity
-            await supabase.rpc('contact_touch', { p_contact_id: contact.contact_id });
-
-            sentCount++;
-          } else {
-            // Update send record with error
-            await supabase
-              .from('email_sends')
-              .update({
-                status: 'bounced',
-                error_message: result.message || 'Send failed',
-              })
-              .eq('id', sendRecord.id);
-
-            errorCount++;
-            console.error(`❌ Failed to send to ${contact.email}:`, result);
-          }
         } catch (err: any) {
           errorCount++;
-          console.error(`❌ Error sending to ${contact.email}:`, err.message);
+          console.error(`[${requestId}] Failed to send to ${contact.email}:`, err.message);
         }
       }));
 
-      // Small delay between batches to respect rate limits
+      // Rate limit between batches
       if (i + BATCH_SIZE < recipients.length) {
         await new Promise(resolve => setTimeout(resolve, 100));
       }
 
-      // Log progress for large campaigns
+      // Log progress
       if (recipients.length > 100 && (i + BATCH_SIZE) % 100 === 0) {
-        console.log(`📧 Progress: ${Math.min(i + BATCH_SIZE, recipients.length)}/${recipients.length}`);
+        console.log(`[${requestId}] Progress: ${Math.min(i + BATCH_SIZE, recipients.length)}/${recipients.length}`);
       }
     }
 
-    // Update campaign with final stats
-    await supabase
-      .from('email_campaigns')
-      .update({
-        status: 'sent',
-        sent_at: new Date().toISOString(),
-        total_sent: sentCount,
-      })
-      .eq('id', campaignId);
+    await supabase.from('email_campaigns').update({
+      status: 'sent',
+      sent_at: new Date().toISOString(),
+      total_sent: sentCount,
+    }).eq('id', campaignId);
 
-    console.log(`✅ Campaign sent: ${sentCount} delivered, ${errorCount} errors`);
+    console.log(`[${requestId}] Campaign complete: ${sentCount} sent, ${errorCount} errors`);
 
     return new Response(
       JSON.stringify({
@@ -430,32 +337,24 @@ async function sendCampaign(
         sent: sentCount,
         errors: errorCount,
       }),
-      {
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-        status: 200,
-      }
+      { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 200 }
     );
 
   } catch (error: any) {
-    // If sending fails, revert campaign status to draft
-    await supabase
-      .from('email_campaigns')
-      .update({ status: 'draft' })
-      .eq('id', campaignId);
-
+    await supabase.from('email_campaigns').update({ status: 'draft' }).eq('id', campaignId);
     throw error;
   }
 }
 
 /**
- * Replace personalization tokens in content
+ * Replace personalization tokens
  */
 function personalizeContent(content: string, contact: any): string {
   return content
-    .replace(/{{first_name}}/gi, contact.first_name || 'there')
-    .replace(/{{last_name}}/gi, contact.last_name || '')
-    .replace(/{{email}}/gi, contact.email || '')
-    .replace(/{{name}}/gi, 
+    .replace(/\{\{first_name\}\}/gi, contact.first_name || 'there')
+    .replace(/\{\{last_name\}\}/gi, contact.last_name || '')
+    .replace(/\{\{email\}\}/gi, contact.email || '')
+    .replace(/\{\{name\}\}/gi, 
       contact.first_name 
         ? `${contact.first_name}${contact.last_name ? ' ' + contact.last_name : ''}`
         : 'there'
