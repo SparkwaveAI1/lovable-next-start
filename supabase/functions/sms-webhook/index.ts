@@ -1,6 +1,7 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 import { withRetry, SMS_RETRY_OPTIONS } from "../_shared/retry.ts";
+import { enrollInFollowUp, pauseFollowUpOnResponse } from "../_shared/follow-up.ts";
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -157,8 +158,19 @@ serve(async (req) => {
 
     if (contact.isNew) {
       console.log(`New contact created from SMS: ${contact.id}`);
+      
+      // Enroll new leads in follow-up sequence (runs async, don't wait)
+      enrollInFollowUp(supabase, {
+        contactId: contact.id,
+        businessId: businessId,
+        trigger: 'new_lead',
+      }).catch(err => console.error('Follow-up enrollment failed:', err));
     } else {
       console.log(`Matched existing contact: ${contact.id}`);
+      
+      // Existing contact is responding - pause any active follow-up sequences
+      pauseFollowUpOnResponse(supabase, contact.id)
+        .catch(err => console.error('Follow-up pause failed:', err));
     }
 
     // STEP 3: Find or create conversation thread (handle duplicates)
