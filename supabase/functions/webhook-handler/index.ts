@@ -1,5 +1,6 @@
 import { serve } from "https://deno.land/std@0.190.0/http/server.ts";
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.45.0';
+import { enrollInFollowUp } from "../_shared/follow-up.ts";
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -808,6 +809,13 @@ serve(async (req: Request) => {
         if (contactResult.isNew) {
           console.log(`New contact created: ${contactResult.contact.id}`);
           automationType = 'contact_created';
+          
+          // Enroll new leads in follow-up sequence (async, don't wait)
+          enrollInFollowUp(supabase, {
+            contactId: contactResult.contact.id,
+            businessId: endpoint.business_id,
+            trigger: 'new_lead',
+          }).catch(err => console.error('Follow-up enrollment failed:', err));
         } else {
           console.log(`Existing contact matched by ${contactResult.matchedBy}: ${contactResult.contact.id}`);
           automationType = 'contact_updated';
