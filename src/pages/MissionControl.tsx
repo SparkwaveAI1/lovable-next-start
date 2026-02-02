@@ -21,31 +21,42 @@ export default function MissionControl() {
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  // Fetch data from Supabase mc_ tables
+  // Fetch data from Supabase mc_ tables, filtered by selected business
   const fetchData = useCallback(async () => {
+    if (!selectedBusiness?.id) {
+      setAgents([]);
+      setTasks([]);
+      setActivities([]);
+      setIsLoading(false);
+      return;
+    }
+
     setIsLoading(true);
     setError(null);
     try {
-      // Fetch agents from mc_agents
+      // Fetch agents from mc_agents filtered by business
       const { data: agentsData, error: agentsError } = await supabase
         .from('mc_agents')
         .select('*')
+        .eq('business_id', selectedBusiness.id)
         .order('created_at', { ascending: true });
       
       if (agentsError) throw agentsError;
       
-      // Fetch tasks from mc_tasks
+      // Fetch tasks from mc_tasks filtered by business
       const { data: tasksData, error: tasksError } = await supabase
         .from('mc_tasks')
         .select('*')
+        .eq('business_id', selectedBusiness.id)
         .order('created_at', { ascending: false });
       
       if (tasksError) throw tasksError;
       
-      // Fetch activities from mc_activities
+      // Fetch activities from mc_activities filtered by business
       const { data: activitiesData, error: activitiesError } = await supabase
         .from('mc_activities')
         .select('*')
+        .eq('business_id', selectedBusiness.id)
         .order('created_at', { ascending: false })
         .limit(50);
       
@@ -61,21 +72,25 @@ export default function MissionControl() {
     } finally {
       setIsLoading(false);
     }
-  }, []);
+  }, [selectedBusiness?.id]);
 
   // Initial data fetch
   useEffect(() => {
     fetchData();
   }, [fetchData]);
 
-  // Real-time subscriptions for live updates
+  // Real-time subscriptions for live updates (filtered by business)
   useEffect(() => {
-    // Subscribe to mc_agents changes
+    if (!selectedBusiness?.id) return;
+
+    const businessId = selectedBusiness.id;
+
+    // Subscribe to mc_agents changes for this business
     const agentsChannel = supabase
-      .channel('mc_agents_changes')
+      .channel(`mc_agents_changes_${businessId}`)
       .on(
         'postgres_changes',
-        { event: '*', schema: 'public', table: 'mc_agents' },
+        { event: '*', schema: 'public', table: 'mc_agents', filter: `business_id=eq.${businessId}` },
         (payload) => {
           console.log('Agent change:', payload);
           if (payload.eventType === 'INSERT') {
@@ -91,12 +106,12 @@ export default function MissionControl() {
       )
       .subscribe();
 
-    // Subscribe to mc_tasks changes
+    // Subscribe to mc_tasks changes for this business
     const tasksChannel = supabase
-      .channel('mc_tasks_changes')
+      .channel(`mc_tasks_changes_${businessId}`)
       .on(
         'postgres_changes',
-        { event: '*', schema: 'public', table: 'mc_tasks' },
+        { event: '*', schema: 'public', table: 'mc_tasks', filter: `business_id=eq.${businessId}` },
         (payload) => {
           console.log('Task change:', payload);
           if (payload.eventType === 'INSERT') {
@@ -112,12 +127,12 @@ export default function MissionControl() {
       )
       .subscribe();
 
-    // Subscribe to mc_activities changes
+    // Subscribe to mc_activities changes for this business
     const activitiesChannel = supabase
-      .channel('mc_activities_changes')
+      .channel(`mc_activities_changes_${businessId}`)
       .on(
         'postgres_changes',
-        { event: '*', schema: 'public', table: 'mc_activities' },
+        { event: '*', schema: 'public', table: 'mc_activities', filter: `business_id=eq.${businessId}` },
         (payload) => {
           console.log('Activity change:', payload);
           if (payload.eventType === 'INSERT') {
@@ -134,13 +149,13 @@ export default function MissionControl() {
       )
       .subscribe();
 
-    // Cleanup subscriptions on unmount
+    // Cleanup subscriptions on unmount or business change
     return () => {
       supabase.removeChannel(agentsChannel);
       supabase.removeChannel(tasksChannel);
       supabase.removeChannel(activitiesChannel);
     };
-  }, []);
+  }, [selectedBusiness?.id]);
 
   // Handle task status change via drag-drop
   const handleTaskStatusChange = async (taskId: string, newStatus: TaskStatus) => {
@@ -170,10 +185,11 @@ export default function MissionControl() {
         .from('mc_activities')
         .insert({
           type: 'status_changed',
-          agent_id: agents[0]?.id || 'system', // Use first agent or system
+          agent_id: agents[0]?.id || null, // Use first agent or null
           task_id: taskId,
           message: `Moved "${task.title}" from ${oldStatus.replace('_', ' ')} to ${newStatus.replace('_', ' ')}`,
-          metadata: { from: oldStatus, to: newStatus }
+          metadata: { from: oldStatus, to: newStatus },
+          business_id: selectedBusiness?.id || null
         });
 
       if (activityError) {

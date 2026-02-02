@@ -12,6 +12,7 @@ import {
   Settings,
   Menu,
   CalendarDays,
+  Rocket,
 } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { Button } from "@/components/ui/button"
@@ -36,6 +37,7 @@ const navItems: NavItem[] = [
   { label: "Media Library", href: "/media-library", icon: Image },
   { label: "Service Requests", href: "/service-requests", icon: Headphones },
   { label: "Email", href: "/email-marketing", icon: Mail },
+  { label: "Mission Control", href: "/mission-control", icon: Rocket },
   { label: "Admin", href: "/admin", icon: Shield, adminOnly: true },
 ]
 
