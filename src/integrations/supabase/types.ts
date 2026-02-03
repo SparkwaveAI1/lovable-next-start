@@ -14,6 +14,51 @@ export type Database = {
   }
   public: {
     Tables: {
+      activities: {
+        Row: {
+          agent_id: string
+          created_at: string | null
+          id: string
+          message: string
+          metadata: Json | null
+          task_id: string | null
+          type: string
+        }
+        Insert: {
+          agent_id: string
+          created_at?: string | null
+          id?: string
+          message: string
+          metadata?: Json | null
+          task_id?: string | null
+          type: string
+        }
+        Update: {
+          agent_id?: string
+          created_at?: string | null
+          id?: string
+          message?: string
+          metadata?: Json | null
+          task_id?: string | null
+          type?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "activities_agent_id_fkey"
+            columns: ["agent_id"]
+            isOneToOne: false
+            referencedRelation: "agents"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "activities_task_id_fkey"
+            columns: ["task_id"]
+            isOneToOne: false
+            referencedRelation: "tasks"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       agent_actions: {
         Row: {
           created_at: string
@@ -207,6 +252,135 @@ export type Database = {
         }
         Relationships: []
       }
+      agent_registry: {
+        Row: {
+          business_id: string | null
+          capabilities: Json | null
+          color: string | null
+          config: Json | null
+          created_at: string | null
+          description: string | null
+          full_documentation: string | null
+          icon: string | null
+          id: string
+          name: string
+          slug: string
+          status: string | null
+          updated_at: string | null
+        }
+        Insert: {
+          business_id?: string | null
+          capabilities?: Json | null
+          color?: string | null
+          config?: Json | null
+          created_at?: string | null
+          description?: string | null
+          full_documentation?: string | null
+          icon?: string | null
+          id?: string
+          name: string
+          slug: string
+          status?: string | null
+          updated_at?: string | null
+        }
+        Update: {
+          business_id?: string | null
+          capabilities?: Json | null
+          color?: string | null
+          config?: Json | null
+          created_at?: string | null
+          description?: string | null
+          full_documentation?: string | null
+          icon?: string | null
+          id?: string
+          name?: string
+          slug?: string
+          status?: string | null
+          updated_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "agent_registry_business_id_fkey"
+            columns: ["business_id"]
+            isOneToOne: false
+            referencedRelation: "businesses"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      agent_registry_activity: {
+        Row: {
+          action_type: string
+          agent_id: string | null
+          created_at: string | null
+          description: string | null
+          details: Json | null
+          id: string
+        }
+        Insert: {
+          action_type: string
+          agent_id?: string | null
+          created_at?: string | null
+          description?: string | null
+          details?: Json | null
+          id?: string
+        }
+        Update: {
+          action_type?: string
+          agent_id?: string | null
+          created_at?: string | null
+          description?: string | null
+          details?: Json | null
+          id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "agent_registry_activity_agent_id_fkey"
+            columns: ["agent_id"]
+            isOneToOne: false
+            referencedRelation: "agent_registry"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      agent_registry_status: {
+        Row: {
+          agent_id: string | null
+          current_task: string | null
+          id: string
+          metadata: Json | null
+          started_at: string | null
+          status: string
+          updated_at: string | null
+        }
+        Insert: {
+          agent_id?: string | null
+          current_task?: string | null
+          id?: string
+          metadata?: Json | null
+          started_at?: string | null
+          status: string
+          updated_at?: string | null
+        }
+        Update: {
+          agent_id?: string | null
+          current_task?: string | null
+          id?: string
+          metadata?: Json | null
+          started_at?: string | null
+          status?: string
+          updated_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "agent_registry_status_agent_id_fkey"
+            columns: ["agent_id"]
+            isOneToOne: false
+            referencedRelation: "agent_registry"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       agent_triggers: {
         Row: {
           action_id: string | null
@@ -257,6 +431,211 @@ export type Database = {
           updated_at?: string
         }
         Relationships: []
+      }
+      agents: {
+        Row: {
+          avatar_url: string | null
+          created_at: string | null
+          current_task_id: string | null
+          id: string
+          level: string
+          name: string
+          role: string
+          session_key: string | null
+          status: string
+          updated_at: string | null
+        }
+        Insert: {
+          avatar_url?: string | null
+          created_at?: string | null
+          current_task_id?: string | null
+          id?: string
+          level: string
+          name: string
+          role: string
+          session_key?: string | null
+          status?: string
+          updated_at?: string | null
+        }
+        Update: {
+          avatar_url?: string | null
+          created_at?: string | null
+          current_task_id?: string | null
+          id?: string
+          level?: string
+          name?: string
+          role?: string
+          session_key?: string | null
+          status?: string
+          updated_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "agents_current_task_id_fkey"
+            columns: ["current_task_id"]
+            isOneToOne: false
+            referencedRelation: "tasks"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      assistant_actions: {
+        Row: {
+          business_id: string
+          confirmed_at: string | null
+          conversation_id: string | null
+          created_at: string | null
+          error_message: string | null
+          execution_time_ms: number | null
+          function_input: Json
+          function_name: string
+          function_output: Json | null
+          id: string
+          message_id: string | null
+          required_confirmation: boolean | null
+          status: string
+          user_id: string
+        }
+        Insert: {
+          business_id: string
+          confirmed_at?: string | null
+          conversation_id?: string | null
+          created_at?: string | null
+          error_message?: string | null
+          execution_time_ms?: number | null
+          function_input: Json
+          function_name: string
+          function_output?: Json | null
+          id?: string
+          message_id?: string | null
+          required_confirmation?: boolean | null
+          status?: string
+          user_id: string
+        }
+        Update: {
+          business_id?: string
+          confirmed_at?: string | null
+          conversation_id?: string | null
+          created_at?: string | null
+          error_message?: string | null
+          execution_time_ms?: number | null
+          function_input?: Json
+          function_name?: string
+          function_output?: Json | null
+          id?: string
+          message_id?: string | null
+          required_confirmation?: boolean | null
+          status?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "assistant_actions_business_id_fkey"
+            columns: ["business_id"]
+            isOneToOne: false
+            referencedRelation: "businesses"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "assistant_actions_conversation_id_fkey"
+            columns: ["conversation_id"]
+            isOneToOne: false
+            referencedRelation: "assistant_conversations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "assistant_actions_message_id_fkey"
+            columns: ["message_id"]
+            isOneToOne: false
+            referencedRelation: "assistant_messages"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      assistant_conversations: {
+        Row: {
+          business_id: string
+          created_at: string | null
+          id: string
+          metadata: Json | null
+          status: string | null
+          title: string | null
+          updated_at: string | null
+          user_id: string
+        }
+        Insert: {
+          business_id: string
+          created_at?: string | null
+          id?: string
+          metadata?: Json | null
+          status?: string | null
+          title?: string | null
+          updated_at?: string | null
+          user_id: string
+        }
+        Update: {
+          business_id?: string
+          created_at?: string | null
+          id?: string
+          metadata?: Json | null
+          status?: string | null
+          title?: string | null
+          updated_at?: string | null
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "assistant_conversations_business_id_fkey"
+            columns: ["business_id"]
+            isOneToOne: false
+            referencedRelation: "businesses"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      assistant_messages: {
+        Row: {
+          content: string | null
+          conversation_id: string
+          created_at: string | null
+          id: string
+          metadata: Json | null
+          role: string
+          tool_call_id: string | null
+          tool_calls: Json | null
+          tool_name: string | null
+        }
+        Insert: {
+          content?: string | null
+          conversation_id: string
+          created_at?: string | null
+          id?: string
+          metadata?: Json | null
+          role: string
+          tool_call_id?: string | null
+          tool_calls?: Json | null
+          tool_name?: string | null
+        }
+        Update: {
+          content?: string | null
+          conversation_id?: string
+          created_at?: string | null
+          id?: string
+          metadata?: Json | null
+          role?: string
+          tool_call_id?: string | null
+          tool_calls?: Json | null
+          tool_name?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "assistant_messages_conversation_id_fkey"
+            columns: ["conversation_id"]
+            isOneToOne: false
+            referencedRelation: "assistant_conversations"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       automation_logs: {
         Row: {
@@ -565,6 +944,56 @@ export type Database = {
           },
         ]
       }
+      client_assistant_config: {
+        Row: {
+          allowed_functions: string[] | null
+          blocked_functions: string[] | null
+          business_id: string
+          created_at: string | null
+          daily_limits: Json | null
+          enabled: boolean | null
+          id: string
+          model: string | null
+          require_confirmation: string[] | null
+          system_prompt_additions: string | null
+          updated_at: string | null
+        }
+        Insert: {
+          allowed_functions?: string[] | null
+          blocked_functions?: string[] | null
+          business_id: string
+          created_at?: string | null
+          daily_limits?: Json | null
+          enabled?: boolean | null
+          id?: string
+          model?: string | null
+          require_confirmation?: string[] | null
+          system_prompt_additions?: string | null
+          updated_at?: string | null
+        }
+        Update: {
+          allowed_functions?: string[] | null
+          blocked_functions?: string[] | null
+          business_id?: string
+          created_at?: string | null
+          daily_limits?: Json | null
+          enabled?: boolean | null
+          id?: string
+          model?: string | null
+          require_confirmation?: string[] | null
+          system_prompt_additions?: string | null
+          updated_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "client_assistant_config_business_id_fkey"
+            columns: ["business_id"]
+            isOneToOne: true
+            referencedRelation: "businesses"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       contact_activities: {
         Row: {
           activity_data: Json | null
@@ -596,6 +1025,76 @@ export type Database = {
             columns: ["contact_id"]
             isOneToOne: false
             referencedRelation: "contacts"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      contact_follow_ups: {
+        Row: {
+          business_id: string | null
+          completed_at: string | null
+          contact_id: string | null
+          created_at: string | null
+          current_step: number | null
+          enrolled_at: string | null
+          id: string
+          last_step_sent_at: string | null
+          next_step_due_at: string | null
+          pause_reason: string | null
+          sequence_id: string | null
+          status: string | null
+          updated_at: string | null
+        }
+        Insert: {
+          business_id?: string | null
+          completed_at?: string | null
+          contact_id?: string | null
+          created_at?: string | null
+          current_step?: number | null
+          enrolled_at?: string | null
+          id?: string
+          last_step_sent_at?: string | null
+          next_step_due_at?: string | null
+          pause_reason?: string | null
+          sequence_id?: string | null
+          status?: string | null
+          updated_at?: string | null
+        }
+        Update: {
+          business_id?: string | null
+          completed_at?: string | null
+          contact_id?: string | null
+          created_at?: string | null
+          current_step?: number | null
+          enrolled_at?: string | null
+          id?: string
+          last_step_sent_at?: string | null
+          next_step_due_at?: string | null
+          pause_reason?: string | null
+          sequence_id?: string | null
+          status?: string | null
+          updated_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "contact_follow_ups_business_id_fkey"
+            columns: ["business_id"]
+            isOneToOne: false
+            referencedRelation: "businesses"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "contact_follow_ups_contact_id_fkey"
+            columns: ["contact_id"]
+            isOneToOne: false
+            referencedRelation: "contacts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "contact_follow_ups_sequence_id_fkey"
+            columns: ["sequence_id"]
+            isOneToOne: false
+            referencedRelation: "follow_up_sequences"
             referencedColumns: ["id"]
           },
         ]
@@ -952,6 +1451,54 @@ export type Database = {
           value?: number | null
         }
         Relationships: []
+      }
+      documents: {
+        Row: {
+          content: string | null
+          created_at: string | null
+          created_by_agent_id: string
+          id: string
+          task_id: string | null
+          title: string
+          type: string
+          updated_at: string | null
+        }
+        Insert: {
+          content?: string | null
+          created_at?: string | null
+          created_by_agent_id: string
+          id?: string
+          task_id?: string | null
+          title: string
+          type?: string
+          updated_at?: string | null
+        }
+        Update: {
+          content?: string | null
+          created_at?: string | null
+          created_by_agent_id?: string
+          id?: string
+          task_id?: string | null
+          title?: string
+          type?: string
+          updated_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "documents_created_by_agent_id_fkey"
+            columns: ["created_by_agent_id"]
+            isOneToOne: false
+            referencedRelation: "agents"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "documents_task_id_fkey"
+            columns: ["task_id"]
+            isOneToOne: false
+            referencedRelation: "tasks"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       email_campaigns: {
         Row: {
@@ -1428,6 +1975,91 @@ export type Database = {
           },
         ]
       }
+      follow_up_sequences: {
+        Row: {
+          business_id: string | null
+          created_at: string | null
+          description: string | null
+          id: string
+          is_active: boolean | null
+          name: string
+          trigger_type: string
+          updated_at: string | null
+        }
+        Insert: {
+          business_id?: string | null
+          created_at?: string | null
+          description?: string | null
+          id?: string
+          is_active?: boolean | null
+          name: string
+          trigger_type: string
+          updated_at?: string | null
+        }
+        Update: {
+          business_id?: string | null
+          created_at?: string | null
+          description?: string | null
+          id?: string
+          is_active?: boolean | null
+          name?: string
+          trigger_type?: string
+          updated_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "follow_up_sequences_business_id_fkey"
+            columns: ["business_id"]
+            isOneToOne: false
+            referencedRelation: "businesses"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      follow_up_steps: {
+        Row: {
+          channel: string
+          created_at: string | null
+          delay_from: string | null
+          delay_hours: number
+          id: string
+          message_template: string
+          sequence_id: string | null
+          step_order: number
+          subject_template: string | null
+        }
+        Insert: {
+          channel: string
+          created_at?: string | null
+          delay_from?: string | null
+          delay_hours?: number
+          id?: string
+          message_template: string
+          sequence_id?: string | null
+          step_order: number
+          subject_template?: string | null
+        }
+        Update: {
+          channel?: string
+          created_at?: string | null
+          delay_from?: string | null
+          delay_hours?: number
+          id?: string
+          message_template?: string
+          sequence_id?: string | null
+          step_order?: number
+          subject_template?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "follow_up_steps_sequence_id_fkey"
+            columns: ["sequence_id"]
+            isOneToOne: false
+            referencedRelation: "follow_up_sequences"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       generated_tweets: {
         Row: {
           business_id: string | null
@@ -1518,6 +2150,219 @@ export type Database = {
         }
         Relationships: []
       }
+      mc_activities: {
+        Row: {
+          agent_id: string | null
+          business_id: string | null
+          created_at: string
+          id: string
+          message: string
+          metadata: Json | null
+          task_id: string | null
+          type: Database["public"]["Enums"]["mc_activity_type"]
+        }
+        Insert: {
+          agent_id?: string | null
+          business_id?: string | null
+          created_at?: string
+          id?: string
+          message: string
+          metadata?: Json | null
+          task_id?: string | null
+          type: Database["public"]["Enums"]["mc_activity_type"]
+        }
+        Update: {
+          agent_id?: string | null
+          business_id?: string | null
+          created_at?: string
+          id?: string
+          message?: string
+          metadata?: Json | null
+          task_id?: string | null
+          type?: Database["public"]["Enums"]["mc_activity_type"]
+        }
+        Relationships: [
+          {
+            foreignKeyName: "mc_activities_agent_id_fkey"
+            columns: ["agent_id"]
+            isOneToOne: false
+            referencedRelation: "mc_agents"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "mc_activities_business_id_fkey"
+            columns: ["business_id"]
+            isOneToOne: false
+            referencedRelation: "businesses"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "mc_activities_task_id_fkey"
+            columns: ["task_id"]
+            isOneToOne: false
+            referencedRelation: "mc_tasks"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      mc_agents: {
+        Row: {
+          avatar_url: string | null
+          business_id: string | null
+          created_at: string
+          current_task_id: string | null
+          id: string
+          level: Database["public"]["Enums"]["mc_agent_level"]
+          name: string
+          role: string
+          session_key: string | null
+          status: Database["public"]["Enums"]["mc_agent_status"]
+          updated_at: string
+        }
+        Insert: {
+          avatar_url?: string | null
+          business_id?: string | null
+          created_at?: string
+          current_task_id?: string | null
+          id?: string
+          level?: Database["public"]["Enums"]["mc_agent_level"]
+          name: string
+          role: string
+          session_key?: string | null
+          status?: Database["public"]["Enums"]["mc_agent_status"]
+          updated_at?: string
+        }
+        Update: {
+          avatar_url?: string | null
+          business_id?: string | null
+          created_at?: string
+          current_task_id?: string | null
+          id?: string
+          level?: Database["public"]["Enums"]["mc_agent_level"]
+          name?: string
+          role?: string
+          session_key?: string | null
+          status?: Database["public"]["Enums"]["mc_agent_status"]
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "fk_agent_current_task"
+            columns: ["current_task_id"]
+            isOneToOne: false
+            referencedRelation: "mc_tasks"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "mc_agents_business_id_fkey"
+            columns: ["business_id"]
+            isOneToOne: false
+            referencedRelation: "businesses"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      mc_messages: {
+        Row: {
+          attachments: string[] | null
+          content: string
+          created_at: string
+          from_agent_id: string | null
+          id: string
+          task_id: string
+        }
+        Insert: {
+          attachments?: string[] | null
+          content: string
+          created_at?: string
+          from_agent_id?: string | null
+          id?: string
+          task_id: string
+        }
+        Update: {
+          attachments?: string[] | null
+          content?: string
+          created_at?: string
+          from_agent_id?: string | null
+          id?: string
+          task_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "mc_messages_from_agent_id_fkey"
+            columns: ["from_agent_id"]
+            isOneToOne: false
+            referencedRelation: "mc_agents"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "mc_messages_task_id_fkey"
+            columns: ["task_id"]
+            isOneToOne: false
+            referencedRelation: "mc_tasks"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      mc_tasks: {
+        Row: {
+          assignee_ids: string[] | null
+          business_id: string | null
+          created_at: string
+          description: string | null
+          document_url: string | null
+          external_id: string | null
+          external_source: string | null
+          id: string
+          priority: Database["public"]["Enums"]["mc_task_priority"]
+          status: Database["public"]["Enums"]["mc_task_status"]
+          tags: string[] | null
+          title: string
+          updated_at: string
+          work_summary: string | null
+        }
+        Insert: {
+          assignee_ids?: string[] | null
+          business_id?: string | null
+          created_at?: string
+          description?: string | null
+          document_url?: string | null
+          external_id?: string | null
+          external_source?: string | null
+          id?: string
+          priority?: Database["public"]["Enums"]["mc_task_priority"]
+          status?: Database["public"]["Enums"]["mc_task_status"]
+          tags?: string[] | null
+          title: string
+          updated_at?: string
+          work_summary?: string | null
+        }
+        Update: {
+          assignee_ids?: string[] | null
+          business_id?: string | null
+          created_at?: string
+          description?: string | null
+          document_url?: string | null
+          external_id?: string | null
+          external_source?: string | null
+          id?: string
+          priority?: Database["public"]["Enums"]["mc_task_priority"]
+          status?: Database["public"]["Enums"]["mc_task_status"]
+          tags?: string[] | null
+          title?: string
+          updated_at?: string
+          work_summary?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "mc_tasks_business_id_fkey"
+            columns: ["business_id"]
+            isOneToOne: false
+            referencedRelation: "businesses"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       media_assets: {
         Row: {
           business_id: string
@@ -1576,6 +2421,100 @@ export type Database = {
             columns: ["business_id"]
             isOneToOne: false
             referencedRelation: "businesses"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      messages: {
+        Row: {
+          attachments: string[] | null
+          content: string
+          created_at: string | null
+          from_agent_id: string
+          id: string
+          task_id: string
+        }
+        Insert: {
+          attachments?: string[] | null
+          content: string
+          created_at?: string | null
+          from_agent_id: string
+          id?: string
+          task_id: string
+        }
+        Update: {
+          attachments?: string[] | null
+          content?: string
+          created_at?: string | null
+          from_agent_id?: string
+          id?: string
+          task_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "messages_from_agent_id_fkey"
+            columns: ["from_agent_id"]
+            isOneToOne: false
+            referencedRelation: "agents"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "messages_task_id_fkey"
+            columns: ["task_id"]
+            isOneToOne: false
+            referencedRelation: "tasks"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      notifications: {
+        Row: {
+          content: string
+          created_at: string | null
+          delivered: boolean
+          from_agent_id: string | null
+          id: string
+          mentioned_agent_id: string
+          task_id: string | null
+        }
+        Insert: {
+          content: string
+          created_at?: string | null
+          delivered?: boolean
+          from_agent_id?: string | null
+          id?: string
+          mentioned_agent_id: string
+          task_id?: string | null
+        }
+        Update: {
+          content?: string
+          created_at?: string | null
+          delivered?: boolean
+          from_agent_id?: string | null
+          id?: string
+          mentioned_agent_id?: string
+          task_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "notifications_from_agent_id_fkey"
+            columns: ["from_agent_id"]
+            isOneToOne: false
+            referencedRelation: "agents"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "notifications_mentioned_agent_id_fkey"
+            columns: ["mentioned_agent_id"]
+            isOneToOne: false
+            referencedRelation: "agents"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "notifications_task_id_fkey"
+            columns: ["task_id"]
+            isOneToOne: false
+            referencedRelation: "tasks"
             referencedColumns: ["id"]
           },
         ]
@@ -1872,6 +2811,48 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
+      }
+      tasks: {
+        Row: {
+          assignee_ids: string[] | null
+          created_at: string | null
+          description: string | null
+          external_id: string | null
+          external_source: string | null
+          id: string
+          priority: string
+          status: string
+          tags: string[] | null
+          title: string
+          updated_at: string | null
+        }
+        Insert: {
+          assignee_ids?: string[] | null
+          created_at?: string | null
+          description?: string | null
+          external_id?: string | null
+          external_source?: string | null
+          id?: string
+          priority?: string
+          status?: string
+          tags?: string[] | null
+          title: string
+          updated_at?: string | null
+        }
+        Update: {
+          assignee_ids?: string[] | null
+          created_at?: string | null
+          description?: string | null
+          external_id?: string | null
+          external_source?: string | null
+          id?: string
+          priority?: string
+          status?: string
+          tags?: string[] | null
+          title?: string
+          updated_at?: string | null
+        }
+        Relationships: []
       }
       token_alert_preferences: {
         Row: {
@@ -2345,6 +3326,15 @@ export type Database = {
         }[]
       }
       set_default_sender: { Args: { p_sender_id: string }; Returns: undefined }
+      upsert_agent_status: {
+        Args: {
+          p_agent_id: string
+          p_current_task?: string
+          p_metadata?: Json
+          p_status: string
+        }
+        Returns: string
+      }
     }
     Enums: {
       app_role:
@@ -2354,6 +3344,17 @@ export type Database = {
         | "content_creator"
         | "viewer"
       business_permission_level: "admin" | "manager" | "creator" | "viewer"
+      mc_activity_type:
+        | "task_created"
+        | "task_updated"
+        | "status_changed"
+        | "message_sent"
+        | "decision_made"
+        | "document_created"
+      mc_agent_level: "lead" | "specialist" | "intern"
+      mc_agent_status: "working" | "idle" | "blocked"
+      mc_task_priority: "critical" | "high" | "medium" | "low"
+      mc_task_status: "inbox" | "assigned" | "in_progress" | "review" | "done"
     }
     CompositeTypes: {
       [_ in never]: never
@@ -2489,6 +3490,18 @@ export const Constants = {
         "viewer",
       ],
       business_permission_level: ["admin", "manager", "creator", "viewer"],
+      mc_activity_type: [
+        "task_created",
+        "task_updated",
+        "status_changed",
+        "message_sent",
+        "decision_made",
+        "document_created",
+      ],
+      mc_agent_level: ["lead", "specialist", "intern"],
+      mc_agent_status: ["working", "idle", "blocked"],
+      mc_task_priority: ["critical", "high", "medium", "low"],
+      mc_task_status: ["inbox", "assigned", "in_progress", "review", "done"],
     },
   },
 } as const
