@@ -3,7 +3,8 @@ import { CSS } from "@dnd-kit/utilities";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { cn } from "@/lib/utils";
 import type { Task, TaskPriority, Agent } from "@/types/mission-control";
-import { Clock, Tag, GripVertical } from "lucide-react";
+import { Clock, Tag, GripVertical, FileText, ChevronDown, ChevronUp, ExternalLink } from "lucide-react";
+import { useState } from "react";
 
 interface TaskCardProps {
   task: Task;
@@ -61,8 +62,23 @@ function formatRelativeTime(dateString: string): string {
 }
 
 export function TaskCard({ task, agents, onClick, isDragging }: TaskCardProps) {
+  const [summaryExpanded, setSummaryExpanded] = useState(false);
   const priority = priorityConfig[task.priority];
   const assignees = agents.filter((a) => task.assignee_ids.includes(a.id));
+  const hasDocument = !!task.document_url;
+  const hasSummary = !!task.work_summary;
+
+  const handleDocumentClick = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (task.document_url) {
+      window.open(task.document_url, '_blank', 'noopener,noreferrer');
+    }
+  };
+
+  const handleSummaryToggle = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    setSummaryExpanded(!summaryExpanded);
+  };
 
   return (
     <div
@@ -109,6 +125,46 @@ export function TaskCard({ task, agents, onClick, isDragging }: TaskCardProps) {
           ))}
           {task.tags.length > 3 && (
             <span className="text-[10px] text-slate-400">+{task.tags.length - 3}</span>
+          )}
+        </div>
+      )}
+
+      {/* Document Link & Work Summary */}
+      {(hasDocument || hasSummary) && (
+        <div className="ml-5 mb-2 space-y-1">
+          {/* Document link button */}
+          {hasDocument && (
+            <button
+              onClick={handleDocumentClick}
+              className="inline-flex items-center gap-1.5 text-xs text-violet-600 hover:text-violet-800 hover:underline transition-colors"
+            >
+              <FileText className="h-3.5 w-3.5" />
+              <span>View Document</span>
+              <ExternalLink className="h-3 w-3" />
+            </button>
+          )}
+          
+          {/* Work summary toggle */}
+          {hasSummary && (
+            <div>
+              <button
+                onClick={handleSummaryToggle}
+                className="inline-flex items-center gap-1 text-xs text-slate-500 hover:text-slate-700 transition-colors"
+              >
+                {summaryExpanded ? (
+                  <ChevronUp className="h-3.5 w-3.5" />
+                ) : (
+                  <ChevronDown className="h-3.5 w-3.5" />
+                )}
+                <span>{summaryExpanded ? 'Hide Summary' : 'Show Summary'}</span>
+              </button>
+              
+              {summaryExpanded && (
+                <div className="mt-1.5 p-2 bg-slate-50 rounded text-xs text-slate-600 border border-slate-200">
+                  {task.work_summary}
+                </div>
+              )}
+            </div>
           )}
         </div>
       )}

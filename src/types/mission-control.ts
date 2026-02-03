@@ -31,6 +31,8 @@ export interface Task {
   external_id: string | null;
   external_source: string | null;
   business_id: string | null;
+  document_url: string | null;
+  work_summary: string | null;
   created_at: string;
   updated_at: string;
 }
