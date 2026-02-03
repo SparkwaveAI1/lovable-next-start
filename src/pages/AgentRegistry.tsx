@@ -1,6 +1,7 @@
 import { useState, useMemo } from "react";
 import { DashboardLayout } from "@/components/layout/DashboardLayout";
-import { PageContent } from "@/components/layout/PageLayout";
+import { PageLayout, PageContent } from "@/components/layout/PageLayout";
+import { DashboardHeader } from "@/components/DashboardHeader";
 import { AgentCard, AgentDetail, LiveActivityFeed } from "@/components/agents";
 import { useBusinessContext } from "@/contexts/BusinessContext";
 import { useBusinesses } from "@/hooks/useBusinesses";

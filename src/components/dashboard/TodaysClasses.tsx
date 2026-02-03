@@ -57,13 +57,17 @@ export function TodaysClasses({ businessId }: TodaysClassesProps) {
       // Get booking counts for each class
       const classIds = scheduleData.map(c => c.id);
 
-      const { data: bookingCounts, error: bookingError } = await supabase
-        .from('class_bookings')
+      // Type assertion to avoid deeply nested type instantiation
+      const bookingQuery = supabase.from('class_bookings') as any;
+      const bookingResult = await bookingQuery
         .select('class_schedule_id')
         .eq('business_id', businessId)
         .eq('booking_date', todayDateStr)
         .in('class_schedule_id', classIds)
         .in('status', ['confirmed', 'showed']);
+      
+      const bookingCounts = bookingResult.data as { class_schedule_id: string }[] | null;
+      const bookingError = bookingResult.error;
 
       if (bookingError) {
         console.error('Error fetching booking counts:', bookingError);

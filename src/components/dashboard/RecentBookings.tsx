@@ -71,8 +71,9 @@ export function RecentBookings({ businessId, onContactClick }: RecentBookingsPro
     queryFn: async () => {
       const twentyFourHoursAgo = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
 
-      const { data, error } = await supabase
-        .from('class_bookings')
+      // Type assertion to avoid deeply nested type instantiation
+      const query = supabase.from('class_bookings') as any;
+      const result = await query
         .select(`
           id,
           booking_date,
@@ -94,12 +95,12 @@ export function RecentBookings({ businessId, onContactClick }: RecentBookingsPro
         .order('created_at', { ascending: false })
         .limit(10);
 
-      if (error) {
-        console.error('Error fetching bookings:', error);
+      if (result.error) {
+        console.error('Error fetching bookings:', result.error);
         return [];
       }
 
-      return (data || []) as Booking[];
+      return (result.data || []) as Booking[];
     },
     enabled: !!businessId,
     refetchInterval: 60000, // Refresh every minute
