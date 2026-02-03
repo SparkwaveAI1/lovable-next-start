@@ -24,17 +24,23 @@ export function TableRow({
   children,
   className,
   isHoverable = true,
+  onClick,
 }: {
   children: React.ReactNode
   className?: string
   isHoverable?: boolean
+  onClick?: () => void
 }) {
   return (
-    <tr className={cn(
-      "border-b border-gray-100 last:border-b-0",
-      isHoverable && "hover:bg-gray-50/50 transition-colors",
-      className
-    )}>
+    <tr 
+      className={cn(
+        "border-b border-gray-100 last:border-b-0",
+        isHoverable && "hover:bg-gray-50/50 transition-colors",
+        onClick && "cursor-pointer",
+        className
+      )}
+      onClick={onClick}
+    >
       {children}
     </tr>
   )

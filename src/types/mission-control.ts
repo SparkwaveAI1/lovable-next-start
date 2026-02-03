@@ -1,6 +1,6 @@
 // Mission Control Types
 
-export type AgentStatus = 'working' | 'idle' | 'blocked';
+export type AgentStatus = 'working' | 'idle' | 'blocked' | 'active' | 'offline';
 export type AgentLevel = 'lead' | 'specialist' | 'intern';
 export type TaskStatus = 'inbox' | 'assigned' | 'in_progress' | 'review' | 'done';
 export type TaskPriority = 'critical' | 'high' | 'medium' | 'low';
@@ -18,6 +18,8 @@ export interface Agent {
   business_id: string | null;
   created_at: string;
   updated_at: string;
+  type?: 'rico' | 'agent';
+  description?: string;
 }
 
 export interface Task {

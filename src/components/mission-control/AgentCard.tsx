@@ -22,6 +22,14 @@ const statusConfig: Record<AgentStatus, { label: string; className: string }> = 
     label: 'BLOCKED',
     className: 'bg-amber-100 text-amber-700 border-amber-200',
   },
+  active: {
+    label: 'ACTIVE',
+    className: 'bg-emerald-100 text-emerald-700 border-emerald-200',
+  },
+  offline: {
+    label: 'OFFLINE',
+    className: 'bg-slate-100 text-slate-500 border-slate-200',
+  },
 };
 
 const levelConfig: Record<AgentLevel, { label: string; className: string }> = {
@@ -74,8 +82,10 @@ export function AgentCard({ agent, isActive, onClick }: AgentCardProps) {
           className={cn(
             "absolute bottom-0 right-0 h-3 w-3 rounded-full border-2 border-white",
             agent.status === 'working' && "bg-emerald-500",
+            agent.status === 'active' && "bg-emerald-500",
             agent.status === 'idle' && "bg-slate-400",
-            agent.status === 'blocked' && "bg-amber-500"
+            agent.status === 'blocked' && "bg-amber-500",
+            agent.status === 'offline' && "bg-slate-300"
           )}
         />
       </div>

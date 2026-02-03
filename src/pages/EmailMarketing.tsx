@@ -4,6 +4,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { useBusinessContext } from '@/contexts/BusinessContext';
 import { useBusinesses } from '@/hooks/useBusinesses';
 import { DashboardLayout } from '@/components/layout/DashboardLayout';
+import { DashboardHeader } from '@/components/DashboardHeader';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';

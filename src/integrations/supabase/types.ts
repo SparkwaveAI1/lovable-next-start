@@ -2150,6 +2150,76 @@ export type Database = {
         }
         Relationships: []
       }
+      mc_active_agent_tasks: {
+        Row: {
+          agent_id: string | null
+          agent_name: string
+          agent_type: string
+          business_id: string | null
+          completed_at: string | null
+          created_at: string | null
+          id: string
+          metadata: Json | null
+          parent_agent_id: string | null
+          progress: number | null
+          started_at: string | null
+          status: string | null
+          task_description: string
+        }
+        Insert: {
+          agent_id?: string | null
+          agent_name: string
+          agent_type: string
+          business_id?: string | null
+          completed_at?: string | null
+          created_at?: string | null
+          id?: string
+          metadata?: Json | null
+          parent_agent_id?: string | null
+          progress?: number | null
+          started_at?: string | null
+          status?: string | null
+          task_description: string
+        }
+        Update: {
+          agent_id?: string | null
+          agent_name?: string
+          agent_type?: string
+          business_id?: string | null
+          completed_at?: string | null
+          created_at?: string | null
+          id?: string
+          metadata?: Json | null
+          parent_agent_id?: string | null
+          progress?: number | null
+          started_at?: string | null
+          status?: string | null
+          task_description?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "mc_active_agent_tasks_agent_id_fkey"
+            columns: ["agent_id"]
+            isOneToOne: false
+            referencedRelation: "mc_agents"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "mc_active_agent_tasks_business_id_fkey"
+            columns: ["business_id"]
+            isOneToOne: false
+            referencedRelation: "businesses"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "mc_active_agent_tasks_parent_agent_id_fkey"
+            columns: ["parent_agent_id"]
+            isOneToOne: false
+            referencedRelation: "mc_agents"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       mc_activities: {
         Row: {
           agent_id: string | null
@@ -2201,76 +2271,6 @@ export type Database = {
             columns: ["task_id"]
             isOneToOne: false
             referencedRelation: "mc_tasks"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
-      mc_active_agent_tasks: {
-        Row: {
-          id: string
-          business_id: string | null
-          agent_id: string | null
-          agent_name: string
-          agent_type: string
-          task_description: string
-          status: string
-          started_at: string
-          completed_at: string | null
-          progress: number | null
-          metadata: Json | null
-          parent_agent_id: string | null
-          created_at: string
-        }
-        Insert: {
-          id?: string
-          business_id?: string | null
-          agent_id?: string | null
-          agent_name: string
-          agent_type: string
-          task_description: string
-          status?: string
-          started_at?: string
-          completed_at?: string | null
-          progress?: number | null
-          metadata?: Json | null
-          parent_agent_id?: string | null
-          created_at?: string
-        }
-        Update: {
-          id?: string
-          business_id?: string | null
-          agent_id?: string | null
-          agent_name?: string
-          agent_type?: string
-          task_description?: string
-          status?: string
-          started_at?: string
-          completed_at?: string | null
-          progress?: number | null
-          metadata?: Json | null
-          parent_agent_id?: string | null
-          created_at?: string
-        }
-        Relationships: [
-          {
-            foreignKeyName: "mc_active_agent_tasks_business_id_fkey"
-            columns: ["business_id"]
-            isOneToOne: false
-            referencedRelation: "businesses"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "mc_active_agent_tasks_agent_id_fkey"
-            columns: ["agent_id"]
-            isOneToOne: false
-            referencedRelation: "mc_agents"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "mc_active_agent_tasks_parent_agent_id_fkey"
-            columns: ["parent_agent_id"]
-            isOneToOne: false
-            referencedRelation: "mc_agents"
             referencedColumns: ["id"]
           },
         ]
