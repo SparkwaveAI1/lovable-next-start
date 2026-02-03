@@ -1,6 +1,6 @@
 import { useState } from "react"
-import { DashboardHeader } from "@/components/DashboardHeader"
-import { PageLayout, PageHeader, PageContent } from "@/components/layout/PageLayout"
+import { DashboardLayout } from "@/components/layout/DashboardLayout"
+import { PageHeader, PageContent } from "@/components/layout/PageLayout"
 import { ContactDetail } from "@/components/ContactDetail"
 import { useBusinessContext } from "@/contexts/BusinessContext"
 import { useBusinesses } from "@/hooks/useBusinesses"
@@ -19,35 +19,34 @@ const Index = () => {
   // If a contact is selected, show the contact detail view
   if (selectedContactId) {
     return (
-      <PageLayout>
-        <DashboardHeader
-          selectedBusinessId={selectedBusiness?.id}
-          onBusinessChange={(id) => {
-            const business = businesses.find(b => b.id === id);
-            if (business) setSelectedBusiness(business);
-          }}
-        />
-        <PageContent className="pt-2 md:pt-28">
-          <ContactDetail
-            contactId={selectedContactId}
-            onBack={() => setSelectedContactId(null)}
-          />
-        </PageContent>
-      </PageLayout>
-    );
-  }
-
-  return (
-    <PageLayout>
-      <DashboardHeader
+      <DashboardLayout
         selectedBusinessId={selectedBusiness?.id}
         onBusinessChange={(id) => {
           const business = businesses.find(b => b.id === id);
           if (business) setSelectedBusiness(business);
         }}
-      />
+        businessName={selectedBusiness?.name}
+      >
+        <PageContent>
+          <ContactDetail
+            contactId={selectedContactId}
+            onBack={() => setSelectedContactId(null)}
+          />
+        </PageContent>
+      </DashboardLayout>
+    );
+  }
 
-      <PageContent className="pt-2 md:pt-28">
+  return (
+    <DashboardLayout
+      selectedBusinessId={selectedBusiness?.id}
+      onBusinessChange={(id) => {
+        const business = businesses.find(b => b.id === id);
+        if (business) setSelectedBusiness(business);
+      }}
+      businessName={selectedBusiness?.name}
+    >
+      <PageContent>
         {/* Welcome Section */}
         <PageHeader
           title={selectedBusiness ? `${selectedBusiness.name} Dashboard` : "Automation Center"}
@@ -104,7 +103,7 @@ const Index = () => {
           </div>
         )}
       </PageContent>
-    </PageLayout>
+    </DashboardLayout>
   );
 };
 

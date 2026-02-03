@@ -10,7 +10,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { useToast } from "@/hooks/use-toast";
 import { formatToEasternCompact } from "@/lib/dateUtils";
 import { AlertCircle, CheckCircle2, Clock, XCircle } from "lucide-react";
-import { DashboardHeader } from "@/components/DashboardHeader";
+import { DashboardLayout } from "@/components/layout/DashboardLayout";
 import { useBusinessContext } from "@/contexts/BusinessContext";
 
 interface ServiceRequest {
@@ -145,16 +145,15 @@ export default function ServiceRequests() {
   };
 
   return (
-    <div className="min-h-screen bg-background overflow-x-hidden w-full">
-      <DashboardHeader 
-        selectedBusinessId={selectedBusiness?.id}
-        onBusinessChange={(id) => {
-          const business = businesses.find(b => b.id === id);
-          if (business) setSelectedBusiness(business);
-        }}
-      />
-
-      <main className="container mx-auto p-6 space-y-6 pt-2 md:pt-28">
+    <DashboardLayout
+      selectedBusinessId={selectedBusiness?.id}
+      onBusinessChange={(id) => {
+        const business = businesses.find(b => b.id === id);
+        if (business) setSelectedBusiness(business);
+      }}
+      businessName={selectedBusiness?.name}
+    >
+      <main className="container mx-auto p-6 space-y-6">
         <div>
           <h1 className="text-3xl font-bold mb-2">Service Requests</h1>
           <p className="text-muted-foreground">
@@ -290,6 +289,6 @@ export default function ServiceRequests() {
           </CardContent>
         </Card>
       </main>
-    </div>
+    </DashboardLayout>
   );
 }

@@ -4,7 +4,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { ManualIndicatorEntry } from "@/components/ManualIndicatorEntry";
-import { DashboardHeader } from "@/components/DashboardHeader";
+import { DashboardLayout } from "@/components/layout/DashboardLayout";
 import { TokenHealthDashboard } from "@/components/TokenHealthDashboard";
 import { Shield, Users, Link2, Settings, AlertTriangle } from "lucide-react";
 
@@ -72,10 +72,8 @@ export default function AdminDashboard() {
   }
 
   return (
-    <div className="min-h-screen bg-background">
-      <DashboardHeader />
-      
-      <main className="container mx-auto px-4 py-6 pt-6 md:pt-[100px]">
+    <DashboardLayout>
+      <main className="container mx-auto px-4 py-6">
         <div className="mb-6">
           <h1 className="text-3xl font-bold flex items-center gap-2">
             <Shield className="h-8 w-8 text-primary" />
@@ -146,6 +144,6 @@ export default function AdminDashboard() {
           </div>
         </div>
       </main>
-    </div>
+    </DashboardLayout>
   );
 }

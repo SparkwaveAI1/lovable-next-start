@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useBusinessContext } from '@/contexts/BusinessContext';
-import { DashboardHeader } from '@/components/DashboardHeader';
+import { DashboardLayout } from '@/components/layout/DashboardLayout';
 import { ContactDetail } from '@/components/ContactDetail';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
@@ -332,37 +332,36 @@ export default function Contacts() {
   // Show ContactDetail if a contact is selected
   if (selectedContactId) {
     return (
-      <div className="min-h-screen bg-background">
-        <DashboardHeader
-          selectedBusinessId={selectedBusiness?.id}
-          onBusinessChange={(id) => {
-            const businesses = JSON.parse(localStorage.getItem('businesses') || '[]');
-            const business = businesses.find((b: any) => b.id === id);
-            if (business) setSelectedBusiness(business);
-          }}
-        />
-        <main className="container mx-auto px-4 py-6 md:pt-24">
-          <ContactDetail
-            contactId={selectedContactId}
-            onBack={() => setSelectedContactId(null)}
-          />
-        </main>
-      </div>
-    );
-  }
-
-  return (
-    <div className="min-h-screen bg-background">
-      <DashboardHeader
+      <DashboardLayout
         selectedBusinessId={selectedBusiness?.id}
         onBusinessChange={(id) => {
           const businesses = JSON.parse(localStorage.getItem('businesses') || '[]');
           const business = businesses.find((b: any) => b.id === id);
           if (business) setSelectedBusiness(business);
         }}
-      />
+        businessName={selectedBusiness?.name}
+      >
+        <main className="container mx-auto px-4 py-6">
+          <ContactDetail
+            contactId={selectedContactId}
+            onBack={() => setSelectedContactId(null)}
+          />
+        </main>
+      </DashboardLayout>
+    );
+  }
 
-      <main className="container mx-auto px-4 py-6 md:pt-24">
+  return (
+    <DashboardLayout
+      selectedBusinessId={selectedBusiness?.id}
+      onBusinessChange={(id) => {
+        const businesses = JSON.parse(localStorage.getItem('businesses') || '[]');
+        const business = businesses.find((b: any) => b.id === id);
+        if (business) setSelectedBusiness(business);
+      }}
+      businessName={selectedBusiness?.name}
+    >
+      <main className="container mx-auto px-4 py-6">
         {/* Page Header */}
         <div className="flex flex-col gap-4 mb-6">
           <div className="flex items-center justify-between">
@@ -837,6 +836,6 @@ export default function Contacts() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
-    </div>
+    </DashboardLayout>
   );
 }

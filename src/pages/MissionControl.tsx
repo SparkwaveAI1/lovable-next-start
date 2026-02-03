@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from "react";
-import { DashboardHeader } from "@/components/DashboardHeader";
-import { PageLayout, PageContent } from "@/components/layout/PageLayout";
+import { DashboardLayout } from "@/components/layout/DashboardLayout";
+import { PageContent } from "@/components/layout/PageLayout";
 import { AgentCard, KanbanBoard, ActivityFeed, StatsBar } from "@/components/mission-control";
 import { useBusinessContext } from "@/contexts/BusinessContext";
 import { useBusinesses } from "@/hooks/useBusinesses";
@@ -231,16 +231,15 @@ export default function MissionControl() {
   };
 
   return (
-    <PageLayout>
-      <DashboardHeader
-        selectedBusinessId={selectedBusiness?.id}
-        onBusinessChange={(id) => {
-          const business = businesses.find(b => b.id === id);
-          if (business) setSelectedBusiness(business);
-        }}
-      />
-
-      <PageContent className="pt-2 md:pt-28">
+    <DashboardLayout
+      selectedBusinessId={selectedBusiness?.id}
+      onBusinessChange={(id) => {
+        const business = businesses.find(b => b.id === id);
+        if (business) setSelectedBusiness(business);
+      }}
+      businessName={selectedBusiness?.name}
+    >
+      <PageContent>
         {/* Page Header */}
         <div className="flex items-center justify-between mb-6">
           <div>
@@ -341,6 +340,6 @@ export default function MissionControl() {
           </div>
         </div>
       </PageContent>
-    </PageLayout>
+    </DashboardLayout>
   );
 }

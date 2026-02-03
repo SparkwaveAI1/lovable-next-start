@@ -15,8 +15,8 @@ import { MediaViewerDialog } from "@/components/MediaViewerDialog";
 import { MediaCard } from "@/components/media/MediaCard";
 import { toast } from "sonner";
 import { useBusinessContext } from "@/contexts/BusinessContext";
-import { DashboardHeader } from "@/components/DashboardHeader";
-import { PageLayout, PageHeader, PageContent } from "@/components/layout/PageLayout";
+import { DashboardLayout } from "@/components/layout/DashboardLayout";
+import { PageHeader, PageContent } from "@/components/layout/PageLayout";
 import { Progress } from "@/components/ui/progress";
 import { format } from "date-fns";
 import { useContentFilter } from "@/hooks/useContentFilter";
@@ -564,16 +564,15 @@ export default function MediaLibraryPage() {
   };
 
   return (
-    <PageLayout>
-      <DashboardHeader
-        selectedBusinessId={selectedBusiness?.id}
-        onBusinessChange={(id) => {
-          const business = businesses.find(b => b.id === id);
-          if (business) setSelectedBusiness(business);
-        }}
-      />
-
-      <PageContent className="pt-2 sm:pt-4 md:pt-28">
+    <DashboardLayout
+      selectedBusinessId={selectedBusiness?.id}
+      onBusinessChange={(id) => {
+        const business = businesses.find(b => b.id === id);
+        if (business) setSelectedBusiness(business);
+      }}
+      businessName={selectedBusiness?.name}
+    >
+      <PageContent className="pt-2 sm:pt-4">
         <PageHeader
           title="Media Library"
           description="Manage images and videos for your content"
@@ -840,6 +839,6 @@ export default function MediaLibraryPage() {
           </div>
         </DialogContent>
       </Dialog>
-    </PageLayout>
+    </DashboardLayout>
   );
 }

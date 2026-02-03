@@ -5,7 +5,7 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { supabase } from '@/integrations/supabase/client';
 import { useBusinessContext } from '@/contexts/BusinessContext';
-import { DashboardHeader } from '@/components/DashboardHeader';
+import { DashboardLayout } from '@/components/layout/DashboardLayout';
 import { 
   Twitter, 
   Instagram, 
@@ -250,26 +250,24 @@ export default function LateConnections() {
 
   if (!selectedBusiness) {
     return (
-      <div className="min-h-screen bg-background">
-        <DashboardHeader 
-          selectedBusinessId={undefined}
-          onBusinessChange={handleBusinessChange}
-        />
-        <div className="container mx-auto p-8 pt-[120px] md:pt-[88px]">
+      <DashboardLayout
+        selectedBusinessId={undefined}
+        onBusinessChange={handleBusinessChange}
+      >
+        <div className="container mx-auto p-8">
           <p className="text-muted-foreground">Please select a business</p>
         </div>
-      </div>
+      </DashboardLayout>
     );
   }
 
   return (
-    <div className="min-h-screen bg-background">
-      <DashboardHeader 
-        selectedBusinessId={selectedBusiness.id}
-        onBusinessChange={handleBusinessChange}
-      />
-      
-      <div className="container mx-auto p-8 pt-[120px] md:pt-[88px]">
+    <DashboardLayout
+      selectedBusinessId={selectedBusiness.id}
+      onBusinessChange={handleBusinessChange}
+      businessName={selectedBusiness?.name}
+    >
+      <div className="container mx-auto p-8">
         <div className="mb-8">
           <div className="flex items-center justify-between mb-4">
             <div>
@@ -425,6 +423,6 @@ export default function LateConnections() {
           </div>
         )}
       </div>
-    </div>
+    </DashboardLayout>
   );
 }

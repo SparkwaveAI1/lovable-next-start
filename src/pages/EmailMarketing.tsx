@@ -3,7 +3,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useBusinessContext } from '@/contexts/BusinessContext';
 import { useBusinesses } from '@/hooks/useBusinesses';
-import { DashboardHeader } from '@/components/DashboardHeader';
+import { DashboardLayout } from '@/components/layout/DashboardLayout';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -230,12 +230,12 @@ export default function EmailMarketing() {
 
   // Show list view
   return (
-    <div className="min-h-screen bg-background">
-      <DashboardHeader 
-        selectedBusinessId={selectedBusiness?.id}
-        onBusinessChange={handleBusinessChange}
-      />
-      <main className="container mx-auto px-4 sm:px-6 py-4 md:py-8 pt-2 md:pt-28">
+    <DashboardLayout
+      selectedBusinessId={selectedBusiness?.id}
+      onBusinessChange={handleBusinessChange}
+      businessName={selectedBusiness?.name}
+    >
+      <main className="container mx-auto px-4 sm:px-6 py-4 md:py-8">
       <div className="flex items-center justify-between mb-6">
         <div>
           <h1 className="text-2xl font-bold">Email Marketing</h1>
@@ -353,6 +353,6 @@ export default function EmailMarketing() {
         </CardContent>
       </Card>
       </main>
-    </div>
+    </DashboardLayout>
   );
 }

@@ -14,7 +14,7 @@ import { Badge } from "@/components/ui/badge";
 import { Label } from "@/components/ui/label";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { useToast } from "@/hooks/use-toast";
-import { DashboardHeader } from "@/components/DashboardHeader";
+import { DashboardLayout } from "@/components/layout/DashboardLayout";
 import { supabase } from "@/integrations/supabase/client";
 import { ContentReviewDialog } from "@/components/ContentReviewDialog";
 import { UnifiedContentLibrary } from "@/components/UnifiedContentLibrary";
@@ -812,16 +812,15 @@ const ContentCenter = () => {
   );
 
   return (
-    <div className="min-h-screen bg-background overflow-x-hidden w-full">
-      <DashboardHeader 
-        selectedBusinessId={selectedBusiness?.id}
-        onBusinessChange={(id) => {
-          const business = businesses.find(b => b.id === id);
-          if (business) setSelectedBusiness(business);
-        }}
-      />
-      
-      <main className="container mx-auto px-4 md:px-6 py-4 md:py-8 pt-2 md:pt-28 max-w-full">
+    <DashboardLayout
+      selectedBusinessId={selectedBusiness?.id}
+      onBusinessChange={(id) => {
+        const business = businesses.find(b => b.id === id);
+        if (business) setSelectedBusiness(business);
+      }}
+      businessName={selectedBusiness?.name}
+    >
+      <main className="container mx-auto px-4 md:px-6 py-4 md:py-8 max-w-full">
         {/* Header */}
         <div className="mb-8">
           <h1 className="text-3xl font-bold text-foreground mb-2">
@@ -1215,7 +1214,7 @@ const ContentCenter = () => {
           setReviewingContent([]);
         }}
       />
-    </div>
+    </DashboardLayout>
   );
 };
 
