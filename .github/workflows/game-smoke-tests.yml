@@ -1,0 +1,63 @@
+name: GAME SDK Smoke Tests
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  smoke:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Install deps (normal)
+        run: npm ci
+        continue-on-error: true
+
+      - name: Install deps (fallback)
+        if: failure()
+        run: |
+          npm install --no-audit --no-fund || \
+          npm install --legacy-peer-deps --no-audit --no-fund
+
+      - name: Verify tsx
+        run: npx tsx --version
+
+      - name: Run echo smoke
+        env:
+          GAME_API_KEY: ${{ secrets.GAME_API_KEY }}
+        run: |
+          set -e
+          echo "== Echo Smoke =="
+          npx tsx scripts/game/smoke.ts | tee echo.log
+
+      - name: Run twitter smoke
+        env:
+          GAME_API_KEY: ${{ secrets.GAME_API_KEY }}
+          TWITTER_WORKER_ID: ${{ secrets.TWITTER_WORKER_ID }}
+          POST_TWEET_FN: ${{ secrets.POST_TWEET_FN }}
+        run: |
+          set -e
+          echo "== Twitter Smoke =="
+          npx tsx scripts/game/twitter.ts | tee twitter.log
+
+      - name: Upload logs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: smoke-logs
+          path: |
+            echo.log
+            twitter.log
