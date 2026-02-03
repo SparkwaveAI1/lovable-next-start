@@ -8,9 +8,7 @@ import { supabase } from "@/integrations/supabase/client";
 import type { Agent, Task, Activity, TaskStatus } from "@/types/mission-control";
 import { RefreshCw, Bot, Activity as ActivityIcon } from "lucide-react";
 import { useToast } from "@/components/ui/use-toast";
-import { cn } from "@/lib/utils";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { ScrollArea } from "@/components/ui/scroll-area";
 
 export default function MissionControl() {
   const { selectedBusiness, setSelectedBusiness } = useBusinessContext();
@@ -276,142 +274,126 @@ export default function MissionControl() {
           </div>
         )}
 
-        {/* Main Layout: Two-row structure (50/50 split) */}
-        <div className="flex flex-col gap-4 h-[calc(100vh-160px)]">
+        {/* Main Layout - CSS Grid with explicit row heights */}
+        <div className="grid grid-rows-[1fr_1fr] gap-4" style={{ height: 'calc(100vh - 180px)' }}>
           
-          {/* TOP SECTION (50% height): Rico Chat + Agents/Activity */}
-          <div className="grid grid-cols-12 gap-4 h-1/2 min-h-[300px]">
+          {/* TOP ROW: Rico Chat + Agents/Activity */}
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 min-h-0">
             
-            {/* Left: Rico Chat - 50% on desktop */}
-            <div className="col-span-12 lg:col-span-6">
+            {/* Rico Chat - bounded container */}
+            <div className="bg-white rounded-xl border border-slate-200 overflow-hidden min-h-0">
               <RicoChat 
                 className="h-full" 
                 onExpand={() => setChatExpanded(true)}
               />
             </div>
 
-            {/* Right: Agents + Activity Feed - 50% on desktop */}
-            <div className="col-span-12 lg:col-span-6">
-              <div className="bg-white rounded-xl border border-slate-200 h-full overflow-hidden">
-                {/* Desktop: Split view */}
-                <div className="hidden lg:flex h-full">
-                  {/* Agents Panel */}
-                  <div className="w-1/3 border-r border-slate-200 flex flex-col">
-                    <div className="px-4 py-3 border-b border-slate-200 flex items-center gap-2">
-                      <Bot className="h-4 w-4 text-violet-600" />
-                      <h3 className="font-semibold text-sm text-slate-900">Agents</h3>
-                      <span className="text-xs text-slate-400">({agents.length})</span>
-                    </div>
-                    <ScrollArea className="flex-1 p-2">
-                      {isLoading ? (
-                        <div className="text-center py-4 text-slate-400 text-sm">Loading...</div>
-                      ) : agents.length === 0 ? (
-                        <div className="text-center py-4 text-slate-400 text-sm">No agents configured</div>
-                      ) : (
-                        <div className="space-y-2">
-                          {agents.map((agent) => (
-                            <AgentCard
-                              key={agent.id}
-                              agent={agent}
-                              isActive={selectedAgent?.id === agent.id}
-                              onClick={() => handleAgentClick(agent)}
-                            />
-                          ))}
-                        </div>
-                      )}
-                      {selectedAgent && (
-                        <div className="mt-2 pt-2 border-t border-slate-200">
-                          <button
-                            onClick={() => setSelectedAgent(null)}
-                            className="text-xs text-violet-600 hover:underline"
-                          >
-                            Clear filter
-                          </button>
-                        </div>
-                      )}
-                    </ScrollArea>
+            {/* Agents + Activity Feed - bounded container */}
+            <div className="bg-white rounded-xl border border-slate-200 overflow-hidden min-h-0">
+              {/* Desktop: Split view */}
+              <div className="hidden lg:flex h-full">
+                {/* Agents Panel - 1/3 width */}
+                <div className="w-1/3 border-r border-slate-200 flex flex-col min-h-0">
+                  <div className="px-4 py-3 border-b border-slate-200 flex items-center gap-2 shrink-0">
+                    <Bot className="h-4 w-4 text-violet-600" />
+                    <h3 className="font-semibold text-sm text-slate-900">Agents</h3>
+                    <span className="text-xs text-slate-400">({agents.length})</span>
                   </div>
-
-                  {/* Activity Feed Panel */}
-                  <div className="flex-1 flex flex-col">
-                    <div className="px-4 py-3 border-b border-slate-200 flex items-center gap-2">
-                      <ActivityIcon className="h-4 w-4 text-emerald-600" />
-                      <h3 className="font-semibold text-sm text-slate-900">Activity Feed</h3>
-                      <div className="flex items-center gap-1 text-xs text-slate-400 ml-auto">
-                        <div className="h-2 w-2 rounded-full bg-emerald-500 animate-pulse" />
-                        Live
+                  <div className="flex-1 overflow-y-auto p-2 min-h-0">
+                    {isLoading ? (
+                      <div className="text-center py-4 text-slate-400 text-sm">Loading...</div>
+                    ) : agents.length === 0 ? (
+                      <div className="text-center py-4 text-slate-400 text-sm">No agents configured</div>
+                    ) : (
+                      <div className="space-y-2">
+                        {agents.map((agent) => (
+                          <AgentCard
+                            key={agent.id}
+                            agent={agent}
+                            isActive={selectedAgent?.id === agent.id}
+                            onClick={() => handleAgentClick(agent)}
+                          />
+                        ))}
                       </div>
-                    </div>
-                    <div className="flex-1 overflow-hidden">
-                      <ActivityFeed activities={activities} agents={agents} />
-                    </div>
+                    )}
+                    {selectedAgent && (
+                      <div className="mt-2 pt-2 border-t border-slate-200">
+                        <button
+                          onClick={() => setSelectedAgent(null)}
+                          className="text-xs text-violet-600 hover:underline"
+                        >
+                          Clear filter
+                        </button>
+                      </div>
+                    )}
                   </div>
                 </div>
 
-                {/* Mobile: Tabs */}
-                <Tabs defaultValue="agents" className="lg:hidden h-full flex flex-col">
-                  <TabsList className="grid w-full grid-cols-2 rounded-none border-b">
-                    <TabsTrigger value="agents" className="flex items-center gap-2">
-                      <Bot className="h-4 w-4" />
-                      Agents
-                    </TabsTrigger>
-                    <TabsTrigger value="activity" className="flex items-center gap-2">
-                      <ActivityIcon className="h-4 w-4" />
-                      Activity
-                    </TabsTrigger>
-                  </TabsList>
-                  <TabsContent value="agents" className="flex-1 overflow-hidden m-0">
-                    <ScrollArea className="h-full p-2">
-                      {isLoading ? (
-                        <div className="text-center py-4 text-slate-400 text-sm">Loading...</div>
-                      ) : agents.length === 0 ? (
-                        <div className="text-center py-4 text-slate-400 text-sm">No agents configured</div>
-                      ) : (
-                        <div className="space-y-2">
-                          {agents.map((agent) => (
-                            <AgentCard
-                              key={agent.id}
-                              agent={agent}
-                              isActive={selectedAgent?.id === agent.id}
-                              onClick={() => handleAgentClick(agent)}
-                            />
-                          ))}
-                        </div>
-                      )}
-                    </ScrollArea>
-                  </TabsContent>
-                  <TabsContent value="activity" className="flex-1 overflow-hidden m-0">
-                    <ActivityFeed activities={activities} agents={agents} />
-                  </TabsContent>
-                </Tabs>
+                {/* Activity Feed Panel - 2/3 width (component has its own header) */}
+                <div className="flex-1 flex flex-col min-h-0">
+                  <ActivityFeed activities={activities} agents={agents} className="h-full" />
+                </div>
               </div>
+
+              {/* Mobile: Tabs */}
+              <Tabs defaultValue="agents" className="lg:hidden h-full flex flex-col">
+                <TabsList className="grid w-full grid-cols-2 rounded-none border-b shrink-0">
+                  <TabsTrigger value="agents" className="flex items-center gap-2">
+                    <Bot className="h-4 w-4" />
+                    Agents
+                  </TabsTrigger>
+                  <TabsTrigger value="activity" className="flex items-center gap-2">
+                    <ActivityIcon className="h-4 w-4" />
+                    Activity
+                  </TabsTrigger>
+                </TabsList>
+                <TabsContent value="agents" className="flex-1 overflow-y-auto m-0 p-2 min-h-0">
+                  {isLoading ? (
+                    <div className="text-center py-4 text-slate-400 text-sm">Loading...</div>
+                  ) : agents.length === 0 ? (
+                    <div className="text-center py-4 text-slate-400 text-sm">No agents configured</div>
+                  ) : (
+                    <div className="space-y-2">
+                      {agents.map((agent) => (
+                        <AgentCard
+                          key={agent.id}
+                          agent={agent}
+                          isActive={selectedAgent?.id === agent.id}
+                          onClick={() => handleAgentClick(agent)}
+                        />
+                      ))}
+                    </div>
+                  )}
+                </TabsContent>
+                <TabsContent value="activity" className="flex-1 overflow-hidden m-0 min-h-0">
+                  <ActivityFeed activities={activities} agents={agents} className="h-full" />
+                </TabsContent>
+              </Tabs>
             </div>
           </div>
 
-          {/* BOTTOM SECTION (50% height): Kanban Board */}
-          <div className="flex-1 min-h-[300px]">
-            <div className="bg-white rounded-xl border border-slate-200 p-4 h-full flex flex-col">
-              <div className="flex items-center justify-between mb-4">
-                <div className="flex items-center gap-3">
-                  <h3 className="font-semibold text-sm text-slate-900">Task Board</h3>
-                  {selectedAgent && (
-                    <span className="text-xs bg-violet-100 text-violet-700 px-2 py-1 rounded-full">
-                      Filtering: {selectedAgent.name}
-                    </span>
-                  )}
-                </div>
-                <span className="text-xs text-slate-400">
-                  {tasks.length} tasks total
-                </span>
+          {/* BOTTOM ROW: Kanban Board */}
+          <div className="bg-white rounded-xl border border-slate-200 overflow-hidden min-h-0 flex flex-col">
+            <div className="flex items-center justify-between p-4 border-b border-slate-200 shrink-0">
+              <div className="flex items-center gap-3">
+                <h3 className="font-semibold text-sm text-slate-900">Task Board</h3>
+                {selectedAgent && (
+                  <span className="text-xs bg-violet-100 text-violet-700 px-2 py-1 rounded-full">
+                    Filtering: {selectedAgent.name}
+                  </span>
+                )}
               </div>
-              <div className="flex-1 overflow-hidden">
-                <KanbanBoard
-                  tasks={selectedAgent ? tasks.filter(t => t.assignee_ids.includes(selectedAgent.id)) : tasks}
-                  agents={agents}
-                  onTaskClick={handleTaskClick}
-                  onTaskStatusChange={handleTaskStatusChange}
-                />
-              </div>
+              <span className="text-xs text-slate-400">
+                {tasks.length} tasks total
+              </span>
+            </div>
+            <div className="flex-1 overflow-hidden p-4 min-h-0">
+              <KanbanBoard
+                tasks={selectedAgent ? tasks.filter(t => t.assignee_ids.includes(selectedAgent.id)) : tasks}
+                agents={agents}
+                onTaskClick={handleTaskClick}
+                onTaskStatusChange={handleTaskStatusChange}
+              />
             </div>
           </div>
         </div>
