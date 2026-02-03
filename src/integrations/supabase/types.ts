@@ -2205,6 +2205,76 @@ export type Database = {
           },
         ]
       }
+      mc_active_agent_tasks: {
+        Row: {
+          id: string
+          business_id: string | null
+          agent_id: string | null
+          agent_name: string
+          agent_type: string
+          task_description: string
+          status: string
+          started_at: string
+          completed_at: string | null
+          progress: number | null
+          metadata: Json | null
+          parent_agent_id: string | null
+          created_at: string
+        }
+        Insert: {
+          id?: string
+          business_id?: string | null
+          agent_id?: string | null
+          agent_name: string
+          agent_type: string
+          task_description: string
+          status?: string
+          started_at?: string
+          completed_at?: string | null
+          progress?: number | null
+          metadata?: Json | null
+          parent_agent_id?: string | null
+          created_at?: string
+        }
+        Update: {
+          id?: string
+          business_id?: string | null
+          agent_id?: string | null
+          agent_name?: string
+          agent_type?: string
+          task_description?: string
+          status?: string
+          started_at?: string
+          completed_at?: string | null
+          progress?: number | null
+          metadata?: Json | null
+          parent_agent_id?: string | null
+          created_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "mc_active_agent_tasks_business_id_fkey"
+            columns: ["business_id"]
+            isOneToOne: false
+            referencedRelation: "businesses"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "mc_active_agent_tasks_agent_id_fkey"
+            columns: ["agent_id"]
+            isOneToOne: false
+            referencedRelation: "mc_agents"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "mc_active_agent_tasks_parent_agent_id_fkey"
+            columns: ["parent_agent_id"]
+            isOneToOne: false
+            referencedRelation: "mc_agents"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       mc_agents: {
         Row: {
           avatar_url: string | null

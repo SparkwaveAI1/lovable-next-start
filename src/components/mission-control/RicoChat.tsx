@@ -10,7 +10,10 @@ import {
   Bot, 
   User,
   Sparkles,
-  Loader2
+  Loader2,
+  ChevronUp,
+  ChevronDown,
+  MessageSquare
 } from "lucide-react";
 
 interface ChatMessage {
@@ -24,13 +27,48 @@ interface RicoChatProps {
   className?: string;
   onExpand?: () => void;
   isExpanded?: boolean;
+  isCollapsed?: boolean;
+  onToggleCollapse?: () => void;
 }
 
 function formatTime(date: Date): string {
   return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
 }
 
-export function RicoChat({ className, onExpand, isExpanded = false }: RicoChatProps) {
+export function RicoChat({ className, onExpand, isExpanded = false, isCollapsed = false, onToggleCollapse }: RicoChatProps) {
+  // Collapsed bar view
+  if (isCollapsed) {
+    return (
+      <button
+        onClick={onToggleCollapse}
+        className={cn(
+          "w-full h-12 bg-gradient-to-r from-violet-600 to-indigo-600 rounded-xl",
+          "flex items-center justify-between px-4 group",
+          "hover:from-violet-700 hover:to-indigo-700 transition-all",
+          "border border-violet-500 shadow-sm",
+          className
+        )}
+      >
+        <div className="flex items-center gap-3">
+          <div className="relative">
+            <div className="h-7 w-7 rounded-full bg-white/20 flex items-center justify-center">
+              <Sparkles className="h-4 w-4 text-white" />
+            </div>
+            <div className="absolute -bottom-0.5 -right-0.5 h-2.5 w-2.5 rounded-full bg-emerald-400 border-2 border-violet-600" />
+          </div>
+          <div className="flex items-center gap-2">
+            <span className="font-semibold text-white text-sm">Rico Chat</span>
+            <span className="text-white/60 text-xs">• Online</span>
+          </div>
+        </div>
+        <div className="flex items-center gap-2 text-white/80 group-hover:text-white">
+          <MessageSquare className="h-4 w-4" />
+          <ChevronDown className="h-4 w-4" />
+        </div>
+      </button>
+    );
+  }
+
   const [messages, setMessages] = useState<ChatMessage[]>([
     {
       id: "1",
@@ -125,6 +163,15 @@ export function RicoChat({ className, onExpand, isExpanded = false }: RicoChatPr
           </div>
         </div>
         <div className="flex items-center gap-1">
+          {onToggleCollapse && !isExpanded && (
+            <button
+              onClick={onToggleCollapse}
+              className="p-2 hover:bg-white/10 rounded-lg transition-colors"
+              title="Collapse chat"
+            >
+              <ChevronUp className="h-4 w-4 text-white" />
+            </button>
+          )}
           <button
             onClick={onExpand}
             className="p-2 hover:bg-white/10 rounded-lg transition-colors"

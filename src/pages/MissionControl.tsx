@@ -1,14 +1,19 @@
 import { useState, useEffect, useCallback } from "react";
 import { DashboardLayout } from "@/components/layout/DashboardLayout";
 import { PageContent } from "@/components/layout/PageLayout";
-import { AgentCard, KanbanBoard, ActivityFeed, RicoChat, RicoChatModal } from "@/components/mission-control";
+import { 
+  KanbanBoard, 
+  RicoChat, 
+  RicoChatModal, 
+  AgentList, 
+  AgentActivityMonitor 
+} from "@/components/mission-control";
 import { useBusinessContext } from "@/contexts/BusinessContext";
 import { useBusinesses } from "@/hooks/useBusinesses";
 import { supabase } from "@/integrations/supabase/client";
 import type { Agent, Task, Activity, TaskStatus } from "@/types/mission-control";
-import { RefreshCw, Bot, Activity as ActivityIcon } from "lucide-react";
+import { RefreshCw } from "lucide-react";
 import { useToast } from "@/components/ui/use-toast";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 
 export default function MissionControl() {
   const { selectedBusiness, setSelectedBusiness } = useBusinessContext();
@@ -21,7 +26,10 @@ export default function MissionControl() {
   const [selectedAgent, setSelectedAgent] = useState<Agent | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  
+  // Chat state
   const [chatExpanded, setChatExpanded] = useState(false);
+  const [chatCollapsed, setChatCollapsed] = useState(false);
 
   // Fetch data from Supabase mc_ tables, filtered by selected business
   const fetchData = useCallback(async () => {
@@ -274,105 +282,26 @@ export default function MissionControl() {
           </div>
         )}
 
-        {/* Main Layout - CSS Grid with explicit row heights */}
-        <div className="grid grid-rows-[1fr_1fr] gap-4" style={{ height: 'calc(100vh - 180px)' }}>
+        {/* NEW LAYOUT: Top-to-Bottom Grid */}
+        <div 
+          className="grid gap-4" 
+          style={{ 
+            gridTemplateRows: chatCollapsed ? 'auto 1fr auto' : 'minmax(240px, auto) 1fr minmax(240px, auto)',
+            height: 'calc(100vh - 160px)' 
+          }}
+        >
           
-          {/* TOP ROW: Rico Chat + Agents/Activity */}
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 min-h-0">
-            
-            {/* Rico Chat - bounded container */}
-            <div className="bg-white rounded-xl border border-slate-200 overflow-hidden min-h-0">
-              <RicoChat 
-                className="h-full" 
-                onExpand={() => setChatExpanded(true)}
-              />
-            </div>
-
-            {/* Agents + Activity Feed - bounded container */}
-            <div className="bg-white rounded-xl border border-slate-200 overflow-hidden min-h-0">
-              {/* Desktop: Split view */}
-              <div className="hidden lg:flex h-full">
-                {/* Agents Panel - 1/3 width */}
-                <div className="w-1/3 border-r border-slate-200 flex flex-col min-h-0">
-                  <div className="px-4 py-3 border-b border-slate-200 flex items-center gap-2 shrink-0">
-                    <Bot className="h-4 w-4 text-violet-600" />
-                    <h3 className="font-semibold text-sm text-slate-900">Agents</h3>
-                    <span className="text-xs text-slate-400">({agents.length})</span>
-                  </div>
-                  <div className="flex-1 overflow-y-auto p-2 min-h-0">
-                    {isLoading ? (
-                      <div className="text-center py-4 text-slate-400 text-sm">Loading...</div>
-                    ) : agents.length === 0 ? (
-                      <div className="text-center py-4 text-slate-400 text-sm">No agents configured</div>
-                    ) : (
-                      <div className="space-y-2">
-                        {agents.map((agent) => (
-                          <AgentCard
-                            key={agent.id}
-                            agent={agent}
-                            isActive={selectedAgent?.id === agent.id}
-                            onClick={() => handleAgentClick(agent)}
-                          />
-                        ))}
-                      </div>
-                    )}
-                    {selectedAgent && (
-                      <div className="mt-2 pt-2 border-t border-slate-200">
-                        <button
-                          onClick={() => setSelectedAgent(null)}
-                          className="text-xs text-violet-600 hover:underline"
-                        >
-                          Clear filter
-                        </button>
-                      </div>
-                    )}
-                  </div>
-                </div>
-
-                {/* Activity Feed Panel - 2/3 width (component has its own header) */}
-                <div className="flex-1 flex flex-col min-h-0">
-                  <ActivityFeed activities={activities} agents={agents} className="h-full" />
-                </div>
-              </div>
-
-              {/* Mobile: Tabs */}
-              <Tabs defaultValue="agents" className="lg:hidden h-full flex flex-col">
-                <TabsList className="grid w-full grid-cols-2 rounded-none border-b shrink-0">
-                  <TabsTrigger value="agents" className="flex items-center gap-2">
-                    <Bot className="h-4 w-4" />
-                    Agents
-                  </TabsTrigger>
-                  <TabsTrigger value="activity" className="flex items-center gap-2">
-                    <ActivityIcon className="h-4 w-4" />
-                    Activity
-                  </TabsTrigger>
-                </TabsList>
-                <TabsContent value="agents" className="flex-1 overflow-y-auto m-0 p-2 min-h-0">
-                  {isLoading ? (
-                    <div className="text-center py-4 text-slate-400 text-sm">Loading...</div>
-                  ) : agents.length === 0 ? (
-                    <div className="text-center py-4 text-slate-400 text-sm">No agents configured</div>
-                  ) : (
-                    <div className="space-y-2">
-                      {agents.map((agent) => (
-                        <AgentCard
-                          key={agent.id}
-                          agent={agent}
-                          isActive={selectedAgent?.id === agent.id}
-                          onClick={() => handleAgentClick(agent)}
-                        />
-                      ))}
-                    </div>
-                  )}
-                </TabsContent>
-                <TabsContent value="activity" className="flex-1 overflow-hidden m-0 min-h-0">
-                  <ActivityFeed activities={activities} agents={agents} className="h-full" />
-                </TabsContent>
-              </Tabs>
-            </div>
+          {/* TOP: Rico Chat (collapsible) */}
+          <div className={chatCollapsed ? '' : 'min-h-0'}>
+            <RicoChat 
+              className={chatCollapsed ? '' : 'h-full'}
+              isCollapsed={chatCollapsed}
+              onToggleCollapse={() => setChatCollapsed(!chatCollapsed)}
+              onExpand={() => setChatExpanded(true)}
+            />
           </div>
 
-          {/* BOTTOM ROW: Kanban Board */}
+          {/* MIDDLE: Kanban Board (takes most space) */}
           <div className="bg-white rounded-xl border border-slate-200 overflow-hidden min-h-0 flex flex-col">
             <div className="flex items-center justify-between p-4 border-b border-slate-200 shrink-0">
               <div className="flex items-center gap-3">
@@ -395,6 +324,22 @@ export default function MissionControl() {
                 onTaskStatusChange={handleTaskStatusChange}
               />
             </div>
+          </div>
+
+          {/* BOTTOM: Agent List + Activity Monitor (side by side) */}
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 min-h-0">
+            {/* Agent List */}
+            <AgentList
+              agents={agents}
+              selectedAgent={selectedAgent}
+              onAgentClick={handleAgentClick}
+              onClearFilter={() => setSelectedAgent(null)}
+              isLoading={isLoading}
+              className="h-full"
+            />
+
+            {/* Agent Activity Monitor */}
+            <AgentActivityMonitor className="h-full" />
           </div>
         </div>
 
