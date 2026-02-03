@@ -15,26 +15,50 @@ interface TaskCardProps {
 
 interface SortableTaskCardProps extends TaskCardProps {}
 
-const priorityConfig: Record<TaskPriority, { className: string; dotColor: string; emoji: string }> = {
+const priorityConfig: Record<TaskPriority, { 
+  className: string; 
+  dotColor: string; 
+  emoji: string;
+  tagBg: string;
+  tagText: string;
+  cardBg: string;
+  label: string;
+}> = {
   critical: {
     className: 'border-l-red-500',
     dotColor: 'bg-red-500',
     emoji: '🔴',
+    tagBg: 'bg-red-100',
+    tagText: 'text-red-700',
+    cardBg: 'bg-red-50',
+    label: 'Critical',
   },
   high: {
     className: 'border-l-orange-500',
     dotColor: 'bg-orange-500',
     emoji: '🟠',
+    tagBg: 'bg-orange-100',
+    tagText: 'text-orange-700',
+    cardBg: '',
+    label: 'High',
   },
   medium: {
     className: 'border-l-yellow-500',
     dotColor: 'bg-yellow-500',
     emoji: '🟡',
+    tagBg: 'bg-yellow-100',
+    tagText: 'text-yellow-700',
+    cardBg: '',
+    label: 'Medium',
   },
   low: {
     className: 'border-l-slate-300',
     dotColor: 'bg-slate-400',
     emoji: '🟢',
+    tagBg: 'bg-gray-100',
+    tagText: 'text-gray-600',
+    cardBg: '',
+    label: 'Low',
   },
 };
 
@@ -84,18 +108,25 @@ export function TaskCard({ task, agents, onClick, isDragging }: TaskCardProps) {
     <div
       onClick={onClick}
       className={cn(
-        "bg-white rounded-lg border border-slate-200 border-l-4 p-3 cursor-pointer",
+        "rounded-lg border border-slate-200 border-l-4 p-3 cursor-pointer",
         "hover:shadow-md hover:border-slate-300 transition-all",
         priority.className,
+        priority.cardBg || "bg-white",
         isDragging && "shadow-xl ring-2 ring-violet-400 opacity-90 rotate-2"
       )}
     >
       {/* Header with priority and drag handle */}
       <div className="flex items-start gap-2">
         <div className="flex-1">
-          {/* Priority emoji + Title */}
-          <div className="flex items-center gap-1.5 mb-1">
-            <span className="text-sm">{priority.emoji}</span>
+          {/* Priority pill tag + Title */}
+          <div className="flex items-center gap-2 mb-1">
+            <span className={cn(
+              "inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-semibold",
+              priority.tagBg,
+              priority.tagText
+            )}>
+              {priority.label}
+            </span>
             <h4 className="font-medium text-slate-900 text-sm line-clamp-2">
               {task.title}
             </h4>

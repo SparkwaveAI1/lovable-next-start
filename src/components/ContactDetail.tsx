@@ -845,37 +845,48 @@ export function ContactDetail({ contactId, onBack }: { contactId: string; onBack
               </div>
             ) : (
               <div className="space-y-3 max-h-80 overflow-y-auto mb-4 pr-2">
-                {unifiedMessages.map((msg) => (
-                  <div
-                    key={msg.id}
-                    className={`p-3 rounded-lg border ${
-                      msg.direction === 'inbound'
-                        ? 'bg-primary/5 border-primary/20'
-                        : 'bg-secondary/50 border-secondary ml-8'
-                    }`}
-                  >
-                    <div className="flex justify-between items-start mb-1">
-                      <span className="text-sm font-medium text-foreground flex items-center gap-2">
-                        {getChannelIcon(msg.type)}
-                        {msg.direction === 'inbound' 
-                          ? 'Customer' 
-                          : msg.metadata?.ai_response ? 'AI Assistant' : 'Staff'}
-                        <Badge variant="outline" className="text-xs">
-                          {msg.type.toUpperCase()}
-                        </Badge>
-                      </span>
-                      <span className="text-xs text-muted-foreground">
-                        {formatDate(msg.created_at)}
-                      </span>
+                {unifiedMessages.map((msg) => {
+                  const isAiResponse = msg.direction === 'outbound' && msg.metadata?.ai_response;
+                  const isCustomer = msg.direction === 'inbound';
+                  const isStaff = msg.direction === 'outbound' && !msg.metadata?.ai_response;
+                  
+                  return (
+                    <div
+                      key={msg.id}
+                      className={`p-3 rounded-lg border ${
+                        isCustomer
+                          ? 'bg-slate-50 border-slate-200'
+                          : isAiResponse
+                          ? 'bg-violet-50 border-violet-200 ml-8'
+                          : 'bg-blue-50 border-blue-200 ml-8'
+                      }`}
+                    >
+                      <div className="flex justify-between items-start mb-1">
+                        <span className="text-sm font-medium text-foreground flex items-center gap-2">
+                          {getChannelIcon(msg.type)}
+                          {isCustomer 
+                            ? 'Customer' 
+                            : isAiResponse 
+                            ? 'AI Assistant' 
+                            : 'Staff'}
+                          <Badge variant="outline" className="text-xs">
+                            {msg.type.toUpperCase()}
+                          </Badge>
+                          {isAiResponse && (
+                            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-medium bg-violet-100 text-violet-700 border border-violet-200">
+                              <Sparkles className="h-2.5 w-2.5" />
+                              AI Generated
+                            </span>
+                          )}
+                        </span>
+                        <span className="text-xs text-muted-foreground">
+                          {formatDate(msg.created_at)}
+                        </span>
+                      </div>
+                      <div className="text-sm text-foreground">{msg.content}</div>
                     </div>
-                    <div className="text-sm text-foreground">{msg.content}</div>
-                    {msg.metadata?.ai_response && (
-                      <Badge variant="outline" className="mt-2 text-xs">
-                        AI Generated
-                      </Badge>
-                    )}
-                  </div>
-                ))}
+                  );
+                })}
               </div>
             )}
             

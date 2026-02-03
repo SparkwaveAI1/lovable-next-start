@@ -70,21 +70,21 @@ function getConversationStatus(conv: Conversation): ConversationStatus {
 
 function StatusBadge({ status }: { status: ConversationStatus }) {
   const config = {
-    booked: { label: 'Booked', className: 'bg-green-100 text-green-800 border-green-200', icon: CheckCircle },
-    needs_human: { label: 'Needs Human', className: 'bg-purple-100 text-purple-800 border-purple-200', icon: UserCheck },
-    waiting_customer: { label: 'Waiting', className: 'bg-yellow-100 text-yellow-800 border-yellow-200', icon: Hourglass },
-    needs_response: { label: 'Needs Response', className: 'bg-red-100 text-red-800 border-red-200', icon: AlertCircle },
-    new: { label: 'New', className: 'bg-blue-100 text-blue-800 border-blue-200', icon: MessageSquare },
-    inactive: { label: 'Inactive', className: 'bg-gray-100 text-gray-600 border-gray-200', icon: Clock },
+    booked: { label: 'Booked', className: 'bg-green-100 text-green-800 border-green-300', icon: CheckCircle },
+    needs_human: { label: 'Needs Human', className: 'bg-red-100 text-red-800 border-red-300', icon: UserCheck },
+    waiting_customer: { label: 'Waiting', className: 'bg-yellow-100 text-yellow-800 border-yellow-300', icon: Hourglass },
+    needs_response: { label: 'Needs Response', className: 'bg-orange-100 text-orange-800 border-orange-300', icon: AlertCircle },
+    new: { label: 'New Lead', className: 'bg-blue-100 text-blue-800 border-blue-300', icon: MessageSquare },
+    inactive: { label: 'Inactive', className: 'bg-gray-100 text-gray-700 border-gray-300', icon: Clock },
   };
 
   const { label, className, icon: Icon } = config[status];
 
   return (
-    <Badge variant="outline" className={`${className} flex items-center gap-1`}>
+    <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold border shadow-sm ${className}`}>
       <Icon className="h-3 w-3" />
       {label}
-    </Badge>
+    </span>
   );
 }
 

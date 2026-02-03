@@ -99,21 +99,33 @@ export default function ServiceRequests() {
   };
 
   const getStatusBadge = (stage: string) => {
-    const variants: Record<string, { variant: "default" | "secondary" | "destructive" | "outline", icon: any }> = {
-      pending_review: { variant: "outline", icon: Clock },
-      in_progress: { variant: "default", icon: AlertCircle },
-      completed: { variant: "secondary", icon: CheckCircle2 },
-      cancelled: { variant: "destructive", icon: XCircle },
+    const variants: Record<string, { className: string, icon: any }> = {
+      pending_review: { 
+        className: "bg-orange-100 text-orange-800 border-orange-300", 
+        icon: Clock 
+      },
+      in_progress: { 
+        className: "bg-blue-100 text-blue-800 border-blue-300", 
+        icon: AlertCircle 
+      },
+      completed: { 
+        className: "bg-green-100 text-green-800 border-green-300", 
+        icon: CheckCircle2 
+      },
+      cancelled: { 
+        className: "bg-red-100 text-red-800 border-red-300", 
+        icon: XCircle 
+      },
     };
 
-    const config = variants[stage] || { variant: "outline" as const, icon: Clock };
+    const config = variants[stage] || { className: "bg-gray-100 text-gray-700 border-gray-300", icon: Clock };
     const Icon = config.icon;
 
     return (
-      <Badge variant={config.variant} className="flex items-center gap-1 w-fit">
-        <Icon className="h-3 w-3" />
-        {stage.replace("_", " ").toUpperCase()}
-      </Badge>
+      <span className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-sm font-semibold border shadow-sm ${config.className}`}>
+        <Icon className="h-3.5 w-3.5" />
+        {stage.replace("_", " ").replace(/\b\w/g, l => l.toUpperCase())}
+      </span>
     );
   };
 
@@ -226,7 +238,7 @@ export default function ServiceRequests() {
                 </TableHeader>
                 <TableBody>
                   {requests.map((request) => (
-                    <TableRow key={request.id}>
+                    <TableRow key={request.id} className="group">
                       <TableCell>{getRequestTypeBadge(request.lead_type)}</TableCell>
                       <TableCell>
                         <div className="font-medium">
@@ -244,7 +256,7 @@ export default function ServiceRequests() {
                         {formatToEasternCompact(request.created_at)}
                       </TableCell>
                       <TableCell>
-                        <div className="flex items-center gap-2">
+                        <div className="flex items-center gap-2 opacity-0 group-hover:opacity-100 transition-opacity duration-150">
                           {request.pipeline_stage === "pending_review" && (
                             <Button
                               size="sm"
@@ -262,13 +274,13 @@ export default function ServiceRequests() {
                               Mark Complete
                             </Button>
                           )}
-                          {request.pipeline_stage === "completed" && (
-                            <Badge variant="secondary">
-                              <CheckCircle2 className="h-3 w-3 mr-1" />
-                              Done
-                            </Badge>
-                          )}
                         </div>
+                        {request.pipeline_stage === "completed" && (
+                          <span className="inline-flex items-center gap-1 text-sm text-green-700">
+                            <CheckCircle2 className="h-4 w-4" />
+                            Done
+                          </span>
+                        )}
                       </TableCell>
                     </TableRow>
                   ))}

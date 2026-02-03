@@ -154,7 +154,7 @@ export function ContactsTable({ businessId }: { businessId: string }) {
               </thead>
               <tbody>
                 {contacts.map((contact) => (
-                  <TableRow key={contact.id}>
+                  <TableRow key={contact.id} className="group cursor-pointer" onClick={() => setSelectedContactId(contact.id)}>
                     <TableCell className="font-medium text-gray-900">
                       {contact.first_name} {contact.last_name}
                     </TableCell>
@@ -190,8 +190,11 @@ export function ContactsTable({ businessId }: { businessId: string }) {
                       <Button
                         variant="outline"
                         size="sm"
-                        className="text-gray-600 hover:text-gray-900"
-                        onClick={() => setSelectedContactId(contact.id)}
+                        className="text-gray-600 hover:text-gray-900 opacity-0 group-hover:opacity-100 transition-opacity duration-150"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setSelectedContactId(contact.id);
+                        }}
                       >
                         View Details
                       </Button>
