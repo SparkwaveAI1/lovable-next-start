@@ -715,12 +715,27 @@ serve(async (req: Request) => {
 
       // First check the submissions array which has labeled fields
       if (formData.submissions && Array.isArray(formData.submissions)) {
-        const messageField = formData.submissions.find((s: any) =>
-          s.label?.toLowerCase().includes('message') ||
-          s.label?.toLowerCase().includes('comment') ||
-          s.label?.toLowerCase().includes('inquiry') ||
-          s.label?.toLowerCase().includes('question')
-        );
+        const messageField = formData.submissions.find((s: any) => {
+          const label = s.label?.toLowerCase() || '';
+          const value = s.value?.toString().toLowerCase().trim() || '';
+          
+          // Skip consent/checkbox fields that happen to contain "message"
+          if (label.includes('consent') || label.includes('checkbox') || label.includes('opt-in') || label.includes('opt in')) {
+            return false;
+          }
+          // Skip if the value is just a checkbox state
+          if (value === 'checked' || value === 'unchecked' || value === 'true' || value === 'false') {
+            return false;
+          }
+          
+          // Match actual message/comment fields (including Russian "Сообщение")
+          return label.includes('message') ||
+                 label.includes('comment') ||
+                 label.includes('inquiry') ||
+                 label.includes('question') ||
+                 label.includes('сообщение') ||  // Russian for "message"
+                 label.includes('комментарий');   // Russian for "comment"
+        });
         if (messageField?.value) {
           leadComments = messageField.value.trim();
           console.log(`Found comments in submissions array, label: ${messageField.label}`);

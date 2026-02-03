@@ -179,7 +179,7 @@ function findMatchingClasses(
 
 // Format class option for AI to present
 function formatClassOption(cls: ClassSchedule): string {
-  return `${cls.class_name} on ${getDayName(cls.day_of_week)} at ${cls.start_time} with ${cls.instructor}`;
+  return `${cls.class_name} on ${getDayName(cls.day_of_week)} at ${formatTime(cls.start_time)} with ${cls.instructor}`;
 }
 
 interface BookingState {
@@ -232,6 +232,30 @@ function getDayName(dayNum: number): string {
   return days[dayNum] || 'Unknown';
 }
 
+// Convert 24-hour time (e.g., "07:00:00" or "18:30") to 12-hour AM/PM format
+function formatTime(time24: string): string {
+  if (!time24) return '';
+  
+  // Extract hours and minutes from formats like "07:00:00" or "07:00"
+  const parts = time24.split(':');
+  let hours = parseInt(parts[0], 10);
+  const minutes = parts[1] || '00';
+  
+  // Determine AM/PM
+  const period = hours >= 12 ? 'PM' : 'AM';
+  
+  // Convert to 12-hour format
+  if (hours === 0) {
+    hours = 12; // Midnight
+  } else if (hours > 12) {
+    hours = hours - 12;
+  }
+  // hours === 12 stays as 12 (noon)
+  
+  // Format: "7:00 AM" or "6:30 PM"
+  return `${hours}:${minutes} ${period}`;
+}
+
 function formatClassSchedule(classes: ClassSchedule[]): string {
   if (!classes || classes.length === 0) {
     return 'No classes currently scheduled.';
@@ -249,7 +273,7 @@ function formatClassSchedule(classes: ClassSchedule[]): string {
     if (byDay[day] && byDay[day].length > 0) {
       schedule += `${getDayName(day)}:\n`;
       byDay[day].forEach(cls => {
-        schedule += `  - ${cls.class_name} at ${cls.start_time} (${cls.instructor})\n`;
+        schedule += `  - ${cls.class_name} at ${formatTime(cls.start_time)} (${cls.instructor})\n`;
       });
     }
   }
@@ -367,7 +391,7 @@ serve(async (req) => {
     const hasFullPreferences = bookingState.classType && (bookingState.preferredDay !== null || bookingState.preferredTime);
     const recommendationContext = hasFullPreferences && suggestedClasses.length > 0
       ? `\n\nRECOMMENDED CLASSES (based on customer preferences):\n${suggestedClasses.slice(0, 3).map(cls =>
-          `- ${cls.class_name} on ${getDayName(cls.day_of_week)} at ${cls.start_time}`
+          `- ${cls.class_name} on ${getDayName(cls.day_of_week)} at ${formatTime(cls.start_time)}`
         ).join('\n')}\nONLY suggest from this list.`
       : '';
 
@@ -486,7 +510,7 @@ IMPORTANT: Respond ONLY with the message to send to the customer. No prefixes, n
         className: bookingState.suggestedClass.class_name,
         day: getDayName(bookingState.suggestedClass.day_of_week),
         dayOfWeek: bookingState.suggestedClass.day_of_week,
-        time: bookingState.suggestedClass.start_time,
+        time: formatTime(bookingState.suggestedClass.start_time),
         instructor: bookingState.suggestedClass.instructor,
         classScheduleId: bookingState.suggestedClass.id
       };
@@ -509,7 +533,7 @@ IMPORTANT: Respond ONLY with the message to send to the customer. No prefixes, n
             className: cls.class_name,
             day: getDayName(cls.day_of_week),
             dayOfWeek: cls.day_of_week,
-            time: cls.start_time,
+            time: formatTime(cls.start_time),
             instructor: cls.instructor,
             classScheduleId: cls.id
           };
@@ -526,7 +550,7 @@ IMPORTANT: Respond ONLY with the message to send to the customer. No prefixes, n
           className: firstMatch.class_name,
           day: getDayName(firstMatch.day_of_week),
           dayOfWeek: firstMatch.day_of_week,
-          time: firstMatch.start_time,
+          time: formatTime(firstMatch.start_time),
           instructor: firstMatch.instructor,
           classScheduleId: firstMatch.id
         };
