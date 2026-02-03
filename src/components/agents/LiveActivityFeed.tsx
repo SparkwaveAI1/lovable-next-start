@@ -89,9 +89,9 @@ export function LiveActivityFeed({
   });
 
   return (
-    <div className={cn("flex flex-col", className)}>
+    <div className={cn("flex flex-col h-full overflow-hidden", className)}>
       {/* Header with filters */}
-      <div className="px-4 py-3 border-b border-slate-200 bg-white">
+      <div className="px-4 py-3 border-b border-slate-200 bg-white shrink-0">
         <div className="flex items-center justify-between mb-2">
           <h3 className="font-semibold text-sm text-slate-900">Live Activity</h3>
           <div className="flex items-center gap-1 text-xs text-slate-500">
@@ -180,15 +180,15 @@ function ActivityItem({ activity, agentName }: ActivityItemProps) {
           </div>
           
           {activity.description && (
-            <p className="text-sm text-slate-700 line-clamp-2">
+            <p className="text-sm text-slate-700 line-clamp-2 break-words">
               {activity.description}
             </p>
           )}
 
           {/* Show error details if applicable */}
           {activity.action_type === 'error' && activity.details?.error && (
-            <div className="mt-2 bg-red-50 border border-red-100 rounded px-2 py-1">
-              <p className="text-xs text-red-600 font-mono truncate">
+            <div className="mt-2 bg-red-50 border border-red-100 rounded px-2 py-1 overflow-hidden">
+              <p className="text-xs text-red-600 font-mono truncate break-all">
                 {activity.details.error}
               </p>
             </div>

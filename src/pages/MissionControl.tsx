@@ -282,16 +282,16 @@ export default function MissionControl() {
           {/* TOP SECTION (50% height): Rico Chat + Agents/Activity */}
           <div className="grid grid-cols-12 gap-4 h-1/2 min-h-[300px]">
             
-            {/* Left: Rico Chat */}
-            <div className="col-span-12 lg:col-span-5 xl:col-span-4">
+            {/* Left: Rico Chat - 50% on desktop */}
+            <div className="col-span-12 lg:col-span-6">
               <RicoChat 
                 className="h-full" 
                 onExpand={() => setChatExpanded(true)}
               />
             </div>
 
-            {/* Right: Agents + Activity Feed (Tabs on mobile, side by side on desktop) */}
-            <div className="col-span-12 lg:col-span-7 xl:col-span-8">
+            {/* Right: Agents + Activity Feed - 50% on desktop */}
+            <div className="col-span-12 lg:col-span-6">
               <div className="bg-white rounded-xl border border-slate-200 h-full overflow-hidden">
                 {/* Desktop: Split view */}
                 <div className="hidden lg:flex h-full">

@@ -70,9 +70,9 @@ export function ActivityFeed({ activities, agents, className }: ActivityFeedProp
   const getAgent = (agentId: string) => agents.find((a) => a.id === agentId);
 
   return (
-    <div className={cn("flex flex-col h-full", className)}>
+    <div className={cn("flex flex-col h-full overflow-hidden", className)}>
       {/* Header with filters */}
-      <div className="px-4 py-3 border-b border-slate-200 bg-white">
+      <div className="px-4 py-3 border-b border-slate-200 bg-white shrink-0">
         <h3 className="font-semibold text-sm text-slate-900 mb-2">Activity Feed</h3>
         <div className="flex flex-wrap gap-1">
           {ACTIVITY_FILTERS.map((f) => (
@@ -93,7 +93,7 @@ export function ActivityFeed({ activities, agents, className }: ActivityFeedProp
       </div>
 
       {/* Activity list */}
-      <div className="flex-1 overflow-y-auto">
+      <div className="flex-1 overflow-y-auto overflow-x-hidden min-h-0">
         {filteredActivities.length === 0 ? (
           <div className="flex items-center justify-center h-32">
             <p className="text-sm text-slate-400">No activities yet</p>
@@ -134,7 +134,7 @@ export function ActivityFeed({ activities, agents, className }: ActivityFeedProp
                           {activityIcons[activity.type]}
                         </span>
                       </div>
-                      <p className="text-xs text-slate-600 line-clamp-2">
+                      <p className="text-xs text-slate-600 line-clamp-2 break-words">
                         {activity.message}
                       </p>
                       <span className="text-[10px] text-slate-400 mt-1 block">
