@@ -282,27 +282,21 @@ export default function MissionControl() {
           </div>
         )}
 
-        {/* NEW LAYOUT: Top-to-Bottom Grid */}
-        <div 
-          className="grid gap-4" 
-          style={{ 
-            gridTemplateRows: chatCollapsed ? 'auto 1fr auto' : 'minmax(240px, auto) 1fr minmax(240px, auto)',
-            height: 'calc(100vh - 160px)' 
-          }}
-        >
+        {/* LAYOUT: Flexbox approach for reliable height distribution */}
+        <div className="flex flex-col gap-4 h-[calc(100vh-160px)]">
           
           {/* TOP: Rico Chat (collapsible) */}
-          <div className={chatCollapsed ? '' : 'min-h-0'}>
+          <div className={chatCollapsed ? 'h-12 shrink-0' : 'h-[280px] shrink-0'}>
             <RicoChat 
-              className={chatCollapsed ? '' : 'h-full'}
+              className="h-full"
               isCollapsed={chatCollapsed}
               onToggleCollapse={() => setChatCollapsed(!chatCollapsed)}
               onExpand={() => setChatExpanded(true)}
             />
           </div>
 
-          {/* MIDDLE: Kanban Board (takes most space) */}
-          <div className="bg-white rounded-xl border border-slate-200 overflow-hidden min-h-0 flex flex-col">
+          {/* MIDDLE: Kanban Board (takes remaining space with min-height) */}
+          <div className="flex-1 min-h-[300px] bg-white rounded-xl border border-slate-200 overflow-hidden flex flex-col">
             <div className="flex items-center justify-between p-4 border-b border-slate-200 shrink-0">
               <div className="flex items-center gap-3">
                 <h3 className="font-semibold text-sm text-slate-900">Task Board</h3>
@@ -316,7 +310,7 @@ export default function MissionControl() {
                 {tasks.length} tasks total
               </span>
             </div>
-            <div className="flex-1 overflow-hidden p-4 min-h-0">
+            <div className="flex-1 overflow-hidden p-4">
               <KanbanBoard
                 tasks={selectedAgent ? tasks.filter(t => t.assignee_ids.includes(selectedAgent.id)) : tasks}
                 agents={agents}
@@ -326,8 +320,8 @@ export default function MissionControl() {
             </div>
           </div>
 
-          {/* BOTTOM: Agent List + Activity Monitor (side by side) */}
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 min-h-0">
+          {/* BOTTOM: Agent List + Activity Monitor (side by side, fixed height) */}
+          <div className="h-[240px] shrink-0 grid grid-cols-1 lg:grid-cols-2 gap-4">
             {/* Agent List */}
             <AgentList
               agents={agents}
