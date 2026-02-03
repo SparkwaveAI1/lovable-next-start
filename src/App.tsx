@@ -3,6 +3,7 @@ import { Toaster as Sonner } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter, Routes, Route } from "react-router-dom";
+import { AssistantButton } from "@/components/assistant";
 import Index from "./pages/Index";
 import NotFound from "./pages/NotFound";
 import ContentCenter from "./pages/ContentCenter";
@@ -35,6 +36,8 @@ const App = () => (
       <AuthProvider>
         <BusinessProvider>
           <BrowserRouter>
+            {/* Floating AI Assistant - appears on all pages */}
+            <AssistantButton />
             <Routes>
             <Route path="/auth" element={<Auth />} />
             <Route path="/crisis-monitor" element={<CrisisMonitor />} />
