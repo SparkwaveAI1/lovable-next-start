@@ -282,11 +282,11 @@ export default function MissionControl() {
           </div>
         )}
 
-        {/* LAYOUT: Flexbox approach for reliable height distribution */}
-        <div className="flex flex-col gap-4 h-[calc(100vh-160px)]">
+        {/* LAYOUT: Simple flexbox with explicit heights */}
+        <div className="h-[calc(100vh-140px)] flex flex-col gap-4 overflow-hidden">
           
-          {/* TOP: Rico Chat (collapsible) */}
-          <div className={chatCollapsed ? 'h-12 shrink-0' : 'h-[280px] shrink-0'}>
+          {/* RICO CHAT - fixed height, collapsible */}
+          <div className={`${chatCollapsed ? 'h-12' : 'h-[280px]'} shrink-0 transition-all duration-300`}>
             <RicoChat 
               className="h-full"
               isCollapsed={chatCollapsed}
@@ -295,22 +295,24 @@ export default function MissionControl() {
             />
           </div>
 
-          {/* MIDDLE: Kanban Board (takes remaining space with min-height) */}
-          <div className="flex-1 min-h-[300px] bg-white rounded-xl border border-slate-200 overflow-hidden flex flex-col">
-            <div className="flex items-center justify-between p-4 border-b border-slate-200 shrink-0">
-              <div className="flex items-center gap-3">
-                <h3 className="font-semibold text-sm text-slate-900">Task Board</h3>
-                {selectedAgent && (
-                  <span className="text-xs bg-violet-100 text-violet-700 px-2 py-1 rounded-full">
-                    Filtering: {selectedAgent.name}
-                  </span>
-                )}
+          {/* KANBAN - fills remaining space, min 250px */}
+          <div className="flex-1 min-h-[250px] bg-white rounded-xl border border-slate-200 flex flex-col overflow-hidden">
+            <div className="shrink-0 p-4 border-b border-slate-200">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-3">
+                  <h3 className="font-semibold text-sm text-slate-900">Task Board</h3>
+                  {selectedAgent && (
+                    <span className="text-xs bg-violet-100 text-violet-700 px-2 py-1 rounded-full">
+                      Filtering: {selectedAgent.name}
+                    </span>
+                  )}
+                </div>
+                <span className="text-xs text-slate-400">
+                  {tasks.length} tasks total
+                </span>
               </div>
-              <span className="text-xs text-slate-400">
-                {tasks.length} tasks total
-              </span>
             </div>
-            <div className="flex-1 overflow-hidden p-4">
+            <div className="flex-1 overflow-auto p-4">
               <KanbanBoard
                 tasks={selectedAgent ? tasks.filter(t => t.assignee_ids.includes(selectedAgent.id)) : tasks}
                 agents={agents}
@@ -320,8 +322,8 @@ export default function MissionControl() {
             </div>
           </div>
 
-          {/* BOTTOM: Agent List + Activity Monitor (side by side, fixed height) */}
-          <div className="h-[240px] shrink-0 grid grid-cols-1 lg:grid-cols-2 gap-4">
+          {/* BOTTOM - fixed height */}
+          <div className="h-[220px] shrink-0 grid grid-cols-1 lg:grid-cols-2 gap-4">
             {/* Agent List */}
             <AgentList
               agents={agents}
