@@ -52,69 +52,41 @@ ALTER TABLE agent_registry ENABLE ROW LEVEL SECURITY;
 ALTER TABLE agent_registry_status ENABLE ROW LEVEL SECURITY;
 ALTER TABLE agent_registry_activity ENABLE ROW LEVEL SECURITY;
 
--- RLS Policies for agent_registry
-CREATE POLICY "Users can view agents for their businesses"
-  ON agent_registry FOR SELECT
-  USING (
-    business_id IN (
-      SELECT business_id FROM user_business_permissions
-      WHERE user_id = auth.uid()
-    )
-  );
+-- RLS Policies for agent_registry (same pattern as mission control)
+CREATE POLICY "Allow authenticated read agent_registry" ON agent_registry
+  FOR SELECT TO authenticated USING (true);
 
-CREATE POLICY "Users with edit permission can insert agents"
-  ON agent_registry FOR INSERT
-  WITH CHECK (
-    business_id IN (
-      SELECT business_id FROM user_business_permissions
-      WHERE user_id = auth.uid() AND permission_level IN ('owner', 'admin', 'editor')
-    )
-  );
+CREATE POLICY "Allow authenticated insert agent_registry" ON agent_registry
+  FOR INSERT TO authenticated WITH CHECK (true);
 
-CREATE POLICY "Users with edit permission can update agents"
-  ON agent_registry FOR UPDATE
-  USING (
-    business_id IN (
-      SELECT business_id FROM user_business_permissions
-      WHERE user_id = auth.uid() AND permission_level IN ('owner', 'admin', 'editor')
-    )
-  );
+CREATE POLICY "Allow authenticated update agent_registry" ON agent_registry
+  FOR UPDATE TO authenticated USING (true);
 
-CREATE POLICY "Service role can do anything on agent_registry"
-  ON agent_registry FOR ALL
-  USING (auth.jwt() ->> 'role' = 'service_role');
+CREATE POLICY "Allow service role full access agent_registry" ON agent_registry
+  FOR ALL TO service_role USING (true) WITH CHECK (true);
 
 -- RLS Policies for agent_registry_status
-CREATE POLICY "Users can view status for their business agents"
-  ON agent_registry_status FOR SELECT
-  USING (
-    agent_id IN (
-      SELECT id FROM agent_registry WHERE business_id IN (
-        SELECT business_id FROM user_business_permissions
-        WHERE user_id = auth.uid()
-      )
-    )
-  );
+CREATE POLICY "Allow authenticated read agent_registry_status" ON agent_registry_status
+  FOR SELECT TO authenticated USING (true);
 
-CREATE POLICY "Service role can manage agent_registry_status"
-  ON agent_registry_status FOR ALL
-  USING (auth.jwt() ->> 'role' = 'service_role');
+CREATE POLICY "Allow authenticated insert agent_registry_status" ON agent_registry_status
+  FOR INSERT TO authenticated WITH CHECK (true);
+
+CREATE POLICY "Allow authenticated update agent_registry_status" ON agent_registry_status
+  FOR UPDATE TO authenticated USING (true);
+
+CREATE POLICY "Allow service role full access agent_registry_status" ON agent_registry_status
+  FOR ALL TO service_role USING (true) WITH CHECK (true);
 
 -- RLS Policies for agent_registry_activity
-CREATE POLICY "Users can view activity for their business agents"
-  ON agent_registry_activity FOR SELECT
-  USING (
-    agent_id IN (
-      SELECT id FROM agent_registry WHERE business_id IN (
-        SELECT business_id FROM user_business_permissions
-        WHERE user_id = auth.uid()
-      )
-    )
-  );
+CREATE POLICY "Allow authenticated read agent_registry_activity" ON agent_registry_activity
+  FOR SELECT TO authenticated USING (true);
 
-CREATE POLICY "Service role can manage agent_registry_activity"
-  ON agent_registry_activity FOR ALL
-  USING (auth.jwt() ->> 'role' = 'service_role');
+CREATE POLICY "Allow authenticated insert agent_registry_activity" ON agent_registry_activity
+  FOR INSERT TO authenticated WITH CHECK (true);
+
+CREATE POLICY "Allow service role full access agent_registry_activity" ON agent_registry_activity
+  FOR ALL TO service_role USING (true) WITH CHECK (true);
 
 -- Trigger to update agent_registry.updated_at
 CREATE OR REPLACE FUNCTION update_agent_registry_timestamp()

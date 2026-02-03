@@ -21,6 +21,7 @@ import BusinessPermissionsPage from "./pages/BusinessPermissionsPage";
 import AdminDashboard from "./pages/AdminDashboard";
 import EmailMarketing from "./pages/EmailMarketing";
 import MissionControl from "./pages/MissionControl";
+import AgentRegistry from "./pages/AgentRegistry";
 import ProtectedRoute from "./components/ProtectedRoute";
 import { ErrorBoundary } from "./components/ErrorBoundary";
 import { BusinessProvider } from "@/contexts/BusinessContext";
@@ -55,6 +56,7 @@ const App = () => (
             <Route path="/admin" element={<ProtectedRoute><ErrorBoundary><AdminDashboard /></ErrorBoundary></ProtectedRoute>} />
             <Route path="/email-marketing" element={<ProtectedRoute><ErrorBoundary><EmailMarketing /></ErrorBoundary></ProtectedRoute>} />
             <Route path="/mission-control" element={<ProtectedRoute><ErrorBoundary><MissionControl /></ErrorBoundary></ProtectedRoute>} />
+            <Route path="/agents" element={<ProtectedRoute><ErrorBoundary><AgentRegistry /></ErrorBoundary></ProtectedRoute>} />
             {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
             <Route path="*" element={<NotFound />} />
             </Routes>
