@@ -1,13 +1,16 @@
 import { useState, useEffect, useCallback } from "react";
 import { DashboardLayout } from "@/components/layout/DashboardLayout";
 import { PageContent } from "@/components/layout/PageLayout";
-import { AgentCard, KanbanBoard, ActivityFeed, StatsBar } from "@/components/mission-control";
+import { AgentCard, KanbanBoard, ActivityFeed, RicoChat, RicoChatModal } from "@/components/mission-control";
 import { useBusinessContext } from "@/contexts/BusinessContext";
 import { useBusinesses } from "@/hooks/useBusinesses";
 import { supabase } from "@/integrations/supabase/client";
 import type { Agent, Task, Activity, TaskStatus } from "@/types/mission-control";
-import { RefreshCw } from "lucide-react";
+import { RefreshCw, Bot, Activity as ActivityIcon } from "lucide-react";
 import { useToast } from "@/components/ui/use-toast";
+import { cn } from "@/lib/utils";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { ScrollArea } from "@/components/ui/scroll-area";
 
 export default function MissionControl() {
   const { selectedBusiness, setSelectedBusiness } = useBusinessContext();
@@ -20,6 +23,7 @@ export default function MissionControl() {
   const [selectedAgent, setSelectedAgent] = useState<Agent | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [chatExpanded, setChatExpanded] = useState(false);
 
   // Fetch data from Supabase mc_ tables, filtered by selected business
   const fetchData = useCallback(async () => {
@@ -241,10 +245,10 @@ export default function MissionControl() {
     >
       <PageContent>
         {/* Page Header */}
-        <div className="flex items-center justify-between mb-6">
+        <div className="flex items-center justify-between mb-4">
           <div>
             <h1 className="text-2xl font-bold text-slate-900">Mission Control</h1>
-            <p className="text-slate-500 mt-1">
+            <p className="text-slate-500 text-sm mt-0.5">
               Coordinate agents and track task progress
             </p>
           </div>
@@ -260,7 +264,7 @@ export default function MissionControl() {
 
         {/* Error Display */}
         {error && (
-          <div className="mb-6 p-4 bg-red-50 border border-red-200 rounded-xl text-red-700">
+          <div className="mb-4 p-4 bg-red-50 border border-red-200 rounded-xl text-red-700">
             <p className="font-medium">Failed to load data</p>
             <p className="text-sm mt-1">{error}</p>
             <button 
@@ -272,73 +276,151 @@ export default function MissionControl() {
           </div>
         )}
 
-        {/* Stats Bar */}
-        <StatsBar agents={agents} tasks={tasks} className="mb-6" />
-
-        {/* Main Content: Three-column layout */}
-        <div className="grid grid-cols-12 gap-6">
-          {/* Left Sidebar: Agents */}
-          <div className="col-span-12 lg:col-span-2">
-            <div className="bg-white rounded-xl border border-slate-200 overflow-hidden sticky top-28">
-              <div className="px-4 py-3 border-b border-slate-200">
-                <h3 className="font-semibold text-sm text-slate-900">Agents</h3>
-              </div>
-              <div className="p-2 space-y-2 max-h-[calc(100vh-280px)] overflow-y-auto">
-                {isLoading ? (
-                  <div className="text-center py-4 text-slate-400 text-sm">Loading...</div>
-                ) : agents.length === 0 ? (
-                  <div className="text-center py-4 text-slate-400 text-sm">No agents found</div>
-                ) : (
-                  agents.map((agent) => (
-                    <AgentCard
-                      key={agent.id}
-                      agent={agent}
-                      isActive={selectedAgent?.id === agent.id}
-                      onClick={() => handleAgentClick(agent)}
-                    />
-                  ))
-                )}
-              </div>
-              {selectedAgent && (
-                <div className="px-4 py-2 border-t border-slate-200 bg-slate-50">
-                  <button
-                    onClick={() => setSelectedAgent(null)}
-                    className="text-xs text-violet-600 hover:underline"
-                  >
-                    Clear filter
-                  </button>
-                </div>
-              )}
-            </div>
-          </div>
-
-          {/* Center: Kanban Board */}
-          <div className="col-span-12 lg:col-span-7">
-            <div className="bg-white rounded-xl border border-slate-200 p-4">
-              <div className="flex items-center justify-between mb-4">
-                <h3 className="font-semibold text-sm text-slate-900">Task Board</h3>
-                {selectedAgent && (
-                  <span className="text-xs bg-violet-100 text-violet-700 px-2 py-1 rounded-full">
-                    Filtering: {selectedAgent.name}
-                  </span>
-                )}
-              </div>
-              <KanbanBoard
-                tasks={selectedAgent ? tasks.filter(t => t.assignee_ids.includes(selectedAgent.id)) : tasks}
-                agents={agents}
-                onTaskClick={handleTaskClick}
-                onTaskStatusChange={handleTaskStatusChange}
+        {/* Main Layout: Two-row structure (50/50 split) */}
+        <div className="flex flex-col gap-4 h-[calc(100vh-160px)]">
+          
+          {/* TOP SECTION (50% height): Rico Chat + Agents/Activity */}
+          <div className="grid grid-cols-12 gap-4 h-1/2 min-h-[300px]">
+            
+            {/* Left: Rico Chat */}
+            <div className="col-span-12 lg:col-span-5 xl:col-span-4">
+              <RicoChat 
+                className="h-full" 
+                onExpand={() => setChatExpanded(true)}
               />
             </div>
+
+            {/* Right: Agents + Activity Feed (Tabs on mobile, side by side on desktop) */}
+            <div className="col-span-12 lg:col-span-7 xl:col-span-8">
+              <div className="bg-white rounded-xl border border-slate-200 h-full overflow-hidden">
+                {/* Desktop: Split view */}
+                <div className="hidden lg:flex h-full">
+                  {/* Agents Panel */}
+                  <div className="w-1/3 border-r border-slate-200 flex flex-col">
+                    <div className="px-4 py-3 border-b border-slate-200 flex items-center gap-2">
+                      <Bot className="h-4 w-4 text-violet-600" />
+                      <h3 className="font-semibold text-sm text-slate-900">Agents</h3>
+                      <span className="text-xs text-slate-400">({agents.length})</span>
+                    </div>
+                    <ScrollArea className="flex-1 p-2">
+                      {isLoading ? (
+                        <div className="text-center py-4 text-slate-400 text-sm">Loading...</div>
+                      ) : agents.length === 0 ? (
+                        <div className="text-center py-4 text-slate-400 text-sm">No agents configured</div>
+                      ) : (
+                        <div className="space-y-2">
+                          {agents.map((agent) => (
+                            <AgentCard
+                              key={agent.id}
+                              agent={agent}
+                              isActive={selectedAgent?.id === agent.id}
+                              onClick={() => handleAgentClick(agent)}
+                            />
+                          ))}
+                        </div>
+                      )}
+                      {selectedAgent && (
+                        <div className="mt-2 pt-2 border-t border-slate-200">
+                          <button
+                            onClick={() => setSelectedAgent(null)}
+                            className="text-xs text-violet-600 hover:underline"
+                          >
+                            Clear filter
+                          </button>
+                        </div>
+                      )}
+                    </ScrollArea>
+                  </div>
+
+                  {/* Activity Feed Panel */}
+                  <div className="flex-1 flex flex-col">
+                    <div className="px-4 py-3 border-b border-slate-200 flex items-center gap-2">
+                      <ActivityIcon className="h-4 w-4 text-emerald-600" />
+                      <h3 className="font-semibold text-sm text-slate-900">Activity Feed</h3>
+                      <div className="flex items-center gap-1 text-xs text-slate-400 ml-auto">
+                        <div className="h-2 w-2 rounded-full bg-emerald-500 animate-pulse" />
+                        Live
+                      </div>
+                    </div>
+                    <div className="flex-1 overflow-hidden">
+                      <ActivityFeed activities={activities} agents={agents} />
+                    </div>
+                  </div>
+                </div>
+
+                {/* Mobile: Tabs */}
+                <Tabs defaultValue="agents" className="lg:hidden h-full flex flex-col">
+                  <TabsList className="grid w-full grid-cols-2 rounded-none border-b">
+                    <TabsTrigger value="agents" className="flex items-center gap-2">
+                      <Bot className="h-4 w-4" />
+                      Agents
+                    </TabsTrigger>
+                    <TabsTrigger value="activity" className="flex items-center gap-2">
+                      <ActivityIcon className="h-4 w-4" />
+                      Activity
+                    </TabsTrigger>
+                  </TabsList>
+                  <TabsContent value="agents" className="flex-1 overflow-hidden m-0">
+                    <ScrollArea className="h-full p-2">
+                      {isLoading ? (
+                        <div className="text-center py-4 text-slate-400 text-sm">Loading...</div>
+                      ) : agents.length === 0 ? (
+                        <div className="text-center py-4 text-slate-400 text-sm">No agents configured</div>
+                      ) : (
+                        <div className="space-y-2">
+                          {agents.map((agent) => (
+                            <AgentCard
+                              key={agent.id}
+                              agent={agent}
+                              isActive={selectedAgent?.id === agent.id}
+                              onClick={() => handleAgentClick(agent)}
+                            />
+                          ))}
+                        </div>
+                      )}
+                    </ScrollArea>
+                  </TabsContent>
+                  <TabsContent value="activity" className="flex-1 overflow-hidden m-0">
+                    <ActivityFeed activities={activities} agents={agents} />
+                  </TabsContent>
+                </Tabs>
+              </div>
+            </div>
           </div>
 
-          {/* Right Sidebar: Activity Feed */}
-          <div className="col-span-12 lg:col-span-3">
-            <div className="bg-white rounded-xl border border-slate-200 overflow-hidden h-[600px] sticky top-28">
-              <ActivityFeed activities={activities} agents={agents} />
+          {/* BOTTOM SECTION (50% height): Kanban Board */}
+          <div className="flex-1 min-h-[300px]">
+            <div className="bg-white rounded-xl border border-slate-200 p-4 h-full flex flex-col">
+              <div className="flex items-center justify-between mb-4">
+                <div className="flex items-center gap-3">
+                  <h3 className="font-semibold text-sm text-slate-900">Task Board</h3>
+                  {selectedAgent && (
+                    <span className="text-xs bg-violet-100 text-violet-700 px-2 py-1 rounded-full">
+                      Filtering: {selectedAgent.name}
+                    </span>
+                  )}
+                </div>
+                <span className="text-xs text-slate-400">
+                  {tasks.length} tasks total
+                </span>
+              </div>
+              <div className="flex-1 overflow-hidden">
+                <KanbanBoard
+                  tasks={selectedAgent ? tasks.filter(t => t.assignee_ids.includes(selectedAgent.id)) : tasks}
+                  agents={agents}
+                  onTaskClick={handleTaskClick}
+                  onTaskStatusChange={handleTaskStatusChange}
+                />
+              </div>
             </div>
           </div>
         </div>
+
+        {/* Expanded Chat Modal */}
+        <RicoChatModal 
+          isOpen={chatExpanded} 
+          onClose={() => setChatExpanded(false)} 
+        />
       </PageContent>
     </DashboardLayout>
   );

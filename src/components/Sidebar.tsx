@@ -28,14 +28,14 @@ interface NavItem {
 
 const mainNavItems: NavItem[] = [
   { label: "Dashboard", href: "/", icon: LayoutDashboard },
+  { label: "Mission Control", href: "/mission-control", icon: Rocket },
+  { label: "Agents", href: "/agents", icon: Bot },
   { label: "Contacts", href: "/contacts", icon: Users },
-  { label: "Bookings", href: "/bookings", icon: CalendarDays },
-  { label: "Service Requests", href: "/service-requests", icon: Headphones },
   { label: "Content Center", href: "/content-center", icon: FileText },
   { label: "Media Library", href: "/media-library", icon: Image },
   { label: "Email", href: "/email-marketing", icon: Mail },
-  { label: "Mission Control", href: "/mission-control", icon: Rocket },
-  { label: "Agents", href: "/agents", icon: Bot },
+  { label: "Bookings", href: "/bookings", icon: CalendarDays },
+  { label: "Service Requests", href: "/service-requests", icon: Headphones },
 ]
 
 const adminNavItems: NavItem[] = [
