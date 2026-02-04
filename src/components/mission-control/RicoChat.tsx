@@ -94,7 +94,7 @@ export function RicoChat({ className, onExpand, isExpanded = false, isCollapsed 
     const textarea = textareaRef.current;
     if (textarea) {
       textarea.style.height = 'auto';
-      const newHeight = Math.min(Math.max(textarea.scrollHeight, 100), 200);
+      const newHeight = Math.min(Math.max(textarea.scrollHeight, 40), 120);
       textarea.style.height = `${newHeight}px`;
     }
   }, []);
@@ -119,7 +119,7 @@ export function RicoChat({ className, onExpand, isExpanded = false, isCollapsed 
 
     // Reset textarea height
     if (textareaRef.current) {
-      textareaRef.current.style.height = '100px';
+      textareaRef.current.style.height = '40px';
     }
 
     // Simulate AI response (will be replaced with actual OpenClaw webhook later)
@@ -258,10 +258,10 @@ export function RicoChat({ className, onExpand, isExpanded = false, isCollapsed 
         )}
       </div>
 
-      {/* Input area */}
-      <div className="p-4 border-t border-slate-200 bg-white shrink-0">
-        <div className="flex gap-3">
-          <div className="flex-1 relative">
+      {/* Input area - compact */}
+      <div className="px-4 py-2 border-t border-slate-200 bg-white shrink-0">
+        <div className="flex gap-2 items-end">
+          <div className="flex-1">
             <textarea
               ref={textareaRef}
               value={input}
@@ -269,26 +269,25 @@ export function RicoChat({ className, onExpand, isExpanded = false, isCollapsed 
               onKeyDown={handleKeyDown}
               placeholder="Message Rico... (Shift+Enter for new line)"
               className={cn(
-                "w-full px-4 py-3 rounded-xl border border-slate-200",
+                "w-full px-3 py-2 rounded-lg border border-slate-200",
                 "focus:outline-none focus:ring-2 focus:ring-violet-500 focus:border-transparent",
                 "placeholder:text-slate-400 text-sm resize-none",
-                "min-h-[100px] max-h-[200px]"
+                "min-h-[40px] max-h-[120px]"
               )}
-              style={{ height: '100px' }}
+              style={{ height: '40px' }}
+              rows={1}
             />
           </div>
-          <div className="flex flex-col justify-end">
-            <Button
-              onClick={handleSend}
-              disabled={!input.trim() || isLoading}
-              className="h-11 w-11 rounded-xl bg-gradient-to-r from-violet-600 to-indigo-600 hover:from-violet-700 hover:to-indigo-700 shadow-lg"
-            >
-              <Send className="h-5 w-5" />
-            </Button>
-          </div>
+          <Button
+            onClick={handleSend}
+            disabled={!input.trim() || isLoading}
+            className="h-10 w-10 rounded-lg bg-gradient-to-r from-violet-600 to-indigo-600 hover:from-violet-700 hover:to-indigo-700 shadow-sm shrink-0"
+          >
+            <Send className="h-4 w-4" />
+          </Button>
         </div>
-        <p className="text-[10px] text-slate-400 mt-2 text-center">
-          Press Enter to send • Shift+Enter for new line
+        <p className="text-[10px] text-slate-400 mt-1 text-center">
+          Enter to send • Shift+Enter for new line
         </p>
       </div>
     </div>
