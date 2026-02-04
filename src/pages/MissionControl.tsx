@@ -187,7 +187,7 @@ export default function MissionControl() {
           </div>
         )}
 
-        {/* SECTION 1: Rico Chat (collapsible) */}
+        {/* Rico Chat */}
         <div className="mb-6">
           <button
             onClick={() => setChatVisible(!chatVisible)}
@@ -198,7 +198,7 @@ export default function MissionControl() {
             <span className="text-xs text-emerald-600">● Online</span>
           </button>
           {chatVisible && (
-            <div className="h-[300px] bg-white rounded-xl border border-slate-200 overflow-hidden">
+            <div className="h-[300px] bg-white rounded-xl border border-slate-200">
               <RicoChat
                 className="h-full"
                 onExpand={() => setChatExpanded(true)}
@@ -207,7 +207,7 @@ export default function MissionControl() {
           )}
         </div>
 
-        {/* SECTION 2: Kanban Board (full width) - THIS IS THE WORKING LAYOUT */}
+        {/* Kanban Board */}
         <div className="mb-6">
           <div className="bg-white rounded-xl border border-slate-200 p-4">
             <div className="flex items-center justify-between mb-4">
@@ -230,14 +230,13 @@ export default function MissionControl() {
           </div>
         </div>
 
-        {/* SECTION 3: Agent List + Agent Activity (side by side) */}
+        {/* Agent List + Activity Monitor */}
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
-          {/* Agent List */}
-          <div className="bg-white rounded-xl border border-slate-200 overflow-hidden">
+          <div className="bg-white rounded-xl border border-slate-200">
             <div className="px-4 py-3 border-b border-slate-200">
               <h3 className="font-semibold text-sm text-slate-900">Agents ({agents.length})</h3>
             </div>
-            <div className="p-2 space-y-2 max-h-[300px] overflow-y-auto">
+            <div className="p-2 space-y-2">
               {isLoading ? (
                 <div className="text-center py-4 text-slate-400 text-sm">Loading...</div>
               ) : agents.length === 0 ? (
@@ -262,12 +261,11 @@ export default function MissionControl() {
             </div>
           </div>
 
-          {/* Agent Activity Monitor */}
-          <AgentActivityMonitor className="h-[300px]" />
+          <AgentActivityMonitor />
         </div>
 
-        {/* SECTION 4: Activity Feed (full width) */}
-        <div className="bg-white rounded-xl border border-slate-200 overflow-hidden h-[400px]">
+        {/* Activity Feed */}
+        <div className="bg-white rounded-xl border border-slate-200">
           <ActivityFeed activities={activities} agents={agents} />
         </div>
 
