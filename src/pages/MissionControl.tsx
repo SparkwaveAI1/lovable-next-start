@@ -198,7 +198,7 @@ export default function MissionControl() {
             <span className="text-xs text-emerald-600">● Online</span>
           </button>
           {chatVisible && (
-            <div className="h-[300px] bg-white rounded-xl border border-slate-200">
+            <div className="h-[450px] bg-white rounded-xl border border-slate-200 overflow-hidden">
               <RicoChat
                 className="h-full"
                 onExpand={() => setChatExpanded(true)}
