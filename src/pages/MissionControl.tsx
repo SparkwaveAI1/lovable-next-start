@@ -210,6 +210,20 @@ export default function MissionControl() {
   // Check if "All Businesses" is selected
   const isAllBusinessesSelected = selectedBusiness?.id === ALL_BUSINESSES_ID;
 
+  // Compute Kanban tasks (business-specific) vs global tasks (for Scott's To-Do)
+  const kanbanTasks = (() => {
+    let filtered = tasks;
+    // Filter by business for Kanban (unless "All" is selected)
+    if (!isAllBusinessesSelected && selectedBusiness?.id) {
+      filtered = filtered.filter(t => t.business_id === selectedBusiness.id || t.business_id === null);
+    }
+    // Filter by selected agent if applicable
+    if (selectedAgent) {
+      filtered = filtered.filter(t => t.assignee_ids?.includes(selectedAgent.id));
+    }
+    return filtered;
+  })();
+
   return (
     <DashboardLayout
       selectedBusinessId={selectedBusiness?.id}
@@ -285,18 +299,7 @@ export default function MissionControl() {
               <span className="text-xs text-slate-400">{tasks.length} tasks total</span>
             </div>
             <KanbanBoard
-              tasks={(() => {
-                // Kanban is business-specific (filter by selected business)
-                let filteredTasks = tasks;
-                if (!isAllBusinessesSelected && selectedBusiness?.id) {
-                  filteredTasks = tasks.filter(t => t.business_id === selectedBusiness.id || t.business_id === null);
-                }
-                // Also filter by selected agent if applicable
-                if (selectedAgent) {
-                  filteredTasks = filteredTasks.filter(t => t.assignee_ids.includes(selectedAgent.id));
-                }
-                return filteredTasks;
-              })()}
+              tasks={kanbanTasks}
               agents={agents}
               onTaskClick={handleTaskClick}
               onTaskStatusChange={handleTaskStatusChange}

@@ -169,7 +169,7 @@ export function AgentActivityMonitor({ className, agents: externalAgents = [] }:
     return () => {
       supabase.removeChannel(channel);
     };
-  }, [selectedBusiness?.id]);
+  }, []); // Global subscription - no dependencies
 
   // Update durations every second for running tasks
   const [, setTick] = useState(0);
