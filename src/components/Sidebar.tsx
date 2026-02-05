@@ -14,6 +14,7 @@ import {
   Plus,
   ChevronLeft,
   ChevronRight,
+  ChevronDown,
   ClipboardList,
   BookOpen,
   TrendingUp,
@@ -29,19 +30,52 @@ interface NavItem {
   adminOnly?: boolean
 }
 
-const mainNavItems: NavItem[] = [
-  { label: "Dashboard", href: "/", icon: LayoutDashboard },
-  { label: "Mission Control", href: "/mission-control", icon: Rocket },
-  { label: "Reports", href: "/reports", icon: ClipboardList },
-  { label: "Docs", href: "/docs", icon: BookOpen },
-  { label: "Agents", href: "/agents", icon: Bot },
-  { label: "Contacts", href: "/contacts", icon: Users },
-  { label: "Content Center", href: "/content-center", icon: FileText },
-  { label: "Media Library", href: "/media-library", icon: Image },
-  { label: "Email", href: "/email-marketing", icon: Mail },
-  { label: "Bookings", href: "/bookings", icon: CalendarDays },
-  { label: "Service Requests", href: "/service-requests", icon: Headphones },
-  { label: "Investments", href: "/investments", icon: TrendingUp },
+interface NavGroup {
+  label: string
+  items: NavItem[]
+  collapsible?: boolean
+}
+
+// Organized navigation with clear hierarchy
+const navGroups: NavGroup[] = [
+  {
+    label: "Core",
+    items: [
+      { label: "Dashboard", href: "/", icon: LayoutDashboard },
+      { label: "Mission Control", href: "/mission-control", icon: Rocket },
+    ],
+  },
+  {
+    label: "AI & Automation",
+    items: [
+      { label: "Agents", href: "/agents", icon: Bot },
+      { label: "Reports", href: "/reports", icon: ClipboardList },
+    ],
+  },
+  {
+    label: "Operations",
+    items: [
+      { label: "Contacts", href: "/contacts", icon: Users },
+      { label: "Bookings", href: "/bookings", icon: CalendarDays },
+      { label: "Service Requests", href: "/service-requests", icon: Headphones },
+    ],
+  },
+  {
+    label: "Content",
+    items: [
+      { label: "Content Center", href: "/content-center", icon: FileText },
+      { label: "Media Library", href: "/media-library", icon: Image },
+      { label: "Email Marketing", href: "/email-marketing", icon: Mail },
+    ],
+  },
+  {
+    label: "Reference",
+    collapsible: true,
+    items: [
+      { label: "Docs", href: "/docs", icon: BookOpen },
+      { label: "Investments", href: "/investments", icon: TrendingUp },
+    ],
+  },
 ]
 
 const adminNavItems: NavItem[] = [
@@ -58,12 +92,26 @@ interface SidebarProps {
 export function Sidebar({ isSuperAdmin, collapsed = false, onToggleCollapse, businessName }: SidebarProps) {
   const location = useLocation()
   const navigate = useNavigate()
+  const [collapsedGroups, setCollapsedGroups] = useState<Record<string, boolean>>({
+    Reference: true, // Reference section collapsed by default
+  })
 
   const isActiveRoute = (href: string) => {
     if (href === "/") {
       return location.pathname === "/"
     }
     return location.pathname === href || location.pathname.startsWith(href + "/")
+  }
+
+  const toggleGroup = (groupLabel: string) => {
+    setCollapsedGroups(prev => ({
+      ...prev,
+      [groupLabel]: !prev[groupLabel]
+    }))
+  }
+
+  const isGroupActive = (group: NavGroup) => {
+    return group.items.some(item => isActiveRoute(item.href))
   }
 
   return (
@@ -112,53 +160,90 @@ export function Sidebar({ isSuperAdmin, collapsed = false, onToggleCollapse, bus
       </div>
 
       {/* Main Navigation */}
-      <nav className="flex-1 overflow-y-auto px-3 py-4">
-        <ul className="space-y-1">
-          {mainNavItems.map((item) => {
-            const isActive = isActiveRoute(item.href)
-            const Icon = item.icon
-
-            return (
-              <li key={item.href}>
-                <Link
-                  to={item.href}
+      <nav className="flex-1 overflow-y-auto px-3 py-4 scrollbar-thin scrollbar-thumb-indigo-800 scrollbar-track-transparent">
+        {navGroups.map((group) => {
+          const isCollapsed = group.collapsible && collapsedGroups[group.label]
+          const groupActive = isGroupActive(group)
+          
+          return (
+            <div key={group.label} className="mb-4">
+              {/* Group Label */}
+              {!collapsed && (
+                <div 
                   className={cn(
-                    "flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-all duration-200",
-                    isActive
-                      ? "bg-white/10 text-white"
-                      : "text-slate-300 hover:text-white hover:bg-white/5",
-                    collapsed && "justify-center px-2"
+                    "flex items-center justify-between mb-2 px-3",
+                    group.collapsible && "cursor-pointer hover:text-indigo-200"
                   )}
-                  title={collapsed ? item.label : undefined}
+                  onClick={() => group.collapsible && toggleGroup(group.label)}
                 >
-                  <Icon className={cn(
-                    "h-5 w-5 flex-shrink-0",
-                    isActive ? "text-white" : "text-slate-400"
-                  )} />
-                  {!collapsed && <span>{item.label}</span>}
-                </Link>
-              </li>
-            )
-          })}
-        </ul>
+                  <span className={cn(
+                    "text-xs font-semibold uppercase tracking-wider",
+                    groupActive ? "text-indigo-300" : "text-indigo-500"
+                  )}>
+                    {group.label}
+                  </span>
+                  {group.collapsible && (
+                    <ChevronDown className={cn(
+                      "h-3 w-3 text-indigo-500 transition-transform",
+                      isCollapsed && "-rotate-90"
+                    )} />
+                  )}
+                </div>
+              )}
+              
+              {collapsed && (
+                <div className="w-8 h-px bg-indigo-800 mx-auto mb-2" />
+              )}
+
+              {/* Group Items */}
+              {(!isCollapsed || collapsed) && (
+                <ul className="space-y-0.5">
+                  {group.items.map((item) => {
+                    const isActive = isActiveRoute(item.href)
+                    const Icon = item.icon
+
+                    return (
+                      <li key={item.href}>
+                        <Link
+                          to={item.href}
+                          className={cn(
+                            "flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium transition-all duration-200",
+                            isActive
+                              ? "bg-white/10 text-white shadow-sm"
+                              : "text-slate-300 hover:text-white hover:bg-white/5",
+                            collapsed && "justify-center px-2"
+                          )}
+                          title={collapsed ? item.label : undefined}
+                        >
+                          <Icon className={cn(
+                            "h-5 w-5 flex-shrink-0 transition-colors",
+                            isActive ? "text-indigo-300" : "text-slate-400"
+                          )} />
+                          {!collapsed && <span>{item.label}</span>}
+                        </Link>
+                      </li>
+                    )
+                  })}
+                </ul>
+              )}
+            </div>
+          )
+        })}
 
         {/* Admin Section */}
         {isSuperAdmin && (
-          <>
-            <div className={cn(
-              "mt-6 mb-2 px-3",
-              collapsed && "px-0 text-center"
-            )}>
-              {!collapsed && (
-                <span className="text-xs font-semibold text-indigo-400 uppercase tracking-wider">
+          <div className="mt-2 pt-4 border-t border-indigo-800/50">
+            {!collapsed && (
+              <div className="mb-2 px-3">
+                <span className="text-xs font-semibold text-indigo-500 uppercase tracking-wider">
                   Admin
                 </span>
-              )}
-              {collapsed && (
-                <div className="w-8 h-px bg-indigo-700 mx-auto" />
-              )}
-            </div>
-            <ul className="space-y-1">
+              </div>
+            )}
+            {collapsed && (
+              <div className="w-8 h-px bg-indigo-700 mx-auto mb-2" />
+            )}
+            <ul className="space-y-0.5">
               {adminNavItems.map((item) => {
                 const isActive = isActiveRoute(item.href)
                 const Icon = item.icon
@@ -168,9 +253,9 @@ export function Sidebar({ isSuperAdmin, collapsed = false, onToggleCollapse, bus
                     <Link
                       to={item.href}
                       className={cn(
-                        "flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-all duration-200",
+                        "flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium transition-all duration-200",
                         isActive
-                          ? "bg-white/10 text-white"
+                          ? "bg-white/10 text-white shadow-sm"
                           : "text-slate-300 hover:text-white hover:bg-white/5",
                         collapsed && "justify-center px-2"
                       )}
@@ -178,7 +263,7 @@ export function Sidebar({ isSuperAdmin, collapsed = false, onToggleCollapse, bus
                     >
                       <Icon className={cn(
                         "h-5 w-5 flex-shrink-0",
-                        isActive ? "text-white" : "text-slate-400"
+                        isActive ? "text-indigo-300" : "text-slate-400"
                       )} />
                       {!collapsed && <span>{item.label}</span>}
                     </Link>
@@ -186,29 +271,31 @@ export function Sidebar({ isSuperAdmin, collapsed = false, onToggleCollapse, bus
                 )
               })}
             </ul>
-          </>
+          </div>
         )}
       </nav>
 
       {/* Collapse Toggle */}
-      <div className="border-t border-indigo-800/50 p-3">
-        <button
-          onClick={onToggleCollapse}
-          className={cn(
-            "flex items-center gap-2 px-3 py-2 w-full rounded-lg text-slate-400 hover:text-white hover:bg-white/5 transition-colors text-sm",
-            collapsed && "justify-center px-2"
-          )}
-        >
-          {collapsed ? (
-            <ChevronRight className="h-4 w-4" />
-          ) : (
-            <>
-              <ChevronLeft className="h-4 w-4" />
-              <span>Collapse</span>
-            </>
-          )}
-        </button>
-      </div>
+      {onToggleCollapse && (
+        <div className="border-t border-indigo-800/50 p-3">
+          <button
+            onClick={onToggleCollapse}
+            className={cn(
+              "flex items-center gap-2 px-3 py-2 w-full rounded-lg text-slate-400 hover:text-white hover:bg-white/5 transition-colors text-sm",
+              collapsed && "justify-center px-2"
+            )}
+          >
+            {collapsed ? (
+              <ChevronRight className="h-4 w-4" />
+            ) : (
+              <>
+                <ChevronLeft className="h-4 w-4" />
+                <span>Collapse</span>
+              </>
+            )}
+          </button>
+        </div>
+      )}
     </aside>
   )
 }

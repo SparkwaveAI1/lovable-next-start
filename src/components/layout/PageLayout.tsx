@@ -25,16 +25,16 @@ interface PageHeaderProps {
 
 export function PageHeader({ title, description, actions, className }: PageHeaderProps) {
   return (
-    <div className={cn("mb-8", className)}>
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-2xl font-bold text-gray-900">{title}</h1>
+    <div className={cn("mb-6 md:mb-8", className)}>
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+        <div className="min-w-0">
+          <h1 className="text-xl sm:text-2xl font-bold text-gray-900 truncate">{title}</h1>
           {description && (
-            <p className="text-gray-500 mt-1">{description}</p>
+            <p className="text-sm sm:text-base text-gray-500 mt-1">{description}</p>
           )}
         </div>
         {actions && (
-          <div className="flex items-center gap-3">
+          <div className="flex items-center gap-2 sm:gap-3 flex-shrink-0">
             {actions}
           </div>
         )}
@@ -46,12 +46,15 @@ export function PageHeader({ title, description, actions, className }: PageHeade
 interface PageContentProps {
   children: React.ReactNode
   className?: string
+  /** Remove max-width container constraint for full-width layouts */
+  fullWidth?: boolean
 }
 
-export function PageContent({ children, className }: PageContentProps) {
+export function PageContent({ children, className, fullWidth = false }: PageContentProps) {
   return (
     <main className={cn(
-      "container mx-auto px-4 sm:px-6 py-6",
+      "px-3 sm:px-4 md:px-6 py-4 sm:py-6",
+      !fullWidth && "max-w-7xl mx-auto",
       className
     )}>
       {children}

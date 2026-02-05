@@ -1,49 +1,20 @@
 import { useState, useEffect } from "react"
 import { Link, useLocation } from "react-router-dom"
 import {
-  LayoutDashboard,
-  Users,
-  FileText,
-  Image,
-  Headphones,
-  Mail,
-  Shield,
   Bell,
   Settings,
   Menu,
-  CalendarDays,
-  Rocket,
-  Bot,
   X,
 } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { Button } from "@/components/ui/button"
-import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet"
+import { Sheet, SheetContent, SheetTrigger, SheetClose } from "@/components/ui/sheet"
 import { BusinessSwitcher } from "@/components/BusinessSwitcher"
 import LogoutButton from "@/components/LogoutButton"
 import { Sidebar } from "@/components/Sidebar"
+import { Breadcrumbs } from "@/components/layout/Breadcrumbs"
 import sparkwaveIcon from "@/assets/sparkwave-icon.png"
 import { supabase } from "@/integrations/supabase/client"
-
-interface NavItem {
-  label: string
-  href: string
-  icon: React.ComponentType<{ className?: string }>
-  adminOnly?: boolean
-}
-
-const navItems: NavItem[] = [
-  { label: "Dashboard", href: "/", icon: LayoutDashboard },
-  { label: "Contacts", href: "/contacts", icon: Users },
-  { label: "Bookings", href: "/bookings", icon: CalendarDays },
-  { label: "Service Requests", href: "/service-requests", icon: Headphones },
-  { label: "Content Center", href: "/content-center", icon: FileText },
-  { label: "Media Library", href: "/media-library", icon: Image },
-  { label: "Email", href: "/email-marketing", icon: Mail },
-  { label: "Mission Control", href: "/mission-control", icon: Rocket },
-  { label: "Agents", href: "/agents", icon: Bot },
-  { label: "Admin", href: "/admin", icon: Shield, adminOnly: true },
-]
 
 interface DashboardLayoutProps {
   children: React.ReactNode
@@ -51,6 +22,8 @@ interface DashboardLayoutProps {
   onBusinessChange?: (businessId: string) => void
   businessName?: string
   showAllOption?: boolean
+  /** Hide breadcrumbs on specific pages */
+  hideBreadcrumbs?: boolean
 }
 
 export function DashboardLayout({ 
@@ -58,7 +31,8 @@ export function DashboardLayout({
   selectedBusinessId, 
   onBusinessChange,
   businessName,
-  showAllOption = false
+  showAllOption = false,
+  hideBreadcrumbs = false
 }: DashboardLayoutProps) {
   const [isSuperAdmin, setIsSuperAdmin] = useState(false)
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false)
@@ -84,14 +58,19 @@ export function DashboardLayout({
     setMobileOpen(false)
   }, [location.pathname])
 
-  const isActiveRoute = (href: string) => {
-    if (href === "/") {
-      return location.pathname === "/"
+  // Persist sidebar collapsed state
+  useEffect(() => {
+    const saved = localStorage.getItem("sparkwave-sidebar-collapsed")
+    if (saved) {
+      setSidebarCollapsed(JSON.parse(saved))
     }
-    return location.pathname === href || location.pathname.startsWith(href + "/")
-  }
+  }, [])
 
-  const visibleNavItems = navItems.filter(item => !item.adminOnly || isSuperAdmin)
+  const handleToggleCollapse = () => {
+    const newState = !sidebarCollapsed
+    setSidebarCollapsed(newState)
+    localStorage.setItem("sparkwave-sidebar-collapsed", JSON.stringify(newState))
+  }
 
   return (
     <div className="min-h-screen bg-[hsl(220,20%,97%)]">
@@ -100,19 +79,28 @@ export function DashboardLayout({
         <Sidebar
           isSuperAdmin={isSuperAdmin}
           collapsed={sidebarCollapsed}
-          onToggleCollapse={() => setSidebarCollapsed(!sidebarCollapsed)}
+          onToggleCollapse={handleToggleCollapse}
           businessName={businessName}
         />
       </div>
 
       {/* Mobile Sidebar */}
       <Sheet open={mobileOpen} onOpenChange={setMobileOpen}>
-        <SheetContent side="left" className="p-0 w-64 bg-indigo-950 border-indigo-800">
-          <Sidebar
-            isSuperAdmin={isSuperAdmin}
-            collapsed={false}
-            businessName={businessName}
-          />
+        <SheetContent 
+          side="left" 
+          className="p-0 w-72 bg-indigo-950 border-indigo-800"
+        >
+          <div className="relative h-full">
+            {/* Close button for mobile */}
+            <SheetClose className="absolute right-3 top-5 z-50">
+              <X className="h-5 w-5 text-slate-400 hover:text-white transition-colors" />
+            </SheetClose>
+            <Sidebar
+              isSuperAdmin={isSuperAdmin}
+              collapsed={false}
+              businessName={businessName}
+            />
+          </div>
         </SheetContent>
       </Sheet>
 
@@ -133,18 +121,24 @@ export function DashboardLayout({
                 size="icon"
                 className="lg:hidden"
                 onClick={() => setMobileOpen(true)}
+                aria-label="Open navigation menu"
               >
                 <Menu className="h-5 w-5" />
               </Button>
-              <img 
-                src={sparkwaveIcon} 
-                alt="Sparkwave" 
-                className="h-8 w-8 lg:hidden" 
-              />
+              <Link to="/" className="lg:hidden flex items-center gap-2">
+                <img 
+                  src={sparkwaveIcon} 
+                  alt="Sparkwave" 
+                  className="h-8 w-8" 
+                />
+                <span className="font-semibold text-gray-900 hidden sm:inline">
+                  Sparkwave
+                </span>
+              </Link>
             </div>
 
             {/* Center - Business Switcher */}
-            <div className="flex-1 max-w-xs mx-4">
+            <div className="flex-1 max-w-xs mx-4 hidden sm:block">
               <BusinessSwitcher
                 selectedBusinessId={selectedBusinessId}
                 onBusinessChange={onBusinessChange}
@@ -153,11 +147,12 @@ export function DashboardLayout({
             </div>
 
             {/* Right - Actions */}
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-1 sm:gap-2">
               <Button 
                 variant="ghost" 
                 size="icon" 
                 className="relative text-gray-500 hover:text-gray-900 hover:bg-gray-100"
+                aria-label="Notifications"
               >
                 <Bell className="h-5 w-5" />
                 <span className="absolute top-1.5 right-1.5 h-2 w-2 bg-red-500 rounded-full" />
@@ -166,7 +161,8 @@ export function DashboardLayout({
               <Button 
                 variant="ghost" 
                 size="icon"
-                className="text-gray-500 hover:text-gray-900 hover:bg-gray-100"
+                className="text-gray-500 hover:text-gray-900 hover:bg-gray-100 hidden sm:flex"
+                aria-label="Settings"
               >
                 <Settings className="h-5 w-5" />
               </Button>
@@ -174,7 +170,23 @@ export function DashboardLayout({
               <LogoutButton />
             </div>
           </div>
+
+          {/* Mobile Business Switcher - below header on small screens */}
+          <div className="sm:hidden px-4 pb-3 border-t border-gray-100 pt-3 bg-white">
+            <BusinessSwitcher
+              selectedBusinessId={selectedBusinessId}
+              onBusinessChange={onBusinessChange}
+              showAllOption={showAllOption}
+            />
+          </div>
         </header>
+
+        {/* Breadcrumbs - show below header for deep navigation */}
+        {!hideBreadcrumbs && (
+          <div className="bg-white border-b border-gray-100 px-4 md:px-6 py-2">
+            <Breadcrumbs />
+          </div>
+        )}
 
         {/* Page Content */}
         <main>

@@ -1,12 +1,12 @@
 import { useState, useEffect, useCallback } from "react";
 import { DashboardLayout } from "@/components/layout/DashboardLayout";
 import { PageContent } from "@/components/layout/PageLayout";
-import { AgentCard, KanbanBoard, ActivityFeed, StatsBar, RicoChat, RicoChatModal, ScottsActionItems, AgentActivityMonitor, HealthDashboard } from "@/components/mission-control";
+import { AgentCard, KanbanBoard, ActivityFeed, StatsBar, RicoChat, RicoChatModal, ScottsActionItems, AgentActivityMonitor, HealthDashboard, AnalyticsMonitor } from "@/components/mission-control";
 import { useBusinessContext } from "@/contexts/BusinessContext";
 import { useBusinesses } from "@/hooks/useBusinesses";
 import { supabase } from "@/integrations/supabase/client";
 import type { Agent, Task, Activity, TaskStatus } from "@/types/mission-control";
-import { RefreshCw, ChevronDown, ChevronUp } from "lucide-react";
+import { RefreshCw, MessageCircle } from "lucide-react";
 import { useToast } from "@/components/ui/use-toast";
 import { ALL_BUSINESSES_ID } from "@/components/BusinessSwitcher";
 
@@ -21,8 +21,7 @@ export default function MissionControl() {
   const [selectedAgent, setSelectedAgent] = useState<Agent | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [chatExpanded, setChatExpanded] = useState(false);
-  const [chatVisible, setChatVisible] = useState(true);
+  const [chatModalOpen, setChatModalOpen] = useState(false);
 
   // Fetch data from Supabase mc_ tables, filtered by selected business
   // Global agents (scope='global') are always included regardless of business selection
@@ -265,27 +264,19 @@ export default function MissionControl() {
           </div>
         )}
 
-        {/* Rico Chat */}
-        <div className="mb-6">
-          <button
-            onClick={() => setChatVisible(!chatVisible)}
-            className="flex items-center gap-2 mb-2 text-sm text-slate-600 hover:text-slate-900"
-          >
-            {chatVisible ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
-            <span className="font-medium">AI Chat</span>
-            <span className="text-xs text-emerald-600">● Online</span>
-          </button>
-          {chatVisible && (
-            <div className="h-[450px] bg-white rounded-xl border border-slate-200 overflow-hidden">
-              <RicoChat
-                className="h-full"
-                onExpand={() => setChatExpanded(true)}
-              />
-            </div>
-          )}
+        {/* 1. Agent Activity + Scott's To-Do (top, side by side) */}
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
+          <AgentActivityMonitor
+            agents={agents.map(a => ({ id: a.id, name: a.name, status: a.status, role: a.role }))}
+          />
+
+          <ScottsActionItems
+            tasks={tasks}
+            onTaskClick={handleTaskClick}
+          />
         </div>
 
-        {/* Kanban Board */}
+        {/* 2. Kanban Board (full width) */}
         <div className="mb-6">
           <div className="bg-white rounded-xl border border-slate-200 p-4">
             <div className="flex items-center justify-between mb-4">
@@ -308,32 +299,30 @@ export default function MissionControl() {
           </div>
         </div>
 
-        {/* Agent List + Action Items */}
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
-          <AgentActivityMonitor
-            agents={agents.map(a => ({ id: a.id, name: a.name, status: a.status, role: a.role }))}
-          />
-
-          <ScottsActionItems
-            tasks={tasks}
-            onTaskClick={handleTaskClick}
-          />
-        </div>
-
-        {/* System Health Dashboard */}
-        <div className="mb-6">
-          <HealthDashboard />
-        </div>
-
-        {/* Activity Feed */}
-        <div className="bg-white rounded-xl border border-slate-200">
+        {/* 3. Activity Feed */}
+        <div className="mb-6 bg-white rounded-xl border border-slate-200">
           <ActivityFeed activities={activities} agents={agents} />
         </div>
 
-        {/* Expanded Chat Modal */}
+        {/* 4. System Health Dashboard + Analytics Monitor (side by side) */}
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
+          <HealthDashboard />
+          <AnalyticsMonitor />
+        </div>
+
+        {/* 5. Floating Chat Bubble (lower right) */}
+        <button
+          onClick={() => setChatModalOpen(true)}
+          className="fixed bottom-6 right-6 w-14 h-14 bg-gradient-to-r from-violet-600 to-indigo-600 text-white rounded-full shadow-lg hover:shadow-xl hover:scale-105 transition-all duration-200 flex items-center justify-center z-50"
+          title="Chat with Rico"
+        >
+          <MessageCircle className="h-6 w-6" />
+        </button>
+
+        {/* Rico Chat Modal */}
         <RicoChatModal 
-          isOpen={chatExpanded} 
-          onClose={() => setChatExpanded(false)} 
+          isOpen={chatModalOpen} 
+          onClose={() => setChatModalOpen(false)} 
         />
       </PageContent>
     </DashboardLayout>
