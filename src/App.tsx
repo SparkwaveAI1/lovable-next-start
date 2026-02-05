@@ -24,6 +24,7 @@ import AgentRegistry from "./pages/AgentRegistry";
 import Bookings from "./pages/Bookings";
 import Reports from "./pages/Reports";
 import Docs from "./pages/Docs";
+import Investments from "./pages/Investments";
 import ProtectedRoute from "./components/ProtectedRoute";
 import { ErrorBoundary } from "./components/ErrorBoundary";
 import { BusinessProvider } from "@/contexts/BusinessContext";
@@ -61,6 +62,7 @@ const App = () => (
             <Route path="/bookings" element={<ProtectedRoute><ErrorBoundary><Bookings /></ErrorBoundary></ProtectedRoute>} />
             <Route path="/reports" element={<ProtectedRoute><ErrorBoundary><Reports /></ErrorBoundary></ProtectedRoute>} />
             <Route path="/docs/*" element={<ProtectedRoute><ErrorBoundary><Docs /></ErrorBoundary></ProtectedRoute>} />
+            <Route path="/investments" element={<ProtectedRoute><ErrorBoundary><Investments /></ErrorBoundary></ProtectedRoute>} />
             {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
             <Route path="*" element={<NotFound />} />
             </Routes>

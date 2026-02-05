@@ -16,6 +16,7 @@ import {
   ChevronRight,
   ClipboardList,
   BookOpen,
+  TrendingUp,
 } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { Button } from "@/components/ui/button"
@@ -32,6 +33,7 @@ const mainNavItems: NavItem[] = [
   { label: "Dashboard", href: "/", icon: LayoutDashboard },
   { label: "Mission Control", href: "/mission-control", icon: Rocket },
   { label: "Reports", href: "/reports", icon: ClipboardList },
+  { label: "Investments", href: "/investments", icon: TrendingUp },
   { label: "Docs", href: "/docs", icon: BookOpen },
   { label: "Agents", href: "/agents", icon: Bot },
   { label: "Contacts", href: "/contacts", icon: Users },
