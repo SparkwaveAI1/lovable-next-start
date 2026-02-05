@@ -17,17 +17,20 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
-import { Search, Loader2, CheckCircle, AlertCircle } from 'lucide-react';
+import { Search, Loader2, CheckCircle, AlertCircle, Crown } from 'lucide-react';
 import { useAddSymbol } from '@/hooks/useWatchlists';
 import { useQuote } from '@/hooks/useMarketData';
 import { useToast } from '@/hooks/use-toast';
 import { useDebounce } from '@/hooks/useDebounce';
+import { useSubscription } from '@/hooks/useSubscription';
+import { LimitWarning, UpgradePrompt } from '@/components/investments/UpgradePrompt';
 
 interface AddSymbolDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   watchlistId: string | null;
   onSuccess?: () => void;
+  businessId?: string;
 }
 
 // Common crypto symbols mapped to CoinGecko IDs
@@ -54,11 +57,19 @@ export function AddSymbolDialog({
   onOpenChange,
   watchlistId,
   onSuccess,
+  businessId,
 }: AddSymbolDialogProps) {
   const { toast } = useToast();
   const [symbol, setSymbol] = useState('');
   const [assetType, setAssetType] = useState<'stock' | 'crypto'>('crypto');
   const [validationStatus, setValidationStatus] = useState<'idle' | 'validating' | 'valid' | 'invalid'>('idle');
+  const [showUpgrade, setShowUpgrade] = useState(false);
+
+  // Subscription & limits
+  const subscription = useSubscription(businessId);
+  const canAdd = subscription.canAddWatchlistItem();
+  const isAtLimit = !canAdd;
+  const isApproachingLimit = subscription.isApproachingLimit('items');
 
   const addSymbolMutation = useAddSymbol();
   const debouncedSymbol = useDebounce(symbol, 500);
@@ -127,7 +138,8 @@ export function AddSymbolDialog({
 
   const canSubmit = symbol.trim().length >= 2 && 
     (currentValidationStatus === 'valid' || currentValidationStatus === 'idle') &&
-    !addSymbolMutation.isPending;
+    !addSymbolMutation.isPending &&
+    canAdd;
 
   return (
     <Dialog open={open} onOpenChange={handleClose}>
@@ -228,26 +240,57 @@ export function AddSymbolDialog({
           </div>
         </div>
 
+        {/* Limit warning */}
+        {(isApproachingLimit || isAtLimit) && !subscription.isPro && (
+          <div className="pt-2">
+            <LimitWarning
+              currentUsage={subscription.usage.watchlistItems}
+              limit={subscription.limits.maxWatchlistItems}
+              feature="watchlist items"
+              onUpgrade={() => setShowUpgrade(true)}
+            />
+          </div>
+        )}
+
         <DialogFooter>
           <Button variant="outline" onClick={() => handleClose(false)}>
             Cancel
           </Button>
-          <Button
-            onClick={handleSubmit}
-            disabled={!canSubmit}
-            className="bg-indigo-600 hover:bg-indigo-700"
-          >
-            {addSymbolMutation.isPending ? (
-              <>
-                <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                Adding...
-              </>
-            ) : (
-              'Add Symbol'
-            )}
-          </Button>
+          {isAtLimit ? (
+            <Button
+              onClick={() => setShowUpgrade(true)}
+              className="bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-700 hover:to-purple-700"
+            >
+              <Crown className="h-4 w-4 mr-2" />
+              Upgrade to Add More
+            </Button>
+          ) : (
+            <Button
+              onClick={handleSubmit}
+              disabled={!canSubmit}
+              className="bg-indigo-600 hover:bg-indigo-700"
+            >
+              {addSymbolMutation.isPending ? (
+                <>
+                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                  Adding...
+                </>
+              ) : (
+                'Add Symbol'
+              )}
+            </Button>
+          )}
         </DialogFooter>
       </DialogContent>
+
+      {/* Upgrade prompt dialog */}
+      <UpgradePrompt
+        open={showUpgrade}
+        onOpenChange={setShowUpgrade}
+        feature="watchlist items"
+        currentUsage={subscription.usage.watchlistItems}
+        limit={subscription.limits.maxWatchlistItems}
+      />
     </Dialog>
   );
 }

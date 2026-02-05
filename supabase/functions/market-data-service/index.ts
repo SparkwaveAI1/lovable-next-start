@@ -40,6 +40,23 @@ interface HistoricalData {
   days: number
 }
 
+// OHLCV data for TradingView candlestick charts
+interface OHLCVData {
+  time: string // YYYY-MM-DD format for TradingView
+  open: number
+  high: number
+  low: number
+  close: number
+  volume: number
+}
+
+interface OHLCVResponse {
+  symbol: string
+  assetType: 'stock' | 'crypto'
+  data: OHLCVData[]
+  range: string
+}
+
 interface HistoryCacheEntry {
   symbol: string
   asset_type: string
@@ -294,6 +311,227 @@ async function fetchStockHistoryFromPolygon(symbol: string, days: number): Promi
     console.error(`Polygon history fetch error for ${upperSymbol}:`, error)
     return null
   }
+}
+
+// ============ OHLCV DATA FETCHING ============
+
+async function fetchCryptoOHLCVFromCoinGecko(symbol: string, days: number): Promise<OHLCVData[] | null> {
+  const lowerSymbol = symbol.toLowerCase()
+  
+  try {
+    // CoinGecko OHLC endpoint
+    const url = `https://api.coingecko.com/api/v3/coins/${lowerSymbol}/ohlc?vs_currency=usd&days=${days}`
+    const response = await fetch(url, {
+      headers: { 'Accept': 'application/json' }
+    })
+    
+    if (response.status === 429) {
+      console.error('CoinGecko API rate limit exceeded')
+      return null
+    }
+    
+    if (response.status === 404) {
+      console.error(`CoinGecko: Coin not found: ${lowerSymbol}`)
+      return null
+    }
+    
+    if (!response.ok) {
+      console.error(`CoinGecko OHLC API error: ${response.status} ${response.statusText}`)
+      return null
+    }
+    
+    const data = await response.json()
+    
+    if (!Array.isArray(data) || data.length === 0) {
+      console.error(`CoinGecko: No OHLC data for ${lowerSymbol}`)
+      return null
+    }
+    
+    // CoinGecko returns [[timestamp_ms, open, high, low, close], ...]
+    // We need to aggregate into daily candles and add volume
+    const dailyMap = new Map<string, OHLCVData>()
+    
+    for (const [ts, open, high, low, close] of data) {
+      const date = new Date(ts).toISOString().split('T')[0]
+      
+      if (!dailyMap.has(date)) {
+        dailyMap.set(date, {
+          time: date,
+          open,
+          high,
+          low,
+          close,
+          volume: 0, // CoinGecko OHLC doesn't include volume, we'll estimate
+        })
+      } else {
+        const existing = dailyMap.get(date)!
+        existing.high = Math.max(existing.high, high)
+        existing.low = Math.min(existing.low, low)
+        existing.close = close // Last close of the day
+      }
+    }
+    
+    // Try to get volume data from market_chart endpoint
+    try {
+      const volumeUrl = `https://api.coingecko.com/api/v3/coins/${lowerSymbol}/market_chart?vs_currency=usd&days=${days}`
+      const volumeResponse = await fetch(volumeUrl, {
+        headers: { 'Accept': 'application/json' }
+      })
+      
+      if (volumeResponse.ok) {
+        const volumeData = await volumeResponse.json()
+        if (volumeData.total_volumes) {
+          for (const [ts, vol] of volumeData.total_volumes) {
+            const date = new Date(ts).toISOString().split('T')[0]
+            if (dailyMap.has(date)) {
+              dailyMap.get(date)!.volume = vol
+            }
+          }
+        }
+      }
+    } catch (e) {
+      console.log('Could not fetch volume data:', e)
+    }
+    
+    return Array.from(dailyMap.values()).sort((a, b) => a.time.localeCompare(b.time))
+  } catch (error) {
+    console.error(`CoinGecko OHLCV fetch error for ${lowerSymbol}:`, error)
+    return null
+  }
+}
+
+async function fetchStockOHLCVFromPolygon(symbol: string, days: number): Promise<OHLCVData[] | null> {
+  // Rate limit check
+  const now = Date.now()
+  if (now - lastPolygonCall < POLYGON_MIN_INTERVAL_MS) {
+    console.log(`Rate limiting Polygon API call for ${symbol} OHLCV`)
+    return null
+  }
+  
+  if (!POLYGON_API_KEY) {
+    console.error('POLYGON_API_KEY not configured')
+    return null
+  }
+  
+  lastPolygonCall = now
+  const upperSymbol = symbol.toUpperCase()
+  
+  try {
+    // Calculate date range
+    const endDate = new Date()
+    const startDate = new Date(endDate.getTime() - (days * 24 * 60 * 60 * 1000))
+    
+    const from = startDate.toISOString().split('T')[0]
+    const to = endDate.toISOString().split('T')[0]
+    
+    const url = `https://api.polygon.io/v2/aggs/ticker/${upperSymbol}/range/1/day/${from}/${to}?apiKey=${POLYGON_API_KEY}&sort=asc`
+    const response = await fetch(url)
+    
+    if (response.status === 429) {
+      console.error('Polygon API rate limit exceeded')
+      return null
+    }
+    
+    if (!response.ok) {
+      console.error(`Polygon OHLCV API error: ${response.status} ${response.statusText}`)
+      return null
+    }
+    
+    const data = await response.json()
+    
+    if (data.status !== 'OK' || !data.results || data.results.length === 0) {
+      console.error(`Polygon: No OHLCV data for ${upperSymbol}`)
+      return null
+    }
+    
+    // Polygon returns: { o: open, h: high, l: low, c: close, v: volume, t: timestamp_ms }
+    return data.results.map((r: { t: number, o: number, h: number, l: number, c: number, v: number }) => ({
+      time: new Date(r.t).toISOString().split('T')[0],
+      open: r.o,
+      high: r.h,
+      low: r.l,
+      close: r.c,
+      volume: r.v,
+    }))
+  } catch (error) {
+    console.error(`Polygon OHLCV fetch error for ${upperSymbol}:`, error)
+    return null
+  }
+}
+
+// OHLCV Cache operations
+const OHLCV_CACHE_DURATION_MS = 4 * 60 * 60 * 1000 // 4 hours for OHLCV data
+
+async function getCachedOHLCV(symbol: string, assetType: 'stock' | 'crypto', days: number): Promise<OHLCVData[] | null> {
+  const normalizedSymbol = assetType === 'stock' ? symbol.toUpperCase() : symbol.toLowerCase()
+  
+  const { data, error } = await supabase
+    .from('market_ohlcv_cache')
+    .select('*')
+    .eq('symbol', normalizedSymbol)
+    .eq('asset_type', assetType)
+    .eq('days', days)
+    .single()
+  
+  if (error || !data) {
+    return null
+  }
+  
+  const expiresAt = new Date(data.expires_at).getTime()
+  
+  if (Date.now() > expiresAt) {
+    return null // expired
+  }
+  
+  return data.data as OHLCVData[]
+}
+
+async function setCachedOHLCV(symbol: string, assetType: 'stock' | 'crypto', days: number, ohlcvData: OHLCVData[]): Promise<void> {
+  const normalizedSymbol = assetType === 'stock' ? symbol.toUpperCase() : symbol.toLowerCase()
+  
+  const now = new Date()
+  const expiresAt = new Date(now.getTime() + OHLCV_CACHE_DURATION_MS)
+  
+  const { error } = await supabase
+    .from('market_ohlcv_cache')
+    .upsert({
+      symbol: normalizedSymbol,
+      asset_type: assetType,
+      days,
+      data: ohlcvData,
+      fetched_at: now.toISOString(),
+      expires_at: expiresAt.toISOString(),
+    }, {
+      onConflict: 'symbol,asset_type,days'
+    })
+  
+  if (error) {
+    console.error('OHLCV cache write error:', error)
+  }
+}
+
+async function getOHLCV(symbol: string, assetType: 'stock' | 'crypto', days: number): Promise<{ data: OHLCVData[] | null, source: string, error?: string }> {
+  // Check cache first
+  const cached = await getCachedOHLCV(symbol, assetType, days)
+  if (cached) {
+    return { data: cached, source: 'cache' }
+  }
+  
+  // Fetch fresh data
+  let fresh: OHLCVData[] | null = null
+  
+  if (assetType === 'stock') {
+    fresh = await fetchStockOHLCVFromPolygon(symbol, days)
+  } else {
+    fresh = await fetchCryptoOHLCVFromCoinGecko(symbol, days)
+  }
+  
+  if (fresh && fresh.length > 0) {
+    await setCachedOHLCV(symbol, assetType, days, fresh)
+    return { data: fresh, source: 'api' }
+  }
+  
+  return { data: null, source: 'none', error: `Unable to fetch OHLCV data for ${symbol}` }
 }
 
 // ============ HISTORY CACHE OPERATIONS ============
@@ -705,6 +943,70 @@ async function handleHistory(url: URL): Promise<Response> {
   })
 }
 
+async function handleOHLCV(url: URL): Promise<Response> {
+  const symbol = url.searchParams.get('symbol')
+  const type = url.searchParams.get('type') as 'stock' | 'crypto' | null
+  const rangeParam = url.searchParams.get('range')
+  const daysParam = url.searchParams.get('days')
+  
+  if (!symbol) {
+    return new Response(JSON.stringify({ error: 'Missing symbol parameter' }), {
+      status: 400,
+      headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+    })
+  }
+  
+  if (!type || !['stock', 'crypto'].includes(type)) {
+    return new Response(JSON.stringify({ error: 'Invalid or missing type parameter (stock|crypto)' }), {
+      status: 400,
+      headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+    })
+  }
+  
+  // Convert range to days if provided
+  let days = 30
+  if (daysParam) {
+    days = parseInt(daysParam, 10)
+  } else if (rangeParam) {
+    switch (rangeParam) {
+      case '1D': days = 1; break
+      case '1W': days = 7; break
+      case '1M': days = 30; break
+      case '3M': days = 90; break
+      case '1Y': days = 365; break
+      case 'ALL': days = 730; break
+      default: days = 30
+    }
+  }
+  
+  // Clamp days to valid range
+  days = Math.max(1, Math.min(days, 730))
+  
+  const result = await getOHLCV(symbol, type, days)
+  
+  if (!result.data || result.data.length === 0) {
+    return new Response(JSON.stringify({ error: result.error || 'OHLCV data not found' }), {
+      status: 404,
+      headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+    })
+  }
+  
+  return new Response(JSON.stringify({
+    symbol: type === 'stock' ? symbol.toUpperCase() : symbol.toLowerCase(),
+    assetType: type,
+    range: rangeParam || `${days}D`,
+    data: result.data,
+    meta: {
+      source: result.source,
+      dataPoints: result.data.length,
+      cachedUntil: new Date(Date.now() + OHLCV_CACHE_DURATION_MS).toISOString(),
+    }
+  }), {
+    status: 200,
+    headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+  })
+}
+
 async function handleRefresh(req: Request, url: URL): Promise<Response> {
   // Admin only - check for service role key in auth header
   const authHeader = req.headers.get('Authorization')
@@ -796,6 +1098,15 @@ Deno.serve(async (req) => {
         }
         return await handleHistory(url)
       
+      case 'ohlcv':
+        if (req.method !== 'GET') {
+          return new Response(JSON.stringify({ error: 'Method not allowed' }), {
+            status: 405,
+            headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+          })
+        }
+        return await handleOHLCV(url)
+      
       case 'refresh':
         if (req.method !== 'POST') {
           return new Response(JSON.stringify({ error: 'Method not allowed' }), {
@@ -808,20 +1119,22 @@ Deno.serve(async (req) => {
       default:
         return new Response(JSON.stringify({
           service: 'market-data-service',
-          version: '1.0.0',
+          version: '1.1.0',
           endpoints: [
             'GET /quote?symbol=AAPL&type=stock',
             'GET /quote?symbol=bitcoin&type=crypto',
             'GET /batch?symbols=AAPL,GOOGL&type=stock',
             'GET /history?symbol=bitcoin&type=crypto&days=7',
+            'GET /ohlcv?symbol=bitcoin&type=crypto&range=1M (TradingView candlestick data)',
             'GET /indicators?symbol=AAPL&type=stock',
             'POST /refresh (admin only)',
           ],
-          cacheExpiry: '15 minutes',
+          cacheExpiry: '15 minutes (quotes), 4 hours (OHLCV)',
           sources: {
             stocks: 'Polygon.io',
             crypto: 'CoinGecko',
-          }
+          },
+          ohlcvRanges: ['1D', '1W', '1M', '3M', '1Y', 'ALL'],
         }), {
           status: 200,
           headers: { ...corsHeaders, 'Content-Type': 'application/json' }

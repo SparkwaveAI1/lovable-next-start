@@ -10,7 +10,13 @@ import { CreateWatchlistDialog } from '@/components/investments/CreateWatchlistD
 import { ScreenerBuilder } from '@/components/investments/ScreenerBuilder';
 import { ScreenerResults } from '@/components/investments/ScreenerResults';
 import { AlertManager } from '@/components/investments/AlertManager';
+import { TierBadge, UpgradePrompt } from '@/components/investments/UpgradePrompt';
+import { InvestmentDisclaimer } from '@/components/investments/Disclaimer';
+import { DisclaimerAcceptanceModal } from '@/components/investments/DisclaimerAcceptanceModal';
+import { OnboardingFlow } from '@/components/investments/OnboardingFlow';
+import { TemplateGallery } from '@/components/investments/TemplateGallery';
 import { useBusinessContext } from '@/contexts/BusinessContext';
+import { useSubscription } from '@/hooks/useSubscription';
 import { useWatchlists, useRemoveSymbol, useCreateWatchlist, useAddSymbol } from '@/hooks/useWatchlists';
 import { useMixedQuotes, QuoteData } from '@/hooks/useMarketData';
 import { useMixedHistory } from '@/hooks/useSymbolHistory';
@@ -18,6 +24,7 @@ import { useRunScreener, useSaveScreener, ScreenerProfile, ScreenerResult } from
 import { Plus, LayoutGrid, List, Loader2, AlertCircle, RefreshCw } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { Skeleton } from '@/components/ui/skeleton';
+import type { WorkflowTemplate } from '@/data/workflowTemplates';
 
 // Extended item type for UI display
 export type WatchlistItem = {
@@ -44,6 +51,10 @@ export default function Investments() {
   const [addSymbolOpen, setAddSymbolOpen] = useState(false);
   const [createWatchlistOpen, setCreateWatchlistOpen] = useState(false);
   const [targetWatchlistId, setTargetWatchlistId] = useState<string | null>(null);
+  const [showUpgradeDialog, setShowUpgradeDialog] = useState(false);
+
+  // Subscription tier & limits
+  const subscription = useSubscription(selectedBusiness?.id);
 
   // Fetch watchlists from database
   const { 
@@ -367,9 +378,8 @@ export default function Investments() {
           <TabsList className="mb-6">
             <TabsTrigger value="watchlist">Watchlist</TabsTrigger>
             <TabsTrigger value="screener">Screener</TabsTrigger>
-            <TabsTrigger value="alerts">
-              Alerts
-            </TabsTrigger>
+            <TabsTrigger value="alerts">Alerts</TabsTrigger>
+            <TabsTrigger value="templates">Templates</TabsTrigger>
           </TabsList>
 
           <TabsContent value="watchlist" className="mt-0">
@@ -431,8 +441,37 @@ export default function Investments() {
           <TabsContent value="alerts" className="mt-0">
             <AlertManager businessId={selectedBusiness?.id} />
           </TabsContent>
+
+          <TabsContent value="templates" className="mt-0">
+            <TemplateGallery 
+              onUseTemplate={(template: WorkflowTemplate) => {
+                // For now, show a toast - workflow creation can be implemented later
+                toast({
+                  title: 'Template selected',
+                  description: `"${template.name}" template selected. Workflow automation coming soon!`,
+                });
+              }}
+            />
+          </TabsContent>
         </Tabs>
+
+        {/* Footer disclaimer */}
+        <InvestmentDisclaimer />
       </PageContent>
+
+      {/* Disclaimer acceptance modal - shows on first use */}
+      <DisclaimerAcceptanceModal />
+
+      {/* Onboarding flow - shows for new users with no watchlists */}
+      <OnboardingFlow
+        hasWatchlists={watchlists.length > 0}
+        onCreateWatchlist={async (name: string) => {
+          await handleCreateWatchlist(name);
+        }}
+        onComplete={() => {
+          // Onboarding complete - user can now use the module
+        }}
+      />
 
       <AddSymbolDialog
         open={addSymbolOpen}

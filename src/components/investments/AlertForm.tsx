@@ -18,11 +18,14 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
-import { Search, Loader2, CheckCircle, AlertCircle } from 'lucide-react';
+import { Search, Loader2, CheckCircle, AlertCircle, Crown, Lock } from 'lucide-react';
 import { useCreateAlert, AlertCondition, NotificationConfig, INDICATOR_LABELS, OPERATOR_LABELS } from '@/hooks/useAlerts';
 import { useQuote } from '@/hooks/useMarketData';
 import { useToast } from '@/hooks/use-toast';
 import { useDebounce } from '@/hooks/useDebounce';
+import { useSubscription } from '@/hooks/useSubscription';
+import { LimitWarning, UpgradePrompt } from '@/components/investments/UpgradePrompt';
+import { FormDisclaimer } from './Disclaimer';
 
 interface AlertFormProps {
   open: boolean;
@@ -70,6 +73,15 @@ export function AlertForm({
   const [notifyInApp, setNotifyInApp] = useState(true);
   const [workflowId, setWorkflowId] = useState<string>('');
   const [cooldownMinutes, setCooldownMinutes] = useState('60');
+  const [showUpgrade, setShowUpgrade] = useState(false);
+
+  // Subscription & limits
+  const subscription = useSubscription(businessId);
+  const canCreateNewAlert = subscription.canCreateAlert();
+  const isAtLimit = !canCreateNewAlert;
+  const isApproachingLimit = subscription.isApproachingLimit('alerts');
+  const hasAdvancedIndicators = subscription.hasFeature('hasAdvancedIndicators');
+  const hasWorkflowTriggers = subscription.hasFeature('hasWorkflowTriggers');
 
   const createAlertMutation = useCreateAlert();
   const debouncedSymbol = useDebounce(symbol, 500);
@@ -176,7 +188,12 @@ export function AlertForm({
     !isNaN(parseFloat(value)) &&
     (validationStatus === 'valid' || validationStatus === 'idle') &&
     (notifyEmail || notifyPush || notifyInApp || workflowId) &&
-    !createAlertMutation.isPending;
+    !createAlertMutation.isPending &&
+    canCreateNewAlert;
+  
+  // Check if selected indicator requires pro
+  const isAdvancedIndicator = indicator !== 'price' && indicator !== 'change_pct';
+  const indicatorRequiresPro = isAdvancedIndicator && !hasAdvancedIndicators;
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -267,11 +284,31 @@ export function AlertForm({
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="price">{INDICATOR_LABELS.price}</SelectItem>
-                  <SelectItem value="rsi_14">{INDICATOR_LABELS.rsi_14}</SelectItem>
                   <SelectItem value="change_pct">{INDICATOR_LABELS.change_pct}</SelectItem>
-                  <SelectItem value="volume_ratio">{INDICATOR_LABELS.volume_ratio}</SelectItem>
-                  <SelectItem value="sma_20">{INDICATOR_LABELS.sma_20}</SelectItem>
-                  <SelectItem value="sma_50">{INDICATOR_LABELS.sma_50}</SelectItem>
+                  <SelectItem value="rsi_14" disabled={!hasAdvancedIndicators}>
+                    <div className="flex items-center gap-2">
+                      {INDICATOR_LABELS.rsi_14}
+                      {!hasAdvancedIndicators && <Lock className="h-3 w-3 text-gray-400" />}
+                    </div>
+                  </SelectItem>
+                  <SelectItem value="volume_ratio" disabled={!hasAdvancedIndicators}>
+                    <div className="flex items-center gap-2">
+                      {INDICATOR_LABELS.volume_ratio}
+                      {!hasAdvancedIndicators && <Lock className="h-3 w-3 text-gray-400" />}
+                    </div>
+                  </SelectItem>
+                  <SelectItem value="sma_20" disabled={!hasAdvancedIndicators}>
+                    <div className="flex items-center gap-2">
+                      {INDICATOR_LABELS.sma_20}
+                      {!hasAdvancedIndicators && <Lock className="h-3 w-3 text-gray-400" />}
+                    </div>
+                  </SelectItem>
+                  <SelectItem value="sma_50" disabled={!hasAdvancedIndicators}>
+                    <div className="flex items-center gap-2">
+                      {INDICATOR_LABELS.sma_50}
+                      {!hasAdvancedIndicators && <Lock className="h-3 w-3 text-gray-400" />}
+                    </div>
+                  </SelectItem>
                 </SelectContent>
               </Select>
               <Select
@@ -355,21 +392,31 @@ export function AlertForm({
 
           {/* Workflow Trigger (placeholder) */}
           <div className="space-y-2">
-            <Label>Workflow Trigger (optional)</Label>
+            <div className="flex items-center gap-2">
+              <Label>Workflow Trigger (optional)</Label>
+              {!hasWorkflowTriggers && (
+                <span className="inline-flex items-center gap-1 text-xs text-indigo-600 bg-indigo-50 px-2 py-0.5 rounded-full">
+                  <Crown className="h-3 w-3" />
+                  Pro
+                </span>
+              )}
+            </div>
             <Select
               value={workflowId}
               onValueChange={setWorkflowId}
-              disabled
+              disabled={!hasWorkflowTriggers}
             >
-              <SelectTrigger className="text-gray-400">
-                <SelectValue placeholder="Coming soon..." />
+              <SelectTrigger className={!hasWorkflowTriggers ? 'text-gray-400' : ''}>
+                <SelectValue placeholder={hasWorkflowTriggers ? 'Select workflow...' : 'Pro feature'} />
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="none">No workflow</SelectItem>
               </SelectContent>
             </Select>
             <p className="text-xs text-gray-500">
-              Trigger a Sparkwave workflow when the alert fires.
+              {hasWorkflowTriggers 
+                ? 'Trigger a Sparkwave workflow when the alert fires.'
+                : 'Upgrade to Pro to trigger workflows from alerts.'}
             </p>
           </div>
 
@@ -389,26 +436,60 @@ export function AlertForm({
           </div>
         </div>
 
+        {/* Limit warning */}
+        {(isApproachingLimit || isAtLimit) && !subscription.isPro && (
+          <div className="pt-2">
+            <LimitWarning
+              currentUsage={subscription.usage.alerts}
+              limit={subscription.limits.maxAlerts}
+              feature="alerts"
+              onUpgrade={() => setShowUpgrade(true)}
+            />
+          </div>
+        )}
+
+        {/* Disclaimer */}
+        <FormDisclaimer />
+
         <DialogFooter>
           <Button variant="outline" onClick={() => onOpenChange(false)}>
             Cancel
           </Button>
-          <Button
-            onClick={handleSubmit}
-            disabled={!canSubmit}
-            className="bg-indigo-600 hover:bg-indigo-700"
-          >
-            {createAlertMutation.isPending ? (
-              <>
-                <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                Creating...
-              </>
-            ) : (
-              'Create Alert'
-            )}
-          </Button>
+          {isAtLimit ? (
+            <Button
+              onClick={() => setShowUpgrade(true)}
+              className="bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-700 hover:to-purple-700"
+            >
+              <Crown className="h-4 w-4 mr-2" />
+              Upgrade to Create More
+            </Button>
+          ) : (
+            <Button
+              onClick={handleSubmit}
+              disabled={!canSubmit || indicatorRequiresPro}
+              className="bg-indigo-600 hover:bg-indigo-700"
+            >
+              {createAlertMutation.isPending ? (
+                <>
+                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                  Creating...
+                </>
+              ) : (
+                'Create Alert'
+              )}
+            </Button>
+          )}
         </DialogFooter>
       </DialogContent>
+
+      {/* Upgrade prompt dialog */}
+      <UpgradePrompt
+        open={showUpgrade}
+        onOpenChange={setShowUpgrade}
+        feature="alerts"
+        currentUsage={subscription.usage.alerts}
+        limit={subscription.limits.maxAlerts}
+      />
     </Dialog>
   );
 }

@@ -1,8 +1,9 @@
 import { useState, useMemo } from 'react';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Card, CardContent, CardHeader, CardTitle, CardFooter } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Skeleton } from '@/components/ui/skeleton';
+import { InvestmentDisclaimer } from './Disclaimer';
 import {
   Table,
   TableBody,
@@ -384,6 +385,11 @@ export function ScreenerResults({
               </TableBody>
             </Table>
           </div>
+        )}
+
+        {/* Disclaimer shown when results are present */}
+        {results.length > 0 && (
+          <InvestmentDisclaimer variant="compact" className="mt-4" />
         )}
       </CardContent>
     </Card>
