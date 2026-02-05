@@ -212,6 +212,26 @@ const ESCALATION_PATTERNS = {
   ]
 };
 
+// Polite rejection patterns - customer is saying NO
+const REJECTION_PATTERNS = [
+  'i\'m good', 'im good', 'i am good',
+  'no thanks', 'no thank you', 'not interested',
+  'not right now', 'not at this time', 'maybe later',
+  'i\'ll pass', 'pass for now', 'gonna pass',
+  'already found', 'went with', 'chose another', 'signed up elsewhere',
+  'too expensive', 'can\'t afford', 'out of my budget',
+  'too far', 'not convenient', 'location doesn\'t work',
+  'don\'t have time', 'too busy', 'schedule doesn\'t work',
+  'not for me', 'changed my mind', 'decided against',
+  'thank you for the offer', 'thanks for the offer', 'thanks anyway'
+];
+
+// Detect if customer is politely declining
+function detectRejection(message: string): boolean {
+  const lowerMessage = message.toLowerCase();
+  return REJECTION_PATTERNS.some(pattern => lowerMessage.includes(pattern));
+}
+
 // Detect if message should trigger human escalation
 function detectEscalation(message: string): { shouldEscalate: boolean; reason: string | null } {
   const lowerMessage = message.toLowerCase();
@@ -305,6 +325,12 @@ serve(async (req) => {
     const escalation = detectEscalation(latestMessage);
     if (escalation.shouldEscalate) {
       console.log('Escalation triggered:', escalation.reason);
+    }
+
+    // Check for polite rejection
+    const isRejection = detectRejection(latestMessage);
+    if (isRejection) {
+      console.log('Rejection detected - customer declined');
     }
 
     // Get agent configuration
@@ -404,6 +430,7 @@ ${scheduleContext}
 ${recommendationContext}
 
 DETECTED INTENT(S): ${detectedIntents.join(', ')}
+${isRejection ? 'CUSTOMER HAS DECLINED: Yes - they said no. Close gracefully, DO NOT ask follow-up questions.' : ''}
 ${bookingState.classType ? `CUSTOMER INTERESTED IN: ${bookingState.classType}` : 'CLASS TYPE: Not yet known - ASK THEM'}
 ${bookingState.preferredDay !== null ? `PREFERRED DAY: ${getDayName(bookingState.preferredDay)}` : 'PREFERRED DAY: Not yet known - ASK THEM'}
 ${bookingState.preferredTime ? `PREFERRED TIME: ${bookingState.preferredTime}` : 'PREFERRED TIME: Not yet known - ASK THEM'}
@@ -441,8 +468,19 @@ RESPONSE GUIDELINES:
 - ANSWER direct questions first, then ask follow-up questions
 - Keep responses concise for SMS (under ${agentConfig?.max_response_length || 320} chars)
 - Be warm and conversational, not salesy
-- Always end with a question to keep the conversation going
 - DOUBLE-CHECK any times you mention against the FULL CLASS SCHEDULE
+
+CRITICAL - HANDLING REJECTIONS:
+If "CUSTOMER HAS DECLINED" appears above, the customer has politely said NO. You MUST:
+1. Accept their decision gracefully with a SHORT response (1-2 sentences max)
+2. Thank them briefly
+3. Leave the door open ONE TIME only ("feel free to reach out if anything changes")
+4. DO NOT ask any follow-up questions
+5. DO NOT try to re-engage or change their mind
+6. DO NOT ask "what's keeping you busy" or similar small talk
+
+Example good rejection response: "No problem! If you ever want to check us out in the future, we're here. Take care!"
+Example BAD rejection response: "No problem! What's been keeping you busy lately?" (NEVER DO THIS)
 
 IMPORTANT: Respond ONLY with the message to send to the customer. No prefixes, no explanations, just the response text.`;
 
@@ -560,8 +598,10 @@ IMPORTANT: Respond ONLY with the message to send to the customer. No prefixes, n
 
     // Update conversation state if threadId provided
     if (threadId && businessId) {
-      const newState = shouldBook ? 'class_scheduled' :
-        (detectedIntents.includes('BOOK_TRIAL') ? 'collecting_booking_info' : 'answering_questions');
+      // If customer rejected, mark as closed - don't keep following up
+      const newState = isRejection ? 'closed_not_interested' :
+        (shouldBook ? 'class_scheduled' :
+        (detectedIntents.includes('BOOK_TRIAL') ? 'collecting_booking_info' : 'answering_questions'));
 
       try {
         const updateData: any = {
@@ -620,6 +660,10 @@ IMPORTANT: Respond ONLY with the message to send to the customer. No prefixes, n
       escalation: escalation.shouldEscalate ? {
         triggered: true,
         reason: escalation.reason
+      } : null,
+      rejection: isRejection ? {
+        detected: true,
+        shouldStopSequence: true
       } : null
     }), {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' }
