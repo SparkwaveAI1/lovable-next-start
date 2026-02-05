@@ -9,6 +9,7 @@ import { AddSymbolDialog } from '@/components/investments/AddSymbolDialog';
 import { CreateWatchlistDialog } from '@/components/investments/CreateWatchlistDialog';
 import { ScreenerBuilder } from '@/components/investments/ScreenerBuilder';
 import { ScreenerResults } from '@/components/investments/ScreenerResults';
+import { AlertManager } from '@/components/investments/AlertManager';
 import { useBusinessContext } from '@/contexts/BusinessContext';
 import { useWatchlists, useRemoveSymbol, useCreateWatchlist, useAddSymbol } from '@/hooks/useWatchlists';
 import { useMixedQuotes, QuoteData } from '@/hooks/useMarketData';
@@ -366,7 +367,7 @@ export default function Investments() {
           <TabsList className="mb-6">
             <TabsTrigger value="watchlist">Watchlist</TabsTrigger>
             <TabsTrigger value="screener">Screener</TabsTrigger>
-            <TabsTrigger value="alerts" disabled className="opacity-50">
+            <TabsTrigger value="alerts">
               Alerts
             </TabsTrigger>
           </TabsList>
@@ -427,10 +428,8 @@ export default function Investments() {
             />
           </TabsContent>
 
-          <TabsContent value="alerts">
-            <div className="text-center py-12 text-gray-500">
-              Price alerts coming soon...
-            </div>
+          <TabsContent value="alerts" className="mt-0">
+            <AlertManager businessId={selectedBusiness?.id} />
           </TabsContent>
         </Tabs>
       </PageContent>

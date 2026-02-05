@@ -5,3 +5,6 @@ export { CreateWatchlistDialog } from './CreateWatchlistDialog';
 export { SparklineChart, getSparklineColor } from './SparklineChart';
 export { ScreenerBuilder } from './ScreenerBuilder';
 export { ScreenerResults } from './ScreenerResults';
+export { AlertManager } from './AlertManager';
+export { AlertForm } from './AlertForm';
+export { AlertHistory } from './AlertHistory';
