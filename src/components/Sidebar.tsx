@@ -33,7 +33,6 @@ const mainNavItems: NavItem[] = [
   { label: "Dashboard", href: "/", icon: LayoutDashboard },
   { label: "Mission Control", href: "/mission-control", icon: Rocket },
   { label: "Reports", href: "/reports", icon: ClipboardList },
-  { label: "Investments", href: "/investments", icon: TrendingUp },
   { label: "Docs", href: "/docs", icon: BookOpen },
   { label: "Agents", href: "/agents", icon: Bot },
   { label: "Contacts", href: "/contacts", icon: Users },
@@ -42,6 +41,7 @@ const mainNavItems: NavItem[] = [
   { label: "Email", href: "/email-marketing", icon: Mail },
   { label: "Bookings", href: "/bookings", icon: CalendarDays },
   { label: "Service Requests", href: "/service-requests", icon: Headphones },
+  { label: "Investments", href: "/investments", icon: TrendingUp },
 ]
 
 const adminNavItems: NavItem[] = [

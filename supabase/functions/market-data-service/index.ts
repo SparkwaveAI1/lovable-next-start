@@ -6,6 +6,7 @@ const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
 const POLYGON_API_KEY = Deno.env.get('POLYGON_API_KEY') || ''
 
 const CACHE_DURATION_MS = 15 * 60 * 1000 // 15 minutes
+const HISTORY_CACHE_DURATION_MS = 24 * 60 * 60 * 1000 // 24 hours for historical data
 
 // Unified quote data schema
 interface QuoteData {
@@ -26,6 +27,24 @@ interface CacheEntry {
   symbol: string
   asset_type: string
   data: QuoteData
+  fetched_at: string
+  expires_at: string
+}
+
+// Historical price data schema
+interface HistoricalData {
+  symbol: string
+  assetType: 'stock' | 'crypto'
+  prices: number[] // Array of daily close prices
+  timestamps: string[] // Corresponding ISO timestamps
+  days: number
+}
+
+interface HistoryCacheEntry {
+  symbol: string
+  asset_type: string
+  days: number
+  data: HistoricalData
   fetched_at: string
   expires_at: string
 }
@@ -150,6 +169,208 @@ async function fetchCryptoFromCoinGecko(symbol: string): Promise<QuoteData | nul
     console.error(`CoinGecko fetch error for ${lowerSymbol}:`, error)
     return null
   }
+}
+
+// ============ HISTORICAL DATA FETCHING ============
+
+async function fetchCryptoHistoryFromCoinGecko(symbol: string, days: number): Promise<HistoricalData | null> {
+  const lowerSymbol = symbol.toLowerCase()
+  
+  try {
+    // CoinGecko market_chart endpoint returns prices array
+    const url = `https://api.coingecko.com/api/v3/coins/${lowerSymbol}/market_chart?vs_currency=usd&days=${days}`
+    const response = await fetch(url, {
+      headers: { 'Accept': 'application/json' }
+    })
+    
+    if (response.status === 429) {
+      console.error('CoinGecko API rate limit exceeded')
+      return null
+    }
+    
+    if (response.status === 404) {
+      console.error(`CoinGecko: Coin not found: ${lowerSymbol}`)
+      return null
+    }
+    
+    if (!response.ok) {
+      console.error(`CoinGecko API error: ${response.status} ${response.statusText}`)
+      return null
+    }
+    
+    const data = await response.json()
+    
+    if (!data.prices || data.prices.length === 0) {
+      console.error(`CoinGecko: No price history for ${lowerSymbol}`)
+      return null
+    }
+    
+    // CoinGecko returns [[timestamp_ms, price], ...]
+    // For 7 days, we get data points every ~1 hour, so we sample daily
+    const prices: number[] = []
+    const timestamps: string[] = []
+    
+    // Sample one price per day (take first data point of each day)
+    const msPerDay = 24 * 60 * 60 * 1000
+    let lastDay = -1
+    
+    for (const [ts, price] of data.prices) {
+      const dayNum = Math.floor(ts / msPerDay)
+      if (dayNum !== lastDay) {
+        prices.push(price)
+        timestamps.push(new Date(ts).toISOString())
+        lastDay = dayNum
+      }
+    }
+    
+    return {
+      symbol: lowerSymbol,
+      assetType: 'crypto',
+      prices,
+      timestamps,
+      days,
+    }
+  } catch (error) {
+    console.error(`CoinGecko history fetch error for ${lowerSymbol}:`, error)
+    return null
+  }
+}
+
+async function fetchStockHistoryFromPolygon(symbol: string, days: number): Promise<HistoricalData | null> {
+  // Rate limit check
+  const now = Date.now()
+  if (now - lastPolygonCall < POLYGON_MIN_INTERVAL_MS) {
+    console.log(`Rate limiting Polygon API call for ${symbol} history`)
+    return null
+  }
+  
+  if (!POLYGON_API_KEY) {
+    console.error('POLYGON_API_KEY not configured')
+    return null
+  }
+  
+  lastPolygonCall = now
+  const upperSymbol = symbol.toUpperCase()
+  
+  try {
+    // Calculate date range
+    const endDate = new Date()
+    const startDate = new Date(endDate.getTime() - (days * 24 * 60 * 60 * 1000))
+    
+    const from = startDate.toISOString().split('T')[0]
+    const to = endDate.toISOString().split('T')[0]
+    
+    const url = `https://api.polygon.io/v2/aggs/ticker/${upperSymbol}/range/1/day/${from}/${to}?apiKey=${POLYGON_API_KEY}`
+    const response = await fetch(url)
+    
+    if (response.status === 429) {
+      console.error('Polygon API rate limit exceeded')
+      return null
+    }
+    
+    if (!response.ok) {
+      console.error(`Polygon API error: ${response.status} ${response.statusText}`)
+      return null
+    }
+    
+    const data = await response.json()
+    
+    if (data.status !== 'OK' || !data.results || data.results.length === 0) {
+      console.error(`Polygon: No history data for ${upperSymbol}`)
+      return null
+    }
+    
+    const prices = data.results.map((r: { c: number }) => r.c)
+    const timestamps = data.results.map((r: { t: number }) => new Date(r.t).toISOString())
+    
+    return {
+      symbol: upperSymbol,
+      assetType: 'stock',
+      prices,
+      timestamps,
+      days,
+    }
+  } catch (error) {
+    console.error(`Polygon history fetch error for ${upperSymbol}:`, error)
+    return null
+  }
+}
+
+// ============ HISTORY CACHE OPERATIONS ============
+
+async function getCachedHistory(symbol: string, assetType: 'stock' | 'crypto', days: number): Promise<HistoricalData | null> {
+  const normalizedSymbol = assetType === 'stock' ? symbol.toUpperCase() : symbol.toLowerCase()
+  
+  const { data, error } = await supabase
+    .from('market_history_cache')
+    .select('*')
+    .eq('symbol', normalizedSymbol)
+    .eq('asset_type', assetType)
+    .eq('days', days)
+    .single()
+  
+  if (error || !data) {
+    return null
+  }
+  
+  const entry = data as HistoryCacheEntry
+  const expiresAt = new Date(entry.expires_at).getTime()
+  
+  if (Date.now() > expiresAt) {
+    return null // expired
+  }
+  
+  return entry.data
+}
+
+async function setCachedHistory(history: HistoricalData, originalSymbol: string): Promise<void> {
+  const normalizedSymbol = history.assetType === 'stock' 
+    ? history.symbol.toUpperCase() 
+    : originalSymbol.toLowerCase()
+  
+  const now = new Date()
+  const expiresAt = new Date(now.getTime() + HISTORY_CACHE_DURATION_MS)
+  
+  const { error } = await supabase
+    .from('market_history_cache')
+    .upsert({
+      symbol: normalizedSymbol,
+      asset_type: history.assetType,
+      days: history.days,
+      data: history,
+      fetched_at: now.toISOString(),
+      expires_at: expiresAt.toISOString(),
+    }, {
+      onConflict: 'symbol,asset_type,days'
+    })
+  
+  if (error) {
+    console.error('History cache write error:', error)
+  }
+}
+
+async function getHistory(symbol: string, assetType: 'stock' | 'crypto', days: number): Promise<{ data: HistoricalData | null, source: string, error?: string }> {
+  // Check cache first
+  const cached = await getCachedHistory(symbol, assetType, days)
+  if (cached) {
+    return { data: cached, source: 'cache' }
+  }
+  
+  // Fetch fresh data
+  let fresh: HistoricalData | null = null
+  
+  if (assetType === 'stock') {
+    fresh = await fetchStockHistoryFromPolygon(symbol, days)
+  } else {
+    fresh = await fetchCryptoHistoryFromCoinGecko(symbol, days)
+  }
+  
+  if (fresh) {
+    await setCachedHistory(fresh, symbol)
+    return { data: fresh, source: 'api' }
+  }
+  
+  return { data: null, source: 'none', error: `Unable to fetch history for ${symbol}` }
 }
 
 // ============ CACHE OPERATIONS ============
