@@ -316,7 +316,7 @@ serve(async (req) => {
         lead_tier: tier,
         pipeline_stage: priority === "hot" ? "qualified" : priority === "warm" ? "lead" : "subscriber",
         tags: ["automation_audit", tier],
-        custom_fields: {
+        metadata: {
           audit_answers: answers,
           audit_score: score,
           audit_tier: tier,
@@ -335,6 +335,23 @@ serve(async (req) => {
       console.error("Error saving contact:", contactError);
     } else {
       console.log("Contact saved:", contact?.id);
+
+      // Initialize drip sequence tracking
+      const { error: dripError } = await supabase
+        .from("survey_drip_status")
+        .upsert({
+          contact_id: contact.id,
+          survey_completed_at: new Date().toISOString(),
+          tier: tier,
+        }, {
+          onConflict: "contact_id",
+        });
+
+      if (dripError) {
+        console.error("Error initializing drip:", dripError);
+      } else {
+        console.log("Drip sequence initialized for contact:", contact.id);
+      }
     }
 
     // Send results email via Resend

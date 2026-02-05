@@ -189,11 +189,30 @@ export function AgentActivityMonitor({ className, agents: externalAgents = [] }:
     };
   }, []); // Global subscription - no dependencies
 
-  // Update durations every second for running tasks
+  // Update durations every second for running tasks AND refetch every 30s
   const [, setTick] = useState(0);
   useEffect(() => {
     const interval = setInterval(() => setTick(t => t + 1), 1000);
     return () => clearInterval(interval);
+  }, []);
+
+  // Force refetch every 30 seconds to ensure data stays fresh
+  useEffect(() => {
+    const refetchInterval = setInterval(async () => {
+      try {
+        const { data, error } = await supabase
+          .from('mc_active_agent_tasks')
+          .select('*')
+          .in('status', ['running', 'waiting'])
+          .order('started_at', { ascending: false });
+        if (!error && data) {
+          setTasks(data as unknown as ActiveAgentTask[]);
+        }
+      } catch (err) {
+        console.error('Refetch error:', err);
+      }
+    }, 30000);
+    return () => clearInterval(refetchInterval);
   }, []);
 
   return (

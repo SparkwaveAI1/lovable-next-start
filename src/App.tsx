@@ -26,6 +26,7 @@ import Book from "./pages/Book";
 import Reports from "./pages/Reports";
 import Docs from "./pages/Docs";
 import Investments from "./pages/Investments";
+import Sales from "./pages/Sales";
 import ProtectedRoute from "./components/ProtectedRoute";
 import { ErrorBoundary } from "./components/ErrorBoundary";
 import { BusinessProvider } from "@/contexts/BusinessContext";
@@ -46,6 +47,7 @@ const App = () => (
             <Routes>
             <Route path="/auth" element={<Auth />} />
             <Route path="/book" element={<Book />} />
+            <Route path="/sales" element={<Sales />} />
             <Route path="/crisis-monitor" element={<CrisisMonitor />} />
             <Route path="/upload" element={<EmployeeUpload />} />
             <Route path="/" element={<ProtectedRoute><ErrorBoundary><Index /></ErrorBoundary></ProtectedRoute>} />
