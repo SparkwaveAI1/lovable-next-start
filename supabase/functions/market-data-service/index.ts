@@ -657,6 +657,54 @@ async function handleIndicators(url: URL): Promise<Response> {
   })
 }
 
+async function handleHistory(url: URL): Promise<Response> {
+  const symbol = url.searchParams.get('symbol')
+  const type = url.searchParams.get('type') as 'stock' | 'crypto' | null
+  const daysParam = url.searchParams.get('days')
+  
+  if (!symbol) {
+    return new Response(JSON.stringify({ error: 'Missing symbol parameter' }), {
+      status: 400,
+      headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+    })
+  }
+  
+  if (!type || !['stock', 'crypto'].includes(type)) {
+    return new Response(JSON.stringify({ error: 'Invalid or missing type parameter (stock|crypto)' }), {
+      status: 400,
+      headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+    })
+  }
+  
+  const days = daysParam ? parseInt(daysParam, 10) : 7
+  if (isNaN(days) || days < 1 || days > 90) {
+    return new Response(JSON.stringify({ error: 'Invalid days parameter (1-90)' }), {
+      status: 400,
+      headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+    })
+  }
+  
+  const result = await getHistory(symbol, type, days)
+  
+  if (!result.data) {
+    return new Response(JSON.stringify({ error: result.error || 'History not found' }), {
+      status: 404,
+      headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+    })
+  }
+  
+  return new Response(JSON.stringify({
+    data: result.data,
+    meta: {
+      source: result.source,
+      cachedUntil: new Date(Date.now() + HISTORY_CACHE_DURATION_MS).toISOString(),
+    }
+  }), {
+    status: 200,
+    headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+  })
+}
+
 async function handleRefresh(req: Request, url: URL): Promise<Response> {
   // Admin only - check for service role key in auth header
   const authHeader = req.headers.get('Authorization')
@@ -739,6 +787,15 @@ Deno.serve(async (req) => {
         }
         return await handleIndicators(url)
       
+      case 'history':
+        if (req.method !== 'GET') {
+          return new Response(JSON.stringify({ error: 'Method not allowed' }), {
+            status: 405,
+            headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+          })
+        }
+        return await handleHistory(url)
+      
       case 'refresh':
         if (req.method !== 'POST') {
           return new Response(JSON.stringify({ error: 'Method not allowed' }), {
@@ -756,6 +813,7 @@ Deno.serve(async (req) => {
             'GET /quote?symbol=AAPL&type=stock',
             'GET /quote?symbol=bitcoin&type=crypto',
             'GET /batch?symbols=AAPL,GOOGL&type=stock',
+            'GET /history?symbol=bitcoin&type=crypto&days=7',
             'GET /indicators?symbol=AAPL&type=stock',
             'POST /refresh (admin only)',
           ],
