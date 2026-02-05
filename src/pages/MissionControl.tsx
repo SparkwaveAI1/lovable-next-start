@@ -1,12 +1,12 @@
 import { useState, useEffect, useCallback } from "react";
 import { DashboardLayout } from "@/components/layout/DashboardLayout";
 import { PageContent } from "@/components/layout/PageLayout";
-import { AgentCard, KanbanBoard, ActivityFeed, StatsBar, RicoChat, ScottsActionItems, AgentActivityMonitor, HealthDashboard, AnalyticsMonitor } from "@/components/mission-control";
+import { AgentCard, KanbanBoard, ActivityFeed, StatsBar, RicoChat, ScottsActionItems, AgentActivityMonitor, HealthDashboard, AnalyticsMonitor, AddTaskDialog } from "@/components/mission-control";
 import { useBusinessContext } from "@/contexts/BusinessContext";
 import { useBusinesses } from "@/hooks/useBusinesses";
 import { supabase } from "@/integrations/supabase/client";
 import type { Agent, Task, Activity, TaskStatus } from "@/types/mission-control";
-import { RefreshCw } from "lucide-react";
+import { RefreshCw, Plus } from "lucide-react";
 import { useToast } from "@/components/ui/use-toast";
 import { ALL_BUSINESSES_ID } from "@/components/BusinessSwitcher";
 
@@ -21,6 +21,7 @@ export default function MissionControl() {
   const [selectedAgent, setSelectedAgent] = useState<Agent | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [addTaskDialogOpen, setAddTaskDialogOpen] = useState(false);
 
   // Fetch data from Supabase mc_ tables, filtered by selected business
   // Global agents (scope='global') are always included regardless of business selection
@@ -287,7 +288,16 @@ export default function MissionControl() {
                   </span>
                 )}
               </div>
-              <span className="text-xs text-slate-400">{kanbanTasks.length} tasks for this business</span>
+              <div className="flex items-center gap-3">
+                <span className="text-xs text-slate-400">{kanbanTasks.length} tasks for this business</span>
+                <button
+                  onClick={() => setAddTaskDialogOpen(true)}
+                  className="flex items-center gap-1.5 px-3 py-1.5 bg-violet-600 hover:bg-violet-700 text-white rounded-lg transition-colors text-sm font-medium"
+                >
+                  <Plus className="h-4 w-4" />
+                  Add Task
+                </button>
+              </div>
             </div>
             <KanbanBoard
               tasks={kanbanTasks}
@@ -308,6 +318,14 @@ export default function MissionControl() {
           <HealthDashboard />
           <AnalyticsMonitor />
         </div>
+
+        {/* Add Task Dialog */}
+        <AddTaskDialog
+          open={addTaskDialogOpen}
+          onOpenChange={setAddTaskDialogOpen}
+          businessId={isAllBusinessesSelected ? null : (selectedBusiness?.id || null)}
+          onTaskCreated={() => fetchData()}
+        />
 
       </PageContent>
     </DashboardLayout>

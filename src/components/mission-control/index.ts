@@ -10,3 +10,4 @@ export type { ActiveAgentTask } from './AgentActivityMonitor';
 export { ScottsActionItems } from './ScottsActionItems';
 export { HealthDashboard } from './HealthDashboard';
 export { AnalyticsMonitor } from './AnalyticsMonitor';
+export { AddTaskDialog } from './AddTaskDialog';
