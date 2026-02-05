@@ -7,10 +7,13 @@ import { WatchlistCard } from '@/components/investments/WatchlistCard';
 import { WatchlistTable } from '@/components/investments/WatchlistTable';
 import { AddSymbolDialog } from '@/components/investments/AddSymbolDialog';
 import { CreateWatchlistDialog } from '@/components/investments/CreateWatchlistDialog';
+import { ScreenerBuilder } from '@/components/investments/ScreenerBuilder';
+import { ScreenerResults } from '@/components/investments/ScreenerResults';
 import { useBusinessContext } from '@/contexts/BusinessContext';
-import { useWatchlists, useRemoveSymbol, useCreateWatchlist } from '@/hooks/useWatchlists';
+import { useWatchlists, useRemoveSymbol, useCreateWatchlist, useAddSymbol } from '@/hooks/useWatchlists';
 import { useMixedQuotes, QuoteData } from '@/hooks/useMarketData';
 import { useMixedHistory } from '@/hooks/useSymbolHistory';
+import { useRunScreener, useSaveScreener, ScreenerProfile, ScreenerResult } from '@/hooks/useScreener';
 import { Plus, LayoutGrid, List, Loader2, AlertCircle, RefreshCw } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -74,6 +77,13 @@ export default function Investments() {
   // Mutations
   const removeSymbolMutation = useRemoveSymbol();
   const createWatchlistMutation = useCreateWatchlist();
+  const addSymbolMutation = useAddSymbol();
+
+  // Screener state and mutations
+  const [screenerResults, setScreenerResults] = useState<ScreenerResult[]>([]);
+  const [hasRunScreener, setHasRunScreener] = useState(false);
+  const runScreenerMutation = useRunScreener();
+  const saveScreenerMutation = useSaveScreener();
 
   // Transform database data + market quotes into UI format
   const watchlists: Watchlist[] = (dbWatchlists || []).map(wl => ({
@@ -137,6 +147,85 @@ export default function Investments() {
       toast({
         title: 'Error',
         description: error instanceof Error ? error.message : 'Failed to create watchlist',
+        variant: 'destructive',
+      });
+    }
+  };
+
+  // Screener handlers
+  const handleRunScreener = async (profile: ScreenerProfile) => {
+    try {
+      setHasRunScreener(true);
+      const results = await runScreenerMutation.mutateAsync(profile);
+      setScreenerResults(results);
+      toast({
+        title: 'Screener complete',
+        description: `Found ${results.length} ${results.length === 1 ? 'match' : 'matches'}.`,
+      });
+    } catch (error) {
+      toast({
+        title: 'Screener failed',
+        description: error instanceof Error ? error.message : 'Failed to run screener',
+        variant: 'destructive',
+      });
+    }
+  };
+
+  const handleSaveScreener = async (name: string, profile: ScreenerProfile) => {
+    try {
+      await saveScreenerMutation.mutateAsync({
+        name,
+        profile,
+        businessId: selectedBusiness?.id,
+      });
+      toast({
+        title: 'Screener saved',
+        description: `"${name}" has been saved.`,
+      });
+    } catch (error) {
+      toast({
+        title: 'Error',
+        description: error instanceof Error ? error.message : 'Failed to save screener',
+        variant: 'destructive',
+      });
+    }
+  };
+
+  const handleAddToWatchlistFromScreener = async (symbol: string, type: 'stock' | 'crypto') => {
+    // If there's only one watchlist, add to it directly
+    // Otherwise, open the add symbol dialog
+    if (watchlists.length === 1) {
+      try {
+        await addSymbolMutation.mutateAsync({
+          watchlistId: watchlists[0].id,
+          symbol,
+          assetType: type,
+        });
+        toast({
+          title: 'Symbol added',
+          description: `${symbol} has been added to ${watchlists[0].name}.`,
+        });
+        refetchWatchlists();
+        refetchQuotes();
+      } catch (error) {
+        toast({
+          title: 'Error',
+          description: error instanceof Error ? error.message : 'Failed to add symbol',
+          variant: 'destructive',
+        });
+      }
+    } else if (watchlists.length > 1) {
+      // For multiple watchlists, use the first one (could enhance with a selector)
+      setTargetWatchlistId(watchlists[0].id);
+      setAddSymbolOpen(true);
+      toast({
+        title: 'Select a watchlist',
+        description: `Choose which watchlist to add ${symbol} to.`,
+      });
+    } else {
+      toast({
+        title: 'No watchlists',
+        description: 'Create a watchlist first to add symbols.',
         variant: 'destructive',
       });
     }
@@ -276,9 +365,7 @@ export default function Investments() {
         <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
           <TabsList className="mb-6">
             <TabsTrigger value="watchlist">Watchlist</TabsTrigger>
-            <TabsTrigger value="screener" disabled className="opacity-50">
-              Screener
-            </TabsTrigger>
+            <TabsTrigger value="screener">Screener</TabsTrigger>
             <TabsTrigger value="alerts" disabled className="opacity-50">
               Alerts
             </TabsTrigger>
@@ -326,10 +413,18 @@ export default function Investments() {
             )}
           </TabsContent>
 
-          <TabsContent value="screener">
-            <div className="text-center py-12 text-gray-500">
-              Stock screener coming soon...
-            </div>
+          <TabsContent value="screener" className="mt-0 space-y-6">
+            <ScreenerBuilder
+              onRunScreener={handleRunScreener}
+              onSaveScreener={handleSaveScreener}
+              isRunning={runScreenerMutation.isPending}
+              isSaving={saveScreenerMutation.isPending}
+            />
+            <ScreenerResults
+              results={hasRunScreener ? screenerResults : []}
+              isLoading={runScreenerMutation.isPending}
+              onAddToWatchlist={handleAddToWatchlistFromScreener}
+            />
           </TabsContent>
 
           <TabsContent value="alerts">
