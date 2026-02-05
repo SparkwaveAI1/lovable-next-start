@@ -214,10 +214,10 @@ const ESCALATION_PATTERNS = {
 
 // Patterns that indicate AI should escalate to human (Scott)
 const NEEDS_HUMAN_PATTERNS = [
-  'have scott', 'talk to scott', 'speak to scott', 'reach out to',
-  'let me have', 'i\'ll have someone', 'someone will reach out',
-  'beyond what i can', 'can\'t answer that', 'not sure about that',
-  'better than i can'
+  'let scott know', 'i\'ll let scott', 'scott know and he',
+  'he\'ll be in touch', 'will be in touch', 'get in touch',
+  'have scott', 'talk to scott', 'speak to scott',
+  'beyond what i can', 'can\'t answer that', 'not sure about that'
 ];
 
 // Polite rejection patterns - customer is saying NO
@@ -457,7 +457,7 @@ If they share a concern, address it — don't ignore it.
 
 === WHEN YOU CAN'T HELP ===
 If they have a question you can't answer, a concern you can't address, or a request that's beyond what you can do:
-Say: "Let me have Scott reach out to you directly — he can help with that better than I can."
+Say: "I'll let Scott know and he'll be in touch!"
 Then STOP. Don't keep pushing. Flag the conversation for human follow-up.
 
 === WHEN THEY SAY NO ===
