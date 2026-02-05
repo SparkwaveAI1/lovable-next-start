@@ -114,6 +114,14 @@ export default function Contacts() {
   // Selection state
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
 
+  // Add contact dialog state
+  const [addContactDialogOpen, setAddContactDialogOpen] = useState(false);
+  const [newContactFirstName, setNewContactFirstName] = useState('');
+  const [newContactLastName, setNewContactLastName] = useState('');
+  const [newContactEmail, setNewContactEmail] = useState('');
+  const [newContactPhone, setNewContactPhone] = useState('');
+  const [isAddingContact, setIsAddingContact] = useState(false);
+
   // Bulk action dialog state
   const [bulkTagDialogOpen, setBulkTagDialogOpen] = useState(false);
   const [bulkTagAction, setBulkTagAction] = useState<'add' | 'remove'>('add');
@@ -300,6 +308,48 @@ export default function Contacts() {
     }
   };
 
+  // Add contact handler
+  const handleAddContact = async () => {
+    if (!selectedBusiness?.id || !newContactFirstName.trim()) return;
+
+    setIsAddingContact(true);
+    try {
+      const { error } = await supabase
+        .from('contacts')
+        .insert({
+          business_id: selectedBusiness.id,
+          first_name: newContactFirstName.trim(),
+          last_name: newContactLastName.trim() || null,
+          email: newContactEmail.trim() || null,
+          phone: newContactPhone.trim() || null,
+          status: 'new_lead',
+          source: 'manual',
+        });
+
+      if (error) throw error;
+
+      toast({
+        title: 'Contact Added',
+        description: `${newContactFirstName} ${newContactLastName} has been added.`,
+      });
+
+      setAddContactDialogOpen(false);
+      setNewContactFirstName('');
+      setNewContactLastName('');
+      setNewContactEmail('');
+      setNewContactPhone('');
+      refetch();
+    } catch (error: any) {
+      toast({
+        title: 'Error',
+        description: error.message || 'Failed to add contact',
+        variant: 'destructive',
+      });
+    } finally {
+      setIsAddingContact(false);
+    }
+  };
+
   // Format helpers
   const formatStatusLabel = (status: string | null) => {
     if (!status) return 'Unknown';
@@ -370,7 +420,7 @@ export default function Contacts() {
               <h1 className="text-2xl font-bold">Contacts</h1>
               <Badge variant="secondary">{totalCount} total</Badge>
             </div>
-            <Button disabled>
+            <Button onClick={() => setAddContactDialogOpen(true)} disabled={!selectedBusiness?.id}>
               <Plus className="h-4 w-4 mr-2" />
               Add Contact
             </Button>
@@ -796,6 +846,68 @@ export default function Contacts() {
             >
               {isBulkUpdating && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
               {bulkTagAction === 'add' ? 'Add Tags' : 'Remove Tags'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Add Contact Dialog */}
+      <Dialog open={addContactDialogOpen} onOpenChange={setAddContactDialogOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Add Contact</DialogTitle>
+            <DialogDescription>
+              Add a new contact to your CRM
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4 py-4">
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <label className="text-sm font-medium">First Name *</label>
+                <Input
+                  placeholder="First name"
+                  value={newContactFirstName}
+                  onChange={(e) => setNewContactFirstName(e.target.value)}
+                />
+              </div>
+              <div className="space-y-2">
+                <label className="text-sm font-medium">Last Name</label>
+                <Input
+                  placeholder="Last name"
+                  value={newContactLastName}
+                  onChange={(e) => setNewContactLastName(e.target.value)}
+                />
+              </div>
+            </div>
+            <div className="space-y-2">
+              <label className="text-sm font-medium">Email</label>
+              <Input
+                type="email"
+                placeholder="email@example.com"
+                value={newContactEmail}
+                onChange={(e) => setNewContactEmail(e.target.value)}
+              />
+            </div>
+            <div className="space-y-2">
+              <label className="text-sm font-medium">Phone</label>
+              <Input
+                type="tel"
+                placeholder="+1 (555) 123-4567"
+                value={newContactPhone}
+                onChange={(e) => setNewContactPhone(e.target.value)}
+              />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setAddContactDialogOpen(false)}>
+              Cancel
+            </Button>
+            <Button
+              onClick={handleAddContact}
+              disabled={!newContactFirstName.trim() || isAddingContact}
+            >
+              {isAddingContact && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
+              Add Contact
             </Button>
           </DialogFooter>
         </DialogContent>

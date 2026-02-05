@@ -1,5 +1,5 @@
 import { useState } from "react"
-import { Link, useLocation } from "react-router-dom"
+import { Link, useLocation, useNavigate } from "react-router-dom"
 import {
   LayoutDashboard,
   Users,
@@ -51,6 +51,7 @@ interface SidebarProps {
 
 export function Sidebar({ isSuperAdmin, collapsed = false, onToggleCollapse, businessName }: SidebarProps) {
   const location = useLocation()
+  const navigate = useNavigate()
 
   const isActiveRoute = (href: string) => {
     if (href === "/") {
@@ -92,6 +93,7 @@ export function Sidebar({ isSuperAdmin, collapsed = false, onToggleCollapse, bus
       {/* Create New Button */}
       <div className={cn("px-3 pt-4 pb-2", collapsed && "px-2")}>
         <Button
+          onClick={() => navigate("/content-center")}
           className={cn(
             "w-full bg-indigo-600 hover:bg-indigo-500 text-white font-medium transition-colors",
             collapsed ? "px-0 justify-center" : "justify-start gap-2"

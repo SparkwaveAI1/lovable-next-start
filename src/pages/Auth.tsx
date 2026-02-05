@@ -6,6 +6,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { useToast } from "@/hooks/use-toast";
+import sparkwaveIcon from "@/assets/sparkwave-icon.png";
 
 export default function Auth() {
   const [email, setEmail] = useState("");
@@ -59,9 +60,12 @@ export default function Auth() {
   return (
     <div className="min-h-screen flex items-center justify-center bg-background p-4">
       <Card className="w-full max-w-md">
-        <CardHeader>
-          <CardTitle>Admin Login</CardTitle>
-          <CardDescription>Sign in to access the dashboard</CardDescription>
+        <CardHeader className="text-center">
+          <div className="flex justify-center mb-4">
+            <img src={sparkwaveIcon} alt="Sparkwave" className="h-14 w-14" />
+          </div>
+          <CardTitle className="text-2xl">Welcome to Sparkwave</CardTitle>
+          <CardDescription>Sign in to access your dashboard</CardDescription>
         </CardHeader>
         <CardContent>
           <form onSubmit={handleLogin} className="space-y-4">

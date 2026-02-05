@@ -959,25 +959,17 @@ const ContentCenter = () => {
                   <TabsTrigger value="schedule" className="h-9 shrink-0">Schedule</TabsTrigger>
                   <TabsTrigger value="posted" className="h-9 shrink-0">Posted</TabsTrigger>
                   <TabsTrigger value="history" className="h-9 shrink-0">History</TabsTrigger>
-                  <TabsTrigger value="agent-settings" className="h-9 shrink-0">
-                    <Settings className="h-4 w-4 mr-2" />
-                    Agent Settings
-                  </TabsTrigger>
                 </TabsList>
               </div>
 
               {/* Desktop: Grid layout */}
               <div className="hidden md:block mb-2">
-                <TabsList className="grid grid-cols-6">
+                <TabsList className="grid grid-cols-5">
                   <TabsTrigger value="preview">Preview</TabsTrigger>
                   <TabsTrigger value="library">Library</TabsTrigger>
                   <TabsTrigger value="schedule">Schedule</TabsTrigger>
                   <TabsTrigger value="posted">Posted</TabsTrigger>
                   <TabsTrigger value="history">History</TabsTrigger>
-                  <TabsTrigger value="agent-settings">
-                    <Settings className="h-4 w-4 mr-2" />
-                    Agent Settings
-                  </TabsTrigger>
                 </TabsList>
               </div>
               
@@ -1184,9 +1176,7 @@ const ContentCenter = () => {
                 </Card>
               </TabsContent>
 
-              <TabsContent value="agent-settings">
-                <AgentPromptEditor />
-              </TabsContent>
+              {/* Agent Settings tab hidden — internal admin feature */}
             </Tabs>
           </div>
         </div>

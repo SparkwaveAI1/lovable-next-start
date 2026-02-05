@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback } from "react";
 import { DashboardLayout } from "@/components/layout/DashboardLayout";
 import { PageContent } from "@/components/layout/PageLayout";
-import { AgentCard, KanbanBoard, ActivityFeed, StatsBar, RicoChat, RicoChatModal, AgentActivityMonitor } from "@/components/mission-control";
+import { AgentCard, KanbanBoard, ActivityFeed, StatsBar, RicoChat, RicoChatModal, ScottsActionItems, AgentActivityMonitor } from "@/components/mission-control";
 import { useBusinessContext } from "@/contexts/BusinessContext";
 import { useBusinesses } from "@/hooks/useBusinesses";
 import { supabase } from "@/integrations/supabase/client";
@@ -194,7 +194,7 @@ export default function MissionControl() {
             className="flex items-center gap-2 mb-2 text-sm text-slate-600 hover:text-slate-900"
           >
             {chatVisible ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
-            <span className="font-medium">Rico Chat</span>
+            <span className="font-medium">AI Chat</span>
             <span className="text-xs text-emerald-600">● Online</span>
           </button>
           {chatVisible && (
@@ -230,38 +230,16 @@ export default function MissionControl() {
           </div>
         </div>
 
-        {/* Agent List + Activity Monitor */}
+        {/* Agent List + Action Items */}
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
-          <div className="bg-white rounded-xl border border-slate-200">
-            <div className="px-4 py-3 border-b border-slate-200">
-              <h3 className="font-semibold text-sm text-slate-900">Agents ({agents.length})</h3>
-            </div>
-            <div className="p-2 space-y-2">
-              {isLoading ? (
-                <div className="text-center py-4 text-slate-400 text-sm">Loading...</div>
-              ) : agents.length === 0 ? (
-                <div className="text-center py-4 text-slate-400 text-sm">No agents configured</div>
-              ) : (
-                agents.map((agent) => (
-                  <AgentCard
-                    key={agent.id}
-                    agent={agent}
-                    isActive={selectedAgent?.id === agent.id}
-                    onClick={() => handleAgentClick(agent)}
-                  />
-                ))
-              )}
-              {selectedAgent && (
-                <div className="pt-2 border-t border-slate-200">
-                  <button onClick={() => setSelectedAgent(null)} className="text-xs text-violet-600 hover:underline">
-                    Clear filter
-                  </button>
-                </div>
-              )}
-            </div>
-          </div>
+          <AgentActivityMonitor
+            agents={agents.map(a => ({ id: a.id, name: a.name, status: a.status, role: a.role }))}
+          />
 
-          <AgentActivityMonitor />
+          <ScottsActionItems
+            tasks={tasks}
+            onTaskClick={handleTaskClick}
+          />
         </div>
 
         {/* Activity Feed */}

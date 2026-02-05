@@ -173,10 +173,7 @@ export default function AgentRegistry() {
               <RefreshCw className={cn("h-4 w-4", isLoading && "animate-spin")} />
               Refresh
             </Button>
-            <Button size="sm" className="gap-2 bg-violet-600 hover:bg-violet-700">
-              <Plus className="h-4 w-4" />
-              Add Agent
-            </Button>
+            {/* Add Agent button hidden until feature is wired up */}
           </div>
         </div>
 
@@ -314,12 +311,7 @@ export default function AgentRegistry() {
                     ? "Try adjusting your search or filters"
                     : "Create your first AI agent to get started"}
                 </p>
-                {!searchQuery && statusFilter === "all" && (
-                  <Button className="gap-2 bg-violet-600 hover:bg-violet-700">
-                    <Plus className="h-4 w-4" />
-                    Add Your First Agent
-                  </Button>
-                )}
+                {/* Add Agent button hidden until feature is wired up */}
               </div>
             ) : (
               <div className="grid gap-4 md:grid-cols-2">
