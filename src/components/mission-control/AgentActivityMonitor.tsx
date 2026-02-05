@@ -107,21 +107,14 @@ export function AgentActivityMonitor({ className, agents: externalAgents = [] }:
   const [tasks, setTasks] = useState<ActiveAgentTask[]>([]);
   const [isLoading, setIsLoading] = useState(true);
 
-  // Fetch active tasks
+  // Fetch active tasks - ALWAYS GLOBAL (all businesses)
   useEffect(() => {
-    if (!selectedBusiness?.id) {
-      setTasks([]);
-      setIsLoading(false);
-      return;
-    }
-
     const fetchTasks = async () => {
       setIsLoading(true);
       try {
         const { data, error } = await supabase
           .from('mc_active_agent_tasks')
           .select('*')
-          .eq('business_id', selectedBusiness.id)
           .in('status', ['running', 'waiting'])
           .order('started_at', { ascending: false });
 
@@ -135,21 +128,18 @@ export function AgentActivityMonitor({ className, agents: externalAgents = [] }:
     };
 
     fetchTasks();
-  }, [selectedBusiness?.id]);
+  }, []); // No dependency on business - always global
 
-  // Real-time subscription
+  // Real-time subscription - GLOBAL (all businesses)
   useEffect(() => {
-    if (!selectedBusiness?.id) return;
-
     const channel = supabase
-      .channel(`mc_active_agent_tasks_${selectedBusiness.id}`)
+      .channel(`mc_active_agent_tasks_global`)
       .on(
         'postgres_changes',
         { 
           event: '*', 
           schema: 'public', 
-          table: 'mc_active_agent_tasks',
-          filter: `business_id=eq.${selectedBusiness.id}`
+          table: 'mc_active_agent_tasks'
         },
         (payload) => {
           console.log('Active task change:', payload);

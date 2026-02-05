@@ -55,18 +55,13 @@ export default function MissionControl() {
       const { data: agentsData, error: agentsError } = await agentsQuery;
       if (agentsError) throw agentsError;
       
-      // Fetch tasks
-      let tasksQuery = supabase
+      // Fetch ALL tasks (always global for Scott's To-Do)
+      // Kanban will filter client-side by business
+      const { data: tasksData, error: tasksError } = await supabase
         .from('mc_tasks')
         .select('*')
         .order('created_at', { ascending: false });
       
-      if (businessId) {
-        tasksQuery = tasksQuery.eq('business_id', businessId);
-      }
-      // If isAll or no business, get all tasks (no filter)
-      
-      const { data: tasksData, error: tasksError } = await tasksQuery;
       if (tasksError) throw tasksError;
       
       // Fetch activities - ALWAYS global (all businesses)
@@ -290,7 +285,18 @@ export default function MissionControl() {
               <span className="text-xs text-slate-400">{tasks.length} tasks total</span>
             </div>
             <KanbanBoard
-              tasks={selectedAgent ? tasks.filter(t => t.assignee_ids.includes(selectedAgent.id)) : tasks}
+              tasks={(() => {
+                // Kanban is business-specific (filter by selected business)
+                let filteredTasks = tasks;
+                if (!isAllBusinessesSelected && selectedBusiness?.id) {
+                  filteredTasks = tasks.filter(t => t.business_id === selectedBusiness.id || t.business_id === null);
+                }
+                // Also filter by selected agent if applicable
+                if (selectedAgent) {
+                  filteredTasks = filteredTasks.filter(t => t.assignee_ids.includes(selectedAgent.id));
+                }
+                return filteredTasks;
+              })()}
               agents={agents}
               onTaskClick={handleTaskClick}
               onTaskStatusChange={handleTaskStatusChange}
