@@ -15,3 +15,4 @@ export { TemplateGallery } from './TemplateGallery';
 export { PriceChart } from './PriceChart';
 export { ChartModal } from './ChartModal';
 export { RSIPanel, IndicatorLegend } from './ChartIndicators';
+export { UpgradePrompt, TierBadge, LimitWarning } from './UpgradePrompt';

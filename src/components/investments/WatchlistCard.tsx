@@ -16,6 +16,7 @@ interface WatchlistCardProps {
   watchlist: Watchlist;
   onAddSymbol: () => void;
   onRemoveSymbol: (symbol: string) => void;
+  onViewChart?: (symbol: string, assetType: 'stock' | 'crypto') => void;
   isLoadingQuotes?: boolean;
   historyData?: Record<string, number[]>;
   isLoadingHistory?: boolean;
@@ -65,12 +66,14 @@ function WatchlistItemSkeleton() {
 function WatchlistItemRow({
   item,
   onRemove,
+  onViewChart,
   isLoading,
   priceHistory,
   isLoadingHistory,
 }: {
   item: WatchlistItem;
   onRemove: () => void;
+  onViewChart?: () => void;
   isLoading?: boolean;
   priceHistory?: number[];
   isLoadingHistory?: boolean;
@@ -79,7 +82,10 @@ function WatchlistItemRow({
   const hasData = item.price > 0;
 
   return (
-    <div className="flex items-center justify-between py-3 border-b border-gray-100 last:border-0 group">
+    <div 
+      className="flex items-center justify-between py-3 border-b border-gray-100 last:border-0 group cursor-pointer hover:bg-gray-50 transition-colors px-2 -mx-2 rounded"
+      onClick={onViewChart}
+    >
       <div className="flex items-center gap-3">
         <div className="flex flex-col">
           <div className="flex items-center gap-2">
@@ -143,26 +149,34 @@ function WatchlistItemRow({
           )}
         </div>
 
-        <DropdownMenu>
-          <DropdownMenuTrigger asChild>
-            <Button
-              variant="ghost"
-              size="sm"
-              className="h-8 w-8 p-0 opacity-0 group-hover:opacity-100 transition-opacity"
-            >
-              <MoreHorizontal className="h-4 w-4" />
-            </Button>
-          </DropdownMenuTrigger>
-          <DropdownMenuContent align="end">
-            <DropdownMenuItem
-              onClick={onRemove}
-              className="text-red-600 focus:text-red-600"
-            >
-              <Trash2 className="h-4 w-4 mr-2" />
-              Remove
-            </DropdownMenuItem>
-          </DropdownMenuContent>
-        </DropdownMenu>
+        <div onClick={(e) => e.stopPropagation()}>
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button
+                variant="ghost"
+                size="sm"
+                className="h-8 w-8 p-0 opacity-0 group-hover:opacity-100 transition-opacity"
+              >
+                <MoreHorizontal className="h-4 w-4" />
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end">
+              {onViewChart && (
+                <DropdownMenuItem onClick={onViewChart}>
+                  <BarChart3 className="h-4 w-4 mr-2" />
+                  View Chart
+                </DropdownMenuItem>
+              )}
+              <DropdownMenuItem
+                onClick={onRemove}
+                className="text-red-600 focus:text-red-600"
+              >
+                <Trash2 className="h-4 w-4 mr-2" />
+                Remove
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
+        </div>
       </div>
     </div>
   );
@@ -172,6 +186,7 @@ export function WatchlistCard({
   watchlist,
   onAddSymbol,
   onRemoveSymbol,
+  onViewChart,
   isLoadingQuotes = false,
   historyData = {},
   isLoadingHistory = false,
@@ -233,6 +248,7 @@ export function WatchlistCard({
                 key={item.symbol}
                 item={item}
                 onRemove={() => onRemoveSymbol(item.symbol)}
+                onViewChart={onViewChart ? () => onViewChart(item.symbol, item.type) : undefined}
                 isLoading={isLoadingQuotes}
                 priceHistory={historyData[item.symbol.toUpperCase()]}
                 isLoadingHistory={isLoadingHistory}

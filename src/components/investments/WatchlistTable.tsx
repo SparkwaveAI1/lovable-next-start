@@ -10,7 +10,7 @@ import { Card } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
-import { TrendingUp, TrendingDown, Trash2 } from 'lucide-react';
+import { TrendingUp, TrendingDown, Trash2, BarChart3 } from 'lucide-react';
 import { SparklineChart, getSparklineColor } from './SparklineChart';
 import type { WatchlistItem } from '@/pages/Investments';
 
@@ -22,6 +22,7 @@ interface WatchlistTableItem extends WatchlistItem {
 interface WatchlistTableProps {
   items: WatchlistTableItem[];
   onRemoveSymbol: (watchlistId: string, symbol: string) => void;
+  onViewChart?: (symbol: string, assetType: 'stock' | 'crypto') => void;
   isLoadingQuotes?: boolean;
   historyData?: Record<string, number[]>;
   isLoadingHistory?: boolean;
@@ -61,7 +62,8 @@ function formatVolume(volume: number): string {
 
 export function WatchlistTable({ 
   items, 
-  onRemoveSymbol, 
+  onRemoveSymbol,
+  onViewChart,
   isLoadingQuotes = false,
   historyData = {},
   isLoadingHistory = false,
@@ -96,7 +98,11 @@ export function WatchlistTable({
             const hasData = item.price > 0;
             
             return (
-              <TableRow key={`${item.watchlistId}-${item.symbol}`} className="group">
+              <TableRow 
+                key={`${item.watchlistId}-${item.symbol}`} 
+                className="group cursor-pointer hover:bg-gray-50"
+                onClick={() => onViewChart?.(item.symbol, item.type)}
+              >
                 <TableCell>
                   <div className="flex items-center gap-2">
                     <span className="font-semibold text-gray-900">{item.symbol}</span>
@@ -183,14 +189,28 @@ export function WatchlistTable({
                   )}
                 </TableCell>
                 <TableCell>
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    className="h-8 w-8 p-0 opacity-0 group-hover:opacity-100 transition-opacity text-red-500 hover:text-red-600 hover:bg-red-50"
-                    onClick={() => onRemoveSymbol(item.watchlistId, item.symbol)}
-                  >
-                    <Trash2 className="h-4 w-4" />
-                  </Button>
+                  <div className="flex items-center gap-1" onClick={(e) => e.stopPropagation()}>
+                    {onViewChart && (
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        className="h-8 w-8 p-0 opacity-0 group-hover:opacity-100 transition-opacity text-blue-500 hover:text-blue-600 hover:bg-blue-50"
+                        onClick={() => onViewChart(item.symbol, item.type)}
+                        title="View Chart"
+                      >
+                        <BarChart3 className="h-4 w-4" />
+                      </Button>
+                    )}
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="h-8 w-8 p-0 opacity-0 group-hover:opacity-100 transition-opacity text-red-500 hover:text-red-600 hover:bg-red-50"
+                      onClick={() => onRemoveSymbol(item.watchlistId, item.symbol)}
+                      title="Remove"
+                    >
+                      <Trash2 className="h-4 w-4" />
+                    </Button>
+                  </div>
                 </TableCell>
               </TableRow>
             );

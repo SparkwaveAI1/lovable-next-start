@@ -15,6 +15,7 @@ import { InvestmentDisclaimer } from '@/components/investments/Disclaimer';
 import { DisclaimerAcceptanceModal } from '@/components/investments/DisclaimerAcceptanceModal';
 import { OnboardingFlow } from '@/components/investments/OnboardingFlow';
 import { TemplateGallery } from '@/components/investments/TemplateGallery';
+import { ChartModal } from '@/components/investments/ChartModal';
 import { useBusinessContext } from '@/contexts/BusinessContext';
 import { useSubscription } from '@/hooks/useSubscription';
 import { useWatchlists, useRemoveSymbol, useCreateWatchlist, useAddSymbol } from '@/hooks/useWatchlists';
@@ -52,6 +53,10 @@ export default function Investments() {
   const [createWatchlistOpen, setCreateWatchlistOpen] = useState(false);
   const [targetWatchlistId, setTargetWatchlistId] = useState<string | null>(null);
   const [showUpgradeDialog, setShowUpgradeDialog] = useState(false);
+  const [chartModal, setChartModal] = useState<{
+    symbol: string;
+    assetType: 'stock' | 'crypto';
+  } | null>(null);
 
   // Subscription tier & limits
   const subscription = useSubscription(selectedBusiness?.id);
@@ -142,6 +147,10 @@ export default function Investments() {
         variant: 'destructive',
       });
     }
+  };
+
+  const handleViewChart = (symbol: string, assetType: 'stock' | 'crypto') => {
+    setChartModal({ symbol, assetType });
   };
 
   const handleCreateWatchlist = async (name: string) => {
@@ -327,7 +336,16 @@ export default function Investments() {
           title="Investments"
           description="Track your stocks, crypto, and investment watchlists"
           actions={
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-3">
+              {/* Tier Badge */}
+              <TierBadge 
+                tier={subscription.tier}
+                usage={!subscription.isPro ? {
+                  current: subscription.usage.watchlistItems,
+                  max: subscription.limits.maxWatchlistItems,
+                } : undefined}
+                onClick={() => setShowUpgradeDialog(true)}
+              />
               {/* Refresh button */}
               <Button
                 variant="outline"
@@ -366,6 +384,7 @@ export default function Investments() {
               <Button 
                 className="bg-indigo-600 hover:bg-indigo-700"
                 onClick={() => setCreateWatchlistOpen(true)}
+                disabled={!subscription.canCreateWatchlist()}
               >
                 <Plus className="h-4 w-4 mr-2" />
                 New Watchlist
@@ -407,6 +426,7 @@ export default function Investments() {
                     watchlist={watchlist}
                     onAddSymbol={() => handleAddSymbol(watchlist.id)}
                     onRemoveSymbol={(symbol) => handleRemoveSymbol(watchlist.id, symbol)}
+                    onViewChart={handleViewChart}
                     isLoadingQuotes={quotesLoading}
                     historyData={historyData || {}}
                     isLoadingHistory={historyLoading}
@@ -417,6 +437,7 @@ export default function Investments() {
               <WatchlistTable
                 items={allItems}
                 onRemoveSymbol={(watchlistId, symbol) => handleRemoveSymbol(watchlistId, symbol)}
+                onViewChart={handleViewChart}
                 isLoadingQuotes={quotesLoading}
                 historyData={historyData || {}}
                 isLoadingHistory={historyLoading}
@@ -478,6 +499,7 @@ export default function Investments() {
         onOpenChange={setAddSymbolOpen}
         watchlistId={targetWatchlistId}
         onSuccess={handleSymbolAdded}
+        businessId={selectedBusiness?.id}
       />
 
       <CreateWatchlistDialog
@@ -486,6 +508,25 @@ export default function Investments() {
         onSubmit={handleCreateWatchlist}
         isLoading={createWatchlistMutation.isPending}
       />
+
+      {/* Upgrade prompt dialog */}
+      <UpgradePrompt
+        open={showUpgradeDialog}
+        onOpenChange={setShowUpgradeDialog}
+        feature="features"
+        currentUsage={subscription.usage.watchlistItems}
+        limit={subscription.limits.maxWatchlistItems}
+      />
+
+      {/* Chart Modal */}
+      {chartModal && (
+        <ChartModal
+          symbol={chartModal.symbol}
+          assetType={chartModal.assetType}
+          open={true}
+          onClose={() => setChartModal(null)}
+        />
+      )}
     </DashboardLayout>
   );
 }
