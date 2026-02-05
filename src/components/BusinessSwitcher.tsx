@@ -8,6 +8,7 @@ import {
   CommandGroup,
   CommandInput,
   CommandItem,
+  CommandList,
 } from "@/components/ui/command"
 import {
   Popover,
@@ -54,32 +55,34 @@ export function BusinessSwitcher({ selectedBusinessId, onBusinessChange }: Busin
       <PopoverContent className="w-full sm:w-[280px] p-0 bg-popover border-border shadow-card-hover z-[60]">
         <Command>
           <CommandInput placeholder="Search businesses..." />
-          <CommandEmpty>No business found.</CommandEmpty>
-          <CommandGroup>
-            {businesses.map((business) => (
-              <CommandItem
-                key={business.id}
-                value={business.name}
-                onSelect={() => {
-                  onBusinessChange?.(business.id)
-                  setOpen(false)
-                }}
-                className="flex items-center gap-2 hover:bg-accent"
-              >
-                <Building2 className="h-4 w-4 text-muted-foreground" />
-                <div className="flex-1">
-                  <div className="font-medium">{business.name}</div>
-                  <div className="text-xs text-muted-foreground">{business.description}</div>
-                </div>
-                <Check
-                  className={cn(
-                    "h-4 w-4",
-                    selectedBusinessId === business.id ? "opacity-100 text-primary" : "opacity-0"
-                  )}
-                />
-              </CommandItem>
-            ))}
-          </CommandGroup>
+          <CommandList>
+            <CommandEmpty>No business found.</CommandEmpty>
+            <CommandGroup>
+              {businesses.map((business) => (
+                <CommandItem
+                  key={business.id}
+                  value={business.name}
+                  onSelect={() => {
+                    onBusinessChange?.(business.id)
+                    setOpen(false)
+                  }}
+                  className="flex items-center gap-2 hover:bg-accent cursor-pointer"
+                >
+                  <Building2 className="h-4 w-4 text-muted-foreground" />
+                  <div className="flex-1">
+                    <div className="font-medium">{business.name}</div>
+                    <div className="text-xs text-muted-foreground">{business.description}</div>
+                  </div>
+                  <Check
+                    className={cn(
+                      "h-4 w-4",
+                      selectedBusinessId === business.id ? "opacity-100 text-primary" : "opacity-0"
+                    )}
+                  />
+                </CommandItem>
+              ))}
+            </CommandGroup>
+          </CommandList>
         </Command>
       </PopoverContent>
     </Popover>
