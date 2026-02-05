@@ -17,70 +17,102 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
-import { Search, Loader2 } from 'lucide-react';
+import { Search, Loader2, CheckCircle, AlertCircle } from 'lucide-react';
+import { useAddSymbol } from '@/hooks/useWatchlists';
+import { useQuote } from '@/hooks/useMarketData';
+import { useToast } from '@/hooks/use-toast';
+import { useDebounce } from '@/hooks/useDebounce';
 
 interface AddSymbolDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  onSubmit: (symbol: string, type: 'stock' | 'crypto') => void;
+  watchlistId: string | null;
+  onSuccess?: () => void;
 }
 
-// Mock search results for demonstration
-const mockSearchResults = [
-  { symbol: 'AAPL', name: 'Apple Inc.', type: 'stock' as const },
-  { symbol: 'AMZN', name: 'Amazon.com Inc.', type: 'stock' as const },
-  { symbol: 'AMD', name: 'Advanced Micro Devices', type: 'stock' as const },
-  { symbol: 'AAVE', name: 'Aave', type: 'crypto' as const },
-  { symbol: 'ADA', name: 'Cardano', type: 'crypto' as const },
-];
+// Common crypto symbols mapped to CoinGecko IDs
+const CRYPTO_SYMBOL_MAP: Record<string, string> = {
+  'BTC': 'bitcoin',
+  'ETH': 'ethereum',
+  'SOL': 'solana',
+  'ADA': 'cardano',
+  'XRP': 'ripple',
+  'DOT': 'polkadot',
+  'DOGE': 'dogecoin',
+  'SHIB': 'shiba-inu',
+  'MATIC': 'polygon',
+  'AVAX': 'avalanche-2',
+  'LINK': 'chainlink',
+  'UNI': 'uniswap',
+  'ATOM': 'cosmos',
+  'LTC': 'litecoin',
+  'BCH': 'bitcoin-cash',
+};
 
 export function AddSymbolDialog({
   open,
   onOpenChange,
-  onSubmit,
+  watchlistId,
+  onSuccess,
 }: AddSymbolDialogProps) {
+  const { toast } = useToast();
   const [symbol, setSymbol] = useState('');
-  const [assetType, setAssetType] = useState<'stock' | 'crypto'>('stock');
-  const [isSearching, setIsSearching] = useState(false);
-  const [searchResults, setSearchResults] = useState<typeof mockSearchResults>([]);
-  const [showResults, setShowResults] = useState(false);
+  const [assetType, setAssetType] = useState<'stock' | 'crypto'>('crypto');
+  const [validationStatus, setValidationStatus] = useState<'idle' | 'validating' | 'valid' | 'invalid'>('idle');
 
-  const handleSearch = (value: string) => {
-    setSymbol(value);
-    
-    if (value.length >= 1) {
-      setIsSearching(true);
-      // Simulate API search delay
-      setTimeout(() => {
-        const filtered = mockSearchResults.filter(
-          (item) =>
-            item.symbol.toLowerCase().includes(value.toLowerCase()) ||
-            item.name.toLowerCase().includes(value.toLowerCase())
-        );
-        setSearchResults(filtered);
-        setShowResults(true);
-        setIsSearching(false);
-      }, 300);
-    } else {
-      setSearchResults([]);
-      setShowResults(false);
-    }
-  };
+  const addSymbolMutation = useAddSymbol();
+  const debouncedSymbol = useDebounce(symbol, 500);
 
-  const handleSelectResult = (result: typeof mockSearchResults[0]) => {
-    setSymbol(result.symbol);
-    setAssetType(result.type);
-    setShowResults(false);
-  };
+  // For crypto, map common symbols to CoinGecko IDs
+  const normalizedSymbol = assetType === 'crypto' 
+    ? (CRYPTO_SYMBOL_MAP[symbol.toUpperCase()] || symbol.toLowerCase())
+    : symbol.toUpperCase();
 
-  const handleSubmit = () => {
-    if (symbol.trim()) {
-      onSubmit(symbol.trim(), assetType);
+  // Validate the symbol exists by fetching a quote
+  const { 
+    data: quoteData, 
+    isLoading: isValidating,
+    error: validationError,
+  } = useQuote(
+    debouncedSymbol.length >= 2 ? normalizedSymbol : '',
+    assetType
+  );
+
+  // Determine validation status
+  const currentValidationStatus = (() => {
+    if (!debouncedSymbol || debouncedSymbol.length < 2) return 'idle';
+    if (isValidating) return 'validating';
+    if (quoteData) return 'valid';
+    if (validationError) return 'invalid';
+    return 'idle';
+  })();
+
+  const handleSubmit = async () => {
+    if (!watchlistId || !symbol.trim()) return;
+
+    try {
+      await addSymbolMutation.mutateAsync({
+        watchlistId,
+        symbol: normalizedSymbol,
+        assetType,
+      });
+
+      toast({
+        title: 'Symbol added',
+        description: `${symbol.toUpperCase()} has been added to your watchlist.`,
+      });
+
       // Reset form
       setSymbol('');
-      setAssetType('stock');
-      setSearchResults([]);
-      setShowResults(false);
+      setAssetType('crypto');
+      
+      onSuccess?.();
+    } catch (error) {
+      toast({
+        title: 'Error adding symbol',
+        description: error instanceof Error ? error.message : 'Failed to add symbol',
+        variant: 'destructive',
+      });
     }
   };
 
@@ -88,12 +120,14 @@ export function AddSymbolDialog({
     if (!isOpen) {
       // Reset form on close
       setSymbol('');
-      setAssetType('stock');
-      setSearchResults([]);
-      setShowResults(false);
+      setAssetType('crypto');
     }
     onOpenChange(isOpen);
   };
+
+  const canSubmit = symbol.trim().length >= 2 && 
+    (currentValidationStatus === 'valid' || currentValidationStatus === 'idle') &&
+    !addSymbolMutation.isPending;
 
   return (
     <Dialog open={open} onOpenChange={handleClose}>
@@ -101,92 +135,96 @@ export function AddSymbolDialog({
         <DialogHeader>
           <DialogTitle>Add Symbol</DialogTitle>
           <DialogDescription>
-            Search for a stock or cryptocurrency to add to your watchlist.
+            Add a stock or cryptocurrency to your watchlist. We'll fetch live prices automatically.
           </DialogDescription>
         </DialogHeader>
 
         <div className="grid gap-4 py-4">
-          {/* Symbol Search Input */}
-          <div className="space-y-2">
-            <Label htmlFor="symbol">Symbol</Label>
-            <div className="relative">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
-              <Input
-                id="symbol"
-                placeholder="Search by symbol or name..."
-                value={symbol}
-                onChange={(e) => handleSearch(e.target.value)}
-                className="pl-9"
-                autoComplete="off"
-              />
-              {isSearching && (
-                <Loader2 className="absolute right-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400 animate-spin" />
-              )}
-            </div>
-
-            {/* Search Results Dropdown */}
-            {showResults && searchResults.length > 0 && (
-              <div className="absolute z-10 w-full mt-1 bg-white border border-gray-200 rounded-md shadow-lg max-h-48 overflow-auto">
-                {searchResults.map((result) => (
-                  <button
-                    key={result.symbol}
-                    className="w-full px-4 py-2 text-left hover:bg-gray-50 flex items-center justify-between"
-                    onClick={() => handleSelectResult(result)}
-                  >
-                    <div>
-                      <span className="font-medium text-gray-900">
-                        {result.symbol}
-                      </span>
-                      <span className="ml-2 text-sm text-gray-500">
-                        {result.name}
-                      </span>
-                    </div>
-                    <span
-                      className={`text-xs px-2 py-0.5 rounded ${
-                        result.type === 'crypto'
-                          ? 'bg-purple-100 text-purple-700'
-                          : 'bg-blue-100 text-blue-700'
-                      }`}
-                    >
-                      {result.type === 'crypto' ? 'Crypto' : 'Stock'}
-                    </span>
-                  </button>
-                ))}
-              </div>
-            )}
-
-            {showResults && searchResults.length === 0 && symbol.length >= 1 && !isSearching && (
-              <div className="text-sm text-gray-500 mt-1">
-                No results found. You can still add "{symbol}" manually.
-              </div>
-            )}
-          </div>
-
-          {/* Asset Type Selector */}
+          {/* Asset Type Selector - First for better UX */}
           <div className="space-y-2">
             <Label htmlFor="type">Asset Type</Label>
             <Select
               value={assetType}
-              onValueChange={(value) => setAssetType(value as 'stock' | 'crypto')}
+              onValueChange={(value) => {
+                setAssetType(value as 'stock' | 'crypto');
+                setSymbol(''); // Clear symbol when type changes
+              }}
             >
               <SelectTrigger id="type">
                 <SelectValue placeholder="Select asset type" />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="stock">
-                  <div className="flex items-center gap-2">
-                    <span className="w-2 h-2 rounded-full bg-blue-500" />
-                    Stock
-                  </div>
-                </SelectItem>
                 <SelectItem value="crypto">
                   <div className="flex items-center gap-2">
                     <span className="w-2 h-2 rounded-full bg-purple-500" />
                     Cryptocurrency
                   </div>
                 </SelectItem>
+                <SelectItem value="stock">
+                  <div className="flex items-center gap-2">
+                    <span className="w-2 h-2 rounded-full bg-blue-500" />
+                    Stock
+                  </div>
+                </SelectItem>
               </SelectContent>
             </Select>
+            {assetType === 'stock' && (
+              <p className="text-xs text-amber-600">
+                Note: Stock data requires a Polygon.io API key to be configured.
+              </p>
+            )}
+          </div>
+
+          {/* Symbol Input */}
+          <div className="space-y-2">
+            <Label htmlFor="symbol">
+              {assetType === 'crypto' ? 'Coin Name or Symbol' : 'Stock Symbol'}
+            </Label>
+            <div className="relative">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
+              <Input
+                id="symbol"
+                placeholder={assetType === 'crypto' ? 'e.g., bitcoin, ethereum, BTC' : 'e.g., AAPL, GOOGL, MSFT'}
+                value={symbol}
+                onChange={(e) => setSymbol(e.target.value)}
+                className="pl-9 pr-10"
+                autoComplete="off"
+              />
+              <div className="absolute right-3 top-1/2 -translate-y-1/2">
+                {currentValidationStatus === 'validating' && (
+                  <Loader2 className="h-4 w-4 text-gray-400 animate-spin" />
+                )}
+                {currentValidationStatus === 'valid' && (
+                  <CheckCircle className="h-4 w-4 text-green-500" />
+                )}
+                {currentValidationStatus === 'invalid' && (
+                  <AlertCircle className="h-4 w-4 text-red-500" />
+                )}
+              </div>
+            </div>
+
+            {/* Validation feedback */}
+            {currentValidationStatus === 'valid' && quoteData && (
+              <div className="text-sm text-green-600 flex items-center gap-2">
+                <CheckCircle className="h-3 w-3" />
+                Found: {quoteData.symbol} — ${quoteData.price.toLocaleString()}
+              </div>
+            )}
+            {currentValidationStatus === 'invalid' && (
+              <div className="text-sm text-red-600 flex items-center gap-2">
+                <AlertCircle className="h-3 w-3" />
+                {assetType === 'crypto' 
+                  ? 'Coin not found. Try using the full name (e.g., "bitcoin" instead of "BTC")'
+                  : 'Symbol not found or market data unavailable'}
+              </div>
+            )}
+
+            {/* Helpful hints for crypto */}
+            {assetType === 'crypto' && symbol.length === 0 && (
+              <div className="text-xs text-gray-500">
+                Popular options: bitcoin, ethereum, solana, cardano, dogecoin
+              </div>
+            )}
           </div>
         </div>
 
@@ -196,10 +234,17 @@ export function AddSymbolDialog({
           </Button>
           <Button
             onClick={handleSubmit}
-            disabled={!symbol.trim()}
+            disabled={!canSubmit}
             className="bg-indigo-600 hover:bg-indigo-700"
           >
-            Add Symbol
+            {addSymbolMutation.isPending ? (
+              <>
+                <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                Adding...
+              </>
+            ) : (
+              'Add Symbol'
+            )}
           </Button>
         </DialogFooter>
       </DialogContent>

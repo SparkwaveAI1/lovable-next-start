@@ -9,6 +9,7 @@ import {
 import { Card } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
+import { Skeleton } from '@/components/ui/skeleton';
 import { TrendingUp, TrendingDown, Trash2 } from 'lucide-react';
 import type { WatchlistItem } from '@/pages/Investments';
 
@@ -20,9 +21,11 @@ interface WatchlistTableItem extends WatchlistItem {
 interface WatchlistTableProps {
   items: WatchlistTableItem[];
   onRemoveSymbol: (watchlistId: string, symbol: string) => void;
+  isLoadingQuotes?: boolean;
 }
 
 function formatPrice(price: number, type: 'stock' | 'crypto'): string {
+  if (price === 0) return '—';
   if (type === 'crypto' && price >= 1000) {
     return price.toLocaleString('en-US', {
       style: 'currency',
@@ -40,6 +43,7 @@ function formatPrice(price: number, type: 'stock' | 'crypto'): string {
 }
 
 function formatVolume(volume: number): string {
+  if (volume === 0) return '—';
   if (volume >= 1000000000) {
     return `${(volume / 1000000000).toFixed(1)}B`;
   }
@@ -52,7 +56,7 @@ function formatVolume(volume: number): string {
   return volume.toString();
 }
 
-export function WatchlistTable({ items, onRemoveSymbol }: WatchlistTableProps) {
+export function WatchlistTable({ items, onRemoveSymbol, isLoadingQuotes = false }: WatchlistTableProps) {
   if (items.length === 0) {
     return (
       <Card className="p-8 text-center">
@@ -79,6 +83,8 @@ export function WatchlistTable({ items, onRemoveSymbol }: WatchlistTableProps) {
         <TableBody>
           {items.map((item) => {
             const isPositive = item.change >= 0;
+            const hasData = item.price > 0;
+            
             return (
               <TableRow key={`${item.watchlistId}-${item.symbol}`} className="group">
                 <TableCell>
@@ -105,35 +111,53 @@ export function WatchlistTable({ items, onRemoveSymbol }: WatchlistTableProps) {
                   </Badge>
                 </TableCell>
                 <TableCell className="text-right font-medium">
-                  {formatPrice(item.price, item.type)}
+                  {isLoadingQuotes ? (
+                    <Skeleton className="h-5 w-20 ml-auto" />
+                  ) : (
+                    formatPrice(item.price, item.type)
+                  )}
                 </TableCell>
                 <TableCell className="text-right">
-                  <div
-                    className={`flex items-center justify-end gap-1 font-medium ${
-                      isPositive ? 'text-green-600' : 'text-red-600'
-                    }`}
-                  >
-                    {isPositive ? (
-                      <TrendingUp className="h-4 w-4" />
-                    ) : (
-                      <TrendingDown className="h-4 w-4" />
-                    )}
-                    <span>
-                      {isPositive ? '+' : ''}
-                      {item.changePercent.toFixed(2)}%
-                    </span>
-                  </div>
+                  {isLoadingQuotes ? (
+                    <Skeleton className="h-5 w-16 ml-auto" />
+                  ) : hasData ? (
+                    <div
+                      className={`flex items-center justify-end gap-1 font-medium ${
+                        isPositive ? 'text-green-600' : 'text-red-600'
+                      }`}
+                    >
+                      {isPositive ? (
+                        <TrendingUp className="h-4 w-4" />
+                      ) : (
+                        <TrendingDown className="h-4 w-4" />
+                      )}
+                      <span>
+                        {isPositive ? '+' : ''}
+                        {item.changePercent.toFixed(2)}%
+                      </span>
+                    </div>
+                  ) : (
+                    <span className="text-gray-400">—</span>
+                  )}
                 </TableCell>
-                <TableCell
-                  className={`text-right font-medium ${
-                    isPositive ? 'text-green-600' : 'text-red-600'
-                  }`}
-                >
-                  {isPositive ? '+' : ''}
-                  {item.change.toFixed(2)}
+                <TableCell className="text-right">
+                  {isLoadingQuotes ? (
+                    <Skeleton className="h-5 w-16 ml-auto" />
+                  ) : hasData ? (
+                    <span className={`font-medium ${isPositive ? 'text-green-600' : 'text-red-600'}`}>
+                      {isPositive ? '+' : ''}
+                      {item.change.toFixed(2)}
+                    </span>
+                  ) : (
+                    <span className="text-gray-400">—</span>
+                  )}
                 </TableCell>
                 <TableCell className="text-right text-gray-600">
-                  {formatVolume(item.volume)}
+                  {isLoadingQuotes ? (
+                    <Skeleton className="h-5 w-12 ml-auto" />
+                  ) : (
+                    formatVolume(item.volume)
+                  )}
                 </TableCell>
                 <TableCell>
                   <Button
