@@ -256,6 +256,13 @@ export default function MissionControl() {
           </button>
         </div>
 
+        {/* Debug info - remove after fixing */}
+        <div className="mb-4 p-3 bg-yellow-50 border border-yellow-200 rounded-lg text-xs font-mono text-yellow-800">
+          <strong>DEBUG:</strong> business={selectedBusiness?.name || 'none'} (id={selectedBusiness?.id || 'null'}) | 
+          agents={agents.length} | tasks={tasks.length} | activities={activities.length} | 
+          loading={isLoading.toString()} | error={error || 'none'}
+        </div>
+
         {error && (
           <div className="mb-4 p-4 bg-red-50 border border-red-200 rounded-xl text-red-700">
             <p className="font-medium">Failed to load data</p>

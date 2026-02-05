@@ -313,6 +313,19 @@ serve(async (req) => {
   if (req.method === 'OPTIONS') {
     return new Response('ok', { headers: corsHeaders });
   }
+// EMERGENCY KILL SWITCH - Added 2026-02-05
+// Remove this block when SMS issues are resolved
+const AI_RESPONSE_DISABLED = true;
+
+if (AI_RESPONSE_DISABLED) {
+  console.log('⚠️ AI Response DISABLED - kill switch active');
+  return new Response(JSON.stringify({
+    success: false,
+    message: null,  // null so sms-webhook uses fallback
+    disabled: true
+  }), { headers: corsHeaders });
+}
+// END KILL SWITCH
 
   try {
     const supabase = createClient(
