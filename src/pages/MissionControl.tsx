@@ -1,12 +1,12 @@
 import { useState, useEffect, useCallback } from "react";
 import { DashboardLayout } from "@/components/layout/DashboardLayout";
 import { PageContent } from "@/components/layout/PageLayout";
-import { AgentCard, KanbanBoard, ActivityFeed, StatsBar, RicoChat, RicoChatModal, ScottsActionItems, AgentActivityMonitor, HealthDashboard, AnalyticsMonitor } from "@/components/mission-control";
+import { AgentCard, KanbanBoard, ActivityFeed, StatsBar, RicoChat, ScottsActionItems, AgentActivityMonitor, HealthDashboard, AnalyticsMonitor } from "@/components/mission-control";
 import { useBusinessContext } from "@/contexts/BusinessContext";
 import { useBusinesses } from "@/hooks/useBusinesses";
 import { supabase } from "@/integrations/supabase/client";
 import type { Agent, Task, Activity, TaskStatus } from "@/types/mission-control";
-import { RefreshCw, MessageCircle } from "lucide-react";
+import { RefreshCw } from "lucide-react";
 import { useToast } from "@/components/ui/use-toast";
 import { ALL_BUSINESSES_ID } from "@/components/BusinessSwitcher";
 
@@ -21,7 +21,6 @@ export default function MissionControl() {
   const [selectedAgent, setSelectedAgent] = useState<Agent | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [chatModalOpen, setChatModalOpen] = useState(false);
 
   // Fetch data from Supabase mc_ tables, filtered by selected business
   // Global agents (scope='global') are always included regardless of business selection
@@ -310,20 +309,6 @@ export default function MissionControl() {
           <AnalyticsMonitor />
         </div>
 
-        {/* 5. Floating Chat Bubble (lower right) */}
-        <button
-          onClick={() => setChatModalOpen(true)}
-          className="fixed bottom-6 right-6 w-14 h-14 bg-gradient-to-r from-violet-600 to-indigo-600 text-white rounded-full shadow-lg hover:shadow-xl hover:scale-105 transition-all duration-200 flex items-center justify-center z-50"
-          title="Chat with Rico"
-        >
-          <MessageCircle className="h-6 w-6" />
-        </button>
-
-        {/* Rico Chat Modal */}
-        <RicoChatModal 
-          isOpen={chatModalOpen} 
-          onClose={() => setChatModalOpen(false)} 
-        />
       </PageContent>
     </DashboardLayout>
   );

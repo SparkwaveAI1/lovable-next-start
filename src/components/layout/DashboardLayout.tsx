@@ -5,6 +5,7 @@ import {
   Settings,
   Menu,
   X,
+  MessageCircle,
 } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { Button } from "@/components/ui/button"
@@ -15,6 +16,7 @@ import { Sidebar } from "@/components/Sidebar"
 import { Breadcrumbs } from "@/components/layout/Breadcrumbs"
 import sparkwaveIcon from "@/assets/sparkwave-icon.png"
 import { supabase } from "@/integrations/supabase/client"
+import { RicoChatModal } from "@/components/mission-control"
 
 interface DashboardLayoutProps {
   children: React.ReactNode
@@ -37,6 +39,7 @@ export function DashboardLayout({
   const [isSuperAdmin, setIsSuperAdmin] = useState(false)
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false)
   const [mobileOpen, setMobileOpen] = useState(false)
+  const [chatModalOpen, setChatModalOpen] = useState(false)
   const location = useLocation()
 
   useEffect(() => {
@@ -193,6 +196,21 @@ export function DashboardLayout({
           {children}
         </main>
       </div>
+
+      {/* Rico Chat Floating Bubble - appears on all pages */}
+      <button
+        onClick={() => setChatModalOpen(true)}
+        className="fixed bottom-6 right-6 w-14 h-14 bg-gradient-to-r from-violet-600 to-indigo-600 text-white rounded-full shadow-lg hover:shadow-xl hover:scale-105 transition-all duration-200 flex items-center justify-center z-50"
+        title="Chat with Rico"
+      >
+        <MessageCircle className="h-6 w-6" />
+      </button>
+
+      {/* Rico Chat Modal */}
+      <RicoChatModal 
+        isOpen={chatModalOpen} 
+        onClose={() => setChatModalOpen(false)} 
+      />
     </div>
   )
 }
