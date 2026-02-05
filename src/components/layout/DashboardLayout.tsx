@@ -14,6 +14,7 @@ import { BusinessSwitcher } from "@/components/BusinessSwitcher"
 import LogoutButton from "@/components/LogoutButton"
 import { Sidebar } from "@/components/Sidebar"
 import { Breadcrumbs } from "@/components/layout/Breadcrumbs"
+import { CommandCenterPanel } from "@/components/layout/CommandCenterPanel"
 import sparkwaveIcon from "@/assets/sparkwave-icon.png"
 import { supabase } from "@/integrations/supabase/client"
 import { RicoChatModal } from "@/components/mission-control"
@@ -40,7 +41,28 @@ export function DashboardLayout({
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false)
   const [mobileOpen, setMobileOpen] = useState(false)
   const [chatModalOpen, setChatModalOpen] = useState(false)
+  const [commandPanelCollapsed, setCommandPanelCollapsed] = useState(() => {
+    const saved = localStorage.getItem("sparkwave-command-panel-collapsed")
+    return saved ? JSON.parse(saved) : false
+  })
   const location = useLocation()
+
+  // Sync command panel state from localStorage
+  useEffect(() => {
+    const handleStorageChange = () => {
+      const saved = localStorage.getItem("sparkwave-command-panel-collapsed")
+      if (saved !== null) {
+        setCommandPanelCollapsed(JSON.parse(saved))
+      }
+    }
+    window.addEventListener('storage', handleStorageChange)
+    // Also check periodically for same-tab changes
+    const interval = setInterval(handleStorageChange, 500)
+    return () => {
+      window.removeEventListener('storage', handleStorageChange)
+      clearInterval(interval)
+    }
+  }, [])
 
   useEffect(() => {
     const checkSuperAdmin = async () => {
@@ -111,7 +133,8 @@ export function DashboardLayout({
       <div
         className={cn(
           "transition-all duration-300",
-          sidebarCollapsed ? "lg:ml-16" : "lg:ml-64"
+          sidebarCollapsed ? "lg:ml-16" : "lg:ml-64",
+          commandPanelCollapsed ? "lg:mr-12" : "lg:mr-80 xl:mr-96"
         )}
       >
         {/* Top Header Bar */}
@@ -211,6 +234,11 @@ export function DashboardLayout({
         isOpen={chatModalOpen} 
         onClose={() => setChatModalOpen(false)} 
       />
+
+      {/* Command Center Panel - Scott's To-Do + Agent Activity (visible on all pages) */}
+      <div className="hidden lg:block">
+        <CommandCenterPanel />
+      </div>
     </div>
   )
 }
