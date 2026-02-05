@@ -11,6 +11,7 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
 import { TrendingUp, TrendingDown, Trash2 } from 'lucide-react';
+import { SparklineChart, getSparklineColor } from './SparklineChart';
 import type { WatchlistItem } from '@/pages/Investments';
 
 interface WatchlistTableItem extends WatchlistItem {
@@ -22,6 +23,8 @@ interface WatchlistTableProps {
   items: WatchlistTableItem[];
   onRemoveSymbol: (watchlistId: string, symbol: string) => void;
   isLoadingQuotes?: boolean;
+  historyData?: Record<string, number[]>;
+  isLoadingHistory?: boolean;
 }
 
 function formatPrice(price: number, type: 'stock' | 'crypto'): string {
@@ -56,7 +59,13 @@ function formatVolume(volume: number): string {
   return volume.toString();
 }
 
-export function WatchlistTable({ items, onRemoveSymbol, isLoadingQuotes = false }: WatchlistTableProps) {
+export function WatchlistTable({ 
+  items, 
+  onRemoveSymbol, 
+  isLoadingQuotes = false,
+  historyData = {},
+  isLoadingHistory = false,
+}: WatchlistTableProps) {
   if (items.length === 0) {
     return (
       <Card className="p-8 text-center">
@@ -73,6 +82,7 @@ export function WatchlistTable({ items, onRemoveSymbol, isLoadingQuotes = false 
             <TableHead className="font-semibold">Symbol</TableHead>
             <TableHead className="font-semibold">Name</TableHead>
             <TableHead className="font-semibold">Watchlist</TableHead>
+            <TableHead className="font-semibold text-center w-[70px]">7D</TableHead>
             <TableHead className="font-semibold text-right">Price</TableHead>
             <TableHead className="font-semibold text-right">Change (%)</TableHead>
             <TableHead className="font-semibold text-right">Change ($)</TableHead>

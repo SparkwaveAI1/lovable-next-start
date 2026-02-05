@@ -9,6 +9,7 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
+import { SparklineChart, getSparklineColor } from './SparklineChart';
 import type { Watchlist, WatchlistItem } from '@/pages/Investments';
 
 interface WatchlistCardProps {
@@ -16,6 +17,8 @@ interface WatchlistCardProps {
   onAddSymbol: () => void;
   onRemoveSymbol: (symbol: string) => void;
   isLoadingQuotes?: boolean;
+  historyData?: Record<string, number[]>;
+  isLoadingHistory?: boolean;
 }
 
 function formatPrice(price: number, type: 'stock' | 'crypto'): string {
@@ -63,10 +66,14 @@ function WatchlistItemRow({
   item,
   onRemove,
   isLoading,
+  priceHistory,
+  isLoadingHistory,
 }: {
   item: WatchlistItem;
   onRemove: () => void;
   isLoading?: boolean;
+  priceHistory?: number[];
+  isLoadingHistory?: boolean;
 }) {
   const isPositive = item.change >= 0;
   const hasData = item.price > 0;
@@ -95,6 +102,15 @@ function WatchlistItemRow({
       </div>
 
       <div className="flex items-center gap-3">
+        {/* Sparkline chart */}
+        <SparklineChart
+          data={priceHistory || []}
+          color={priceHistory ? getSparklineColor(priceHistory) : 'neutral'}
+          width={50}
+          height={20}
+          isLoading={isLoadingHistory}
+        />
+        
         <div className="text-right">
           {isLoading ? (
             <>
@@ -157,6 +173,8 @@ export function WatchlistCard({
   onAddSymbol,
   onRemoveSymbol,
   isLoadingQuotes = false,
+  historyData = {},
+  isLoadingHistory = false,
 }: WatchlistCardProps) {
   // Calculate total change for the watchlist (only for items with data)
   const itemsWithData = watchlist.items.filter(item => item.price > 0);
@@ -216,6 +234,8 @@ export function WatchlistCard({
                 item={item}
                 onRemove={() => onRemoveSymbol(item.symbol)}
                 isLoading={isLoadingQuotes}
+                priceHistory={historyData[item.symbol.toUpperCase()]}
+                isLoadingHistory={isLoadingHistory}
               />
             ))}
           </div>
