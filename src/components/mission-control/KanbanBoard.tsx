@@ -109,7 +109,7 @@ export function KanbanBoard({ tasks, agents, onTaskClick, onAddTask, onTaskStatu
       onDragOver={handleDragOver}
       onDragEnd={handleDragEnd}
     >
-      <div className="h-full flex gap-4 overflow-x-auto pb-4">
+      <div className="flex gap-4 overflow-x-auto pb-4 max-h-[600px]">
         {KANBAN_COLUMNS.map((column) => {
           const columnTasks = tasks.filter((t) => t.status === column.id);
           const style = columnStyles[column.id];

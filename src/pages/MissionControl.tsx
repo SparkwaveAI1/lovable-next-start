@@ -8,6 +8,7 @@ import { supabase } from "@/integrations/supabase/client";
 import type { Agent, Task, Activity, TaskStatus } from "@/types/mission-control";
 import { RefreshCw, ChevronDown, ChevronUp } from "lucide-react";
 import { useToast } from "@/components/ui/use-toast";
+import { ALL_BUSINESSES_ID } from "@/components/BusinessSwitcher";
 
 export default function MissionControl() {
   const { selectedBusiness, setSelectedBusiness } = useBusinessContext();
@@ -24,41 +25,60 @@ export default function MissionControl() {
   const [chatVisible, setChatVisible] = useState(true);
 
   // Fetch data from Supabase mc_ tables, filtered by selected business
+  // Global agents (scope='global') are always included regardless of business selection
+  // If "All Businesses" is selected, show everything
   const fetchData = useCallback(async () => {
-    if (!selectedBusiness?.id) {
-      setAgents([]);
-      setTasks([]);
-      setActivities([]);
-      setIsLoading(false);
-      return;
-    }
-
     setIsLoading(true);
     setError(null);
+    
+    const isAll = selectedBusiness?.id === ALL_BUSINESSES_ID;
+    const businessId = (!isAll && selectedBusiness?.id) ? selectedBusiness.id : null;
+    
     try {
-      const { data: agentsData, error: agentsError } = await supabase
+      // Fetch agents: global agents + business-specific agents
+      let agentsQuery = supabase
         .from('mc_agents')
         .select('*')
-        .eq('business_id', selectedBusiness.id)
         .order('created_at', { ascending: true });
       
+      if (isAll) {
+        // "All" selected: get all agents
+        // No filter needed
+      } else if (businessId) {
+        // Specific business: get global agents OR agents for this business
+        agentsQuery = agentsQuery.or(`scope.eq.global,business_id.eq.${businessId}`);
+      } else {
+        // No business selected: only global agents
+        agentsQuery = agentsQuery.eq('scope', 'global');
+      }
+      
+      const { data: agentsData, error: agentsError } = await agentsQuery;
       if (agentsError) throw agentsError;
       
-      const { data: tasksData, error: tasksError } = await supabase
+      // Fetch tasks
+      let tasksQuery = supabase
         .from('mc_tasks')
         .select('*')
-        .eq('business_id', selectedBusiness.id)
         .order('created_at', { ascending: false });
       
+      if (businessId) {
+        tasksQuery = tasksQuery.eq('business_id', businessId);
+      }
+      // If isAll or no business, get all tasks (no filter)
+      
+      const { data: tasksData, error: tasksError } = await tasksQuery;
       if (tasksError) throw tasksError;
       
-      const { data: activitiesData, error: activitiesError } = await supabase
+      // Fetch activities - ALWAYS global (all businesses)
+      // Scott wants to see all activity regardless of business selection
+      const activitiesQuery = supabase
         .from('mc_activities')
         .select('*')
-        .eq('business_id', selectedBusiness.id)
         .order('created_at', { ascending: false })
         .limit(50);
+      // No business filter - activities are always global
       
+      const { data: activitiesData, error: activitiesError } = await activitiesQuery;
       if (activitiesError) throw activitiesError;
       
       setAgents((agentsData as unknown as Agent[]) || []);
@@ -77,13 +97,16 @@ export default function MissionControl() {
   }, [fetchData]);
 
   // Real-time subscriptions
+  // Listen for global agents + business-specific data
   useEffect(() => {
-    if (!selectedBusiness?.id) return;
-    const businessId = selectedBusiness.id;
+    const isAll = selectedBusiness?.id === ALL_BUSINESSES_ID;
+    const businessId = (!isAll && selectedBusiness?.id) ? selectedBusiness.id : null;
+    const channelSuffix = isAll ? 'all' : (businessId || 'global');
 
-    const agentsChannel = supabase
-      .channel(`mc_agents_changes_${businessId}`)
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'mc_agents', filter: `business_id=eq.${businessId}` },
+    // Subscribe to global agents (always)
+    const globalAgentsChannel = supabase
+      .channel(`mc_agents_global_${channelSuffix}`)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'mc_agents', filter: `scope=eq.global` },
         (payload) => {
           if (payload.eventType === 'INSERT') setAgents(prev => [...prev, payload.new as Agent]);
           else if (payload.eventType === 'UPDATE') setAgents(prev => prev.map(a => a.id === (payload.new as Agent).id ? payload.new as Agent : a));
@@ -91,19 +114,54 @@ export default function MissionControl() {
         }
       ).subscribe();
 
+    // Subscribe to business-specific agents (if business selected, or all agents if "All" selected)
+    let businessAgentsChannel: ReturnType<typeof supabase.channel> | null = null;
+    if (isAll) {
+      // "All" mode: subscribe to ALL agent changes
+      businessAgentsChannel = supabase
+        .channel(`mc_agents_all`)
+        .on('postgres_changes', { event: '*', schema: 'public', table: 'mc_agents' },
+          (payload) => {
+            const agent = payload.new as Agent;
+            // Skip global agents (handled by global channel)
+            if ((agent as any).scope === 'global') return;
+            if (payload.eventType === 'INSERT') setAgents(prev => [...prev, agent]);
+            else if (payload.eventType === 'UPDATE') setAgents(prev => prev.map(a => a.id === agent.id ? agent : a));
+            else if (payload.eventType === 'DELETE') setAgents(prev => prev.filter(a => a.id !== (payload.old as Agent).id));
+          }
+        ).subscribe();
+    } else if (businessId) {
+      businessAgentsChannel = supabase
+        .channel(`mc_agents_business_${businessId}`)
+        .on('postgres_changes', { event: '*', schema: 'public', table: 'mc_agents', filter: `business_id=eq.${businessId}` },
+          (payload) => {
+            const agent = payload.new as Agent;
+            // Skip global agents (handled by global channel)
+            if ((agent as any).scope === 'global') return;
+            if (payload.eventType === 'INSERT') setAgents(prev => [...prev, agent]);
+            else if (payload.eventType === 'UPDATE') setAgents(prev => prev.map(a => a.id === agent.id ? agent : a));
+            else if (payload.eventType === 'DELETE') setAgents(prev => prev.filter(a => a.id !== (payload.old as Agent).id));
+          }
+        ).subscribe();
+    }
+
+    // Subscribe to tasks (filter by business if selected, or all if "All")
     const tasksChannel = supabase
-      .channel(`mc_tasks_changes_${businessId}`)
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'mc_tasks', filter: `business_id=eq.${businessId}` },
+      .channel(`mc_tasks_changes_${channelSuffix}`)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'mc_tasks', filter: businessId ? `business_id=eq.${businessId}` : undefined },
         (payload) => {
+          // Skip if business-filtered and doesn't match (not needed for "All" mode)
+          if (businessId && (payload.new as any)?.business_id !== businessId) return;
           if (payload.eventType === 'INSERT') setTasks(prev => [payload.new as Task, ...prev]);
           else if (payload.eventType === 'UPDATE') setTasks(prev => prev.map(t => t.id === (payload.new as Task).id ? payload.new as Task : t));
           else if (payload.eventType === 'DELETE') setTasks(prev => prev.filter(t => t.id !== (payload.old as Task).id));
         }
       ).subscribe();
 
+    // Subscribe to ALL activities (always global - Scott wants to see everything)
     const activitiesChannel = supabase
-      .channel(`mc_activities_changes_${businessId}`)
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'mc_activities', filter: `business_id=eq.${businessId}` },
+      .channel(`mc_activities_global`)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'mc_activities' },
         (payload) => {
           if (payload.eventType === 'INSERT') setActivities(prev => [payload.new as Activity, ...prev].slice(0, 50));
           else if (payload.eventType === 'UPDATE') setActivities(prev => prev.map(a => a.id === (payload.new as Activity).id ? payload.new as Activity : a));
@@ -112,7 +170,8 @@ export default function MissionControl() {
       ).subscribe();
 
     return () => {
-      supabase.removeChannel(agentsChannel);
+      supabase.removeChannel(globalAgentsChannel);
+      if (businessAgentsChannel) supabase.removeChannel(businessAgentsChannel);
       supabase.removeChannel(tasksChannel);
       supabase.removeChannel(activitiesChannel);
     };
@@ -153,14 +212,23 @@ export default function MissionControl() {
   const handleTaskClick = (task: Task) => console.log("Task clicked:", task);
   const handleAgentClick = (agent: Agent) => setSelectedAgent(selectedAgent?.id === agent.id ? null : agent);
 
+  // Check if "All Businesses" is selected
+  const isAllBusinessesSelected = selectedBusiness?.id === ALL_BUSINESSES_ID;
+
   return (
     <DashboardLayout
       selectedBusinessId={selectedBusiness?.id}
       onBusinessChange={(id) => {
-        const business = businesses.find(b => b.id === id);
-        if (business) setSelectedBusiness(business);
+        if (id === ALL_BUSINESSES_ID) {
+          // Set a special "all" business selection
+          setSelectedBusiness({ id: ALL_BUSINESSES_ID, name: "All Businesses" } as any);
+        } else {
+          const business = businesses.find(b => b.id === id);
+          if (business) setSelectedBusiness(business);
+        }
       }}
-      businessName={selectedBusiness?.name}
+      businessName={isAllBusinessesSelected ? "All Businesses" : selectedBusiness?.name}
+      showAllOption={true}
     >
       <PageContent>
         {/* Page Header */}

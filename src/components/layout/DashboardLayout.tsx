@@ -50,13 +50,15 @@ interface DashboardLayoutProps {
   selectedBusinessId?: string
   onBusinessChange?: (businessId: string) => void
   businessName?: string
+  showAllOption?: boolean
 }
 
 export function DashboardLayout({ 
   children, 
   selectedBusinessId, 
   onBusinessChange,
-  businessName 
+  businessName,
+  showAllOption = false
 }: DashboardLayoutProps) {
   const [isSuperAdmin, setIsSuperAdmin] = useState(false)
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false)
@@ -146,6 +148,7 @@ export function DashboardLayout({
               <BusinessSwitcher
                 selectedBusinessId={selectedBusinessId}
                 onBusinessChange={onBusinessChange}
+                showAllOption={showAllOption}
               />
             </div>
 

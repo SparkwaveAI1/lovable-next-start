@@ -43,6 +43,85 @@ interface Contact {
   last_name?: string;
   email?: string;
   phone?: string;
+  tags?: string[];
+}
+
+// Invalid US area codes (fake, reserved, or unusable for SMS)
+const INVALID_AREA_CODES = new Set([
+  '000', '111', '222', '333', '444', '555', '666', '777', '888', '999', // Repeated digits
+  '911', '411', '611', '711', '811', // Service codes
+  '100', '200', '300', '400', '500', '600', '700', '800', '900', // N00 codes (mostly special)
+]);
+
+// Blocked country codes (non-US/Canada that start with +1)
+const BLOCKED_COUNTRY_CODES = new Set([
+  '242', // Bahamas
+  '246', // Barbados
+  '264', // Anguilla
+  '268', // Antigua
+  '284', // British Virgin Islands
+  '340', // US Virgin Islands (high fraud)
+  '345', // Cayman Islands
+  '441', // Bermuda
+  '473', // Grenada
+  '649', // Turks and Caicos
+  '664', // Montserrat
+  '721', // Sint Maarten
+  '758', // Saint Lucia
+  '767', // Dominica
+  '784', // St Vincent
+  '809', // Dominican Republic
+  '829', // Dominican Republic
+  '849', // Dominican Republic
+  '868', // Trinidad and Tobago
+  '869', // St Kitts
+  '876', // Jamaica
+]);
+
+/**
+ * Validate phone number for US SMS delivery
+ * Returns { valid: boolean, reason?: string }
+ */
+function validatePhoneForSMS(phone: string | undefined | null): { valid: boolean; reason?: string } {
+  if (!phone) {
+    return { valid: false, reason: 'no_phone' };
+  }
+
+  // Must start with +1 (US/Canada)
+  if (!phone.startsWith('+1')) {
+    return { valid: false, reason: 'not_us_number' };
+  }
+
+  // Must be exactly 12 characters (+1 + 10 digits)
+  if (phone.length !== 12) {
+    return { valid: false, reason: 'invalid_length' };
+  }
+
+  // Must be all digits after +1
+  const digits = phone.slice(2);
+  if (!/^\d{10}$/.test(digits)) {
+    return { valid: false, reason: 'invalid_format' };
+  }
+
+  // Extract area code (first 3 digits after +1)
+  const areaCode = digits.slice(0, 3);
+
+  // Check for invalid/reserved area codes
+  if (INVALID_AREA_CODES.has(areaCode)) {
+    return { valid: false, reason: `invalid_area_code_${areaCode}` };
+  }
+
+  // Check for blocked Caribbean/international +1 codes
+  if (BLOCKED_COUNTRY_CODES.has(areaCode)) {
+    return { valid: false, reason: `blocked_region_${areaCode}` };
+  }
+
+  // Area code can't start with 0 or 1
+  if (areaCode.startsWith('0') || areaCode.startsWith('1')) {
+    return { valid: false, reason: 'invalid_area_code_start' };
+  }
+
+  return { valid: true };
 }
 
 // Personalize message template with contact data
@@ -70,7 +149,9 @@ serve(async (req) => {
     smsSent: 0,
     emailSent: 0,
     completed: 0,
+    skippedInvalidPhone: 0,
     errors: [] as string[],
+    invalidPhoneContacts: [] as { contactId: string; phone: string; reason: string }[],
   };
 
   try {
@@ -133,7 +214,7 @@ serve(async (req) => {
         // Get contact details
         const { data: contact, error: contactError } = await supabase
           .from('contacts')
-          .select('id, first_name, last_name, email, phone, sms_status, email_status')
+          .select('id, first_name, last_name, email, phone, sms_status, email_status, tags')
           .eq('id', followUp.contact_id)
           .single();
 
@@ -151,36 +232,80 @@ serve(async (req) => {
 
         // Send the message
         let sendSuccess = false;
+        let smsSkippedDueToInvalidPhone = false;
 
         if (step.channel === 'sms' && contact.phone && contact.sms_status !== 'opted_out') {
-          // Send SMS
-          console.log(`📱 Sending SMS to ${contact.phone}`);
+          // Validate phone number before attempting SMS
+          const phoneValidation = validatePhoneForSMS(contact.phone);
           
-          const smsResponse = await fetch(`${Deno.env.get('SUPABASE_URL')}/functions/v1/send-sms`, {
-            method: 'POST',
-            headers: {
-              'Authorization': `Bearer ${Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')}`,
-              'Content-Type': 'application/json',
-            },
-            body: JSON.stringify({
-              to: contact.phone,
-              message: message,
-              businessId: followUp.business_id,
+          if (!phoneValidation.valid) {
+            // Invalid phone - log it and mark the contact
+            console.warn(`⚠️ Invalid phone for SMS: ${contact.phone} (${phoneValidation.reason})`);
+            results.skippedInvalidPhone++;
+            results.invalidPhoneContacts.push({
               contactId: contact.id,
-            }),
-          });
+              phone: contact.phone,
+              reason: phoneValidation.reason || 'unknown',
+            });
+            smsSkippedDueToInvalidPhone = true;
 
-          if (smsResponse.ok) {
-            sendSuccess = true;
-            results.smsSent++;
-            console.log(`✅ SMS sent to ${contact.phone}`);
+            // Add "invalid_phone" tag to contact if not already present
+            const currentTags = contact.tags || [];
+            if (!currentTags.includes('invalid_phone')) {
+              await supabase
+                .from('contacts')
+                .update({ tags: [...currentTags, 'invalid_phone'] })
+                .eq('id', contact.id);
+              console.log(`🏷️ Added 'invalid_phone' tag to contact ${contact.id}`);
+            }
+
+            // Log the skip to automation_logs
+            await supabase.from('automation_logs').insert({
+              business_id: followUp.business_id,
+              automation_type: 'sms_skipped_invalid_phone',
+              status: 'skipped',
+              processed_data: {
+                contact_id: contact.id,
+                phone: contact.phone,
+                reason: phoneValidation.reason,
+                sequence_id: followUp.sequence_id,
+                step_order: nextStepOrder,
+              },
+            });
+
+            // Fall through to try email fallback below
           } else {
-            const errorText = await smsResponse.text();
-            console.error(`❌ SMS failed: ${errorText}`);
-            results.errors.push(`SMS failed for ${contact.id}: ${errorText}`);
-          }
+            // Valid phone - send SMS
+            console.log(`📱 Sending SMS to ${contact.phone}`);
+            
+            const smsResponse = await fetch(`${Deno.env.get('SUPABASE_URL')}/functions/v1/send-sms`, {
+              method: 'POST',
+              headers: {
+                'Authorization': `Bearer ${Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')}`,
+                'Content-Type': 'application/json',
+              },
+              body: JSON.stringify({
+                to: contact.phone,
+                message: message,
+                businessId: followUp.business_id,
+                contactId: contact.id,
+              }),
+            });
 
-        } else if (step.channel === 'email' && contact.email && contact.email_status !== 'unsubscribed') {
+            if (smsResponse.ok) {
+              sendSuccess = true;
+              results.smsSent++;
+              console.log(`✅ SMS sent to ${contact.phone}`);
+            } else {
+              const errorText = await smsResponse.text();
+              console.error(`❌ SMS failed: ${errorText}`);
+              results.errors.push(`SMS failed for ${contact.id}: ${errorText}`);
+            }
+          }
+        }
+        
+        // Handle email channel OR fallback from invalid SMS phone
+        if (!sendSuccess && (step.channel === 'email' || smsSkippedDueToInvalidPhone) && contact.email && contact.email_status !== 'unsubscribed') {
           // Send Email
           console.log(`📧 Sending email to ${contact.email}`);
 
@@ -224,60 +349,17 @@ serve(async (req) => {
             results.errors.push(`Email failed for ${contact.id}: ${errorText}`);
           }
 
-        } else {
-          // Can't send via preferred channel - try fallback or pause
+        } else if (!sendSuccess) {
+          // Can't send via preferred channel and no fallback worked
           console.warn(`⚠️ Cannot send ${step.channel} to contact ${contact.id} - missing info or opted out`);
           
-          // Try email as fallback if SMS failed and contact has email
-          if (step.channel === 'sms' && contact.email && contact.email_status !== 'unsubscribed') {
-            console.log(`📧 Falling back to email for ${contact.email}`);
-            
-            const { data: business } = await supabase
-              .from('businesses')
-              .select('name')
-              .eq('id', followUp.business_id)
-              .single();
-
-            const { data: agentConfig } = await supabase
-              .from('agent_config')
-              .select('from_email, from_name')
-              .eq('business_id', followUp.business_id)
-              .single();
-
-            const emailResponse = await fetch(`${Deno.env.get('SUPABASE_URL')}/functions/v1/send-email`, {
-              method: 'POST',
-              headers: {
-                'Authorization': `Bearer ${Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')}`,
-                'Content-Type': 'application/json',
-              },
-              body: JSON.stringify({
-                to: contact.email,
-                subject: 'Following up',
-                html: message,
-                from_email: agentConfig?.from_email,
-                from_name: agentConfig?.from_name || business?.name,
-                contact_id: contact.id,
-              }),
-            });
-
-            if (emailResponse.ok) {
-              sendSuccess = true;
-              results.emailSent++;
-              console.log(`✅ Fallback email sent to ${contact.email}`);
-            } else {
-              const errorText = await emailResponse.text();
-              console.error(`❌ Fallback email failed: ${errorText}`);
-              results.errors.push(`Fallback email failed for ${contact.id}: ${errorText}`);
-            }
-          } else {
-            // No fallback available - pause the follow-up
-            console.warn(`⏸️ Pausing follow-up for ${contact.id} - no valid channel`);
-            await supabase
-              .from('contact_follow_ups')
-              .update({ status: 'paused' })
-              .eq('id', followUp.id);
-            results.errors.push(`Paused follow-up for ${contact.id} - no valid channel`);
-          }
+          // No fallback available - pause the follow-up
+          console.warn(`⏸️ Pausing follow-up for ${contact.id} - no valid channel`);
+          await supabase
+            .from('contact_follow_ups')
+            .update({ status: 'paused' })
+            .eq('id', followUp.id);
+          results.errors.push(`Paused follow-up for ${contact.id} - no valid channel`);
         }
 
         // Update the follow-up record
