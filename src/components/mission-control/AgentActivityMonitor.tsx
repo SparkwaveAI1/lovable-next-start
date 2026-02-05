@@ -19,13 +19,14 @@ export interface ActiveAgentTask {
   agent_name: string;
   agent_type: 'primary' | 'subagent' | 'builtin';
   task_description: string;
-  status: 'running' | 'waiting' | 'completed' | 'error';
+  status: 'running' | 'waiting' | 'completed' | 'error' | 'stale';
   started_at: string;
   completed_at: string | null;
   progress: number | null;
   metadata: Record<string, unknown> | null;
   parent_agent_id: string | null;
   created_at: string;
+  updated_at: string | null;
 }
 
 interface AgentActivityMonitorProps {
@@ -51,7 +52,19 @@ function formatDuration(startTime: string): string {
   }
 }
 
-function getStatusIcon(status: ActiveAgentTask['status']) {
+function isStale(task: ActiveAgentTask): boolean {
+  const lastUpdate = task.updated_at || task.started_at;
+  const updateTime = new Date(lastUpdate);
+  const now = new Date();
+  const diffMs = now.getTime() - updateTime.getTime();
+  const diffMins = diffMs / (1000 * 60);
+  return diffMins > 30; // Stale after 30 minutes
+}
+
+function getStatusIcon(status: ActiveAgentTask['status'], stale: boolean = false) {
+  if (stale) {
+    return <AlertCircle className="h-4 w-4 text-slate-400" />;
+  }
   switch (status) {
     case 'running':
       return <Loader2 className="h-4 w-4 text-blue-500 animate-spin" />;
@@ -60,11 +73,15 @@ function getStatusIcon(status: ActiveAgentTask['status']) {
     case 'completed':
       return <CheckCircle2 className="h-4 w-4 text-emerald-500" />;
     case 'error':
+    case 'stale':
       return <AlertCircle className="h-4 w-4 text-red-500" />;
   }
 }
 
-function getStatusColor(status: ActiveAgentTask['status']) {
+function getStatusColor(status: ActiveAgentTask['status'], stale: boolean = false) {
+  if (stale) {
+    return 'bg-slate-50 border-slate-300 opacity-60';
+  }
   switch (status) {
     case 'running':
       return 'bg-blue-50 border-blue-200';
@@ -73,6 +90,7 @@ function getStatusColor(status: ActiveAgentTask['status']) {
     case 'completed':
       return 'bg-emerald-50 border-emerald-200';
     case 'error':
+    case 'stale':
       return 'bg-red-50 border-red-200';
   }
 }
@@ -239,12 +257,14 @@ export function AgentActivityMonitor({ className, agents: externalAgents = [] }:
             )}
           </div>
         ) : (
-          tasks.map((task) => (
+          tasks.map((task) => {
+            const stale = isStale(task);
+            return (
             <div
               key={task.id}
               className={cn(
                 "p-3 rounded-lg border transition-all",
-                getStatusColor(task.status)
+                getStatusColor(task.status, stale)
               )}
             >
               {/* Header row: agent name + type + status */}
@@ -256,9 +276,9 @@ export function AgentActivityMonitor({ className, agents: externalAgents = [] }:
                   {getAgentTypeBadge(task.agent_type)}
                 </div>
                 <div className="flex items-center gap-1.5 shrink-0">
-                  {getStatusIcon(task.status)}
+                  {getStatusIcon(task.status, stale)}
                   <span className="text-xs text-slate-500 capitalize">
-                    {task.status}
+                    {stale ? 'Stale' : task.status}
                   </span>
                 </div>
               </div>
@@ -270,9 +290,10 @@ export function AgentActivityMonitor({ className, agents: externalAgents = [] }:
 
               {/* Footer: duration + progress */}
               <div className="flex items-center justify-between text-xs">
-                <span className="text-slate-400 flex items-center gap-1">
+                <span className={cn("flex items-center gap-1", stale ? "text-red-400" : "text-slate-400")}>
                   <Clock className="h-3 w-3" />
-                  {formatDuration(task.started_at)}
+                  {formatDuration(task.updated_at || task.started_at)}
+                  {stale && " (stale)"}
                 </span>
                 
                 {task.progress !== null && (
@@ -288,7 +309,8 @@ export function AgentActivityMonitor({ className, agents: externalAgents = [] }:
                 )}
               </div>
             </div>
-          ))
+          );
+          })
         )}
       </div>
     </div>

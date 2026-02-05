@@ -22,6 +22,7 @@ import EmailMarketing from "./pages/EmailMarketing";
 import MissionControl from "./pages/MissionControl";
 import AgentRegistry from "./pages/AgentRegistry";
 import Bookings from "./pages/Bookings";
+import Book from "./pages/Book";
 import Reports from "./pages/Reports";
 import Docs from "./pages/Docs";
 import Investments from "./pages/Investments";
@@ -44,6 +45,7 @@ const App = () => (
             <AssistantButton />
             <Routes>
             <Route path="/auth" element={<Auth />} />
+            <Route path="/book" element={<Book />} />
             <Route path="/crisis-monitor" element={<CrisisMonitor />} />
             <Route path="/upload" element={<EmployeeUpload />} />
             <Route path="/" element={<ProtectedRoute><ErrorBoundary><Index /></ErrorBoundary></ProtectedRoute>} />
