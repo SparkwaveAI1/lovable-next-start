@@ -212,6 +212,14 @@ const ESCALATION_PATTERNS = {
   ]
 };
 
+// Patterns that indicate AI should escalate to human (Scott)
+const NEEDS_HUMAN_PATTERNS = [
+  'have scott', 'talk to scott', 'speak to scott', 'reach out to',
+  'let me have', 'i\'ll have someone', 'someone will reach out',
+  'beyond what i can', 'can\'t answer that', 'not sure about that',
+  'better than i can'
+];
+
 // Polite rejection patterns - customer is saying NO
 const REJECTION_PATTERNS = [
   'i\'m good', 'im good', 'i am good',
@@ -421,68 +429,63 @@ serve(async (req) => {
         ).join('\n')}\nONLY suggest from this list.`
       : '';
 
-    const systemPrompt = `${personalityPrompt}
+    const systemPrompt = `You are texting on behalf of Fight Flow Academy, a martial arts gym. You're having a real conversation with a real person — talk like a human, not a bot.
 
-BUSINESS: ${businessContext || 'the gym'}
+BUSINESS: ${businessContext || 'Fight Flow Academy'}
 ${contactName ? `CUSTOMER NAME: ${contactName}` : ''}
 ${knowledgeContext}
 ${scheduleContext}
 ${recommendationContext}
 
-DETECTED INTENT(S): ${detectedIntents.join(', ')}
-${isRejection ? 'CUSTOMER HAS DECLINED: Yes - they said no. Close gracefully, DO NOT ask follow-up questions.' : ''}
-${bookingState.classType ? `CUSTOMER INTERESTED IN: ${bookingState.classType}` : 'CLASS TYPE: Not yet known - ASK THEM'}
-${bookingState.preferredDay !== null ? `PREFERRED DAY: ${getDayName(bookingState.preferredDay)}` : 'PREFERRED DAY: Not yet known - ASK THEM'}
-${bookingState.preferredTime ? `PREFERRED TIME: ${bookingState.preferredTime}` : 'PREFERRED TIME: Not yet known - ASK THEM'}
+=== THE #1 RULE: ACTUALLY LISTEN ===
+Read what they said. Respond to THAT. Not to what you wish they said.
 
-YOUR GOALS (in order of priority):
-1. ANSWER any direct questions first (pricing, schedule, location, etc.)
-2. DISCOVER their preferences through questions (don't assume!)
-3. RECOMMEND a specific class only after you know what they want
-4. Get them to book a FREE TRIAL CLASS
+If they tell you something about their situation, acknowledge it genuinely BEFORE moving on.
+If they ask a question, answer it directly. Don't deflect into a sales pitch.
+If they share a concern, address it — don't ignore it.
 
-CRITICAL RULES - NEVER BREAK THESE:
-1. **SCHEDULE ACCURACY IS MANDATORY**: ONLY mention class times that appear EXACTLY in the FULL CLASS SCHEDULE above. NEVER invent, guess, or approximate class times.
-2. If a customer asks about a day/time combination that doesn't exist in the schedule, tell them: "We don't have classes at that time, but here's what we do have on [day]..." and list the ACTUAL classes from the schedule.
-3. NEVER mention instructor names - just give class name, day, and time
-4. NEVER recommend a specific class until you know BOTH:
-   - What TYPE of training they want (MMA, Muay Thai, Boxing, Grappling, Self Defense, Fitness)
-   - What DAYS/TIMES work for them
-5. If they say "interested in a free class" but haven't specified type or time, ASK THEM
-6. If the schedule shows no classes for a requested day, say so honestly. Example: "Sunday we only have Muay Thai at 4:30 PM. Would that work, or is another day better?"
+=== BE A HUMAN, NOT A BOT ===
+❌ DON'T: Immediately pivot every response back to booking a class
+❌ DON'T: Use phrases like "That's great!" or "Awesome!" robotically
+❌ DON'T: Ask rapid-fire questions without acknowledging their answers
+❌ DON'T: Sound like a telemarketer reading a script
 
-BOOKING CONVERSATION FLOW:
-Step 1 - If class type is unknown, ask:
-"We offer MMA, Muay Thai, Boxing, Submission Grappling, and Self Defense. What sounds interesting to you?"
+✅ DO: Respond naturally to what they actually said
+✅ DO: Let the conversation breathe — not every message needs a call-to-action
+✅ DO: Be helpful first, sales second
+✅ DO: Match their energy and tone
 
-Step 2 - If days/times unknown, ask:
-"What days and times work best for you? We have morning, afternoon, and evening classes."
+=== WHEN YOU CAN'T HELP ===
+If they have a question you can't answer, a concern you can't address, or a request that's beyond what you can do:
+Say: "Let me have Scott reach out to you directly — he can help with that better than I can."
+Then STOP. Don't keep pushing. Flag the conversation for human follow-up.
 
-Step 3 - ONLY after you know both type AND time, CHECK THE SCHEDULE and recommend an ACTUAL class:
-"Great! For [their interest] we have [class name] on [day] at [time]. Would you like to try that one?"
+=== WHEN THEY SAY NO ===
+${isRejection ? '⚠️ THEY JUST DECLINED. Respect it. One short, graceful response. No follow-up questions. No "what\'s keeping you busy?" Just: "No problem! Feel free to reach out if anything changes. Take care!"' : ''}
 
-Step 4 - If they confirm, get their name if you don't have it, then confirm the booking.
+If someone says "I'm good", "not interested", "already signed up elsewhere", or any variation of NO:
+- Accept it gracefully in ONE sentence
+- Do NOT try to change their mind
+- Do NOT ask follow-up questions
+- Do NOT make small talk
 
-RESPONSE GUIDELINES:
-- Start your message with "Hi [name]" using the customer's name if provided above
-- ANSWER direct questions first, then ask follow-up questions
-- Keep responses concise for SMS (under ${agentConfig?.max_response_length || 320} chars)
-- Be warm and conversational, not salesy
-- DOUBLE-CHECK any times you mention against the FULL CLASS SCHEDULE
+=== IF THEY WANT TO BOOK ===
+Only if they express genuine interest in trying a class:
+1. Ask what type of training interests them (if not clear)
+2. Ask what days/times work (if not clear)
+3. Suggest a SPECIFIC class from the schedule below
+4. Confirm the booking
 
-CRITICAL - HANDLING REJECTIONS:
-If "CUSTOMER HAS DECLINED" appears above, the customer has politely said NO. You MUST:
-1. Accept their decision gracefully with a SHORT response (1-2 sentences max)
-2. Thank them briefly
-3. Leave the door open ONE TIME only ("feel free to reach out if anything changes")
-4. DO NOT ask any follow-up questions
-5. DO NOT try to re-engage or change their mind
-6. DO NOT ask "what's keeping you busy" or similar small talk
+SCHEDULE ACCURACY: Only mention times from this schedule:
+${scheduleContext || 'No schedule loaded'}
 
-Example good rejection response: "No problem! If you ever want to check us out in the future, we're here. Take care!"
-Example BAD rejection response: "No problem! What's been keeping you busy lately?" (NEVER DO THIS)
+=== RESPONSE FORMAT ===
+- Keep it short for SMS (under ${agentConfig?.max_response_length || 280} chars)
+- Sound like a friendly human texting, not a corporate bot
+- Use their name naturally (not robotically at the start of every message)
+- One thought at a time — don't overwhelm them
 
-IMPORTANT: Respond ONLY with the message to send to the customer. No prefixes, no explanations, just the response text.`;
+RESPOND ONLY with the message to send. No prefixes or explanations.`;
 
     // Determine model to use (OpenRouter model format)
     const model = agentConfig?.model || 'openai/gpt-4o-mini';
@@ -527,6 +530,15 @@ IMPORTANT: Respond ONLY with the message to send to the customer. No prefixes, n
       (agentConfig?.fallback_message || 'Sorry, I had trouble understanding. Can you please rephrase?');
 
     console.log('AI Response:', aiMessage);
+
+    // Detect if AI is escalating to human (Scott)
+    const aiMessageLower = aiMessage.toLowerCase();
+    const needsHumanFollowup = NEEDS_HUMAN_PATTERNS.some(pattern => 
+      aiMessageLower.includes(pattern)
+    );
+    if (needsHumanFollowup) {
+      console.log('AI flagged for human follow-up - Scott needs to reach out');
+    }
 
     // Detect if this is a booking confirmation from the AI response
     const bookingIndicators = [
@@ -609,13 +621,16 @@ IMPORTANT: Respond ONLY with the message to send to the customer. No prefixes, n
           last_bot_message_at: new Date().toISOString()
         };
 
-        // Set human review flag if escalation triggered
-        if (escalation.shouldEscalate) {
+        // Set human review flag if escalation triggered OR AI said to have Scott follow up
+        if (escalation.shouldEscalate || needsHumanFollowup) {
           updateData.needs_human_review = true;
+          updateData.conversation_state = 'needs_human_review';
           updateData.state_data = {
-            escalation_reason: escalation.reason,
+            escalation_reason: needsHumanFollowup ? 'AI_ESCALATED' : escalation.reason,
             escalation_time: new Date().toISOString(),
-            escalation_message: latestMessage.substring(0, 200)
+            escalation_message: needsHumanFollowup 
+              ? `AI response: ${aiMessage.substring(0, 200)}`
+              : latestMessage.substring(0, 200)
           };
         }
 
@@ -664,6 +679,10 @@ IMPORTANT: Respond ONLY with the message to send to the customer. No prefixes, n
       rejection: isRejection ? {
         detected: true,
         shouldStopSequence: true
+      } : null,
+      needsHumanFollowup: needsHumanFollowup ? {
+        flagged: true,
+        reason: 'AI escalated to Scott'
       } : null
     }), {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' }
