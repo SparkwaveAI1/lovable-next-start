@@ -99,6 +99,21 @@ export function useRunScreener() {
       const { data: { session } } = await supabase.auth.getSession();
       if (!session) throw new Error('Not authenticated');
 
+      // Transform rules to API format
+      const apiRules = profile.rules.map(rule => ({
+        field: rule.field === 'rsi' ? `rsi_${rule.period || 14}` :
+               rule.field === 'sma' ? `sma_${rule.period || 50}` :
+               rule.field === 'ema' ? `ema_${rule.period || 20}` :
+               rule.field === 'change_percent' ? 'changePercent' :
+               rule.field,
+        operator: rule.operator === '>' ? 'gt' :
+                  rule.operator === '<' ? 'lt' :
+                  rule.operator === '>=' ? 'gte' :
+                  rule.operator === '<=' ? 'lte' :
+                  rule.operator === '=' ? 'eq' : 'between',
+        value: rule.operator === 'between' ? [rule.value, rule.value2 || rule.value] : rule.value,
+      }));
+
       const response = await fetch(
         `${SUPABASE_URL}/functions/v1/screener-engine/run`,
         {
@@ -107,7 +122,13 @@ export function useRunScreener() {
             'Authorization': `Bearer ${session.access_token}`,
             'Content-Type': 'application/json',
           },
-          body: JSON.stringify(profile),
+          body: JSON.stringify({
+            rules: apiRules,
+            logic: profile.logic === 'all' ? 'AND' : 'OR',
+            assetTypes: profile.assetTypes,
+            universe: 'popular', // Use popular universe to search real securities
+            limit: 50,
+          }),
         }
       );
 
@@ -117,7 +138,18 @@ export function useRunScreener() {
       }
 
       const data = await response.json();
-      return data.results || [];
+      
+      // Transform API response to expected format
+      return (data.matches || []).map((match: any) => ({
+        symbol: match.symbol,
+        name: match.symbol, // API doesn't return name, use symbol
+        type: match.assetType,
+        price: match.price,
+        change: 0, // Not returned by API
+        changePercent: match.matchedValues?.changePercent || 0,
+        volume: 0, // Not returned by API
+        matchedIndicators: match.matchedValues || {},
+      }));
     },
   });
 }

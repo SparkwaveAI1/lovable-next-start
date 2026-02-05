@@ -94,6 +94,9 @@ export function ScottsActionItems({ tasks, className, onTaskClick }: ScottsActio
     return ownerType === 'human' || ownerType === 'cooperative' || isBlockedOnScott(task);
   });
 
+  // DEBUG: Log counts to console
+  console.log('[ScottsActionItems] Total tasks:', tasks.length, '| Scott tasks:', scottTasks.length);
+
   // Sort: blocked items first, then by priority
   const sortedTasks = [...scottTasks].sort((a, b) => {
     const aBlocked = isBlockedOnScott(a) ? 0 : 1;
