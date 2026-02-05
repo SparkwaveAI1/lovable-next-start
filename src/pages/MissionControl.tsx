@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback } from "react";
 import { DashboardLayout } from "@/components/layout/DashboardLayout";
 import { PageContent } from "@/components/layout/PageLayout";
-import { AgentCard, KanbanBoard, ActivityFeed, StatsBar, RicoChat, RicoChatModal, ScottsActionItems, AgentActivityMonitor } from "@/components/mission-control";
+import { AgentCard, KanbanBoard, ActivityFeed, StatsBar, RicoChat, RicoChatModal, ScottsActionItems, AgentActivityMonitor, HealthDashboard } from "@/components/mission-control";
 import { useBusinessContext } from "@/contexts/BusinessContext";
 import { useBusinesses } from "@/hooks/useBusinesses";
 import { supabase } from "@/integrations/supabase/client";
@@ -240,6 +240,11 @@ export default function MissionControl() {
             tasks={tasks}
             onTaskClick={handleTaskClick}
           />
+        </div>
+
+        {/* System Health Dashboard */}
+        <div className="mb-6">
+          <HealthDashboard />
         </div>
 
         {/* Activity Feed */}

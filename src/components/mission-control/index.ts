@@ -7,3 +7,5 @@ export { RicoChat, RicoChatModal } from './RicoChat';
 export { AgentList } from './AgentList';
 export { AgentActivityMonitor } from './AgentActivityMonitor';
 export type { ActiveAgentTask } from './AgentActivityMonitor';
+export { ScottsActionItems } from './ScottsActionItems';
+export { HealthDashboard } from './HealthDashboard';
