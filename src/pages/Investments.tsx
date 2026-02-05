@@ -10,6 +10,7 @@ import { CreateWatchlistDialog } from '@/components/investments/CreateWatchlistD
 import { useBusinessContext } from '@/contexts/BusinessContext';
 import { useWatchlists, useRemoveSymbol, useCreateWatchlist } from '@/hooks/useWatchlists';
 import { useMixedQuotes, QuoteData } from '@/hooks/useMarketData';
+import { useMixedHistory } from '@/hooks/useSymbolHistory';
 import { Plus, LayoutGrid, List, Loader2, AlertCircle, RefreshCw } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -62,6 +63,13 @@ export default function Investments() {
     isLoading: quotesLoading,
     refetch: refetchQuotes,
   } = useMixedQuotes(allSymbolsWithTypes);
+
+  // Fetch historical data for sparklines (crypto only for now, has easier API)
+  const cryptoSymbolsForHistory = allSymbolsWithTypes.filter(s => s.assetType === 'crypto');
+  const {
+    data: historyData,
+    isLoading: historyLoading,
+  } = useMixedHistory(cryptoSymbolsForHistory, 7);
 
   // Mutations
   const removeSymbolMutation = useRemoveSymbol();
@@ -302,6 +310,8 @@ export default function Investments() {
                     onAddSymbol={() => handleAddSymbol(watchlist.id)}
                     onRemoveSymbol={(symbol) => handleRemoveSymbol(watchlist.id, symbol)}
                     isLoadingQuotes={quotesLoading}
+                    historyData={historyData || {}}
+                    isLoadingHistory={historyLoading}
                   />
                 ))}
               </div>
@@ -310,6 +320,8 @@ export default function Investments() {
                 items={allItems}
                 onRemoveSymbol={(watchlistId, symbol) => handleRemoveSymbol(watchlistId, symbol)}
                 isLoadingQuotes={quotesLoading}
+                historyData={historyData || {}}
+                isLoadingHistory={historyLoading}
               />
             )}
           </TabsContent>

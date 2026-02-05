@@ -120,6 +120,19 @@ export function WatchlistTable({
                     {item.watchlistName}
                   </Badge>
                 </TableCell>
+                <TableCell className="text-center">
+                  <div className="flex justify-center">
+                    <SparklineChart
+                      data={historyData[item.symbol.toUpperCase()] || []}
+                      color={historyData[item.symbol.toUpperCase()] 
+                        ? getSparklineColor(historyData[item.symbol.toUpperCase()]) 
+                        : 'neutral'}
+                      width={50}
+                      height={20}
+                      isLoading={isLoadingHistory}
+                    />
+                  </div>
+                </TableCell>
                 <TableCell className="text-right font-medium">
                   {isLoadingQuotes ? (
                     <Skeleton className="h-5 w-20 ml-auto" />
