@@ -225,9 +225,59 @@ serve(async (req) => {
           }
 
         } else {
-          // Can't send - no valid channel
+          // Can't send via preferred channel - try fallback or pause
           console.warn(`⚠️ Cannot send ${step.channel} to contact ${contact.id} - missing info or opted out`);
-          results.errors.push(`Cannot send ${step.channel} to ${contact.id}`);
+          
+          // Try email as fallback if SMS failed and contact has email
+          if (step.channel === 'sms' && contact.email && contact.email_status !== 'unsubscribed') {
+            console.log(`📧 Falling back to email for ${contact.email}`);
+            
+            const { data: business } = await supabase
+              .from('businesses')
+              .select('name')
+              .eq('id', followUp.business_id)
+              .single();
+
+            const { data: agentConfig } = await supabase
+              .from('agent_config')
+              .select('from_email, from_name')
+              .eq('business_id', followUp.business_id)
+              .single();
+
+            const emailResponse = await fetch(`${Deno.env.get('SUPABASE_URL')}/functions/v1/send-email`, {
+              method: 'POST',
+              headers: {
+                'Authorization': `Bearer ${Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')}`,
+                'Content-Type': 'application/json',
+              },
+              body: JSON.stringify({
+                to: contact.email,
+                subject: 'Following up',
+                html: message,
+                from_email: agentConfig?.from_email,
+                from_name: agentConfig?.from_name || business?.name,
+                contact_id: contact.id,
+              }),
+            });
+
+            if (emailResponse.ok) {
+              sendSuccess = true;
+              results.emailSent++;
+              console.log(`✅ Fallback email sent to ${contact.email}`);
+            } else {
+              const errorText = await emailResponse.text();
+              console.error(`❌ Fallback email failed: ${errorText}`);
+              results.errors.push(`Fallback email failed for ${contact.id}: ${errorText}`);
+            }
+          } else {
+            // No fallback available - pause the follow-up
+            console.warn(`⏸️ Pausing follow-up for ${contact.id} - no valid channel`);
+            await supabase
+              .from('contact_follow_ups')
+              .update({ status: 'paused' })
+              .eq('id', followUp.id);
+            results.errors.push(`Paused follow-up for ${contact.id} - no valid channel`);
+          }
         }
 
         // Update the follow-up record
