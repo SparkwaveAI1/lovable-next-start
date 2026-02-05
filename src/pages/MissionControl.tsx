@@ -214,8 +214,9 @@ export default function MissionControl() {
   const kanbanTasks = (() => {
     let filtered = tasks;
     // Filter by business for Kanban (unless "All" is selected)
+    // STRICT: Only show tasks for THIS business, not null/global tasks
     if (!isAllBusinessesSelected && selectedBusiness?.id) {
-      filtered = filtered.filter(t => t.business_id === selectedBusiness.id || t.business_id === null);
+      filtered = filtered.filter(t => t.business_id === selectedBusiness.id);
     }
     // Filter by selected agent if applicable
     if (selectedAgent) {
@@ -296,7 +297,7 @@ export default function MissionControl() {
                   </span>
                 )}
               </div>
-              <span className="text-xs text-slate-400">{tasks.length} tasks total</span>
+              <span className="text-xs text-slate-400">{kanbanTasks.length} tasks for this business</span>
             </div>
             <KanbanBoard
               tasks={kanbanTasks}
