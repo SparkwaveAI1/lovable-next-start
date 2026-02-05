@@ -712,6 +712,62 @@ async function handleTest(body: {
   })
 }
 
+// ============ STATUS HANDLER ============
+
+async function handleStatus(): Promise<Response> {
+  try {
+    // Get alert counts
+    const { count: totalCount } = await supabase
+      .from('investment_alerts')
+      .select('*', { count: 'exact', head: true })
+    
+    const { count: activeCount } = await supabase
+      .from('investment_alerts')
+      .select('*', { count: 'exact', head: true })
+      .eq('is_active', true)
+    
+    // Get recent trigger events (last 24h)
+    const oneDayAgo = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString()
+    const { count: triggeredLast24h } = await supabase
+      .from('alert_events')
+      .select('*', { count: 'exact', head: true })
+      .gte('triggered_at', oneDayAgo)
+    
+    // Get most recent trigger
+    const { data: recentEvent } = await supabase
+      .from('alert_events')
+      .select('triggered_at')
+      .order('triggered_at', { ascending: false })
+      .limit(1)
+      .single()
+    
+    return new Response(JSON.stringify({
+      service: 'alert-evaluator',
+      status: 'healthy',
+      stats: {
+        totalAlerts: totalCount || 0,
+        activeAlerts: activeCount || 0,
+        triggeredLast24h: triggeredLast24h || 0,
+        lastTrigger: recentEvent?.triggered_at || null
+      },
+      timestamp: new Date().toISOString()
+    }), {
+      status: 200,
+      headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+    })
+  } catch (error) {
+    console.error('Status check error:', error)
+    return new Response(JSON.stringify({
+      service: 'alert-evaluator',
+      status: 'error',
+      error: error instanceof Error ? error.message : 'Unknown error'
+    }), {
+      status: 500,
+      headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+    })
+  }
+}
+
 // ============ MAIN HANDLER ============
 
 Deno.serve(async (req) => {
@@ -771,14 +827,15 @@ Deno.serve(async (req) => {
       default:
         return new Response(JSON.stringify({
           service: 'alert-evaluator',
-          version: '1.0.0',
+          version: '1.1.0',
           description: 'Investment alert evaluation engine with workflow integration',
           endpoints: [
             'POST /evaluate - Evaluate all active alerts',
             'POST /evaluate-single - Evaluate a specific alert { alertId }',
-            'POST /test - Test a condition without triggering { symbol, assetType, condition }'
+            'POST /test - Test a condition without triggering { symbol, assetType, condition }',
+            'GET /status - Get evaluation statistics and service health'
           ],
-          tasks: ['INV-056', 'INV-057', 'INV-058', 'INV-060'],
+          tasks: ['INV-046', 'INV-047', 'INV-048', 'INV-049', 'INV-050', 'INV-056', 'INV-057', 'INV-058', 'INV-060'],
           payloadSchema: {
             alertId: 'string',
             alertName: 'string',
