@@ -3,8 +3,49 @@ import { CSS } from "@dnd-kit/utilities";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { cn } from "@/lib/utils";
 import type { Task, TaskPriority, Agent } from "@/types/mission-control";
-import { Clock, Tag, GripVertical, FileText, ChevronDown, ChevronUp, ExternalLink } from "lucide-react";
+import { Clock, Tag, GripVertical, FileText, ChevronDown, ChevronUp, ExternalLink, Bot, User, Users } from "lucide-react";
 import { useState } from "react";
+
+type TaskOwner = 'agent' | 'human' | 'cooperative' | null;
+
+function getOwnerFromTags(tags: string[]): TaskOwner {
+  for (const tag of tags) {
+    if (tag === 'owner:agent') return 'agent';
+    if (tag === 'owner:human') return 'human';
+    if (tag === 'owner:cooperative') return 'cooperative';
+  }
+  return null;
+}
+
+const ownerConfig: Record<string, { 
+  borderColor: string; 
+  badgeBg: string; 
+  badgeText: string; 
+  label: string;
+  icon: React.ReactNode;
+}> = {
+  agent: {
+    borderColor: 'border-l-blue-500',
+    badgeBg: 'bg-blue-100',
+    badgeText: 'text-blue-700',
+    label: 'Rico',
+    icon: <Bot className="h-3 w-3" />,
+  },
+  human: {
+    borderColor: 'border-l-emerald-500',
+    badgeBg: 'bg-emerald-100',
+    badgeText: 'text-emerald-700',
+    label: 'Scott',
+    icon: <User className="h-3 w-3" />,
+  },
+  cooperative: {
+    borderColor: 'border-l-purple-500',
+    badgeBg: 'bg-purple-100',
+    badgeText: 'text-purple-700',
+    label: 'Co-op',
+    icon: <Users className="h-3 w-3" />,
+  },
+};
 
 interface TaskCardProps {
   task: Task;
@@ -88,6 +129,8 @@ function formatRelativeTime(dateString: string): string {
 export function TaskCard({ task, agents, onClick, isDragging }: TaskCardProps) {
   const [summaryExpanded, setSummaryExpanded] = useState(false);
   const priority = priorityConfig[task.priority];
+  const owner = getOwnerFromTags(task.tags);
+  const ownerStyle = owner ? ownerConfig[owner] : null;
   const assignees = agents.filter((a) => task.assignee_ids.includes(a.id));
   const hasDocument = !!task.document_url;
   const hasSummary = !!task.work_summary;
@@ -110,7 +153,7 @@ export function TaskCard({ task, agents, onClick, isDragging }: TaskCardProps) {
       className={cn(
         "rounded-lg border border-slate-200 border-l-4 p-3 cursor-pointer",
         "hover:shadow-md hover:border-slate-300 transition-all",
-        priority.className,
+        ownerStyle ? ownerStyle.borderColor : priority.className,
         priority.cardBg || "bg-white",
         isDragging && "shadow-xl ring-2 ring-violet-400 opacity-90 rotate-2"
       )}
@@ -118,8 +161,8 @@ export function TaskCard({ task, agents, onClick, isDragging }: TaskCardProps) {
       {/* Header with priority and drag handle */}
       <div className="flex items-start gap-2">
         <div className="flex-1">
-          {/* Priority pill tag + Title */}
-          <div className="flex items-center gap-2 mb-1">
+          {/* Priority pill tag + Owner badge + Title */}
+          <div className="flex items-center gap-1.5 mb-1 flex-wrap">
             <span className={cn(
               "inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-semibold",
               priority.tagBg,
@@ -127,6 +170,16 @@ export function TaskCard({ task, agents, onClick, isDragging }: TaskCardProps) {
             )}>
               {priority.label}
             </span>
+            {ownerStyle && (
+              <span className={cn(
+                "inline-flex items-center gap-0.5 px-2 py-0.5 rounded-full text-[10px] font-semibold",
+                ownerStyle.badgeBg,
+                ownerStyle.badgeText
+              )}>
+                {ownerStyle.icon}
+                {ownerStyle.label}
+              </span>
+            )}
             <h4 className="font-medium text-slate-900 text-sm line-clamp-2">
               {task.title}
             </h4>
@@ -143,9 +196,9 @@ export function TaskCard({ task, agents, onClick, isDragging }: TaskCardProps) {
       )}
 
       {/* Tags */}
-      {task.tags.length > 0 && (
+      {task.tags.filter(t => !t.startsWith('owner:')).length > 0 && (
         <div className="flex flex-wrap gap-1 mb-2 ml-5">
-          {task.tags.slice(0, 3).map((tag) => (
+          {task.tags.filter(t => !t.startsWith('owner:')).slice(0, 3).map((tag) => (
             <span
               key={tag}
               className="inline-flex items-center gap-0.5 text-[10px] px-1.5 py-0.5 rounded bg-slate-100 text-slate-600"
@@ -154,8 +207,8 @@ export function TaskCard({ task, agents, onClick, isDragging }: TaskCardProps) {
               {tag}
             </span>
           ))}
-          {task.tags.length > 3 && (
-            <span className="text-[10px] text-slate-400">+{task.tags.length - 3}</span>
+          {task.tags.filter(t => !t.startsWith('owner:')).length > 3 && (
+            <span className="text-[10px] text-slate-400">+{task.tags.filter(t => !t.startsWith('owner:')).length - 3}</span>
           )}
         </div>
       )}

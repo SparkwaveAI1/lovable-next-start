@@ -33,11 +33,11 @@ Deno.serve(async (req) => {
       case 'GET': {
         // Get messages, optionally filtered by task
         let query = supabase
-          .from('messages')
+          .from('mc_messages')
           .select(`
             *,
-            from_agent:agents!from_agent_id(id, name, role, avatar_url),
-            task:tasks!task_id(id, title)
+            from_agent:mc_agents!from_agent_id(id, name, role, avatar_url),
+            task:mc_tasks!task_id(id, title)
           `)
           .order('created_at', { ascending: true })
           .limit(parseInt(limit))
@@ -73,7 +73,7 @@ Deno.serve(async (req) => {
         }
 
         const { data, error } = await supabase
-          .from('messages')
+          .from('mc_messages')
           .insert({
             task_id: messageData.task_id,
             from_agent_id: messageData.from_agent_id,
@@ -82,15 +82,15 @@ Deno.serve(async (req) => {
           })
           .select(`
             *,
-            from_agent:agents!from_agent_id(id, name, role, avatar_url),
-            task:tasks!task_id(id, title)
+            from_agent:mc_agents!from_agent_id(id, name, role, avatar_url),
+            task:mc_tasks!task_id(id, title)
           `)
 
         if (error) throw error
 
         // Create activity for the message
         await supabase
-          .from('activities')
+          .from('mc_activities')
           .insert({
             type: 'message_sent',
             agent_id: messageData.from_agent_id,
@@ -120,7 +120,7 @@ Deno.serve(async (req) => {
         const messageData: Partial<Message> = await req.json()
 
         const { data, error } = await supabase
-          .from('messages')
+          .from('mc_messages')
           .update({
             content: messageData.content,
             attachments: messageData.attachments
@@ -128,8 +128,8 @@ Deno.serve(async (req) => {
           .eq('id', messageId)
           .select(`
             *,
-            from_agent:agents!from_agent_id(id, name, role, avatar_url),
-            task:tasks!task_id(id, title)
+            from_agent:mc_agents!from_agent_id(id, name, role, avatar_url),
+            task:mc_tasks!task_id(id, title)
           `)
 
         if (error) throw error
@@ -149,7 +149,7 @@ Deno.serve(async (req) => {
         }
 
         const { error } = await supabase
-          .from('messages')
+          .from('mc_messages')
           .delete()
           .eq('id', messageId)
 

@@ -58,7 +58,7 @@ function getCompletedToday(tasks: Task[]): number {
 }
 
 export function StatsBar({ agents, tasks, className }: StatsBarProps) {
-  const workingAgents = agents.filter((a) => a.status === 'working').length;
+  const workingAgents = agents.filter((a) => a.status === 'working' || a.status === 'active').length;
   const idleAgents = agents.filter((a) => a.status === 'idle').length;
   const inboxTasks = tasks.filter((t) => t.status === 'inbox').length;
   const inProgressTasks = tasks.filter((t) => t.status === 'in_progress').length;

@@ -37,11 +37,11 @@ Deno.serve(async (req) => {
       case 'GET': {
         // Get activity feed with filters
         let query = supabase
-          .from('activities')
+          .from('mc_activities')
           .select(`
             *,
-            agent:agents!agent_id(id, name, role, avatar_url),
-            task:tasks(id, title, status)
+            agent:mc_agents!agent_id(id, name, role, avatar_url),
+            task:mc_tasks(id, title, status)
           `)
           .order('created_at', { ascending: false })
           .range(parseInt(offset), parseInt(offset) + parseInt(limit) - 1)
@@ -65,7 +65,7 @@ Deno.serve(async (req) => {
 
         // Get total count for pagination
         const { count: totalCount } = await supabase
-          .from('activities')
+          .from('mc_activities')
           .select('*', { count: 'exact', head: true })
 
         return new Response(JSON.stringify({ 
@@ -95,7 +95,7 @@ Deno.serve(async (req) => {
         }
 
         const { data, error } = await supabase
-          .from('activities')
+          .from('mc_activities')
           .insert({
             type: activityData.type,
             agent_id: activityData.agent_id,
@@ -105,8 +105,8 @@ Deno.serve(async (req) => {
           })
           .select(`
             *,
-            agent:agents!agent_id(id, name, role, avatar_url),
-            task:tasks(id, title, status)
+            agent:mc_agents!agent_id(id, name, role, avatar_url),
+            task:mc_tasks(id, title, status)
           `)
 
         if (error) throw error

@@ -38,10 +38,10 @@ Deno.serve(async (req) => {
       case 'GET': {
         // Get tasks with filters
         let query = supabase
-          .from('tasks')
+          .from('mc_tasks')
           .select(`
             *,
-            assignees:agents!inner(id, name, role)
+            assignees:mc_agents!inner(id, name, role)
           `)
           .order('created_at', { ascending: false })
           .limit(parseInt(limit))
@@ -70,7 +70,7 @@ Deno.serve(async (req) => {
         const taskData: Task = await req.json()
 
         const { data, error } = await supabase
-          .from('tasks')
+          .from('mc_tasks')
           .insert({
             ...taskData,
             assignee_ids: taskData.assignee_ids || [],
@@ -101,7 +101,7 @@ Deno.serve(async (req) => {
         const taskData: Partial<Task> = await req.json()
 
         const { data, error } = await supabase
-          .from('tasks')
+          .from('mc_tasks')
           .update(taskData)
           .eq('id', taskId)
           .select()
@@ -123,7 +123,7 @@ Deno.serve(async (req) => {
         }
 
         const { error } = await supabase
-          .from('tasks')
+          .from('mc_tasks')
           .delete()
           .eq('id', taskId)
 

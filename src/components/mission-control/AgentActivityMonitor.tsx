@@ -30,6 +30,7 @@ export interface ActiveAgentTask {
 
 interface AgentActivityMonitorProps {
   className?: string;
+  agents?: Array<{ id: string; name: string; status: string; role: string }>;
 }
 
 function formatDuration(startTime: string): string {
@@ -101,7 +102,7 @@ function getAgentTypeBadge(type: ActiveAgentTask['agent_type']) {
   }
 }
 
-export function AgentActivityMonitor({ className }: AgentActivityMonitorProps) {
+export function AgentActivityMonitor({ className, agents: externalAgents = [] }: AgentActivityMonitorProps) {
   const { selectedBusiness } = useBusinessContext();
   const [tasks, setTasks] = useState<ActiveAgentTask[]>([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -194,7 +195,8 @@ export function AgentActivityMonitor({ className }: AgentActivityMonitorProps) {
         <Activity className="h-4 w-4 text-blue-600" />
         <h3 className="font-semibold text-sm text-slate-900">Agent Activity</h3>
         <span className="text-xs text-slate-400">
-          ({tasks.length} active)
+          {externalAgents.filter(a => a.status === 'working' || a.status === 'active').length} active
+          {tasks.length > 0 && ` · ${tasks.length} task${tasks.length !== 1 ? 's' : ''} running`}
         </span>
       </div>
 
@@ -205,10 +207,46 @@ export function AgentActivityMonitor({ className }: AgentActivityMonitorProps) {
             <Loader2 className="h-5 w-5 animate-spin" />
           </div>
         ) : tasks.length === 0 ? (
-          <div className="flex flex-col items-center justify-center py-8 text-slate-400">
-            <Activity className="h-8 w-8 mb-2 opacity-50" />
-            <p className="text-sm">No active agent tasks</p>
-            <p className="text-xs mt-1">Tasks will appear here when agents are working</p>
+          <div className="space-y-3">
+            {/* Show agent statuses when no active tasks */}
+            {externalAgents.length > 0 ? (
+              <>
+                {externalAgents.map((agent) => {
+                  const isActive = agent.status === 'working' || agent.status === 'active';
+                  return (
+                    <div
+                      key={agent.id}
+                      className={cn(
+                        "p-3 rounded-lg border transition-all",
+                        isActive ? "bg-emerald-50 border-emerald-200" : "bg-slate-50 border-slate-200"
+                      )}
+                    >
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-2">
+                          <Bot className="h-4 w-4 text-violet-500" />
+                          <span className="font-medium text-sm text-slate-900">{agent.name}</span>
+                          <span className="text-[10px] px-2 py-0.5 rounded-full bg-slate-100 text-slate-600">{agent.role}</span>
+                        </div>
+                        <div className="flex items-center gap-1.5">
+                          <span className={cn(
+                            "h-2 w-2 rounded-full",
+                            isActive ? "bg-emerald-500 animate-pulse" : agent.status === 'idle' ? "bg-amber-400" : "bg-slate-400"
+                          )} />
+                          <span className="text-xs text-slate-500 capitalize">{agent.status}</span>
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })}
+                <p className="text-xs text-slate-400 text-center mt-2">Active tasks will appear here when agents are working</p>
+              </>
+            ) : (
+              <div className="flex flex-col items-center justify-center py-8 text-slate-400">
+                <Activity className="h-8 w-8 mb-2 opacity-50" />
+                <p className="text-sm">No agents registered</p>
+                <p className="text-xs mt-1">Tasks will appear here when agents are working</p>
+              </div>
+            )}
           </div>
         ) : (
           tasks.map((task) => (

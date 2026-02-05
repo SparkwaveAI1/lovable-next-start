@@ -36,10 +36,10 @@ Deno.serve(async (req) => {
       case 'GET': {
         // Get agents with optional filters
         let query = supabase
-          .from('agents')
+          .from('mc_agents')
           .select(`
             *,
-            current_task:tasks(id, title, status, priority)
+            current_task:mc_tasks(id, title, status, priority)
           `)
           .order('created_at', { ascending: true })
 
@@ -77,7 +77,7 @@ Deno.serve(async (req) => {
         }
 
         const { data, error } = await supabase
-          .from('agents')
+          .from('mc_agents')
           .insert({
             name: agentData.name,
             role: agentData.role,
@@ -88,14 +88,14 @@ Deno.serve(async (req) => {
           })
           .select(`
             *,
-            current_task:tasks(id, title, status, priority)
+            current_task:mc_tasks(id, title, status, priority)
           `)
 
         if (error) throw error
 
         // Create activity for new agent
         await supabase
-          .from('activities')
+          .from('mc_activities')
           .insert({
             type: 'status_changed',
             agent_id: data[0].id,
@@ -125,18 +125,18 @@ Deno.serve(async (req) => {
 
         // Get current agent data to check for status changes
         const { data: currentAgent } = await supabase
-          .from('agents')
+          .from('mc_agents')
           .select('*')
           .eq('id', agentId)
           .single()
 
         const { data, error } = await supabase
-          .from('agents')
+          .from('mc_agents')
           .update(agentData)
           .eq('id', agentId)
           .select(`
             *,
-            current_task:tasks(id, title, status, priority)
+            current_task:mc_tasks(id, title, status, priority)
           `)
 
         if (error) throw error
@@ -144,7 +144,7 @@ Deno.serve(async (req) => {
         // Create activity if status changed
         if (currentAgent && agentData.status && currentAgent.status !== agentData.status) {
           await supabase
-            .from('activities')
+            .from('mc_activities')
             .insert({
               type: 'status_changed',
               agent_id: agentId,
@@ -173,7 +173,7 @@ Deno.serve(async (req) => {
         }
 
         const { error } = await supabase
-          .from('agents')
+          .from('mc_agents')
           .delete()
           .eq('id', agentId)
 

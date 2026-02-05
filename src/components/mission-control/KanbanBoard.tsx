@@ -160,7 +160,7 @@ export function KanbanBoard({ tasks, agents, onTaskClick, onAddTask, onTaskStatu
               >
                 <div
                   className={cn(
-                    "flex-1 p-2 space-y-2 min-h-[120px] overflow-y-auto transition-colors",
+                    "flex-1 p-2 space-y-2 min-h-[120px] max-h-[600px] overflow-y-auto transition-colors",
                     isOver && "bg-opacity-80"
                   )}
                   data-droppable-id={column.id}
