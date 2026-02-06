@@ -78,7 +78,13 @@ export function BusinessSwitcher({ selectedBusinessId, onBusinessChange, showAll
                       onBusinessChange?.(ALL_BUSINESSES_ID)
                       setOpen(false)
                     }}
-                    className="flex items-center gap-2 hover:bg-accent cursor-pointer"
+                    onPointerDown={(e) => {
+                      // iOS Safari fix: handle touch events directly
+                      e.preventDefault()
+                      onBusinessChange?.(ALL_BUSINESSES_ID)
+                      setOpen(false)
+                    }}
+                    className="flex items-center gap-2 hover:bg-accent cursor-pointer touch-manipulation"
                   >
                     <Globe className="h-4 w-4 text-violet-500" />
                     <div className="flex-1">
@@ -105,7 +111,13 @@ export function BusinessSwitcher({ selectedBusinessId, onBusinessChange, showAll
                     onBusinessChange?.(business.id)
                     setOpen(false)
                   }}
-                  className="flex items-center gap-2 hover:bg-accent cursor-pointer"
+                  onPointerDown={(e) => {
+                    // iOS Safari fix: handle touch events directly
+                    e.preventDefault()
+                    onBusinessChange?.(business.id)
+                    setOpen(false)
+                  }}
+                  className="flex items-center gap-2 hover:bg-accent cursor-pointer touch-manipulation"
                 >
                   <Building2 className="h-4 w-4 text-muted-foreground" />
                   <div className="flex-1">
