@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { DashboardLayout } from '@/components/layout/DashboardLayout';
 import { PageHeader, PageContent } from '@/components/layout/PageLayout';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
@@ -16,6 +16,7 @@ import { DisclaimerAcceptanceModal } from '@/components/investments/DisclaimerAc
 import { OnboardingFlow } from '@/components/investments/OnboardingFlow';
 import { TemplateGallery } from '@/components/investments/TemplateGallery';
 import { ChartModal } from '@/components/investments/ChartModal';
+import { MarketOverviewCards } from '@/components/investments/MarketOverviewCards';
 import { useBusinessContext } from '@/contexts/BusinessContext';
 import { useSubscription } from '@/hooks/useSubscription';
 import { useWatchlists, useRemoveSymbol, useCreateWatchlist, useAddSymbol } from '@/hooks/useWatchlists';
@@ -392,6 +393,9 @@ export default function Investments() {
             </div>
           }
         />
+
+        {/* Market Overview Cards - Major indices at the top */}
+        <MarketOverviewCards className="mb-6" />
 
         <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
           <TabsList className="mb-6">
