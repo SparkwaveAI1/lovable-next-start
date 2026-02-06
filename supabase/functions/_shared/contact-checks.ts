@@ -208,6 +208,63 @@ export async function canSendToContact(
 }
 
 /**
+ * Queue a message for human approval
+ */
+export async function queueForApproval(
+  supabase: SupabaseClient,
+  params: {
+    businessId: string;
+    contactId: string;
+    channel: 'sms' | 'email';
+    messageType: string;
+    recipientPhone?: string;
+    recipientEmail?: string;
+    subject?: string;
+    messageBody: string;
+    reviewReason: string;
+    contactName?: string;
+    recentMessageCount?: number;
+    lastMessageDirection?: 'inbound' | 'outbound' | null;
+    flags?: string[];
+  }
+): Promise<string | null> {
+  try {
+    const { data, error } = await supabase
+      .from('message_approval_queue')
+      .insert({
+        business_id: params.businessId,
+        contact_id: params.contactId,
+        channel: params.channel,
+        message_type: params.messageType,
+        recipient_phone: params.recipientPhone,
+        recipient_email: params.recipientEmail,
+        subject: params.subject,
+        message_body: params.messageBody,
+        status: 'pending',
+        review_reason: params.reviewReason,
+        contact_name: params.contactName,
+        recent_message_count: params.recentMessageCount,
+        last_message_direction: params.lastMessageDirection,
+        flags: params.flags || [],
+        expires_at: new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString() // 24h expiry
+      })
+      .select('id')
+      .single();
+
+    if (error) {
+      console.error('Failed to queue for approval:', error);
+      return null;
+    }
+
+    console.log(`📋 Queued message for approval: ${data.id}`);
+    return data.id;
+  } catch (error) {
+    console.error('Queue approval error:', error);
+    return null;
+  }
+}
+
+/**
  * Log a send decision for audit trail
  */
 export async function logSendDecision(
