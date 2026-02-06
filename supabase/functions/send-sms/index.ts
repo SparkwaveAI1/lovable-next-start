@@ -1,8 +1,10 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
+import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.45.0';
 import { withRetry, SMS_RETRY_OPTIONS } from "../_shared/retry.ts";
+import { checkContactForOutreach, logSendDecision } from "../_shared/contact-checks.ts";
 
 /**
- * Send SMS Edge Function (v5.0 - with retry logic)
+ * Send SMS Edge Function (v6.0 - with pre-send contact checks)
  * 
  * REQUIRED ENVIRONMENT SECRETS:
  * - TWILIO_ACCOUNT_SID (or TWILIO_SID): Your Twilio Account SID
@@ -75,13 +77,54 @@ serve(async (req) => {
     // Parse request
     const rawBody = await req.text();
     const requestBody = JSON.parse(rawBody);
-    const { to, message, businessId } = requestBody;
+    const { to, message, businessId, contactId, skipContactCheck } = requestBody;
     
     console.log(`[${requestId}] Request:`, { 
       to: to?.slice(0, 3) + '***', 
       messageLength: message?.length,
-      businessId 
+      businessId,
+      contactId: contactId?.slice(0, 8),
+      skipContactCheck
     });
+
+    // Initialize Supabase for contact checks
+    const supabase = createClient(
+      Deno.env.get('SUPABASE_URL')!,
+      Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
+    );
+
+    // PRE-SEND CONTACT CHECK (LR-001)
+    // Skip only if explicitly requested (for system messages, tests, etc.)
+    if (contactId && !skipContactCheck) {
+      console.log(`[${requestId}] Running contact check for ${contactId.slice(0, 8)}...`);
+      
+      const checkResult = await checkContactForOutreach(supabase, contactId);
+      
+      // Log the decision for audit trail
+      await logSendDecision(supabase, contactId, businessId, checkResult, 'sms', message);
+      
+      if (!checkResult.canSend) {
+        console.log(`[${requestId}] BLOCKED: ${checkResult.reason}`);
+        return new Response(JSON.stringify({
+          success: false,
+          blocked: true,
+          reason: checkResult.reason,
+          requiresReview: checkResult.requiresReview,
+          recentMessages: checkResult.recentMessages
+        }), {
+          status: 200, // Not an error, just blocked
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+        });
+      }
+      
+      if (checkResult.requiresReview) {
+        console.log(`[${requestId}] REVIEW REQUIRED: ${checkResult.reason}`);
+        // For now, still send but log warning
+        // Future: Route to approval queue
+      }
+      
+      console.log(`[${requestId}] Contact check passed: ${checkResult.reason}`);
+    }
 
     // Validate credentials
     const accountSid = Deno.env.get('TWILIO_ACCOUNT_SID') || Deno.env.get('TWILIO_SID');
