@@ -11,3 +11,4 @@ export { ScottsActionItems } from './ScottsActionItems';
 export { HealthDashboard } from './HealthDashboard';
 export { AnalyticsMonitor } from './AnalyticsMonitor';
 export { AddTaskDialog } from './AddTaskDialog';
+export { QualityDashboard } from './QualityDashboard';

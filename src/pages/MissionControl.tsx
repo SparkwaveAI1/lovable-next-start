@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback } from "react";
 import { DashboardLayout } from "@/components/layout/DashboardLayout";
 import { PageContent } from "@/components/layout/PageLayout";
-import { AgentCard, KanbanBoard, ActivityFeed, StatsBar, RicoChat, ScottsActionItems, AgentActivityMonitor, HealthDashboard, AnalyticsMonitor, AddTaskDialog } from "@/components/mission-control";
+import { AgentCard, KanbanBoard, ActivityFeed, StatsBar, RicoChat, ScottsActionItems, AgentActivityMonitor, HealthDashboard, AnalyticsMonitor, AddTaskDialog, QualityDashboard } from "@/components/mission-control";
 import { useBusinessContext } from "@/contexts/BusinessContext";
 import { useBusinesses } from "@/hooks/useBusinesses";
 import { supabase } from "@/integrations/supabase/client";
@@ -317,6 +317,13 @@ export default function MissionControl() {
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
           <HealthDashboard />
           <AnalyticsMonitor />
+        </div>
+
+        {/* 5. Quality Dashboard (full width) */}
+        <div className="mb-6">
+          <QualityDashboard
+            businessId={isAllBusinessesSelected ? null : (selectedBusiness?.id || null)}
+          />
         </div>
 
         {/* Add Task Dialog */}
