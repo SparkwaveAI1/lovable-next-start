@@ -1,6 +1,7 @@
 import { serve } from "https://deno.land/std@0.190.0/http/server.ts";
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.45.0';
 import { enrollInFollowUp } from "../_shared/follow-up.ts";
+import { checkContactForOutreach, logSendDecision } from "../_shared/contact-checks.ts";
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -214,6 +215,27 @@ async function sendInitialOutreach(
 
   console.log(`Sending initial outreach to ${contact.first_name} ${contact.last_name}`);
   console.log(`Inquiry: ${inquiry || '(none)'}`);
+
+  // LR-003: Pre-send contact check
+  const checkResult = await checkContactForOutreach(supabase, contact.id, {
+    lookbackDays: 7,
+    requireSilenceDays: 1,  // For initial outreach, 1 day is enough
+    allowIfTheyMessaged: true
+  });
+
+  // Log the decision
+  await logSendDecision(supabase, contact.id, businessId, checkResult, 'sms', inquiry || 'initial outreach');
+
+  if (!checkResult.canSend) {
+    console.log(`⚠️ BLOCKED outreach to ${contact.first_name}: ${checkResult.reason}`);
+    return; // Don't send anything
+  }
+
+  if (checkResult.requiresReview) {
+    console.log(`⚠️ REVIEW flag for ${contact.first_name}: ${checkResult.reason}`);
+    // For now, still proceed but log warning
+    // Future: Route to approval queue
+  }
 
   // Load business knowledge base
   let knowledgeBase: any[] = [];
