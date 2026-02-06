@@ -347,6 +347,17 @@ serve(async (req) => {
             const errorText = await emailResponse.text();
             console.error(`❌ Email failed: ${errorText}`);
             results.errors.push(`Email failed for ${contact.id}: ${errorText}`);
+            
+            // Email failed - pause follow-up to prevent infinite retries
+            console.warn(`⏸️ Pausing follow-up for ${contact.id} - email send failed`);
+            await supabase
+              .from('contact_follow_ups')
+              .update({ 
+                status: 'paused',
+                pause_reason: `Email failed: ${errorText.substring(0, 200)}`
+              })
+              .eq('id', followUp.id);
+            results.errors.push(`Paused follow-up for ${contact.id} - email failed`);
           }
 
         } else if (!sendSuccess) {
