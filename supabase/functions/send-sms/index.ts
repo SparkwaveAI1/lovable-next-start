@@ -2,6 +2,7 @@ import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.45.0';
 import { withRetry, SMS_RETRY_OPTIONS } from "../_shared/retry.ts";
 import { checkContactForOutreach, logSendDecision } from "../_shared/contact-checks.ts";
+import { checkMessagePatterns, getPatternSummary } from "../_shared/bad-patterns.ts";
 
 /**
  * Send SMS Edge Function (v6.0 - with pre-send contact checks)
@@ -124,6 +125,31 @@ serve(async (req) => {
       }
       
       console.log(`[${requestId}] Contact check passed: ${checkResult.reason}`);
+    }
+
+    // MESSAGE PATTERN CHECK (LR-005)
+    // Detect bad patterns in the message content
+    const patternResult = checkMessagePatterns(message);
+    
+    if (patternResult.shouldBlock) {
+      console.log(`[${requestId}] MESSAGE BLOCKED by pattern check`);
+      console.log(getPatternSummary(patternResult));
+      return new Response(JSON.stringify({
+        success: false,
+        blocked: true,
+        reason: 'Message contains blocked content',
+        patterns: patternResult.matches.filter(m => m.severity === 'block')
+      }), {
+        status: 200,
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+      });
+    }
+    
+    if (patternResult.shouldReview) {
+      console.log(`[${requestId}] MESSAGE FLAGGED for review`);
+      console.log(getPatternSummary(patternResult));
+      // For now, still send but log warning
+      // Future: Route to approval queue
     }
 
     // Validate credentials
