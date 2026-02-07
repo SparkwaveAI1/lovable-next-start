@@ -35,6 +35,7 @@ import CaseStudies from "./pages/CaseStudies";
 import Services from "./pages/Services";
 import MessageQueue from "./pages/MessageQueue";
 import ClientSuccess from "./pages/ClientSuccess";
+import Communications from "./pages/Communications";
 import Blog from "./pages/Blog";
 import BlogPost from "./pages/BlogPost";
 import ProtectedRoute from "./components/ProtectedRoute";
@@ -87,6 +88,7 @@ const App = () => (
             <Route path="/investments" element={<ProtectedRoute><ErrorBoundary><Investments /></ErrorBoundary></ProtectedRoute>} />
             <Route path="/message-queue" element={<ProtectedRoute><ErrorBoundary><MessageQueue /></ErrorBoundary></ProtectedRoute>} />
             <Route path="/client-success" element={<ProtectedRoute><ErrorBoundary><ClientSuccess /></ErrorBoundary></ProtectedRoute>} />
+            <Route path="/communications" element={<ProtectedRoute><ErrorBoundary><Communications /></ErrorBoundary></ProtectedRoute>} />
             {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
             <Route path="*" element={<NotFound />} />
             </Routes>

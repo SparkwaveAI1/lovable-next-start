@@ -78,13 +78,14 @@ serve(async (req) => {
     // Parse request
     const rawBody = await req.text();
     const requestBody = JSON.parse(rawBody);
-    const { to, message, businessId, contactId, skipContactCheck } = requestBody;
+    const { to, message, businessId, contactId, skipContactCheck, campaignId } = requestBody;
     
     console.log(`[${requestId}] Request:`, { 
       to: to?.slice(0, 3) + '***', 
       messageLength: message?.length,
       businessId,
       contactId: contactId?.slice(0, 8),
+      campaignId: campaignId?.slice(0, 8),
       skipContactCheck
     });
 
@@ -228,6 +229,28 @@ serve(async (req) => {
           .from('contacts')
           .update({ sms_last_contacted: new Date().toISOString() })
           .eq('id', contactId);
+
+        // LOG TO CAMPAIGN_RECIPIENTS (if part of a campaign)
+        if (campaignId) {
+          const { error: campaignError } = await supabase
+            .from('campaign_recipients')
+            .upsert({
+              campaign_id: campaignId,
+              contact_id: contactId,
+              status: 'sent',
+              message_sid: result.sid,
+              sent_at: new Date().toISOString(),
+              personalized_message: message
+            }, {
+              onConflict: 'campaign_id,contact_id'
+            });
+
+          if (campaignError) {
+            console.warn(`[${requestId}] Failed to log to campaign_recipients:`, campaignError.message);
+          } else {
+            console.log(`[${requestId}] Logged to campaign: ${campaignId.slice(0, 8)}`);
+          }
+        }
           
       } catch (logError: any) {
         console.warn(`[${requestId}] Logging failed (non-fatal):`, logError.message);
@@ -237,6 +260,7 @@ serve(async (req) => {
     return new Response(JSON.stringify({
       success: true,
       messageSid: result.sid,
+      campaignId: campaignId || null,
       logged: true
     }), {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' }
