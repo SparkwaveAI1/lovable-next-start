@@ -109,7 +109,7 @@ export function KanbanBoard({ tasks, agents, onTaskClick, onAddTask, onTaskStatu
       onDragOver={handleDragOver}
       onDragEnd={handleDragEnd}
     >
-      <div className="flex gap-4 overflow-x-auto pb-4 max-h-[600px]">
+      <div className="flex gap-3 sm:gap-4 overflow-x-auto pb-4 max-h-[600px] -mx-1 px-1">
         {KANBAN_COLUMNS.map((column) => {
           const columnTasks = tasks.filter((t) => t.status === column.id);
           const style = columnStyles[column.id];
@@ -120,7 +120,7 @@ export function KanbanBoard({ tasks, agents, onTaskClick, onAddTask, onTaskStatu
               key={column.id}
               data-column-id={column.id}
               className={cn(
-                "flex-shrink-0 w-72 h-full flex flex-col rounded-xl transition-all duration-200 overflow-hidden",
+                "flex-shrink-0 w-64 sm:w-72 h-full flex flex-col rounded-xl transition-all duration-200 overflow-hidden",
                 isOver ? style.dropBg : "bg-slate-50/50",
                 isOver && "ring-2 ring-offset-2 ring-violet-400"
               )}

@@ -156,52 +156,86 @@ export function RecentBookings({ businessId, onContactClick }: RecentBookingsPro
             <p className="text-sm">New bookings will appear here automatically</p>
           </div>
         ) : (
-          <div className="overflow-x-auto">
-            <table className="w-full">
-              <thead>
-                <tr className="text-left text-xs text-gray-500 border-b">
-                  <th className="pb-2 font-medium">Contact</th>
-                  <th className="pb-2 font-medium">Class</th>
-                  <th className="pb-2 font-medium">When</th>
-                  <th className="pb-2 font-medium text-right">Status</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-gray-100">
-                {bookings.map((booking) => (
-                  <tr
-                    key={booking.id}
-                    onClick={() => booking.contact?.id && onContactClick(booking.contact.id)}
-                    className="hover:bg-gray-50 cursor-pointer transition-colors"
-                  >
-                    <td className="py-3">
-                      <div className="flex items-center gap-2">
-                        <div className="h-8 w-8 rounded-full bg-gray-100 flex items-center justify-center">
-                          <User className="h-4 w-4 text-gray-500" />
-                        </div>
-                        <span className="font-medium text-gray-900">
-                          {booking.contact
-                            ? `${booking.contact.first_name || ''} ${booking.contact.last_name || ''}`.trim() || 'Unknown'
-                            : 'Unknown'}
-                        </span>
+          <>
+            {/* Mobile view - cards */}
+            <div className="sm:hidden space-y-2">
+              {bookings.map((booking) => (
+                <div
+                  key={booking.id}
+                  onClick={() => booking.contact?.id && onContactClick(booking.contact.id)}
+                  className="p-3 rounded-lg hover:bg-gray-50 cursor-pointer transition-colors border border-gray-100"
+                >
+                  <div className="flex items-center justify-between mb-2">
+                    <div className="flex items-center gap-2">
+                      <div className="h-8 w-8 rounded-full bg-gray-100 flex items-center justify-center">
+                        <User className="h-4 w-4 text-gray-500" />
                       </div>
-                    </td>
-                    <td className="py-3 text-gray-600">
-                      {booking.class_schedule?.class_name || 'Unknown Class'}
-                    </td>
-                    <td className="py-3">
-                      <div className="flex items-center gap-1 text-gray-600">
-                        <Clock className="h-3 w-3" />
-                        {formatBookingDate(booking.booking_date, booking.class_schedule?.start_time)}
-                      </div>
-                    </td>
-                    <td className="py-3 text-right">
-                      {getStatusBadge(booking.status)}
-                    </td>
+                      <span className="font-medium text-gray-900 text-sm">
+                        {booking.contact
+                          ? `${booking.contact.first_name || ''} ${booking.contact.last_name || ''}`.trim() || 'Unknown'
+                          : 'Unknown'}
+                      </span>
+                    </div>
+                    {getStatusBadge(booking.status)}
+                  </div>
+                  <div className="text-xs text-gray-600 pl-10">
+                    <p className="truncate">{booking.class_schedule?.class_name || 'Unknown Class'}</p>
+                    <div className="flex items-center gap-1 mt-1">
+                      <Clock className="h-3 w-3" />
+                      {formatBookingDate(booking.booking_date, booking.class_schedule?.start_time)}
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+            {/* Desktop view - table */}
+            <div className="hidden sm:block overflow-x-auto">
+              <table className="w-full">
+                <thead>
+                  <tr className="text-left text-xs text-gray-500 border-b">
+                    <th className="pb-2 font-medium">Contact</th>
+                    <th className="pb-2 font-medium">Class</th>
+                    <th className="pb-2 font-medium">When</th>
+                    <th className="pb-2 font-medium text-right">Status</th>
                   </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+                </thead>
+                <tbody className="divide-y divide-gray-100">
+                  {bookings.map((booking) => (
+                    <tr
+                      key={booking.id}
+                      onClick={() => booking.contact?.id && onContactClick(booking.contact.id)}
+                      className="hover:bg-gray-50 cursor-pointer transition-colors"
+                    >
+                      <td className="py-3">
+                        <div className="flex items-center gap-2">
+                          <div className="h-8 w-8 rounded-full bg-gray-100 flex items-center justify-center">
+                            <User className="h-4 w-4 text-gray-500" />
+                          </div>
+                          <span className="font-medium text-gray-900">
+                            {booking.contact
+                              ? `${booking.contact.first_name || ''} ${booking.contact.last_name || ''}`.trim() || 'Unknown'
+                              : 'Unknown'}
+                          </span>
+                        </div>
+                      </td>
+                      <td className="py-3 text-gray-600">
+                        {booking.class_schedule?.class_name || 'Unknown Class'}
+                      </td>
+                      <td className="py-3">
+                        <div className="flex items-center gap-1 text-gray-600">
+                          <Clock className="h-3 w-3" />
+                          {formatBookingDate(booking.booking_date, booking.class_schedule?.start_time)}
+                        </div>
+                      </td>
+                      <td className="py-3 text-right">
+                        {getStatusBadge(booking.status)}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </>
         )}
       </CardContent>
     </Card>

@@ -414,22 +414,22 @@ export default function Contacts() {
       <main className="container mx-auto px-4 py-6">
         {/* Page Header */}
         <div className="flex flex-col gap-4 mb-6">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-3">
-              <Users className="h-6 w-6" />
-              <h1 className="text-2xl font-bold">Contacts</h1>
-              <Badge variant="secondary">{totalCount} total</Badge>
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+            <div className="flex items-center gap-2 sm:gap-3">
+              <Users className="h-5 w-5 sm:h-6 sm:w-6" />
+              <h1 className="text-xl sm:text-2xl font-bold">Contacts</h1>
+              <Badge variant="secondary" className="text-xs">{totalCount}</Badge>
             </div>
-            <Button onClick={() => setAddContactDialogOpen(true)} disabled={!selectedBusiness?.id}>
+            <Button onClick={() => setAddContactDialogOpen(true)} disabled={!selectedBusiness?.id} size="sm" className="sm:size-default w-full sm:w-auto">
               <Plus className="h-4 w-4 mr-2" />
               Add Contact
             </Button>
           </div>
 
           {/* Filters Row */}
-          <div className="flex flex-wrap gap-3 items-center">
+          <div className="flex flex-wrap gap-2 sm:gap-3 items-center">
             {/* Search */}
-            <div className="relative flex-1 min-w-[200px] max-w-sm">
+            <div className="relative w-full sm:flex-1 sm:min-w-[200px] sm:max-w-sm">
               <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
               <Input
                 placeholder="Search name, email, phone..."
@@ -450,7 +450,7 @@ export default function Contacts() {
                 setPage(0);
               }}
             >
-              <SelectTrigger className="w-[160px]">
+              <SelectTrigger className="w-full sm:w-[160px]">
                 <SelectValue placeholder="All Status" />
               </SelectTrigger>
               <SelectContent>
@@ -464,7 +464,7 @@ export default function Contacts() {
             {/* Tag Filter */}
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
-                <Button variant="outline" className="min-w-[120px]">
+                <Button variant="outline" className="w-full sm:w-auto sm:min-w-[120px]">
                   <Tags className="h-4 w-4 mr-2" />
                   Tags {selectedTagFilters.length > 0 && `(${selectedTagFilters.length})`}
                 </Button>
@@ -542,9 +542,9 @@ export default function Contacts() {
 
         {/* Bulk Actions Bar */}
         {selectedIds.size > 0 && (
-          <div className="flex items-center gap-4 p-3 mb-4 bg-muted rounded-lg">
-            <span className="text-sm font-medium">{selectedIds.size} contacts selected</span>
-            <div className="flex gap-2">
+          <div className="flex flex-col sm:flex-row items-start sm:items-center gap-3 sm:gap-4 p-3 mb-4 bg-muted rounded-lg">
+            <span className="text-sm font-medium">{selectedIds.size} selected</span>
+            <div className="flex flex-wrap gap-2">
               <Button
                 variant="outline"
                 size="sm"
@@ -554,7 +554,7 @@ export default function Contacts() {
                 }}
               >
                 <Tags className="h-4 w-4 mr-1" />
-                Add Tags
+                <span className="hidden xs:inline">Add</span> Tags
               </Button>
               <Button
                 variant="outline"
@@ -565,22 +565,23 @@ export default function Contacts() {
                 }}
               >
                 <Tags className="h-4 w-4 mr-1" />
-                Remove Tags
+                <span className="hidden xs:inline">Remove</span> Tags
               </Button>
               <Button
                 variant="outline"
                 size="sm"
                 onClick={() => setBulkStatusDialogOpen(true)}
               >
-                Change Status
+                Status
               </Button>
             </div>
             <Button
               variant="ghost"
               size="sm"
               onClick={() => setSelectedIds(new Set())}
+              className="sm:ml-auto"
             >
-              Clear Selection
+              Clear
             </Button>
           </div>
         )}
@@ -611,9 +612,9 @@ export default function Contacts() {
           </div>
         ) : (
           <>
-            {/* Table */}
-            <div className="border rounded-lg">
-              <Table>
+            {/* Table - scrollable on mobile */}
+            <div className="border rounded-lg overflow-x-auto">
+              <Table className="min-w-[900px]">
                 <TableHeader>
                   <TableRow>
                     <TableHead className="w-[50px]">
@@ -737,9 +738,9 @@ export default function Contacts() {
             </div>
 
             {/* Pagination */}
-            <div className="flex items-center justify-between mt-4">
+            <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 mt-4">
               <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                <span>Showing</span>
+                <span className="hidden sm:inline">Showing</span>
                 <Select
                   value={pageSize.toString()}
                   onValueChange={(value) => {

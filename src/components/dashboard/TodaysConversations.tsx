@@ -234,37 +234,44 @@ export function TodaysConversations({ businessId, onContactClick }: TodaysConver
                 <div
                   key={conv.thread_id}
                   onClick={() => onContactClick(conv.contact_id)}
-                  className="flex items-center gap-3 p-3 rounded-lg hover:bg-gray-50 cursor-pointer transition-colors border border-transparent hover:border-gray-200"
+                  className="flex items-start sm:items-center gap-3 p-3 rounded-lg hover:bg-gray-50 cursor-pointer transition-colors border border-transparent hover:border-gray-200"
                 >
                   {/* Avatar / Icon */}
-                  <div className={`h-10 w-10 rounded-full flex items-center justify-center ${
+                  <div className={`h-9 w-9 sm:h-10 sm:w-10 rounded-full flex items-center justify-center flex-shrink-0 ${
                     conv.channel === 'sms' ? 'bg-green-100' : 'bg-blue-100'
                   }`}>
                     {conv.channel === 'sms' ? (
-                      <Phone className="h-5 w-5 text-green-600" />
+                      <Phone className="h-4 w-4 sm:h-5 sm:w-5 text-green-600" />
                     ) : (
-                      <Mail className="h-5 w-5 text-blue-600" />
+                      <Mail className="h-4 w-4 sm:h-5 sm:w-5 text-blue-600" />
                     )}
                   </div>
 
                   {/* Content */}
                   <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-2">
-                      <span className="font-medium text-gray-900 truncate">
+                    <div className="flex items-center justify-between gap-2 flex-wrap">
+                      <span className="font-medium text-gray-900 truncate text-sm sm:text-base">
                         {conv.contact_name}
                       </span>
+                      <span className="text-xs text-gray-400 sm:hidden">
+                        {formatDistanceToNow(new Date(conv.last_message_time), { addSuffix: true })}
+                      </span>
                     </div>
-                    <p className="text-sm text-gray-500 truncate">
+                    <p className="text-xs sm:text-sm text-gray-500 truncate">
                       {conv.last_message_direction === 'outbound' && (
                         <span className="text-gray-400">You: </span>
                       )}
-                      {conv.last_message.substring(0, 50)}
-                      {conv.last_message.length > 50 && '...'}
+                      {conv.last_message.substring(0, 40)}
+                      {conv.last_message.length > 40 && '...'}
                     </p>
+                    {/* Mobile status badge */}
+                    <div className="mt-1.5 sm:hidden">
+                      <StatusBadge status={status} />
+                    </div>
                   </div>
 
-                  {/* Time and Status */}
-                  <div className="flex flex-col items-end gap-1">
+                  {/* Time and Status - Desktop only */}
+                  <div className="hidden sm:flex flex-col items-end gap-1 flex-shrink-0">
                     <span className="text-xs text-gray-400">
                       {formatDistanceToNow(new Date(conv.last_message_time), { addSuffix: true })}
                     </span>

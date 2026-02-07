@@ -247,15 +247,15 @@ export default function MissionControl() {
     >
       <PageContent>
         {/* Page Header */}
-        <div className="flex items-center justify-between mb-4">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-4">
           <div>
-            <h1 className="text-2xl font-bold text-slate-900">Mission Control</h1>
-            <p className="text-slate-500 text-sm mt-0.5">Coordinate agents and track task progress</p>
+            <h1 className="text-xl sm:text-2xl font-bold text-slate-900">Mission Control</h1>
+            <p className="text-slate-500 text-xs sm:text-sm mt-0.5">Coordinate agents and track task progress</p>
           </div>
           <button
             onClick={() => fetchData()}
             disabled={isLoading}
-            className="flex items-center gap-2 px-4 py-2 bg-white border border-slate-200 rounded-lg hover:bg-slate-50 transition-colors disabled:opacity-50"
+            className="flex items-center justify-center gap-2 px-3 sm:px-4 py-2 bg-white border border-slate-200 rounded-lg hover:bg-slate-50 transition-colors disabled:opacity-50 w-full sm:w-auto"
           >
             <RefreshCw className={`h-4 w-4 ${isLoading ? 'animate-spin' : ''}`} />
             <span className="text-sm font-medium">Refresh</span>
@@ -284,9 +284,9 @@ export default function MissionControl() {
 
         {/* 2. Kanban Board (full width) */}
         <div className="mb-6">
-          <div className="bg-white rounded-xl border border-slate-200 p-4">
-            <div className="flex items-center justify-between mb-4">
-              <div className="flex items-center gap-3">
+          <div className="bg-white rounded-xl border border-slate-200 p-3 sm:p-4">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-4">
+              <div className="flex items-center gap-2 sm:gap-3 flex-wrap">
                 <h3 className="font-semibold text-sm text-slate-900">Task Board</h3>
                 {selectedAgent && (
                   <span className="text-xs bg-violet-100 text-violet-700 px-2 py-1 rounded-full">
@@ -294,14 +294,15 @@ export default function MissionControl() {
                   </span>
                 )}
               </div>
-              <div className="flex items-center gap-3">
-                <span className="text-xs text-slate-400">{kanbanTasks.length} tasks for this business</span>
+              <div className="flex items-center justify-between sm:justify-end gap-2 sm:gap-3">
+                <span className="text-xs text-slate-400">{kanbanTasks.length} tasks</span>
                 <button
                   onClick={() => setAddTaskDialogOpen(true)}
                   className="flex items-center gap-1.5 px-3 py-1.5 bg-violet-600 hover:bg-violet-700 text-white rounded-lg transition-colors text-sm font-medium"
                 >
                   <Plus className="h-4 w-4" />
-                  Add Task
+                  <span className="hidden xs:inline">Add Task</span>
+                  <span className="xs:hidden">Add</span>
                 </button>
               </div>
             </div>
