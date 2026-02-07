@@ -324,7 +324,44 @@ async function sendInitialOutreach(
 
       if (aiResponse.ok) {
         const aiResult = await aiResponse.json();
-        responseMessage = aiResult.message || DEFAULT_GREETING;
+        
+        // CRITICAL: Validate AI response before using it
+        // Never send error messages, technical text, or suspicious content to customers
+        const aiMessage = aiResult.message || '';
+        const lowerMessage = aiMessage.toLowerCase();
+        const isErrorMessage = (
+          lowerMessage.includes('error') ||
+          lowerMessage.includes('invalid') ||
+          lowerMessage.includes('failed') ||
+          lowerMessage.includes('exception') ||
+          lowerMessage.includes('jwt') ||
+          lowerMessage.includes('token') ||
+          lowerMessage.includes('undefined') ||
+          lowerMessage.includes('null') ||
+          lowerMessage.includes('cannot read') ||
+          lowerMessage.includes('is not defined') ||
+          lowerMessage.includes('api key') ||
+          lowerMessage.includes('unauthorized') ||
+          lowerMessage.includes('forbidden') ||
+          aiMessage.length < 5 ||
+          aiMessage.length > 1000
+        );
+
+        if (isErrorMessage) {
+          console.error('⚠️ AI response looks like an error, using fallback:', aiMessage);
+          responseMessage = DEFAULT_GREETING;
+          // Log this for monitoring
+          await supabase.from('automation_logs').insert({
+            business_id: endpoint.business_id,
+            automation_type: 'ai_response_error_filtered',
+            status: 'warning',
+            error_message: `Filtered suspicious AI response: ${aiMessage.substring(0, 100)}`,
+            processed_data: { contact_id: contactResult?.contact?.id }
+          });
+        } else {
+          responseMessage = aiMessage;
+        }
+        
         console.log('=== AI RESPONSE DEBUG ===');
         console.log('AI message:', responseMessage);
         console.log('Knowledge used:', aiResult.knowledgeUsed || 'none');
@@ -335,6 +372,14 @@ async function sendInitialOutreach(
         const errorText = await aiResponse.text();
         console.error('AI response failed:', aiResponse.status, errorText);
         responseMessage = DEFAULT_GREETING;
+        // Log the failure for monitoring
+        await supabase.from('automation_logs').insert({
+          business_id: endpoint.business_id,
+          automation_type: 'ai_response_failed',
+          status: 'error',
+          error_message: `AI returned status ${aiResponse.status}: ${errorText.substring(0, 200)}`,
+          processed_data: { contact_id: contactResult?.contact?.id }
+        });
       }
     } catch (aiError: any) {
       console.error('AI response error:', aiError.message);

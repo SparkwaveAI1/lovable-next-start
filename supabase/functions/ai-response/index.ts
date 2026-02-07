@@ -1102,9 +1102,13 @@ RESPOND ONLY with the message to send. No prefixes or explanations.`;
 
   } catch (error: any) {
     console.error('AI response error:', error);
+    // CRITICAL: Never expose internal errors to customers
+    // Always return a friendly, human-readable fallback message
+    const safeMessage = 'Thanks for reaching out! We\'ll get back to you shortly.';
     return new Response(JSON.stringify({
-      message: 'Sorry, I had a technical issue. Please try again or call us directly.',
-      error: error.message
+      message: safeMessage,
+      error: error.message,
+      errorFiltered: true  // Flag so we know this was an error path
     }), {
       status: 500,
       headers: { ...corsHeaders, 'Content-Type': 'application/json' }
