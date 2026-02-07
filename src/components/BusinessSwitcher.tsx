@@ -1,4 +1,4 @@
-import { useState } from "react"
+import { useState, useRef, useCallback } from "react"
 import { Check, ChevronsUpDown, Building2, Globe } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { Button } from "@/components/ui/button"
@@ -30,6 +30,23 @@ interface BusinessSwitcherProps {
 export function BusinessSwitcher({ selectedBusinessId, onBusinessChange, showAllOption = false }: BusinessSwitcherProps) {
   const [open, setOpen] = useState(false)
   const { data: businesses = [], isLoading: loading } = useBusinesses()
+  
+  // Track last selection to debounce/dedupe race conditions between onSelect and onPointerDown
+  const lastSelectionRef = useRef<{ id: string; time: number } | null>(null)
+  
+  // Centralized selection handler with debounce
+  const handleSelect = useCallback((businessId: string) => {
+    const now = Date.now()
+    // Ignore if same selection within 100ms (prevents double-firing)
+    if (lastSelectionRef.current?.id === businessId && 
+        now - lastSelectionRef.current.time < 100) {
+      return
+    }
+    lastSelectionRef.current = { id: businessId, time: now }
+    
+    onBusinessChange?.(businessId)
+    setOpen(false)
+  }, [onBusinessChange])
   
   const selectedBusiness = businesses.find(business => business.id === selectedBusinessId)
   const isAllSelected = selectedBusinessId === ALL_BUSINESSES_ID
@@ -73,16 +90,12 @@ export function BusinessSwitcher({ selectedBusinessId, onBusinessChange, showAll
               <>
                 <CommandGroup>
                   <CommandItem
-                    value="All Businesses"
-                    onSelect={() => {
-                      onBusinessChange?.(ALL_BUSINESSES_ID)
-                      setOpen(false)
-                    }}
+                    value={`${ALL_BUSINESSES_ID}::All Businesses`}
+                    onSelect={() => handleSelect(ALL_BUSINESSES_ID)}
                     onPointerDown={(e) => {
-                      // iOS Safari fix: handle touch events directly
+                      // iOS Safari fix: prevent default for touch handling
+                      // Let onSelect handle the actual selection logic
                       e.preventDefault()
-                      onBusinessChange?.(ALL_BUSINESSES_ID)
-                      setOpen(false)
                     }}
                     className="flex items-center gap-2 hover:bg-accent cursor-pointer touch-manipulation"
                   >
@@ -106,16 +119,12 @@ export function BusinessSwitcher({ selectedBusinessId, onBusinessChange, showAll
               {businesses.map((business) => (
                 <CommandItem
                   key={business.id}
-                  value={business.name}
-                  onSelect={() => {
-                    onBusinessChange?.(business.id)
-                    setOpen(false)
-                  }}
+                  value={`${business.id}::${business.name}`}
+                  onSelect={() => handleSelect(business.id)}
                   onPointerDown={(e) => {
-                    // iOS Safari fix: handle touch events directly
+                    // iOS Safari fix: prevent default for touch handling
+                    // Let onSelect handle the actual selection logic
                     e.preventDefault()
-                    onBusinessChange?.(business.id)
-                    setOpen(false)
                   }}
                   className="flex items-center gap-2 hover:bg-accent cursor-pointer touch-manipulation"
                 >

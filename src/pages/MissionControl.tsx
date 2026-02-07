@@ -233,7 +233,13 @@ export default function MissionControl() {
           setSelectedBusiness({ id: ALL_BUSINESSES_ID, name: "All Businesses" } as any);
         } else {
           const business = businesses.find(b => b.id === id);
-          if (business) setSelectedBusiness(business);
+          if (business) {
+            setSelectedBusiness(business);
+          } else {
+            console.error('Business not found:', id, 'Available:', businesses.map(b => b.id));
+            // Still update UI with minimal data so it doesn't silently fail
+            setSelectedBusiness({ id, name: 'Unknown', slug: '' } as any);
+          }
         }
       }}
       businessName={isAllBusinessesSelected ? "All Businesses" : selectedBusiness?.name}
