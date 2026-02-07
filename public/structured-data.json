@@ -1,0 +1,61 @@
+{
+  "@context": "https://schema.org",
+  "@graph": [
+    {
+      "@type": "Organization",
+      "@id": "https://sparkwaveai.app/#organization",
+      "name": "Sparkwave AI",
+      "url": "https://sparkwaveai.app",
+      "logo": {
+        "@type": "ImageObject",
+        "url": "https://sparkwaveai.app/sparkwave-logo.png"
+      },
+      "description": "Done-for-you AI lead automation for small businesses. We set it up. We run it. You get more customers.",
+      "foundingDate": "2023",
+      "founder": {
+        "@type": "Person",
+        "name": "Scott Johnson"
+      },
+      "contactPoint": {
+        "@type": "ContactPoint",
+        "telephone": "+1-919-532-4050",
+        "contactType": "sales",
+        "email": "scott@sparkwave-ai.com"
+      },
+      "sameAs": [
+        "https://linkedin.com/company/sparkwave-ai"
+      ]
+    },
+    {
+      "@type": "SoftwareApplication",
+      "@id": "https://sparkwaveai.app/#software",
+      "name": "Sparkwave Automation",
+      "applicationCategory": "BusinessApplication",
+      "operatingSystem": "Web",
+      "offers": {
+        "@type": "AggregateOffer",
+        "lowPrice": "197",
+        "highPrice": "797",
+        "priceCurrency": "USD",
+        "offerCount": "3"
+      },
+      "description": "AI-powered lead response and follow-up automation for small businesses.",
+      "featureList": [
+        "Instant AI lead response",
+        "Automated follow-up sequences",
+        "Appointment booking",
+        "CRM integration",
+        "Performance analytics"
+      ]
+    },
+    {
+      "@type": "WebSite",
+      "@id": "https://sparkwaveai.app/#website",
+      "url": "https://sparkwaveai.app",
+      "name": "Sparkwave AI",
+      "publisher": {
+        "@id": "https://sparkwaveai.app/#organization"
+      }
+    }
+  ]
+}
