@@ -15,6 +15,7 @@ interface AgentConfig {
   max_response_length: number;
   model: string;
   temperature: number;
+  evaluation_enabled?: boolean; // New: toggle self-improvement loop
 }
 
 interface ClassSchedule {
@@ -24,6 +25,20 @@ interface ClassSchedule {
   day_of_week: number;
   start_time: string;
   end_time: string;
+}
+
+interface EvaluationResult {
+  allPass: boolean;
+  failures: string[];
+  scores: {
+    relevance: { pass: boolean; reason: string };
+    questionAnswered: { pass: boolean; reason: string; questions: string[] };
+    detailEcho: { pass: boolean; reason: string; details: string[] };
+    contextAware: { pass: boolean; reason: string };
+    accuracy: { pass: boolean; reason: string };
+    ctaAppropriate: { pass: boolean; reason: string };
+  };
+  iteration: number;
 }
 
 // Intent detection patterns
@@ -152,7 +167,6 @@ function findMatchingClasses(
   return classes.filter(cls => {
     // Filter by class type if specified
     if (classType && !cls.class_name.toLowerCase().includes(classType.toLowerCase())) {
-      // Also check partial matches
       const classTypeLower = classType.toLowerCase();
       const classNameLower = cls.class_name.toLowerCase();
       if (!classNameLower.includes(classTypeLower.split(' ')[0])) {
@@ -260,27 +274,22 @@ function getDayName(dayNum: number): string {
   return days[dayNum] || 'Unknown';
 }
 
-// Convert 24-hour time (e.g., "07:00:00" or "18:30") to 12-hour AM/PM format
+// Convert 24-hour time to 12-hour AM/PM format
 function formatTime(time24: string): string {
   if (!time24) return '';
   
-  // Extract hours and minutes from formats like "07:00:00" or "07:00"
   const parts = time24.split(':');
   let hours = parseInt(parts[0], 10);
   const minutes = parts[1] || '00';
   
-  // Determine AM/PM
   const period = hours >= 12 ? 'PM' : 'AM';
   
-  // Convert to 12-hour format
   if (hours === 0) {
-    hours = 12; // Midnight
+    hours = 12;
   } else if (hours > 12) {
     hours = hours - 12;
   }
-  // hours === 12 stays as 12 (noon)
   
-  // Format: "7:00 AM" or "6:30 PM"
   return `${hours}:${minutes} ${period}`;
 }
 
@@ -289,7 +298,6 @@ function formatClassSchedule(classes: ClassSchedule[]): string {
     return 'No classes currently scheduled.';
   }
 
-  // Group by day
   const byDay: Record<number, ClassSchedule[]> = {};
   classes.forEach(cls => {
     if (!byDay[cls.day_of_week]) byDay[cls.day_of_week] = [];
@@ -307,6 +315,330 @@ function formatClassSchedule(classes: ClassSchedule[]): string {
   }
 
   return schedule || 'No classes currently scheduled.';
+}
+
+// ============================================
+// SELF-IMPROVEMENT EVALUATION SYSTEM
+// ============================================
+
+/**
+ * Extract questions from a message using multiple detection methods
+ */
+function extractQuestions(message: string): string[] {
+  const questions: string[] = [];
+  const lowerMessage = message.toLowerCase();
+  
+  // Method 1: Direct question marks
+  const questionMarkSentences = message.split(/[.!]/).filter(s => s.includes('?'));
+  questions.push(...questionMarkSentences.map(q => q.trim()).filter(q => q.length > 0));
+  
+  // Method 2: Question words without question marks (common in texts)
+  const questionPatterns = [
+    /what (?:time|day|days|are|is|do|about|if)/gi,
+    /when (?:are|is|do|can|does)/gi,
+    /how much (?:is|are|does|do)/gi,
+    /how (?:long|many|often|do|can)/gi,
+    /where (?:is|are|do|can)/gi,
+    /do you (?:have|offer|provide)/gi,
+    /can (?:i|you|we)/gi,
+    /is there/gi,
+    /are there/gi
+  ];
+  
+  for (const pattern of questionPatterns) {
+    const matches = message.match(pattern);
+    if (matches) {
+      questions.push(...matches.map(m => m.trim()));
+    }
+  }
+  
+  return [...new Set(questions)]; // Deduplicate
+}
+
+/**
+ * Extract specific details mentioned by the lead (times, days, names, constraints)
+ */
+function extractLeadDetails(message: string): string[] {
+  const details: string[] = [];
+  const lowerMessage = message.toLowerCase();
+  
+  // Time patterns
+  const timePatterns = [
+    /(\d{1,2})\s*(am|pm)/gi,
+    /(\d{1,2}):(\d{2})/g,
+    /(morning|afternoon|evening|night)/gi,
+    /after (\d{1,2}|work|school)/gi,
+    /before (\d{1,2}|work|school)/gi,
+    /until (\d{1,2}|work|school)/gi
+  ];
+  
+  for (const pattern of timePatterns) {
+    const matches = message.match(pattern);
+    if (matches) {
+      details.push(...matches.map(m => m.trim()));
+    }
+  }
+  
+  // Day patterns
+  const dayMatches = message.match(/(monday|tuesday|wednesday|thursday|friday|saturday|sunday|weekday|weekend)/gi);
+  if (dayMatches) {
+    details.push(...dayMatches.map(m => m.trim()));
+  }
+  
+  // Constraint patterns (work until X, kids, etc.)
+  const constraintPatterns = [
+    /i work (?:until|til|till|from|at) [^.!?]+/gi,
+    /my (?:son|daughter|kid|child|wife|husband) [^.!?]+/gi,
+    /i(?:'m| am) (?:busy|available|free) [^.!?]+/gi,
+    /only (?:available|free) [^.!?]+/gi
+  ];
+  
+  for (const pattern of constraintPatterns) {
+    const matches = message.match(pattern);
+    if (matches) {
+      details.push(...matches.map(m => m.trim()));
+    }
+  }
+  
+  return [...new Set(details)];
+}
+
+/**
+ * Evaluate response quality against the lead message
+ * Uses LLM for nuanced evaluation with structured output
+ */
+async function evaluateResponse(
+  draft: string,
+  leadMessage: string,
+  conversationHistory: any[],
+  knowledgeBase: string,
+  classSchedule: ClassSchedule[],
+  apiKey: string,
+  iteration: number
+): Promise<EvaluationResult> {
+  const extractedQuestions = extractQuestions(leadMessage);
+  const extractedDetails = extractLeadDetails(leadMessage);
+  
+  // Build context for evaluation
+  const historyContext = conversationHistory.slice(-6).map(m => 
+    `${m.role.toUpperCase()}: ${m.content}`
+  ).join('\n');
+  
+  const scheduleContext = formatClassSchedule(classSchedule);
+  
+  const evaluationPrompt = `You are a quality evaluator for customer service responses. Analyze this response critically.
+
+LEAD MESSAGE: "${leadMessage}"
+
+DRAFT RESPONSE: "${draft}"
+
+CONVERSATION HISTORY:
+${historyContext || 'None'}
+
+EXTRACTED QUESTIONS FROM LEAD: ${JSON.stringify(extractedQuestions)}
+EXTRACTED DETAILS FROM LEAD: ${JSON.stringify(extractedDetails)}
+
+KNOWLEDGE BASE (for accuracy check):
+${knowledgeBase.substring(0, 2000)}
+
+CLASS SCHEDULE (for accuracy check):
+${scheduleContext.substring(0, 1500)}
+
+Evaluate the draft response against these 6 criteria. Be STRICT - if there's any doubt, mark as FAIL.
+
+1. RELEVANCE: Does this response address what they ACTUALLY said? Would this same response work for any random message? If generic = FAIL.
+
+2. QUESTION_ANSWERED: If the lead asked ANY question (even implied), did we answer it? Check the extracted questions list.
+
+3. DETAIL_ECHO: If the lead mentioned specific times, days, constraints (e.g., "I work until 6pm"), does the response acknowledge this?
+
+4. CONTEXT_AWARE: Looking at conversation history, does this response make sense? Are we asking something they already answered? Contradicting ourselves?
+
+5. ACCURACY: Any times, prices, or facts mentioned - do they match the knowledge base and schedule? If we say "classes at 7pm" there better be a 7pm class.
+
+6. CTA_APPROPRIATE: Is the call-to-action right for this stage? 
+   - If they just asked a question, CTA should be answering it, not jumping to booking
+   - If they confirmed "yes that works", CTA should confirm booking, not ask more questions
+   - If they're new, invite trial; if scheduling, suggest specific time
+
+Return JSON ONLY (no markdown):
+{
+  "relevance": {"pass": boolean, "reason": "brief explanation"},
+  "questionAnswered": {"pass": boolean, "reason": "brief explanation", "questions": ["list of detected questions"]},
+  "detailEcho": {"pass": boolean, "reason": "brief explanation", "details": ["list of details that should be acknowledged"]},
+  "contextAware": {"pass": boolean, "reason": "brief explanation"},
+  "accuracy": {"pass": boolean, "reason": "brief explanation"},
+  "ctaAppropriate": {"pass": boolean, "reason": "brief explanation"}
+}`;
+
+  try {
+    const response = await fetch('https://openrouter.ai/api/v1/chat/completions', {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${apiKey}`,
+        'Content-Type': 'application/json',
+        'HTTP-Referer': 'https://fightflowacademy.com',
+        'X-Title': 'Fight Flow AI Evaluator'
+      },
+      body: JSON.stringify({
+        model: 'openai/gpt-4o-mini', // Fast model for evaluation
+        messages: [
+          { role: 'user', content: evaluationPrompt }
+        ],
+        max_tokens: 500,
+        temperature: 0.1 // Low temp for consistent evaluation
+      })
+    });
+
+    if (!response.ok) {
+      console.error('Evaluation API error:', await response.text());
+      // On error, pass through (fail-open)
+      return createPassingEvaluation(iteration);
+    }
+
+    const data = await response.json();
+    const content = data.choices[0]?.message?.content || '';
+    
+    // Parse JSON response
+    let scores;
+    try {
+      // Clean potential markdown formatting
+      const jsonStr = content.replace(/```json\n?|\n?```/g, '').trim();
+      scores = JSON.parse(jsonStr);
+    } catch (parseError) {
+      console.error('Failed to parse evaluation response:', content);
+      return createPassingEvaluation(iteration);
+    }
+
+    // Compile failures
+    const failures: string[] = [];
+    if (!scores.relevance?.pass) failures.push(`RELEVANCE: ${scores.relevance?.reason || 'Generic response'}`);
+    if (!scores.questionAnswered?.pass) failures.push(`QUESTION_ANSWERED: ${scores.questionAnswered?.reason || 'Missed question'}`);
+    if (!scores.detailEcho?.pass) failures.push(`DETAIL_ECHO: ${scores.detailEcho?.reason || 'Missed details'}`);
+    if (!scores.contextAware?.pass) failures.push(`CONTEXT_AWARE: ${scores.contextAware?.reason || 'Context issue'}`);
+    if (!scores.accuracy?.pass) failures.push(`ACCURACY: ${scores.accuracy?.reason || 'Inaccurate info'}`);
+    if (!scores.ctaAppropriate?.pass) failures.push(`CTA_APPROPRIATE: ${scores.ctaAppropriate?.reason || 'Wrong CTA'}`);
+
+    return {
+      allPass: failures.length === 0,
+      failures,
+      scores: {
+        relevance: scores.relevance || { pass: true, reason: 'No evaluation' },
+        questionAnswered: { 
+          ...scores.questionAnswered || { pass: true, reason: 'No evaluation' },
+          questions: extractedQuestions
+        },
+        detailEcho: {
+          ...scores.detailEcho || { pass: true, reason: 'No evaluation' },
+          details: extractedDetails
+        },
+        contextAware: scores.contextAware || { pass: true, reason: 'No evaluation' },
+        accuracy: scores.accuracy || { pass: true, reason: 'No evaluation' },
+        ctaAppropriate: scores.ctaAppropriate || { pass: true, reason: 'No evaluation' }
+      },
+      iteration
+    };
+  } catch (error) {
+    console.error('Evaluation error:', error);
+    return createPassingEvaluation(iteration);
+  }
+}
+
+function createPassingEvaluation(iteration: number): EvaluationResult {
+  return {
+    allPass: true,
+    failures: [],
+    scores: {
+      relevance: { pass: true, reason: 'Evaluation skipped' },
+      questionAnswered: { pass: true, reason: 'Evaluation skipped', questions: [] },
+      detailEcho: { pass: true, reason: 'Evaluation skipped', details: [] },
+      contextAware: { pass: true, reason: 'Evaluation skipped' },
+      accuracy: { pass: true, reason: 'Evaluation skipped' },
+      ctaAppropriate: { pass: true, reason: 'Evaluation skipped' }
+    },
+    iteration
+  };
+}
+
+/**
+ * Rewrite the response based on specific failures
+ */
+async function rewriteWithDiagnosis(
+  draft: string,
+  failures: string[],
+  leadMessage: string,
+  conversationHistory: any[],
+  knowledgeBase: string,
+  classSchedule: ClassSchedule[],
+  systemPrompt: string,
+  apiKey: string,
+  model: string
+): Promise<string> {
+  const historyContext = conversationHistory.slice(-6).map(m => 
+    `${m.role.toUpperCase()}: ${m.content}`
+  ).join('\n');
+  
+  const scheduleContext = formatClassSchedule(classSchedule);
+
+  const rewritePrompt = `Your previous response FAILED quality checks. Fix these specific issues:
+
+FAILURES:
+${failures.map(f => `❌ ${f}`).join('\n')}
+
+ORIGINAL LEAD MESSAGE: "${leadMessage}"
+
+YOUR FAILED RESPONSE: "${draft}"
+
+CONVERSATION HISTORY:
+${historyContext}
+
+KNOWLEDGE BASE:
+${knowledgeBase.substring(0, 2000)}
+
+CLASS SCHEDULE:
+${scheduleContext.substring(0, 1500)}
+
+Write a NEW response that:
+1. Fixes each failure listed above
+2. Directly addresses what the lead said
+3. Acknowledges any specific details they mentioned
+4. Answers any questions they asked
+5. Uses accurate information from the knowledge base/schedule
+6. Has an appropriate next step for this conversation stage
+
+Respond ONLY with the new message. No explanations.`;
+
+  try {
+    const response = await fetch('https://openrouter.ai/api/v1/chat/completions', {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${apiKey}`,
+        'Content-Type': 'application/json',
+        'HTTP-Referer': 'https://fightflowacademy.com',
+        'X-Title': 'Fight Flow AI Rewriter'
+      },
+      body: JSON.stringify({
+        model: model, // Use main model for quality rewrite
+        messages: [
+          { role: 'system', content: systemPrompt },
+          { role: 'user', content: rewritePrompt }
+        ],
+        max_tokens: 300,
+        temperature: 0.7
+      })
+    });
+
+    if (!response.ok) {
+      console.error('Rewrite API error:', await response.text());
+      return draft; // Return original on error
+    }
+
+    const data = await response.json();
+    return data.choices[0]?.message?.content?.trim() || draft;
+  } catch (error) {
+    console.error('Rewrite error:', error);
+    return draft;
+  }
 }
 
 serve(async (req) => {
@@ -355,7 +687,7 @@ serve(async (req) => {
       }
     }
 
-    // Use pre-loaded knowledge base - the LLM can find relevant info itself
+    // Use pre-loaded knowledge base
     let knowledgeContext = '';
     if (knowledgeBase && knowledgeBase.length > 0) {
       knowledgeContext = '\n\nBUSINESS KNOWLEDGE BASE:\n' + knowledgeBase;
@@ -379,7 +711,6 @@ serve(async (req) => {
     let bookingContext = '';
 
     if (classSchedule && classSchedule.length > 0) {
-      // If we have preferences, find matching classes
       if (bookingState.classType || bookingState.preferredDay !== null || bookingState.preferredTime) {
         suggestedClasses = findMatchingClasses(
           classSchedule,
@@ -419,9 +750,6 @@ serve(async (req) => {
     }
 
     // Build the system prompt
-    const personalityPrompt = agentConfig?.personality_prompt || `You are a helpful AI assistant for ${businessContext}. Be friendly and professional.`;
-
-    // Only include matching classes context if we have BOTH class type AND day/time preference
     const hasFullPreferences = bookingState.classType && (bookingState.preferredDay !== null || bookingState.preferredTime);
     const recommendationContext = hasFullPreferences && suggestedClasses.length > 0
       ? `\n\nRECOMMENDED CLASSES (based on customer preferences):\n${suggestedClasses.slice(0, 3).map(cls =>
@@ -487,20 +815,30 @@ ${scheduleContext || 'No schedule loaded'}
 
 RESPOND ONLY with the message to send. No prefixes or explanations.`;
 
-    // Determine model to use (OpenRouter model format)
+    // Determine model to use
     const model = agentConfig?.model || 'openai/gpt-4o-mini';
     const temperature = agentConfig?.temperature || 0.7;
 
     console.log('Using model:', model, 'temperature:', temperature);
 
-    // Call OpenRouter API (OpenAI-compatible)
     const apiKey = Deno.env.get('OPENROUTER_API_KEY');
     if (!apiKey) {
       console.error('OPENROUTER_API_KEY not configured');
       throw new Error('AI service not configured');
     }
 
-    const openaiResponse = await fetch('https://openrouter.ai/api/v1/chat/completions', {
+    // ============================================
+    // SELF-IMPROVEMENT LOOP (NEW)
+    // ============================================
+    
+    const evaluationEnabled = agentConfig?.evaluation_enabled ?? true; // Default ON
+    const maxIterations = 3;
+    let aiMessage = '';
+    let evaluationResults: EvaluationResult[] = [];
+    let finalIteration = 0;
+
+    // Generate initial response
+    const initialResponse = await fetch('https://openrouter.ai/api/v1/chat/completions', {
       method: 'POST',
       headers: {
         'Authorization': `Bearer ${apiKey}`,
@@ -519,19 +857,66 @@ RESPOND ONLY with the message to send. No prefixes or explanations.`;
       })
     });
 
-    if (!openaiResponse.ok) {
-      const errorText = await openaiResponse.text();
+    if (!initialResponse.ok) {
+      const errorText = await initialResponse.text();
       console.error('OpenRouter API error:', errorText);
-      throw new Error(`OpenRouter API error: ${openaiResponse.status}`);
+      throw new Error(`OpenRouter API error: ${initialResponse.status}`);
     }
 
-    const data = await openaiResponse.json();
-    const aiMessage = data.choices[0]?.message?.content ||
+    const initialData = await initialResponse.json();
+    aiMessage = initialData.choices[0]?.message?.content ||
       (agentConfig?.fallback_message || 'Sorry, I had trouble understanding. Can you please rephrase?');
 
-    console.log('AI Response:', aiMessage);
+    console.log('Initial AI Response:', aiMessage);
 
-    // Detect if AI is escalating to human (Scott)
+    // Run evaluation loop if enabled
+    if (evaluationEnabled && !isRejection && !escalation.shouldEscalate) {
+      for (let iteration = 1; iteration <= maxIterations; iteration++) {
+        console.log(`Evaluation iteration ${iteration}...`);
+        
+        const evaluation = await evaluateResponse(
+          aiMessage,
+          latestMessage,
+          messages,
+          knowledgeBase || '',
+          classSchedule || [],
+          apiKey,
+          iteration
+        );
+        
+        evaluationResults.push(evaluation);
+        finalIteration = iteration;
+
+        if (evaluation.allPass) {
+          console.log(`Evaluation PASSED on iteration ${iteration}`);
+          break;
+        }
+
+        console.log(`Evaluation FAILED on iteration ${iteration}:`, evaluation.failures);
+
+        if (iteration < maxIterations) {
+          // Rewrite with diagnosis
+          aiMessage = await rewriteWithDiagnosis(
+            aiMessage,
+            evaluation.failures,
+            latestMessage,
+            messages,
+            knowledgeBase || '',
+            classSchedule || [],
+            systemPrompt,
+            apiKey,
+            model
+          );
+          console.log(`Rewritten response (iteration ${iteration}):`, aiMessage);
+        } else {
+          console.log('Max iterations reached, using last response');
+        }
+      }
+    }
+
+    console.log('Final AI Response:', aiMessage);
+
+    // Detect if AI is escalating to human
     const aiMessageLower = aiMessage.toLowerCase();
     const needsHumanFollowup = NEEDS_HUMAN_PATTERNS.some(pattern => 
       aiMessageLower.includes(pattern)
@@ -540,7 +925,7 @@ RESPOND ONLY with the message to send. No prefixes or explanations.`;
       console.log('AI flagged for human follow-up - Scott needs to reach out');
     }
 
-    // Detect if this is a booking confirmation from the AI response
+    // Detect booking confirmation
     const bookingIndicators = [
       'booked', 'confirmed', 'scheduled', 'see you', 'you\'re all set',
       'got you down', 'reserved', 'looking forward', 'you\'re set'
@@ -549,11 +934,10 @@ RESPOND ONLY with the message to send. No prefixes or explanations.`;
       aiMessage.toLowerCase().includes(indicator)
     );
 
-    // Try to extract the specific class from the AI response
+    // Extract class details if booking
     let classDetails = undefined;
     let shouldBook = false;
 
-    // Method 1: Customer confirmed a previously suggested class
     if (bookingState.awaitingConfirmation && bookingState.suggestedClass) {
       shouldBook = true;
       classDetails = {
@@ -565,19 +949,15 @@ RESPOND ONLY with the message to send. No prefixes or explanations.`;
         classScheduleId: bookingState.suggestedClass.id
       };
       console.log('Booking confirmed via customer confirmation:', classDetails);
-    }
-    // Method 2: AI response indicates booking was made - extract from AI message
-    else if (aiConfirmedBooking && classSchedule && classSchedule.length > 0) {
-      const aiMessageLower = aiMessage.toLowerCase();
+    } else if (aiConfirmedBooking && classSchedule && classSchedule.length > 0) {
+      const aiMsgLower = aiMessage.toLowerCase();
 
-      // Find which class the AI mentioned in its confirmation
       for (const cls of classSchedule) {
         const classNameLower = cls.class_name.toLowerCase();
         const dayName = getDayName(cls.day_of_week).toLowerCase();
 
-        // Check if AI message contains both class name and day
-        if (aiMessageLower.includes(classNameLower) ||
-            (aiMessageLower.includes(classNameLower.split(' ')[0]) && aiMessageLower.includes(dayName))) {
+        if (aiMsgLower.includes(classNameLower) ||
+            (aiMsgLower.includes(classNameLower.split(' ')[0]) && aiMsgLower.includes(dayName))) {
           shouldBook = true;
           classDetails = {
             className: cls.class_name,
@@ -592,7 +972,6 @@ RESPOND ONLY with the message to send. No prefixes or explanations.`;
         }
       }
 
-      // Fallback: If AI confirmed but we couldn't match specific class, use preferences
       if (!classDetails && suggestedClasses.length > 0) {
         const firstMatch = suggestedClasses[0];
         shouldBook = true;
@@ -608,9 +987,8 @@ RESPOND ONLY with the message to send. No prefixes or explanations.`;
       }
     }
 
-    // Update conversation state if threadId provided
+    // Update conversation state
     if (threadId && businessId) {
-      // If customer rejected, mark as closed - don't keep following up
       const newState = isRejection ? 'closed_not_interested' :
         (shouldBook ? 'class_scheduled' :
         (detectedIntents.includes('BOOK_TRIAL') ? 'collecting_booking_info' : 'answering_questions'));
@@ -621,7 +999,6 @@ RESPOND ONLY with the message to send. No prefixes or explanations.`;
           last_bot_message_at: new Date().toISOString()
         };
 
-        // Set human review flag if escalation triggered OR AI said to have Scott follow up
         if (escalation.shouldEscalate || needsHumanFollowup) {
           updateData.needs_human_review = true;
           updateData.conversation_state = 'needs_human_review';
@@ -639,7 +1016,6 @@ RESPOND ONLY with the message to send. No prefixes or explanations.`;
           .update(updateData)
           .eq('id', threadId);
 
-        // Log escalation for visibility
         if (escalation.shouldEscalate) {
           await supabase
             .from('automation_logs')
@@ -656,7 +1032,32 @@ RESPOND ONLY with the message to send. No prefixes or explanations.`;
         }
       } catch (updateError) {
         console.error('Error updating conversation state:', updateError);
-        // Don't fail the whole request if state update fails
+      }
+    }
+
+    // Log evaluation results to automation_logs (for monitoring)
+    if (evaluationEnabled && evaluationResults.length > 0 && businessId) {
+      try {
+        await supabase
+          .from('automation_logs')
+          .insert({
+            business_id: businessId,
+            automation_type: 'response_evaluation',
+            status: evaluationResults[evaluationResults.length - 1].allPass ? 'passed' : 'failed',
+            processed_data: {
+              thread_id: threadId,
+              lead_message: latestMessage.substring(0, 200),
+              final_response: aiMessage.substring(0, 200),
+              iterations: finalIteration,
+              evaluation_history: evaluationResults.map(e => ({
+                iteration: e.iteration,
+                allPass: e.allPass,
+                failures: e.failures
+              }))
+            }
+          });
+      } catch (logError) {
+        console.error('Error logging evaluation results:', logError);
       }
     }
 
@@ -683,7 +1084,18 @@ RESPOND ONLY with the message to send. No prefixes or explanations.`;
       needsHumanFollowup: needsHumanFollowup ? {
         flagged: true,
         reason: 'AI escalated to Scott'
-      } : null
+      } : null,
+      // New: evaluation metadata
+      evaluation: evaluationEnabled ? {
+        enabled: true,
+        iterations: finalIteration,
+        finalPass: evaluationResults.length > 0 ? evaluationResults[evaluationResults.length - 1].allPass : true,
+        history: evaluationResults.map(e => ({
+          iteration: e.iteration,
+          pass: e.allPass,
+          failures: e.failures
+        }))
+      } : { enabled: false }
     }), {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' }
     });
