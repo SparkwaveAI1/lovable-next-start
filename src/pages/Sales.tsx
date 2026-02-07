@@ -79,18 +79,18 @@ export default function Sales() {
         <div className="relative max-w-7xl mx-auto text-center">
           <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-white/10 border border-white/20 mb-8">
             <Zap className="w-4 h-4 text-yellow-400" />
-            <span className="text-sm text-gray-300">AI-Powered Customer Automation</span>
+            <span className="text-sm text-gray-300">AI Automation for Small Businesses</span>
           </div>
           
           <h1 className="text-4xl sm:text-5xl lg:text-7xl font-bold mb-6 leading-tight">
-            Turn Every Lead Into
+            Never Miss Another Lead.
             <span className="block bg-gradient-to-r from-blue-400 via-purple-400 to-pink-400 bg-clip-text text-transparent">
-              A Paying Customer
+              Respond Instantly. Win More Customers.
             </span>
           </h1>
           
           <p className="text-xl sm:text-2xl text-gray-400 max-w-3xl mx-auto mb-10">
-            AI agents that respond in seconds, book appointments automatically, and never let a lead slip through the cracks.
+            Your AI assistant answers every call, text, and message in seconds — then books appointments automatically. More customers, less busywork.
           </p>
           
           <div className="flex flex-col sm:flex-row items-center justify-center gap-4 mb-12">
@@ -100,7 +100,7 @@ export default function Sales() {
               onClick={handleBookCall}
             >
               <Calendar className="w-5 h-5 mr-2" />
-              Book a Demo
+              See It In Action
             </Button>
             <Button 
               size="lg"
@@ -108,7 +108,7 @@ export default function Sales() {
               className="w-full sm:w-auto border-white/20 bg-white/5 hover:bg-white/10 text-white px-8 py-6 text-lg font-semibold rounded-xl"
               onClick={handleSurvey}
             >
-              Take Quick Survey
+              Get a Custom Plan
               <ArrowRight className="w-5 h-5 ml-2" />
             </Button>
           </div>
