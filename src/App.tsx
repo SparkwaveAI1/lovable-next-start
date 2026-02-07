@@ -29,6 +29,7 @@ import Docs from "./pages/Docs";
 import Investments from "./pages/Investments";
 import Sales from "./pages/Sales";
 import About from "./pages/About";
+import AutomationApp from "./pages/AutomationApp";
 import MessageQueue from "./pages/MessageQueue";
 import ClientSuccess from "./pages/ClientSuccess";
 import Blog from "./pages/Blog";
@@ -56,6 +57,7 @@ const App = () => (
             <Route path="/book" element={<Book />} />
             <Route path="/sales" element={<Sales />} />
             <Route path="/about" element={<About />} />
+            <Route path="/automation" element={<AutomationApp />} />
             <Route path="/blog" element={<Blog />} />
             <Route path="/blog/:slug" element={<BlogPost />} />
             <Route path="/crisis-monitor" element={<CrisisMonitor />} />
