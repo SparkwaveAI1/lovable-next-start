@@ -149,8 +149,15 @@ export default function Communications() {
   };
 
   return (
-    <DashboardLayout>
-      <div className="space-y-6">
+    <DashboardLayout
+      selectedBusinessId={selectedBusiness?.id}
+      onBusinessChange={(id) => {
+        const business = businesses.find((b) => b.id === id);
+        if (business) setSelectedBusiness(business);
+      }}
+      businessName={selectedBusiness?.name}
+    >
+      <main className="container mx-auto px-4 py-6 space-y-6">
         <DashboardHeader
           title="Communication Center"
           subtitle="Manage campaigns, track messages, and monitor engagement"
@@ -238,7 +245,8 @@ export default function Communications() {
           <div className="flex items-center justify-between">
             <TabsList>
               <TabsTrigger value="overview">Overview</TabsTrigger>
-              <TabsTrigger value="campaigns">Campaigns</TabsTrigger>
+              <TabsTrigger value="campaigns">SMS Campaigns</TabsTrigger>
+              <TabsTrigger value="email">Email Marketing</TabsTrigger>
               <TabsTrigger value="inbox">Inbox</TabsTrigger>
             </TabsList>
             <div className="flex gap-2">
@@ -399,6 +407,36 @@ export default function Communications() {
             </Card>
           </TabsContent>
 
+          {/* Email Marketing Tab */}
+          <TabsContent value="email">
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <Mail className="h-5 w-5" />
+                  Email Marketing
+                </CardTitle>
+                <CardDescription>
+                  Create and manage email campaigns, newsletters, and automated sequences
+                </CardDescription>
+              </CardHeader>
+              <CardContent>
+                <div className="text-center py-12 space-y-4">
+                  <Mail className="h-16 w-16 mx-auto text-muted-foreground/50" />
+                  <div>
+                    <h3 className="font-semibold text-lg">Email Marketing Coming Soon</h3>
+                    <p className="text-muted-foreground mt-2 max-w-md mx-auto">
+                      We're integrating email marketing directly into the Communications Center. 
+                      You'll be able to create email campaigns, newsletters, and automated drip sequences.
+                    </p>
+                  </div>
+                  <Button variant="outline" onClick={() => window.location.href = '/email-marketing'}>
+                    Use Legacy Email Marketing
+                  </Button>
+                </div>
+              </CardContent>
+            </Card>
+          </TabsContent>
+
           {/* Inbox Tab */}
           <TabsContent value="inbox">
             <Card>
@@ -449,7 +487,7 @@ export default function Communications() {
             </Card>
           </TabsContent>
         </Tabs>
-      </div>
+      </main>
     </DashboardLayout>
   );
 }

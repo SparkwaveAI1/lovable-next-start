@@ -18,6 +18,7 @@ import {
   ClipboardList,
   BookOpen,
   TrendingUp,
+  MessageSquare,
 } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { Button } from "@/components/ui/button"
@@ -56,6 +57,7 @@ const navGroups: NavGroup[] = [
     label: "Operations",
     items: [
       { label: "Contacts", href: "/contacts", icon: Users },
+      { label: "Communications", href: "/communications", icon: MessageSquare },
       { label: "Bookings", href: "/bookings", icon: CalendarDays },
       { label: "Service Requests", href: "/service-requests", icon: Headphones },
     ],
@@ -65,7 +67,6 @@ const navGroups: NavGroup[] = [
     items: [
       { label: "Content Center", href: "/content-center", icon: FileText },
       { label: "Media Library", href: "/media-library", icon: Image },
-      { label: "Email Marketing", href: "/email-marketing", icon: Mail },
     ],
   },
   {
