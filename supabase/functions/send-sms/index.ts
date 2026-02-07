@@ -182,9 +182,62 @@ serve(async (req) => {
 
     console.log(`[${requestId}] SMS sent successfully: ${result.sid}`);
 
+    // LOG TO SMS_MESSAGES TABLE
+    // This ensures proactive outreach is tracked alongside conversation history
+    if (contactId) {
+      try {
+        // Find existing thread for this contact (if any)
+        const { data: existingMessages } = await supabase
+          .from('sms_messages')
+          .select('thread_id')
+          .eq('contact_id', contactId)
+          .not('thread_id', 'is', null)
+          .order('created_at', { ascending: false })
+          .limit(1);
+        
+        const threadId = existingMessages?.[0]?.thread_id || null;
+
+        // Log the outbound message
+        const { error: logError } = await supabase
+          .from('sms_messages')
+          .insert({
+            thread_id: threadId,
+            contact_id: contactId,
+            direction: 'outbound',
+            message: message,
+            ai_response: false // Proactive outreach, not AI auto-response
+          });
+
+        if (logError) {
+          console.warn(`[${requestId}] Failed to log to sms_messages:`, logError.message);
+        } else {
+          console.log(`[${requestId}] Message logged to sms_messages`);
+        }
+
+        // Also log to contact_message_log for rate limiting
+        await supabase.from('contact_message_log').insert({
+          contact_id: contactId,
+          business_id: businessId,
+          channel: 'sms',
+          direction: 'outbound',
+          message_preview: message.substring(0, 100)
+        });
+
+        // Update contact's last contacted timestamp
+        await supabase
+          .from('contacts')
+          .update({ sms_last_contacted: new Date().toISOString() })
+          .eq('id', contactId);
+          
+      } catch (logError: any) {
+        console.warn(`[${requestId}] Logging failed (non-fatal):`, logError.message);
+      }
+    }
+
     return new Response(JSON.stringify({
       success: true,
-      messageSid: result.sid
+      messageSid: result.sid,
+      logged: true
     }), {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' }
     });

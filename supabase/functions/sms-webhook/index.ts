@@ -26,6 +26,21 @@ function isStopRequest(message: string): boolean {
   );
 }
 
+// ========================================
+// SPAM/AUTOMATED MESSAGE FILTER
+// ========================================
+const SPAM_PATTERNS = [
+  /^https?:\/\/static\.wixstatic\.com/i,  // Wix image URLs
+  /^https?:\/\/.*wix.*\.(png|jpg|jpeg|gif|webp|mp4)/i,  // Other Wix media
+  /^https?:\/\/[^\s]+\.(png|jpg|jpeg|gif|webp)(\?[^\s]*)?$/i,  // Pure image URLs
+];
+
+function isSpamMessage(message: string): boolean {
+  const trimmed = message.trim();
+  // Skip if message is just a URL matching spam patterns
+  return SPAM_PATTERNS.some(pattern => pattern.test(trimmed));
+}
+
 // Phone normalization function for E.164 format
 function normalizePhoneNumber(phoneNumber: string): string | null {
   if (!phoneNumber) return null;
@@ -208,6 +223,17 @@ serve(async (req) => {
       return new Response(twimlResponse, {
         headers: { ...corsHeaders, 'Content-Type': 'text/xml; charset=utf-8' }
       });
+    }
+
+    // ========================================
+    // STEP 0.5: CHECK FOR SPAM/AUTOMATED MESSAGES
+    // ========================================
+    if (isSpamMessage(body)) {
+      console.log('🚫 Spam message detected, ignoring:', body.substring(0, 50));
+      return new Response(
+        '<?xml version="1.0" encoding="UTF-8"?><Response></Response>',
+        { headers: { ...corsHeaders, 'Content-Type': 'text/xml; charset=utf-8' } }
+      );
     }
 
     // STEP 1: Determine which business this SMS is for
