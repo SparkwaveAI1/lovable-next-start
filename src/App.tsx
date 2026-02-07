@@ -31,6 +31,7 @@ import Sales from "./pages/Sales";
 import About from "./pages/About";
 import AutomationApp from "./pages/AutomationApp";
 import PersonaAIPage from "./pages/PersonaAIPage";
+import CaseStudies from "./pages/CaseStudies";
 import MessageQueue from "./pages/MessageQueue";
 import ClientSuccess from "./pages/ClientSuccess";
 import Blog from "./pages/Blog";
@@ -60,6 +61,7 @@ const App = () => (
             <Route path="/about" element={<About />} />
             <Route path="/automation" element={<AutomationApp />} />
             <Route path="/persona-ai" element={<PersonaAIPage />} />
+            <Route path="/case-studies" element={<CaseStudies />} />
             <Route path="/blog" element={<Blog />} />
             <Route path="/blog/:slug" element={<BlogPost />} />
             <Route path="/crisis-monitor" element={<CrisisMonitor />} />
