@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useBusinessContext } from '@/contexts/BusinessContext';
+import { useBusinesses } from '@/hooks/useBusinesses';
 import { DashboardLayout } from '@/components/layout/DashboardLayout';
 import { ContactDetail } from '@/components/ContactDetail';
 import { Input } from '@/components/ui/input';
@@ -93,6 +94,7 @@ const TAG_COLORS: Record<string, string> = {
 
 export default function Contacts() {
   const { selectedBusiness, setSelectedBusiness } = useBusinessContext();
+  const { data: businesses = [] } = useBusinesses();
   const { toast } = useToast();
 
   // View state
@@ -385,8 +387,7 @@ export default function Contacts() {
       <DashboardLayout
         selectedBusinessId={selectedBusiness?.id}
         onBusinessChange={(id) => {
-          const businesses = JSON.parse(localStorage.getItem('businesses') || '[]');
-          const business = businesses.find((b: any) => b.id === id);
+          const business = businesses.find((b) => b.id === id);
           if (business) setSelectedBusiness(business);
         }}
         businessName={selectedBusiness?.name}
@@ -405,8 +406,7 @@ export default function Contacts() {
     <DashboardLayout
       selectedBusinessId={selectedBusiness?.id}
       onBusinessChange={(id) => {
-        const businesses = JSON.parse(localStorage.getItem('businesses') || '[]');
-        const business = businesses.find((b: any) => b.id === id);
+        const business = businesses.find((b) => b.id === id);
         if (business) setSelectedBusiness(business);
       }}
       businessName={selectedBusiness?.name}
