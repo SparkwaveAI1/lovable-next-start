@@ -19,7 +19,7 @@ export interface ActiveAgentTask {
   agent_name: string;
   agent_type: 'primary' | 'subagent' | 'builtin';
   task_description: string;
-  status: 'running' | 'waiting' | 'completed' | 'error' | 'stale';
+  status: 'running' | 'waiting' | 'completed' | 'error' | 'stale' | 'timed_out';
   started_at: string;
   completed_at: string | null;
   progress: number | null;
