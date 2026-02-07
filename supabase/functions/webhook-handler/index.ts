@@ -618,19 +618,20 @@ serve(async (req: Request) => {
       const contactData = requestBody.data?.contact || {};
       const formData = requestBody.data || requestBody;
 
-      // Check for duplicate submission using submissionId
+      // ATOMIC DEDUPLICATION: Use database unique constraint instead of check-then-insert
+      // This prevents race conditions when Wix sends contact_created + contact_updated simultaneously
       const submissionId = formData.submissionId;
       if (submissionId) {
-        const { data: existingSubmission } = await supabase
-          .from('automation_logs')
-          .select('id')
-          .eq('business_id', endpoint.business_id)
-          .eq('automation_type', 'contact_created')
-          .contains('source_data', { data: { submissionId } })
-          .single();
+        const { error: dedupError } = await supabase
+          .from('webhook_submissions')
+          .insert({ 
+            submission_id: submissionId, 
+            business_id: endpoint.business_id 
+          });
 
-        if (existingSubmission) {
-          console.log(`Duplicate submission detected: ${submissionId} - skipping processing`);
+        // If unique_violation (23505), this submission was already processed
+        if (dedupError?.code === '23505') {
+          console.log(`Duplicate submission detected (atomic): ${submissionId} - skipping processing`);
           return new Response(
             JSON.stringify({
               success: true,
@@ -642,6 +643,11 @@ serve(async (req: Request) => {
               headers: { ...corsHeaders, 'Content-Type': 'application/json' }
             }
           );
+        }
+        
+        // Log any other errors but continue processing
+        if (dedupError && dedupError.code !== '23505') {
+          console.error('Dedup insert warning (non-fatal):', dedupError.message);
         }
       }
 
@@ -798,6 +804,19 @@ serve(async (req: Request) => {
             break;
           }
         }
+      }
+
+      // Filter out Wix image URLs (waiver signatures, etc.) - these should not trigger AI responses
+      const isWixImageUrl = (str: string): boolean => {
+        if (!str) return false;
+        const trimmed = str.trim();
+        return trimmed.includes('static.wixstatic.com/media/') || 
+               /^https?:\/\/.*\.(png|jpg|jpeg|gif|webp)(\?.*)?$/i.test(trimmed);
+      };
+      
+      if (leadComments && isWixImageUrl(leadComments)) {
+        console.log('Filtering out Wix image URL from comments:', leadComments.substring(0, 100));
+        leadComments = '';
       }
 
       // Enhanced logging to show data sources
