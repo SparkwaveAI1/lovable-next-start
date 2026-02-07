@@ -30,6 +30,8 @@ import Investments from "./pages/Investments";
 import Sales from "./pages/Sales";
 import MessageQueue from "./pages/MessageQueue";
 import ClientSuccess from "./pages/ClientSuccess";
+import Blog from "./pages/Blog";
+import BlogPost from "./pages/BlogPost";
 import ProtectedRoute from "./components/ProtectedRoute";
 import { ErrorBoundary } from "./components/ErrorBoundary";
 import { BusinessProvider } from "@/contexts/BusinessContext";
@@ -52,6 +54,8 @@ const App = () => (
             <Route path="/auth" element={<Auth />} />
             <Route path="/book" element={<Book />} />
             <Route path="/sales" element={<Sales />} />
+            <Route path="/blog" element={<Blog />} />
+            <Route path="/blog/:slug" element={<BlogPost />} />
             <Route path="/crisis-monitor" element={<CrisisMonitor />} />
             <Route path="/upload" element={<EmployeeUpload />} />
             <Route path="/" element={<ProtectedRoute><ErrorBoundary><Index /></ErrorBoundary></ProtectedRoute>} />
