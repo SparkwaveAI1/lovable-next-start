@@ -93,9 +93,9 @@ export function BusinessSwitcher({ selectedBusinessId, onBusinessChange, showAll
                     value={`${ALL_BUSINESSES_ID}::All Businesses`}
                     onSelect={() => handleSelect(ALL_BUSINESSES_ID)}
                     onPointerDown={(e) => {
-                      // iOS Safari fix: prevent default for touch handling
-                      // Let onSelect handle the actual selection logic
+                      // iOS Safari fix: handle touch events directly with debounce
                       e.preventDefault()
+                      handleSelect(ALL_BUSINESSES_ID)
                     }}
                     className="flex items-center gap-2 hover:bg-accent cursor-pointer touch-manipulation"
                   >
@@ -122,9 +122,9 @@ export function BusinessSwitcher({ selectedBusinessId, onBusinessChange, showAll
                   value={`${business.id}::${business.name}`}
                   onSelect={() => handleSelect(business.id)}
                   onPointerDown={(e) => {
-                    // iOS Safari fix: prevent default for touch handling
-                    // Let onSelect handle the actual selection logic
+                    // iOS Safari fix: handle touch events directly with debounce
                     e.preventDefault()
+                    handleSelect(business.id)
                   }}
                   className="flex items-center gap-2 hover:bg-accent cursor-pointer touch-manipulation"
                 >
