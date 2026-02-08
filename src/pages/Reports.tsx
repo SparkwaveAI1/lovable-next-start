@@ -11,7 +11,7 @@ import { useToast } from "@/components/ui/use-toast";
 import ReactMarkdown from "react-markdown";
 import { format, formatDistanceToNow } from "date-fns";
 
-const REPORT_TYPES: ReportType[] = ['hourly_summary', 'health_check', 'weekly_report', 'activity_log'];
+const REPORT_TYPES: ReportType[] = ['hourly_summary', 'daily_summary', 'health_check', 'weekly_report', 'activity_log'];
 
 export default function Reports() {
   const { selectedBusiness, setSelectedBusiness } = useBusinessContext();
@@ -308,6 +308,22 @@ export default function Reports() {
                               {selectedReport.metadata.sms_sent}
                             </div>
                             <div className="text-xs text-slate-500">SMS Sent</div>
+                          </div>
+                        )}
+                        {selectedReport.metadata.emails_sent !== undefined && selectedReport.metadata.emails_sent > 0 && (
+                          <div className="text-center">
+                            <div className="text-lg font-bold text-indigo-600">
+                              {selectedReport.metadata.emails_sent}
+                            </div>
+                            <div className="text-xs text-slate-500">Emails Sent</div>
+                          </div>
+                        )}
+                        {selectedReport.metadata.decisions_made !== undefined && selectedReport.metadata.decisions_made > 0 && (
+                          <div className="text-center">
+                            <div className="text-lg font-bold text-amber-600">
+                              {selectedReport.metadata.decisions_made}
+                            </div>
+                            <div className="text-xs text-slate-500">Decisions</div>
                           </div>
                         )}
                         {selectedReport.metadata.checks_passed !== undefined && (

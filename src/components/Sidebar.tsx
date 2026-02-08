@@ -19,6 +19,7 @@ import {
   BookOpen,
   TrendingUp,
   MessageSquare,
+  Twitter,
 } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { Button } from "@/components/ui/button"
@@ -51,6 +52,7 @@ const navGroups: NavGroup[] = [
     items: [
       { label: "Agents", href: "/agents", icon: Bot },
       { label: "Reports", href: "/reports", icon: ClipboardList },
+      { label: "Twitter Analytics", href: "/twitter-analytics", icon: Twitter },
     ],
   },
   {

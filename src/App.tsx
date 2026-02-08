@@ -38,6 +38,7 @@ import ClientSuccess from "./pages/ClientSuccess";
 import Communications from "./pages/Communications";
 import Blog from "./pages/Blog";
 import BlogPost from "./pages/BlogPost";
+import TwitterAnalytics from "./pages/TwitterAnalytics";
 import ProtectedRoute from "./components/ProtectedRoute";
 import { ErrorBoundary } from "./components/ErrorBoundary";
 import { BusinessProvider } from "@/contexts/BusinessContext";
@@ -89,6 +90,7 @@ const App = () => (
             <Route path="/message-queue" element={<ProtectedRoute><ErrorBoundary><MessageQueue /></ErrorBoundary></ProtectedRoute>} />
             <Route path="/client-success" element={<ProtectedRoute><ErrorBoundary><ClientSuccess /></ErrorBoundary></ProtectedRoute>} />
             <Route path="/communications" element={<ProtectedRoute><ErrorBoundary><Communications /></ErrorBoundary></ProtectedRoute>} />
+            <Route path="/twitter-analytics" element={<ProtectedRoute><ErrorBoundary><TwitterAnalytics /></ErrorBoundary></ProtectedRoute>} />
             {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
             <Route path="*" element={<NotFound />} />
             </Routes>

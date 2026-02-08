@@ -1,6 +1,6 @@
 // Mission Control Reports Types
 
-export type ReportType = 'hourly_summary' | 'health_check' | 'weekly_report' | 'activity_log';
+export type ReportType = 'hourly_summary' | 'health_check' | 'weekly_report' | 'activity_log' | 'daily_summary';
 
 export interface Report {
   id: string;
@@ -43,6 +43,7 @@ export const REPORT_TYPE_LABELS: Record<ReportType, string> = {
   health_check: 'Health Check',
   weekly_report: 'Weekly Report',
   activity_log: 'Activity Log',
+  daily_summary: 'Daily Summary',
 };
 
 export const REPORT_TYPE_ICONS: Record<ReportType, string> = {
@@ -50,4 +51,5 @@ export const REPORT_TYPE_ICONS: Record<ReportType, string> = {
   health_check: '🏥',
   weekly_report: '📈',
   activity_log: '📝',
+  daily_summary: '📅',
 };
