@@ -7,6 +7,11 @@ import { useBusinesses } from '@/hooks/useBusinesses';
 import { DashboardLayout } from '@/components/layout/DashboardLayout';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import { Textarea } from '@/components/ui/textarea';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Badge } from '@/components/ui/badge';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { 
@@ -67,10 +72,40 @@ export default function Communications() {
   const { data: businesses = [] } = useBusinesses();
   const [activeTab, setActiveTab] = useState('overview');
   const navigate = useNavigate();
+  const [isNewCampaignOpen, setIsNewCampaignOpen] = useState(false);
+  const [newCampaign, setNewCampaign] = useState({
+    name: '',
+    channel: 'sms',
+    message_template: '',
+  });
 
   const handleBusinessChange = (businessId: string) => {
     const business = businesses.find(b => b.id === businessId);
     if (business) setSelectedBusiness(business);
+  };
+
+  const handleCreateCampaign = async () => {
+    if (!newCampaign.name || !newCampaign.message_template) return;
+    
+    try {
+      const { error } = await supabase
+        .from('campaigns')
+        .insert({
+          name: newCampaign.name,
+          channel: newCampaign.channel,
+          message_template: newCampaign.message_template,
+          business_id: selectedBusiness?.id,
+          status: 'draft',
+        });
+      
+      if (error) throw error;
+      
+      setIsNewCampaignOpen(false);
+      setNewCampaign({ name: '', channel: 'sms', message_template: '' });
+      refetchCampaigns();
+    } catch (err) {
+      console.error('Failed to create campaign:', err);
+    }
   };
 
   // Fetch campaigns
@@ -170,10 +205,66 @@ export default function Communications() {
               <RefreshCw className="h-4 w-4 mr-2" />
               Refresh
             </Button>
-            <Button size="sm">
-              <Plus className="h-4 w-4 mr-2" />
-              New Campaign
-            </Button>
+            <Dialog open={isNewCampaignOpen} onOpenChange={setIsNewCampaignOpen}>
+              <DialogTrigger asChild>
+                <Button size="sm">
+                  <Plus className="h-4 w-4 mr-2" />
+                  New Campaign
+                </Button>
+              </DialogTrigger>
+              <DialogContent>
+                <DialogHeader>
+                  <DialogTitle>Create New Campaign</DialogTitle>
+                  <DialogDescription>
+                    Set up a new outreach campaign to engage your contacts.
+                  </DialogDescription>
+                </DialogHeader>
+                <div className="space-y-4 py-4">
+                  <div className="space-y-2">
+                    <Label htmlFor="name">Campaign Name</Label>
+                    <Input
+                      id="name"
+                      placeholder="e.g., Welcome Series"
+                      value={newCampaign.name}
+                      onChange={(e) => setNewCampaign(prev => ({ ...prev, name: e.target.value }))}
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="channel">Channel</Label>
+                    <Select
+                      value={newCampaign.channel}
+                      onValueChange={(value) => setNewCampaign(prev => ({ ...prev, channel: value }))}
+                    >
+                      <SelectTrigger>
+                        <SelectValue placeholder="Select channel" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="sms">SMS</SelectItem>
+                        <SelectItem value="email">Email</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="message">Message Template</Label>
+                    <Textarea
+                      id="message"
+                      placeholder="Your message here... Use {{name}} for personalization"
+                      value={newCampaign.message_template}
+                      onChange={(e) => setNewCampaign(prev => ({ ...prev, message_template: e.target.value }))}
+                      rows={4}
+                    />
+                  </div>
+                </div>
+                <DialogFooter>
+                  <Button variant="outline" onClick={() => setIsNewCampaignOpen(false)}>
+                    Cancel
+                  </Button>
+                  <Button onClick={handleCreateCampaign} disabled={!newCampaign.name || !newCampaign.message_template}>
+                    Create Campaign
+                  </Button>
+                </DialogFooter>
+              </DialogContent>
+            </Dialog>
           </div>
         </div>
 
