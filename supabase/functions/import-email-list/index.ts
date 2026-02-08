@@ -1,325 +1,181 @@
-import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
-import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
-
-/**
- * Import Email List - CSV to email_lists + email_subscribers
- * 
- * Accepts CSV data (inline or URL), creates/finds list, adds subscribers.
- * Deduplicates by email within the business.
- * 
- * Usage:
- *   POST /import-email-list
- *   {
- *     "business_id": "uuid",
- *     "listName": "Sparkwave Prospects",
- *     "listDescription": "Optional description",
- *     "csv": "email,name,company\njohn@example.com,John Smith,Acme Corp",
- *     // OR
- *     "csvUrl": "https://..."
- *   }
- */
+import { serve } from 'https://deno.land/std@0.168.0/http/server.ts'
+import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
-};
+}
 
 interface ImportRequest {
-  business_id: string;
-  listName: string;
-  listDescription?: string;
-  csv?: string;
-  csvUrl?: string;
-  source?: string; // For tracking where imports came from
+  listName: string
+  listDescription?: string
+  businessId?: string  // sparkwave, personaai, fight-flow, charx
+  csv: string  // CSV content: email,first_name,last_name,company (header optional)
 }
 
-interface ParsedRow {
-  email: string;
-  first_name?: string;
-  last_name?: string;
-  name?: string;
-  company?: string;
-  [key: string]: string | undefined;
-}
-
-function parseCSV(csvText: string): ParsedRow[] {
-  const lines = csvText.trim().split(/\r?\n/);
-  if (lines.length < 2) return [];
-
-  // Parse header row
-  const headers = lines[0].split(',').map(h => h.trim().toLowerCase());
-  
-  const rows: ParsedRow[] = [];
-  
-  for (let i = 1; i < lines.length; i++) {
-    const line = lines[i].trim();
-    if (!line) continue;
-    
-    // Handle quoted values in CSV
-    const values: string[] = [];
-    let current = '';
-    let inQuotes = false;
-    
-    for (const char of line) {
-      if (char === '"') {
-        inQuotes = !inQuotes;
-      } else if (char === ',' && !inQuotes) {
-        values.push(current.trim());
-        current = '';
-      } else {
-        current += char;
-      }
-    }
-    values.push(current.trim());
-    
-    const row: ParsedRow = { email: '' };
-    headers.forEach((header, idx) => {
-      if (values[idx]) {
-        row[header] = values[idx];
-      }
-    });
-    
-    // Normalize email field variations
-    const email = row.email || row['e-mail'] || row['email_address'] || row['emailaddress'];
-    if (email && email.includes('@')) {
-      row.email = email.toLowerCase().trim();
-      
-      // Handle name splitting if only "name" provided
-      if (row.name && !row.first_name) {
-        const nameParts = row.name.trim().split(/\s+/);
-        row.first_name = nameParts[0];
-        if (nameParts.length > 1) {
-          row.last_name = nameParts.slice(1).join(' ');
-        }
-      }
-      
-      rows.push(row);
-    }
-  }
-  
-  return rows;
+// Map business names to UUIDs
+const businessMap: Record<string, string> = {
+  'sparkwave': '5a9bbfcf-fae5-4063-9780-bcbe366bae88',
+  'personaai': '18d0dbb1-a82d-4477-a9f8-816a1fa2ee08',
+  'fight-flow': '456dc53b-d9d9-41b0-bc33-4f4c4a791eff',
+  'charx': '350b8fcb-9bfe-4b53-9548-c6ffdb1d3cb5'
 }
 
 serve(async (req) => {
   if (req.method === 'OPTIONS') {
-    return new Response('ok', { headers: corsHeaders });
+    return new Response('ok', { headers: corsHeaders })
   }
 
   try {
-    const supabaseUrl = Deno.env.get('SUPABASE_URL');
-    const supabaseKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY');
-    
-    if (!supabaseUrl || !supabaseKey) {
-      throw new Error('Supabase configuration missing');
+    const supabaseUrl = Deno.env.get('SUPABASE_URL')!
+    const supabaseKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
+    const supabase = createClient(supabaseUrl, supabaseKey)
+
+    const body: ImportRequest = await req.json()
+    const { listName, listDescription, businessId, csv } = body
+
+    if (!listName || !csv) {
+      return new Response(
+        JSON.stringify({ success: false, error: 'listName and csv are required' }),
+        { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 400 }
+      )
     }
 
-    const supabase = createClient(supabaseUrl, supabaseKey);
-    const body: ImportRequest = await req.json();
-    
-    const { business_id, listName, listDescription, csv, csvUrl, source = 'csv_import' } = body;
-
-    if (!business_id) {
-      throw new Error('business_id required');
-    }
-    
-    if (!listName) {
-      throw new Error('listName required');
-    }
-    
-    if (!csv && !csvUrl) {
-      throw new Error('Either csv or csvUrl required');
-    }
-
-    // Get CSV content
-    let csvContent = csv;
-    if (csvUrl) {
-      console.log(`Fetching CSV from: ${csvUrl}`);
-      const response = await fetch(csvUrl);
-      if (!response.ok) {
-        throw new Error(`Failed to fetch CSV: ${response.status}`);
-      }
-      csvContent = await response.text();
-    }
+    const resolvedBusinessId = businessMap[businessId?.toLowerCase()] || businessId || businessMap['sparkwave']
 
     // Parse CSV
-    const rows = parseCSV(csvContent!);
-    console.log(`Parsed ${rows.length} rows from CSV`);
+    const lines = csv.trim().split('\n')
+    const hasHeader = lines[0].toLowerCase().includes('email')
+    const dataLines = hasHeader ? lines.slice(1) : lines
 
-    if (rows.length === 0) {
-      return new Response(JSON.stringify({
-        success: true,
-        message: 'No valid rows found in CSV',
-        results: { imported: 0, skipped: 0, duplicates: 0 }
-      }), {
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' }
-      });
-    }
-
-    // Create or find the list
-    let listId: string;
-    
+    // Create or get list
+    let listId: string
     const { data: existingList } = await supabase
       .from('email_lists')
       .select('id')
-      .eq('business_id', business_id)
       .eq('name', listName)
-      .single();
+      .eq('business_id', resolvedBusinessId)
+      .single()
 
     if (existingList) {
-      listId = existingList.id;
-      console.log(`Using existing list: ${listId}`);
+      listId = existingList.id
     } else {
       const { data: newList, error: listError } = await supabase
         .from('email_lists')
-        .insert({
-          business_id,
-          name: listName,
-          description: listDescription || `Imported from CSV on ${new Date().toISOString().split('T')[0]}`,
-        })
+        .insert({ name: listName, description: listDescription, business_id: resolvedBusinessId })
         .select('id')
-        .single();
+        .single()
 
-      if (listError) {
-        throw new Error(`Failed to create list: ${listError.message}`);
-      }
-      
-      listId = newList.id;
-      console.log(`Created new list: ${listId}`);
+      if (listError) throw listError
+      listId = newList.id
     }
 
-    // Get existing subscribers for this business (for deduplication)
-    const emails = rows.map(r => r.email);
+    // Get existing subscribers for this business
     const { data: existingSubscribers } = await supabase
       .from('email_subscribers')
       .select('id, email')
-      .eq('business_id', business_id)
-      .in('email', emails);
+      .eq('business_id', resolvedBusinessId)
 
-    const existingEmailMap = new Map(
-      (existingSubscribers || []).map(s => [s.email, s.id])
-    );
+    const emailToSubscriberId = new Map<string, string>()
+    for (const sub of existingSubscribers || []) {
+      emailToSubscriberId.set(sub.email.toLowerCase(), sub.id)
+    }
 
-    // Get existing list members (to avoid duplicate links)
+    // Get existing list members
     const { data: existingMembers } = await supabase
       .from('email_list_members')
       .select('subscriber_id')
-      .eq('list_id', listId);
+      .eq('list_id', listId)
 
-    const existingMemberIds = new Set(
-      (existingMembers || []).map(m => m.subscriber_id)
-    );
+    const existingMemberIds = new Set((existingMembers || []).map(m => m.subscriber_id))
 
-    const results = {
-      imported: 0,
-      skipped: 0,
-      duplicates: 0,
-      errors: [] as string[]
-    };
+    // Process CSV rows
+    const newSubscribers: any[] = []
+    const newMembers: any[] = []
+    const errors: string[] = []
+    let skipped = 0
+    let imported = 0
 
-    const subscribersToCreate: any[] = [];
-    const membersToLink: { subscriber_id: string }[] = [];
+    for (const line of dataLines) {
+      if (!line.trim()) continue
 
-    // Process each row
-    for (const row of rows) {
-      const existingId = existingEmailMap.get(row.email);
-      
-      if (existingId) {
-        // Subscriber already exists
-        if (existingMemberIds.has(existingId)) {
-          // Already in this list
-          results.duplicates++;
-        } else {
-          // Add to list
-          membersToLink.push({ subscriber_id: existingId });
-          results.imported++;
+      const parts = line.split(',').map(p => p.trim().replace(/^"|"$/g, ''))
+      const email = parts[0]?.toLowerCase()
+      const firstName = parts[1] || null
+      const lastName = parts[2] || null
+      const company = parts[3] || null
+
+      // Validate email
+      if (!email || !email.includes('@')) {
+        errors.push(`Invalid email: ${parts[0]}`)
+        continue
+      }
+
+      let subscriberId = emailToSubscriberId.get(email)
+
+      // Create subscriber if doesn't exist
+      if (!subscriberId) {
+        const { data: newSub, error: subError } = await supabase
+          .from('email_subscribers')
+          .insert({
+            business_id: resolvedBusinessId,
+            email,
+            first_name: firstName,
+            last_name: lastName,
+            status: 'active',
+            source: 'import',
+            metadata: company ? { company } : null
+          })
+          .select('id')
+          .single()
+
+        if (subError) {
+          errors.push(`Error adding ${email}: ${subError.message}`)
+          continue
         }
+        subscriberId = newSub.id
+        emailToSubscriberId.set(email, subscriberId)
+      }
+
+      // Add to list if not already a member
+      if (!existingMemberIds.has(subscriberId)) {
+        newMembers.push({
+          list_id: listId,
+          subscriber_id: subscriberId
+        })
+        existingMemberIds.add(subscriberId)
+        imported++
       } else {
-        // Need to create new subscriber
-        subscribersToCreate.push({
-          business_id,
-          email: row.email,
-          first_name: row.first_name || null,
-          last_name: row.last_name || null,
-          source,
-          metadata: row.company ? { company: row.company } : {},
-        });
+        skipped++
       }
     }
 
-    // Batch insert new subscribers
-    if (subscribersToCreate.length > 0) {
-      const { data: newSubscribers, error: subError } = await supabase
-        .from('email_subscribers')
-        .insert(subscribersToCreate)
-        .select('id');
-
-      if (subError) {
-        console.error('Error inserting subscribers:', subError);
-        results.errors.push(`Failed to insert some subscribers: ${subError.message}`);
-      } else if (newSubscribers) {
-        // Add all new subscribers to the members list
-        for (const sub of newSubscribers) {
-          membersToLink.push({ subscriber_id: sub.id });
-        }
-        results.imported += newSubscribers.length;
-      }
-    }
-
-    // Batch insert list memberships
-    if (membersToLink.length > 0) {
-      const memberInserts = membersToLink.map(m => ({
-        list_id: listId,
-        subscriber_id: m.subscriber_id,
-      }));
-
+    // Batch insert list members
+    if (newMembers.length > 0) {
       const { error: memberError } = await supabase
         .from('email_list_members')
-        .insert(memberInserts);
+        .insert(newMembers)
 
-      if (memberError) {
-        console.error('Error inserting members:', memberError);
-        results.errors.push(`Failed to link some members: ${memberError.message}`);
-      }
+      if (memberError) throw memberError
     }
 
-    console.log(`Import complete: ${results.imported} imported, ${results.duplicates} duplicates, ${results.skipped} skipped`);
-
-    // Log the import
-    try {
-      await supabase.from('automation_logs').insert({
-        business_id,
-        automation_type: 'email_list_import',
-        status: results.errors.length === 0 ? 'success' : 'partial',
-        source_data: { listName, source, row_count: rows.length },
-        processed_data: results,
-      });
-    } catch (logErr) {
-      console.error('Failed to log import:', logErr);
-    }
-
-    return new Response(JSON.stringify({
-      success: true,
-      listId,
-      listName,
-      results: {
-        total_rows: rows.length,
-        imported: results.imported,
-        duplicates: results.duplicates,
-        skipped: results.skipped,
-        errors: results.errors.length > 0 ? results.errors : undefined,
-      }
-    }), {
-      headers: { ...corsHeaders, 'Content-Type': 'application/json' }
-    });
+    return new Response(
+      JSON.stringify({
+        success: true,
+        listId,
+        listName,
+        imported,
+        skipped,
+        errors: errors.slice(0, 10)
+      }),
+      { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+    )
 
   } catch (error) {
-    console.error('Import error:', error);
-    return new Response(JSON.stringify({
-      success: false,
-      error: error.message
-    }), {
-      status: 400,
-      headers: { ...corsHeaders, 'Content-Type': 'application/json' }
-    });
+    console.error('Import error:', error)
+    return new Response(
+      JSON.stringify({ success: false, error: error.message }),
+      { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 500 }
+    )
   }
-});
+})
