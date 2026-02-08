@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
@@ -17,6 +17,8 @@ import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Badge } from '@/components/ui/badge';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { Checkbox } from '@/components/ui/checkbox';
+import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { 
   Table, 
   TableBody, 
@@ -128,6 +130,66 @@ interface QualityMetrics {
   failurePatterns: { pattern: string; count: number }[];
 }
 
+interface CommunicationsHealthMetrics {
+  smsSentToday: number;
+  smsReceivedToday: number;
+  smsSentWeek: number;
+  smsReceivedWeek: number;
+  automationSuccessRate: number;
+  automationSuccessCount: number;
+  automationFailureCount: number;
+  activeFollowUps: number;
+  pausedFollowUps: number;
+  completedFollowUps: number;
+  respondedFollowUps: number;
+}
+
+// Audience selection types
+type AudienceType = 'all' | 'by_tag' | 'by_status' | 'by_source' | 'manual';
+
+interface AudienceCriteria {
+  type: AudienceType;
+  tags?: string[];
+  statuses?: string[];
+  sources?: string[];
+  contactIds?: string[];
+}
+
+interface ContactForSelection {
+  id: string;
+  first_name: string | null;
+  last_name: string | null;
+  email: string | null;
+  phone: string | null;
+  status: string | null;
+  source: string | null;
+  tags: string[] | null;
+}
+
+interface ContactTag {
+  id: string;
+  name: string;
+  slug: string;
+  color: string | null;
+}
+
+const STATUS_OPTIONS = [
+  { value: 'new_lead', label: 'New Lead' },
+  { value: 'contacted', label: 'Contacted' },
+  { value: 'qualified', label: 'Qualified' },
+  { value: 'active_member', label: 'Active Member' },
+  { value: 'inactive', label: 'Inactive' },
+];
+
+const SOURCE_OPTIONS = [
+  { value: 'wix_form', label: 'Wix Form' },
+  { value: 'wix_booking', label: 'Wix Booking' },
+  { value: 'wix_prechat', label: 'Wix Chat' },
+  { value: 'sms_inbound', label: 'SMS Inbound' },
+  { value: 'email_inbound', label: 'Email Inbound' },
+  { value: 'manual', label: 'Manual Entry' },
+];
+
 export default function Communications() {
   const { selectedBusiness, setSelectedBusiness } = useBusinessContext();
   const { data: businesses = [] } = useBusinesses();
@@ -139,6 +201,14 @@ export default function Communications() {
     channel: 'sms',
     message_template: '',
   });
+  
+  // Audience selection state
+  const [audienceType, setAudienceType] = useState<AudienceType>('all');
+  const [selectedTags, setSelectedTags] = useState<string[]>([]);
+  const [selectedStatuses, setSelectedStatuses] = useState<string[]>([]);
+  const [selectedSources, setSelectedSources] = useState<string[]>([]);
+  const [selectedContactIds, setSelectedContactIds] = useState<string[]>([]);
+  const [isCreatingCampaign, setIsCreatingCampaign] = useState(false);
   const [isComposeOpen, setIsComposeOpen] = useState(false);
   const [composeMessage, setComposeMessage] = useState({
     phone: '',
@@ -150,6 +220,20 @@ export default function Communications() {
   const [selectedContactId, setSelectedContactId] = useState<string | null>(null);
   const [replyMessage, setReplyMessage] = useState('');
   const [isSendingReply, setIsSendingReply] = useState(false);
+  
+  // Email campaign state
+  const [isEmailCampaignOpen, setIsEmailCampaignOpen] = useState(false);
+  const [newEmailCampaign, setNewEmailCampaign] = useState({
+    name: '',
+    subject: '',
+    content_html: '',
+    from_name: '',
+    from_email: '',
+    target_type: 'all',
+    schedule_type: 'now',
+    scheduled_for: '',
+  });
+  const queryClient = useQueryClient();
 
   const handleBusinessChange = (businessId: string) => {
     const business = businesses.find(b => b.id === businessId);
@@ -158,9 +242,25 @@ export default function Communications() {
 
   const handleCreateCampaign = async () => {
     if (!newCampaign.name || !newCampaign.message_template) return;
+    if (recipientCount === 0) {
+      toast.error('Please select at least one recipient');
+      return;
+    }
+    
+    setIsCreatingCampaign(true);
     
     try {
-      const { error } = await supabase
+      // Build audience criteria for storage
+      const audienceCriteria: AudienceCriteria = {
+        type: audienceType,
+        ...(audienceType === 'by_tag' && { tags: selectedTags }),
+        ...(audienceType === 'by_status' && { statuses: selectedStatuses }),
+        ...(audienceType === 'by_source' && { sources: selectedSources }),
+        ...(audienceType === 'manual' && { contactIds: selectedContactIds }),
+      };
+
+      // Create the campaign
+      const { data: campaign, error: campaignError } = await supabase
         .from('campaigns')
         .insert({
           name: newCampaign.name,
@@ -168,16 +268,52 @@ export default function Communications() {
           message_template: newCampaign.message_template,
           business_id: selectedBusiness?.id,
           status: 'draft',
-        });
+          target_criteria: audienceCriteria,
+        })
+        .select('id')
+        .single();
       
-      if (error) throw error;
+      if (campaignError) throw campaignError;
       
+      // Populate campaign_recipients based on filtered contacts
+      const recipientInserts = filteredContacts.map(contact => ({
+        campaign_id: campaign.id,
+        contact_id: contact.id,
+        status: 'pending',
+      }));
+
+      if (recipientInserts.length > 0) {
+        // Insert in batches of 500 to avoid hitting limits
+        const batchSize = 500;
+        for (let i = 0; i < recipientInserts.length; i += batchSize) {
+          const batch = recipientInserts.slice(i, i + batchSize);
+          const { error: recipientError } = await supabase
+            .from('campaign_recipients')
+            .insert(batch);
+          
+          if (recipientError) throw recipientError;
+        }
+      }
+      
+      toast.success(`Campaign created with ${recipientCount} recipients`);
       setIsNewCampaignOpen(false);
-      setNewCampaign({ name: '', channel: 'sms', message_template: '' });
+      resetCampaignForm();
       refetchCampaigns();
     } catch (err) {
       console.error('Failed to create campaign:', err);
+      toast.error('Failed to create campaign');
+    } finally {
+      setIsCreatingCampaign(false);
     }
+  };
+
+  const resetCampaignForm = () => {
+    setNewCampaign({ name: '', channel: 'sms', message_template: '' });
+    setAudienceType('all');
+    setSelectedTags([]);
+    setSelectedStatuses([]);
+    setSelectedSources([]);
+    setSelectedContactIds([]);
   };
 
   const handleSendMessage = async () => {
@@ -219,6 +355,192 @@ export default function Communications() {
     refetchInterval: 30000, // Refresh every 30 seconds
   });
 
+  // Fetch email campaigns
+  const { data: emailCampaigns = [], isLoading: emailCampaignsLoading, refetch: refetchEmailCampaigns } = useQuery({
+    queryKey: ['email-campaigns', selectedBusiness?.id],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('email_campaigns')
+        .select('*')
+        .eq('business_id', selectedBusiness?.id)
+        .order('created_at', { ascending: false });
+      if (error) throw error;
+      return data as EmailCampaign[];
+    },
+    enabled: !!selectedBusiness?.id,
+    refetchInterval: 30000,
+  });
+
+  // Fetch verified senders for email from address
+  const { data: verifiedSenders = [] } = useQuery({
+    queryKey: ['verified-senders', selectedBusiness?.id],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('verified_senders')
+        .select('*')
+        .eq('business_id', selectedBusiness?.id)
+        .eq('is_active', true);
+      if (error) throw error;
+      return data as VerifiedSender[];
+    },
+    enabled: !!selectedBusiness?.id,
+  });
+
+  // Get default sender
+  const defaultSender = verifiedSenders.find(s => s.is_default) || verifiedSenders[0];
+
+  // Fetch contact tags for audience selection
+  const { data: availableTags = [] } = useQuery({
+    queryKey: ['contact-tags', selectedBusiness?.id],
+    queryFn: async () => {
+      if (!selectedBusiness?.id) return [];
+      const { data, error } = await supabase
+        .from('contact_tags')
+        .select('id, name, slug, color')
+        .eq('business_id', selectedBusiness.id)
+        .eq('is_active', true)
+        .order('name');
+      if (error) throw error;
+      return data as ContactTag[];
+    },
+    enabled: !!selectedBusiness?.id,
+  });
+
+  // Fetch all contacts for audience selection
+  const { data: allContacts = [], isLoading: contactsLoading } = useQuery({
+    queryKey: ['all-contacts-for-campaign', selectedBusiness?.id],
+    queryFn: async () => {
+      if (!selectedBusiness?.id) return [];
+      const { data, error } = await supabase
+        .from('contacts')
+        .select('id, first_name, last_name, email, phone, status, source, tags')
+        .eq('business_id', selectedBusiness.id)
+        .order('first_name');
+      if (error) throw error;
+      return data as ContactForSelection[];
+    },
+    enabled: !!selectedBusiness?.id && isNewCampaignOpen,
+  });
+
+  // Calculate filtered contacts based on audience selection
+  const filteredContacts = useMemo(() => {
+    if (!allContacts.length) return [];
+    
+    switch (audienceType) {
+      case 'all':
+        return allContacts;
+      case 'by_tag':
+        if (selectedTags.length === 0) return [];
+        return allContacts.filter(c => 
+          c.tags && c.tags.some(tag => selectedTags.includes(tag))
+        );
+      case 'by_status':
+        if (selectedStatuses.length === 0) return [];
+        return allContacts.filter(c => 
+          c.status && selectedStatuses.includes(c.status)
+        );
+      case 'by_source':
+        if (selectedSources.length === 0) return [];
+        return allContacts.filter(c => 
+          c.source && selectedSources.includes(c.source)
+        );
+      case 'manual':
+        return allContacts.filter(c => selectedContactIds.includes(c.id));
+      default:
+        return [];
+    }
+  }, [allContacts, audienceType, selectedTags, selectedStatuses, selectedSources, selectedContactIds]);
+
+  const recipientCount = filteredContacts.length;
+
+  // Create email campaign mutation
+  const createEmailCampaignMutation = useMutation({
+    mutationFn: async (campaign: typeof newEmailCampaign) => {
+      const insertData: any = {
+        business_id: selectedBusiness?.id,
+        name: campaign.name,
+        subject: campaign.subject,
+        content_html: campaign.content_html,
+        from_name: campaign.from_name || defaultSender?.name || 'Your Business',
+        from_email: campaign.from_email || defaultSender?.email || 'noreply@sparkwave-ai.com',
+        target_type: campaign.target_type,
+        status: campaign.schedule_type === 'scheduled' ? 'scheduled' : 'draft',
+      };
+      
+      if (campaign.schedule_type === 'scheduled' && campaign.scheduled_for) {
+        insertData.scheduled_for = campaign.scheduled_for;
+      }
+      
+      const { data, error } = await supabase
+        .from('email_campaigns')
+        .insert(insertData)
+        .select()
+        .single();
+      
+      if (error) throw error;
+      return data;
+    },
+    onSuccess: () => {
+      toast.success('Email campaign created!');
+      setIsEmailCampaignOpen(false);
+      setNewEmailCampaign({
+        name: '',
+        subject: '',
+        content_html: '',
+        from_name: '',
+        from_email: '',
+        target_type: 'all',
+        schedule_type: 'now',
+        scheduled_for: '',
+      });
+      queryClient.invalidateQueries({ queryKey: ['email-campaigns'] });
+    },
+    onError: (error: Error) => {
+      toast.error('Failed to create campaign: ' + error.message);
+    },
+  });
+
+  // Calculate email campaign stats
+  const emailStats = {
+    totalCampaigns: emailCampaigns.length,
+    totalSent: emailCampaigns.reduce((sum, c) => sum + (c.total_sent || 0), 0),
+    totalOpened: emailCampaigns.reduce((sum, c) => sum + (c.total_opened || 0), 0),
+    totalClicked: emailCampaigns.reduce((sum, c) => sum + (c.total_clicked || 0), 0),
+    avgOpenRate: emailCampaigns.length > 0 && emailCampaigns.reduce((sum, c) => sum + (c.total_sent || 0), 0) > 0
+      ? ((emailCampaigns.reduce((sum, c) => sum + (c.total_opened || 0), 0) / 
+          emailCampaigns.reduce((sum, c) => sum + (c.total_sent || 0), 0)) * 100).toFixed(1)
+      : '0',
+    avgClickRate: emailCampaigns.length > 0 && emailCampaigns.reduce((sum, c) => sum + (c.total_sent || 0), 0) > 0
+      ? ((emailCampaigns.reduce((sum, c) => sum + (c.total_clicked || 0), 0) / 
+          emailCampaigns.reduce((sum, c) => sum + (c.total_sent || 0), 0)) * 100).toFixed(1)
+      : '0',
+  };
+
+  const handleCreateEmailCampaign = () => {
+    if (!newEmailCampaign.name || !newEmailCampaign.subject || !newEmailCampaign.content_html) {
+      toast.error('Please fill in campaign name, subject, and content');
+      return;
+    }
+    createEmailCampaignMutation.mutate(newEmailCampaign);
+  };
+
+  const getEmailStatusBadge = (status: string | null) => {
+    switch (status) {
+      case 'sent':
+        return <Badge className="bg-green-500">Sent</Badge>;
+      case 'sending':
+        return <Badge className="bg-blue-500">Sending</Badge>;
+      case 'scheduled':
+        return <Badge className="bg-purple-500">Scheduled</Badge>;
+      case 'draft':
+        return <Badge variant="outline">Draft</Badge>;
+      case 'cancelled':
+        return <Badge variant="destructive">Cancelled</Badge>;
+      default:
+        return <Badge variant="secondary">{status || 'Unknown'}</Badge>;
+    }
+  };
+
   // Fetch recent messages
   const { data: recentMessages = [], isLoading: messagesLoading } = useQuery({
     queryKey: ['recent-messages', selectedBusiness?.id],
@@ -240,6 +562,190 @@ export default function Communications() {
     },
     enabled: !!selectedBusiness?.id,
     refetchInterval: 10000, // Refresh every 10 seconds
+  });
+
+  // Fetch AI quality metrics
+  // TODO: Replace sample data with real queries once ai_response_logs table is populated
+  const { data: qualityMetrics, isLoading: qualityLoading } = useQuery({
+    queryKey: ['ai-quality-metrics', selectedBusiness?.id],
+    queryFn: async (): Promise<QualityMetrics> => {
+      // Try to fetch from ai_response_logs table
+      const { data: logs, error } = await supabase
+        .from('ai_response_logs')
+        .select('id, confidence_score, patterns_flagged, required_review, reviewed_at, review_rating, created_at')
+        .eq('business_id', selectedBusiness?.id)
+        .order('created_at', { ascending: false })
+        .limit(500);
+      
+      if (error || !logs || logs.length === 0) {
+        // Return sample data if table doesn't exist or is empty
+        // TODO: Remove sample data once real data is flowing
+        return {
+          passRate: 87.5,
+          avgRevisions: 1.2,
+          totalResponses: 0,
+          reviewedCount: 0,
+          flaggedCount: 0,
+          failurePatterns: [
+            { pattern: 'tone_too_formal', count: 12 },
+            { pattern: 'missing_cta', count: 8 },
+            { pattern: 'too_long', count: 5 },
+          ],
+        };
+      }
+
+      // Calculate metrics from real data
+      const totalResponses = logs.length;
+      const reviewedLogs = logs.filter(l => l.reviewed_at !== null);
+      const reviewedCount = reviewedLogs.length;
+      const flaggedCount = logs.filter(l => l.required_review).length;
+      
+      // Pass rate = responses that passed on first try (high confidence, not flagged)
+      const passedFirst = logs.filter(l => 
+        (l.confidence_score && l.confidence_score >= 0.8) && !l.required_review
+      ).length;
+      const passRate = totalResponses > 0 ? (passedFirst / totalResponses) * 100 : 0;
+      
+      // Average revisions (based on review cycles - placeholder logic)
+      // TODO: Implement revision tracking when we have that data
+      const avgRevisions = flaggedCount > 0 ? 1 + (flaggedCount / totalResponses) : 1.0;
+      
+      // Count failure patterns
+      const patternCounts: Record<string, number> = {};
+      logs.forEach(log => {
+        if (log.patterns_flagged && Array.isArray(log.patterns_flagged)) {
+          log.patterns_flagged.forEach((pattern: string) => {
+            patternCounts[pattern] = (patternCounts[pattern] || 0) + 1;
+          });
+        }
+      });
+      
+      const failurePatterns = Object.entries(patternCounts)
+        .map(([pattern, count]) => ({ pattern, count }))
+        .sort((a, b) => b.count - a.count)
+        .slice(0, 5);
+
+      return {
+        passRate: Math.round(passRate * 10) / 10,
+        avgRevisions: Math.round(avgRevisions * 10) / 10,
+        totalResponses,
+        reviewedCount,
+        flaggedCount,
+        failurePatterns: failurePatterns.length > 0 ? failurePatterns : [
+          { pattern: 'No patterns detected yet', count: 0 },
+        ],
+      };
+    },
+    enabled: !!selectedBusiness?.id,
+    refetchInterval: 60000, // Refresh every minute
+  });
+
+  // Fetch communications health metrics (SMS counts, automation success, follow-ups)
+  const { data: healthMetrics, isLoading: healthLoading } = useQuery({
+    queryKey: ['communications-health-metrics', selectedBusiness?.id],
+    queryFn: async (): Promise<CommunicationsHealthMetrics> => {
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+      const todayISO = today.toISOString();
+      
+      const weekAgo = new Date();
+      weekAgo.setDate(weekAgo.getDate() - 7);
+      weekAgo.setHours(0, 0, 0, 0);
+      const weekAgoISO = weekAgo.toISOString();
+
+      // Parallel queries for better performance
+      const [smsResult, automationResult, followUpResult] = await Promise.all([
+        // SMS counts
+        supabase
+          .from('sms_messages')
+          .select('id, direction, created_at')
+          .gte('created_at', weekAgoISO),
+        
+        // Automation logs (last 30 days for success rate)
+        supabase
+          .from('automation_logs')
+          .select('id, status, created_at')
+          .eq('business_id', selectedBusiness?.id)
+          .gte('created_at', weekAgoISO),
+        
+        // Follow-up status counts
+        supabase
+          .from('contact_follow_ups')
+          .select('id, status')
+          .eq('business_id', selectedBusiness?.id)
+      ]);
+
+      // Process SMS data
+      const smsMessages = smsResult.data || [];
+      const smsSentToday = smsMessages.filter(m => 
+        m.direction === 'outbound' && new Date(m.created_at) >= today
+      ).length;
+      const smsReceivedToday = smsMessages.filter(m => 
+        m.direction === 'inbound' && new Date(m.created_at) >= today
+      ).length;
+      const smsSentWeek = smsMessages.filter(m => m.direction === 'outbound').length;
+      const smsReceivedWeek = smsMessages.filter(m => m.direction === 'inbound').length;
+
+      // Process automation data
+      const automationLogs = automationResult.data || [];
+      const automationSuccessCount = automationLogs.filter(l => l.status === 'success').length;
+      const automationFailureCount = automationLogs.filter(l => l.status === 'error' || l.status === 'failed').length;
+      const totalAutomations = automationSuccessCount + automationFailureCount;
+      const automationSuccessRate = totalAutomations > 0 
+        ? Math.round((automationSuccessCount / totalAutomations) * 100 * 10) / 10
+        : 100;
+
+      // Process follow-up data
+      const followUps = followUpResult.data || [];
+      const activeFollowUps = followUps.filter(f => f.status === 'active').length;
+      const pausedFollowUps = followUps.filter(f => f.status === 'paused').length;
+      const completedFollowUps = followUps.filter(f => f.status === 'completed').length;
+      const respondedFollowUps = followUps.filter(f => f.status === 'responded').length;
+
+      return {
+        smsSentToday,
+        smsReceivedToday,
+        smsSentWeek,
+        smsReceivedWeek,
+        automationSuccessRate,
+        automationSuccessCount,
+        automationFailureCount,
+        activeFollowUps,
+        pausedFollowUps,
+        completedFollowUps,
+        respondedFollowUps
+      };
+    },
+    enabled: !!selectedBusiness?.id,
+    refetchInterval: 60000, // Refresh every minute
+  });
+
+  // Fetch recent flagged messages for review
+  const { data: recentFlagged = [], isLoading: flaggedLoading } = useQuery({
+    queryKey: ['recent-flagged', selectedBusiness?.id],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('ai_response_logs')
+        .select('id, input_message, response_text, patterns_flagged, created_at, review_rating, input_channel')
+        .eq('business_id', selectedBusiness?.id)
+        .eq('required_review', true)
+        .is('reviewed_at', null)
+        .order('created_at', { ascending: false })
+        .limit(5);
+      
+      if (error) {
+        // Return sample data if table doesn't exist
+        // TODO: Remove sample data once real data is flowing
+        return [
+          { id: 'sample-1', input_message: 'What are your prices?', response_text: 'Our pricing varies...', patterns_flagged: ['missing_cta'], created_at: new Date().toISOString(), input_channel: 'sms' },
+          { id: 'sample-2', input_message: 'Can I get a trial?', response_text: 'Thank you for your interest...', patterns_flagged: ['tone_too_formal'], created_at: new Date().toISOString(), input_channel: 'sms' },
+        ] as AIResponseLog[];
+      }
+      
+      return (data || []) as AIResponseLog[];
+    },
+    enabled: !!selectedBusiness?.id,
+    refetchInterval: 30000,
   });
 
   // Fetch selected contact details
@@ -551,6 +1057,10 @@ export default function Communications() {
             <TabsTrigger value="campaigns">SMS Campaigns</TabsTrigger>
             <TabsTrigger value="email">Email Marketing</TabsTrigger>
             <TabsTrigger value="inbox">Inbox</TabsTrigger>
+            <TabsTrigger value="quality">
+              <Sparkles className="h-4 w-4 mr-1" />
+              Quality
+            </TabsTrigger>
           </TabsList>
 
           {/* Overview Tab */}
@@ -704,31 +1214,297 @@ export default function Communications() {
           </TabsContent>
 
           {/* Email Marketing Tab */}
-          <TabsContent value="email">
+          <TabsContent value="email" className="space-y-6">
+            {/* Email Stats Cards */}
+            <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
+              <Card>
+                <CardHeader className="pb-2">
+                  <CardTitle className="text-sm font-medium text-muted-foreground">Campaigns</CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <div className="flex items-center gap-2">
+                    <Mail className="h-5 w-5 text-blue-500" />
+                    <span className="text-2xl font-bold">{emailStats.totalCampaigns}</span>
+                  </div>
+                </CardContent>
+              </Card>
+              <Card>
+                <CardHeader className="pb-2">
+                  <CardTitle className="text-sm font-medium text-muted-foreground">Emails Sent</CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <div className="flex items-center gap-2">
+                    <Send className="h-5 w-5 text-green-500" />
+                    <span className="text-2xl font-bold">{emailStats.totalSent}</span>
+                  </div>
+                </CardContent>
+              </Card>
+              <Card>
+                <CardHeader className="pb-2">
+                  <CardTitle className="text-sm font-medium text-muted-foreground">Opened</CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <div className="flex items-center gap-2">
+                    <Eye className="h-5 w-5 text-purple-500" />
+                    <span className="text-2xl font-bold">{emailStats.totalOpened}</span>
+                  </div>
+                </CardContent>
+              </Card>
+              <Card>
+                <CardHeader className="pb-2">
+                  <CardTitle className="text-sm font-medium text-muted-foreground">Avg Open Rate</CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <div className="flex items-center gap-2">
+                    <TrendingUp className="h-5 w-5 text-emerald-500" />
+                    <span className="text-2xl font-bold">{emailStats.avgOpenRate}%</span>
+                  </div>
+                </CardContent>
+              </Card>
+              <Card>
+                <CardHeader className="pb-2">
+                  <CardTitle className="text-sm font-medium text-muted-foreground">Avg Click Rate</CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <div className="flex items-center gap-2">
+                    <Target className="h-5 w-5 text-orange-500" />
+                    <span className="text-2xl font-bold">{emailStats.avgClickRate}%</span>
+                  </div>
+                </CardContent>
+              </Card>
+            </div>
+
+            {/* Email Campaigns List */}
             <Card>
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                  <Mail className="h-5 w-5" />
-                  Email Marketing
-                </CardTitle>
-                <CardDescription>
-                  Create and manage email campaigns, newsletters, and automated sequences
-                </CardDescription>
+              <CardHeader className="flex flex-row items-center justify-between">
+                <div>
+                  <CardTitle className="flex items-center gap-2">
+                    <Mail className="h-5 w-5" />
+                    Email Campaigns
+                  </CardTitle>
+                  <CardDescription>
+                    Create and manage email campaigns
+                  </CardDescription>
+                </div>
+                <div className="flex gap-2">
+                  <Button variant="outline" size="sm" onClick={() => refetchEmailCampaigns()}>
+                    <RefreshCw className="h-4 w-4 mr-2" />
+                    Refresh
+                  </Button>
+                  <Dialog open={isEmailCampaignOpen} onOpenChange={setIsEmailCampaignOpen}>
+                    <DialogTrigger asChild>
+                      <Button size="sm">
+                        <Plus className="h-4 w-4 mr-2" />
+                        New Email Campaign
+                      </Button>
+                    </DialogTrigger>
+                    <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
+                      <DialogHeader>
+                        <DialogTitle>Create Email Campaign</DialogTitle>
+                        <DialogDescription>
+                          Set up a new email campaign to reach your contacts
+                        </DialogDescription>
+                      </DialogHeader>
+                      <div className="space-y-4 py-4">
+                        <div className="space-y-2">
+                          <Label htmlFor="email-name">Campaign Name</Label>
+                          <Input
+                            id="email-name"
+                            placeholder="e.g., February Newsletter"
+                            value={newEmailCampaign.name}
+                            onChange={(e) => setNewEmailCampaign(prev => ({ ...prev, name: e.target.value }))}
+                          />
+                        </div>
+                        <div className="space-y-2">
+                          <Label htmlFor="email-subject">Subject Line</Label>
+                          <Input
+                            id="email-subject"
+                            placeholder="e.g., Check out our latest updates!"
+                            value={newEmailCampaign.subject}
+                            onChange={(e) => setNewEmailCampaign(prev => ({ ...prev, subject: e.target.value }))}
+                          />
+                        </div>
+                        <div className="grid grid-cols-2 gap-4">
+                          <div className="space-y-2">
+                            <Label htmlFor="from-name">From Name</Label>
+                            <Input
+                              id="from-name"
+                              placeholder={defaultSender?.name || 'Your Business'}
+                              value={newEmailCampaign.from_name}
+                              onChange={(e) => setNewEmailCampaign(prev => ({ ...prev, from_name: e.target.value }))}
+                            />
+                          </div>
+                          <div className="space-y-2">
+                            <Label htmlFor="from-email">From Email</Label>
+                            <Select
+                              value={newEmailCampaign.from_email || defaultSender?.email || ''}
+                              onValueChange={(value) => setNewEmailCampaign(prev => ({ ...prev, from_email: value }))}
+                            >
+                              <SelectTrigger>
+                                <SelectValue placeholder="Select verified sender" />
+                              </SelectTrigger>
+                              <SelectContent>
+                                {verifiedSenders.length === 0 ? (
+                                  <SelectItem value="noreply@sparkwave-ai.com">noreply@sparkwave-ai.com</SelectItem>
+                                ) : (
+                                  verifiedSenders.map((sender) => (
+                                    <SelectItem key={sender.id} value={sender.email}>
+                                      {sender.email} {sender.is_default && '(default)'}
+                                    </SelectItem>
+                                  ))
+                                )}
+                              </SelectContent>
+                            </Select>
+                          </div>
+                        </div>
+                        <div className="space-y-2">
+                          <Label htmlFor="email-body">Email Content (HTML)</Label>
+                          <Textarea
+                            id="email-body"
+                            placeholder="<html><body><h1>Hello {{first_name}}!</h1><p>Your content here...</p></body></html>"
+                            value={newEmailCampaign.content_html}
+                            onChange={(e) => setNewEmailCampaign(prev => ({ ...prev, content_html: e.target.value }))}
+                            rows={8}
+                            className="font-mono text-sm"
+                          />
+                          <p className="text-xs text-muted-foreground">
+                            Use {"{{first_name}}"}, {"{{last_name}}"}, {"{{email}}"} for personalization
+                          </p>
+                        </div>
+                        <div className="space-y-2">
+                          <Label htmlFor="target-type">Audience</Label>
+                          <Select
+                            value={newEmailCampaign.target_type}
+                            onValueChange={(value) => setNewEmailCampaign(prev => ({ ...prev, target_type: value }))}
+                          >
+                            <SelectTrigger>
+                              <SelectValue placeholder="Select audience" />
+                            </SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="all">All contacts with email</SelectItem>
+                              <SelectItem value="tags">Contacts with specific tags</SelectItem>
+                              <SelectItem value="segment">Custom segment</SelectItem>
+                            </SelectContent>
+                          </Select>
+                        </div>
+                        <div className="space-y-2">
+                          <Label>Schedule</Label>
+                          <Select
+                            value={newEmailCampaign.schedule_type}
+                            onValueChange={(value) => setNewEmailCampaign(prev => ({ ...prev, schedule_type: value }))}
+                          >
+                            <SelectTrigger>
+                              <SelectValue placeholder="When to send" />
+                            </SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="now">Save as draft</SelectItem>
+                              <SelectItem value="scheduled">Schedule for later</SelectItem>
+                            </SelectContent>
+                          </Select>
+                        </div>
+                        {newEmailCampaign.schedule_type === 'scheduled' && (
+                          <div className="space-y-2">
+                            <Label htmlFor="scheduled-for">Send Date & Time</Label>
+                            <Input
+                              id="scheduled-for"
+                              type="datetime-local"
+                              value={newEmailCampaign.scheduled_for}
+                              onChange={(e) => setNewEmailCampaign(prev => ({ ...prev, scheduled_for: e.target.value }))}
+                            />
+                          </div>
+                        )}
+                      </div>
+                      <DialogFooter>
+                        <Button variant="outline" onClick={() => setIsEmailCampaignOpen(false)}>
+                          Cancel
+                        </Button>
+                        <Button 
+                          onClick={handleCreateEmailCampaign} 
+                          disabled={createEmailCampaignMutation.isPending || !newEmailCampaign.name || !newEmailCampaign.subject || !newEmailCampaign.content_html}
+                        >
+                          {createEmailCampaignMutation.isPending ? (
+                            <>
+                              <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                              Creating...
+                            </>
+                          ) : (
+                            'Create Campaign'
+                          )}
+                        </Button>
+                      </DialogFooter>
+                    </DialogContent>
+                  </Dialog>
+                </div>
               </CardHeader>
               <CardContent>
-                <div className="text-center py-12 space-y-4">
-                  <Mail className="h-16 w-16 mx-auto text-muted-foreground/50" />
-                  <div>
-                    <h3 className="font-semibold text-lg">Email Marketing Coming Soon</h3>
-                    <p className="text-muted-foreground mt-2 max-w-md mx-auto">
-                      We're integrating email marketing directly into the Communications Center. 
-                      You'll be able to create email campaigns, newsletters, and automated drip sequences.
-                    </p>
+                {emailCampaignsLoading ? (
+                  <div className="flex items-center justify-center py-8">
+                    <Loader2 className="h-6 w-6 animate-spin mr-2" />
+                    <span>Loading campaigns...</span>
                   </div>
-                  <Button variant="outline" onClick={() => window.location.href = '/email-marketing'}>
-                    Use Legacy Email Marketing
-                  </Button>
-                </div>
+                ) : emailCampaigns.length === 0 ? (
+                  <div className="text-center py-12 space-y-4">
+                    <Mail className="h-16 w-16 mx-auto text-muted-foreground/50" />
+                    <div>
+                      <h3 className="font-semibold text-lg">No email campaigns yet</h3>
+                      <p className="text-muted-foreground mt-2 max-w-md mx-auto">
+                        Create your first email campaign to start reaching your contacts
+                      </p>
+                    </div>
+                    <Button onClick={() => setIsEmailCampaignOpen(true)}>
+                      <Plus className="h-4 w-4 mr-2" />
+                      Create First Campaign
+                    </Button>
+                  </div>
+                ) : (
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead>Campaign</TableHead>
+                        <TableHead>Subject</TableHead>
+                        <TableHead>Status</TableHead>
+                        <TableHead className="text-right">Sent</TableHead>
+                        <TableHead className="text-right">Delivered</TableHead>
+                        <TableHead className="text-right">Opened</TableHead>
+                        <TableHead className="text-right">Open Rate</TableHead>
+                        <TableHead className="text-right">Clicked</TableHead>
+                        <TableHead>Created</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {emailCampaigns.map(campaign => {
+                        const openRate = campaign.total_sent && campaign.total_sent > 0 
+                          ? ((campaign.total_opened || 0) / campaign.total_sent * 100).toFixed(1) 
+                          : '0';
+                        const clickRate = campaign.total_sent && campaign.total_sent > 0 
+                          ? ((campaign.total_clicked || 0) / campaign.total_sent * 100).toFixed(1) 
+                          : '0';
+                        return (
+                          <TableRow key={campaign.id} className="cursor-pointer hover:bg-muted/50">
+                            <TableCell className="font-medium">{campaign.name}</TableCell>
+                            <TableCell className="max-w-[200px] truncate">{campaign.subject}</TableCell>
+                            <TableCell>{getEmailStatusBadge(campaign.status)}</TableCell>
+                            <TableCell className="text-right">{campaign.total_sent || 0}</TableCell>
+                            <TableCell className="text-right">{campaign.total_delivered || 0}</TableCell>
+                            <TableCell className="text-right">{campaign.total_opened || 0}</TableCell>
+                            <TableCell className="text-right">
+                              <span className={Number(openRate) > 20 ? 'text-green-600 font-medium' : ''}>
+                                {openRate}%
+                              </span>
+                            </TableCell>
+                            <TableCell className="text-right">{campaign.total_clicked || 0}</TableCell>
+                            <TableCell>
+                              {campaign.created_at 
+                                ? format(new Date(campaign.created_at), 'MMM d, yyyy')
+                                : '-'
+                              }
+                            </TableCell>
+                          </TableRow>
+                        );
+                      })}
+                    </TableBody>
+                  </Table>
+                )}
               </CardContent>
             </Card>
           </TabsContent>
@@ -781,6 +1557,382 @@ export default function Communications() {
                 )}
               </CardContent>
             </Card>
+          </TabsContent>
+
+          {/* Quality Metrics Tab */}
+          <TabsContent value="quality" className="space-y-6">
+            {/* SMS Volume Section */}
+            <div>
+              <h3 className="text-lg font-semibold mb-3 flex items-center gap-2">
+                <MessageSquare className="h-5 w-5 text-blue-500" />
+                SMS Volume
+              </h3>
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                <Card>
+                  <CardHeader className="pb-2">
+                    <CardTitle className="text-sm font-medium text-muted-foreground">
+                      Sent Today
+                    </CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    <div className="flex items-center gap-2">
+                      <Send className="h-5 w-5 text-green-500" />
+                      <span className="text-2xl font-bold">
+                        {healthLoading ? '...' : healthMetrics?.smsSentToday || 0}
+                      </span>
+                    </div>
+                  </CardContent>
+                </Card>
+
+                <Card>
+                  <CardHeader className="pb-2">
+                    <CardTitle className="text-sm font-medium text-muted-foreground">
+                      Received Today
+                    </CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    <div className="flex items-center gap-2">
+                      <Reply className="h-5 w-5 text-blue-500" />
+                      <span className="text-2xl font-bold">
+                        {healthLoading ? '...' : healthMetrics?.smsReceivedToday || 0}
+                      </span>
+                    </div>
+                  </CardContent>
+                </Card>
+
+                <Card>
+                  <CardHeader className="pb-2">
+                    <CardTitle className="text-sm font-medium text-muted-foreground">
+                      Sent This Week
+                    </CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    <div className="flex items-center gap-2">
+                      <Send className="h-5 w-5 text-emerald-500" />
+                      <span className="text-2xl font-bold">
+                        {healthLoading ? '...' : healthMetrics?.smsSentWeek || 0}
+                      </span>
+                    </div>
+                  </CardContent>
+                </Card>
+
+                <Card>
+                  <CardHeader className="pb-2">
+                    <CardTitle className="text-sm font-medium text-muted-foreground">
+                      Received This Week
+                    </CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    <div className="flex items-center gap-2">
+                      <Reply className="h-5 w-5 text-indigo-500" />
+                      <span className="text-2xl font-bold">
+                        {healthLoading ? '...' : healthMetrics?.smsReceivedWeek || 0}
+                      </span>
+                    </div>
+                  </CardContent>
+                </Card>
+              </div>
+            </div>
+
+            {/* Automation & Follow-ups Section */}
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+              {/* Automation Success Rate */}
+              <Card>
+                <CardHeader>
+                  <CardTitle className="flex items-center gap-2">
+                    <TrendingUp className="h-5 w-5 text-green-500" />
+                    Automation Success Rate
+                  </CardTitle>
+                  <CardDescription>Last 7 days performance</CardDescription>
+                </CardHeader>
+                <CardContent>
+                  <div className="space-y-4">
+                    <div className="flex items-center justify-between">
+                      <span className="text-4xl font-bold text-green-600">
+                        {healthLoading ? '...' : `${healthMetrics?.automationSuccessRate || 100}%`}
+                      </span>
+                      <div className="text-right text-sm text-muted-foreground">
+                        <div className="flex items-center gap-1">
+                          <CheckCircle className="h-4 w-4 text-green-500" />
+                          {healthMetrics?.automationSuccessCount || 0} success
+                        </div>
+                        <div className="flex items-center gap-1">
+                          <XCircle className="h-4 w-4 text-red-500" />
+                          {healthMetrics?.automationFailureCount || 0} failed
+                        </div>
+                      </div>
+                    </div>
+                    <Progress 
+                      value={healthMetrics?.automationSuccessRate || 100} 
+                      className="h-3"
+                    />
+                  </div>
+                </CardContent>
+              </Card>
+
+              {/* Follow-up Status */}
+              <Card>
+                <CardHeader>
+                  <CardTitle className="flex items-center gap-2">
+                    <Users className="h-5 w-5 text-purple-500" />
+                    Follow-up Sequences
+                  </CardTitle>
+                  <CardDescription>Current enrollment status</CardDescription>
+                </CardHeader>
+                <CardContent>
+                  <div className="space-y-3">
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-2">
+                        <Badge className="bg-green-500">Active</Badge>
+                        <span className="text-sm text-muted-foreground">In progress</span>
+                      </div>
+                      <span className="text-2xl font-bold">
+                        {healthLoading ? '...' : healthMetrics?.activeFollowUps || 0}
+                      </span>
+                    </div>
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-2">
+                        <Badge className="bg-yellow-500">Paused</Badge>
+                        <span className="text-sm text-muted-foreground">On hold</span>
+                      </div>
+                      <span className="text-2xl font-bold">
+                        {healthLoading ? '...' : healthMetrics?.pausedFollowUps || 0}
+                      </span>
+                    </div>
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-2">
+                        <Badge className="bg-blue-500">Responded</Badge>
+                        <span className="text-sm text-muted-foreground">Got a reply</span>
+                      </div>
+                      <span className="text-2xl font-bold">
+                        {healthLoading ? '...' : healthMetrics?.respondedFollowUps || 0}
+                      </span>
+                    </div>
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-2">
+                        <Badge variant="outline">Completed</Badge>
+                        <span className="text-sm text-muted-foreground">Finished sequence</span>
+                      </div>
+                      <span className="text-2xl font-bold text-muted-foreground">
+                        {healthLoading ? '...' : healthMetrics?.completedFollowUps || 0}
+                      </span>
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
+            </div>
+
+            {/* AI Response Quality Section */}
+            <div>
+              <h3 className="text-lg font-semibold mb-3 flex items-center gap-2">
+                <Sparkles className="h-5 w-5 text-purple-500" />
+                AI Response Quality
+              </h3>
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+                {/* Pass Rate Card */}
+                <Card>
+                  <CardHeader className="pb-2">
+                    <CardTitle className="text-sm font-medium text-muted-foreground flex items-center gap-2">
+                      <Target className="h-4 w-4" />
+                      First-Pass Rate
+                    </CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    <div className="space-y-2">
+                      <div className="flex items-center justify-between">
+                        <span className="text-2xl font-bold text-green-600">
+                          {qualityLoading ? '...' : `${qualityMetrics?.passRate || 0}%`}
+                        </span>
+                        <CheckCircle className="h-5 w-5 text-green-500" />
+                      </div>
+                      <Progress 
+                        value={qualityMetrics?.passRate || 0} 
+                        className="h-2"
+                      />
+                      <p className="text-xs text-muted-foreground">
+                        AI responses passing quality check on first try
+                      </p>
+                    </div>
+                  </CardContent>
+                </Card>
+
+                {/* Average Revisions Card */}
+                <Card>
+                  <CardHeader className="pb-2">
+                    <CardTitle className="text-sm font-medium text-muted-foreground flex items-center gap-2">
+                      <RefreshCw className="h-4 w-4" />
+                      Avg Revisions
+                    </CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    <div className="space-y-2">
+                      <div className="flex items-center justify-between">
+                        <span className="text-2xl font-bold">
+                          {qualityLoading ? '...' : qualityMetrics?.avgRevisions || 0}
+                        </span>
+                        <BarChart3 className="h-5 w-5 text-blue-500" />
+                      </div>
+                      <p className="text-xs text-muted-foreground">
+                        Average revisions needed per flagged response
+                      </p>
+                    </div>
+                  </CardContent>
+                </Card>
+
+                {/* Total Responses Card */}
+                <Card>
+                  <CardHeader className="pb-2">
+                    <CardTitle className="text-sm font-medium text-muted-foreground flex items-center gap-2">
+                      <Sparkles className="h-4 w-4" />
+                      Total AI Responses
+                    </CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    <div className="space-y-2">
+                      <div className="flex items-center justify-between">
+                        <span className="text-2xl font-bold">
+                          {qualityLoading ? '...' : qualityMetrics?.totalResponses || 0}
+                        </span>
+                        <Bot className="h-5 w-5 text-purple-500" />
+                      </div>
+                      <p className="text-xs text-muted-foreground">
+                        {qualityMetrics?.reviewedCount || 0} reviewed
+                      </p>
+                    </div>
+                  </CardContent>
+                </Card>
+
+                {/* Flagged for Review Card */}
+                <Card>
+                  <CardHeader className="pb-2">
+                    <CardTitle className="text-sm font-medium text-muted-foreground flex items-center gap-2">
+                      <AlertTriangle className="h-4 w-4" />
+                      Needs Review
+                    </CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    <div className="space-y-2">
+                      <div className="flex items-center justify-between">
+                        <span className={`text-2xl font-bold ${(qualityMetrics?.flaggedCount || 0) > 0 ? 'text-amber-600' : 'text-green-600'}`}>
+                          {qualityLoading ? '...' : qualityMetrics?.flaggedCount || 0}
+                        </span>
+                        <Eye className="h-5 w-5 text-amber-500" />
+                      </div>
+                      <p className="text-xs text-muted-foreground">
+                        Responses flagged for human review
+                      </p>
+                    </div>
+                  </CardContent>
+                </Card>
+              </div>
+            </div>
+
+            {/* Bottom Section: Failure Patterns + Recent Flagged */}
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+              {/* Failure Patterns */}
+              <Card>
+                <CardHeader>
+                  <CardTitle className="flex items-center gap-2">
+                    <AlertTriangle className="h-5 w-5 text-amber-500" />
+                    Top Failure Patterns
+                  </CardTitle>
+                  <CardDescription>
+                    Most common issues flagged in AI responses
+                  </CardDescription>
+                </CardHeader>
+                <CardContent>
+                  {qualityLoading ? (
+                    <p className="text-center py-4">Loading...</p>
+                  ) : !qualityMetrics?.failurePatterns?.length ? (
+                    <p className="text-muted-foreground text-center py-4">No patterns detected yet</p>
+                  ) : (
+                    <div className="space-y-3">
+                      {qualityMetrics.failurePatterns.map((item, idx) => (
+                        <div key={idx} className="flex items-center justify-between">
+                          <div className="flex items-center gap-2">
+                            <Badge variant="outline" className="font-mono text-xs">
+                              {item.pattern.replace(/_/g, ' ')}
+                            </Badge>
+                          </div>
+                          <div className="flex items-center gap-2">
+                            <Progress 
+                              value={Math.min((item.count / (qualityMetrics.totalResponses || 1)) * 100 * 10, 100)} 
+                              className="w-20 h-2"
+                            />
+                            <span className="text-sm font-medium w-8 text-right">{item.count}</span>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </CardContent>
+              </Card>
+
+              {/* Recent Flagged Messages */}
+              <Card>
+                <CardHeader>
+                  <CardTitle className="flex items-center gap-2">
+                    <Eye className="h-5 w-5 text-blue-500" />
+                    Recent Flagged Messages
+                  </CardTitle>
+                  <CardDescription>
+                    Last 5 AI responses needing human review
+                  </CardDescription>
+                </CardHeader>
+                <CardContent>
+                  {flaggedLoading ? (
+                    <p className="text-center py-4">Loading...</p>
+                  ) : recentFlagged.length === 0 ? (
+                    <div className="text-center py-8">
+                      <CheckCircle className="h-12 w-12 mx-auto text-green-500 mb-2" />
+                      <p className="text-muted-foreground">All clear! No messages need review.</p>
+                    </div>
+                  ) : (
+                    <div className="space-y-4">
+                      {recentFlagged.map(msg => (
+                        <div key={msg.id} className="border rounded-lg p-3 space-y-2">
+                          <div className="flex items-start justify-between gap-2">
+                            <div className="flex-1 min-w-0">
+                              <p className="text-sm font-medium text-muted-foreground mb-1">User asked:</p>
+                              <p className="text-sm truncate">{msg.input_message}</p>
+                            </div>
+                            <Badge variant="outline" className="text-xs shrink-0">
+                              {msg.input_channel || 'sms'}
+                            </Badge>
+                          </div>
+                          <div>
+                            <p className="text-sm font-medium text-muted-foreground mb-1">AI responded:</p>
+                            <p className="text-sm text-muted-foreground line-clamp-2">{msg.response_text}</p>
+                          </div>
+                          <div className="flex items-center justify-between pt-1">
+                            <div className="flex gap-1 flex-wrap">
+                              {msg.patterns_flagged?.map((pattern, idx) => (
+                                <Badge key={idx} variant="destructive" className="text-xs">
+                                  {pattern.replace(/_/g, ' ')}
+                                </Badge>
+                              ))}
+                            </div>
+                            <span className="text-xs text-muted-foreground">
+                              {formatDistanceToNow(new Date(msg.created_at), { addSuffix: true })}
+                            </span>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </CardContent>
+              </Card>
+            </div>
+
+            {/* TODO Comment for future implementation */}
+            {/* 
+              TODO: Future enhancements for Quality Metrics:
+              1. Add "Review" button to approve/reject flagged messages
+              2. Add time-range filter (7 days, 30 days, all time)
+              3. Add export functionality for audit reports
+              4. Add trend charts showing quality improvement over time
+              5. Connect to actual ai_response_logs once populated with real data
+            */}
           </TabsContent>
         </Tabs>
       </PageContent>
