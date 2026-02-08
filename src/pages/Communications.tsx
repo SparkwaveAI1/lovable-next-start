@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useBusinessContext } from '@/contexts/BusinessContext';
@@ -65,6 +66,7 @@ export default function Communications() {
   const { selectedBusiness, setSelectedBusiness } = useBusinessContext();
   const { data: businesses = [] } = useBusinesses();
   const [activeTab, setActiveTab] = useState('overview');
+  const navigate = useNavigate();
 
   const handleBusinessChange = (businessId: string) => {
     const business = businesses.find(b => b.id === businessId);
@@ -313,7 +315,11 @@ export default function Communications() {
                   ) : (
                     <div className="space-y-3 max-h-80 overflow-y-auto">
                       {recentMessages.slice(0, 10).map(msg => (
-                        <div key={msg.id} className="flex items-start gap-3 text-sm">
+                        <div 
+                          key={msg.id} 
+                          className="flex items-start gap-3 text-sm p-2 rounded-lg hover:bg-slate-50 cursor-pointer transition-colors"
+                          onClick={() => msg.contact_id && navigate(`/contacts?id=${msg.contact_id}`)}
+                        >
                           <div className={`p-1 rounded ${msg.direction === 'inbound' ? 'bg-blue-100' : 'bg-green-100'}`}>
                             {msg.direction === 'inbound' ? (
                               <Reply className="h-3 w-3 text-blue-600" />
