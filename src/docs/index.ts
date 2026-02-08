@@ -78,6 +78,14 @@ export const docCategories: DocCategory[] = [
         description: 'How AI agents work and how to configure them'
       },
       {
+        id: 'agent-framework',
+        title: 'Agent Framework',
+        path: 'features/agent-framework',
+        category: 'features',
+        lastUpdated: '2026-02-08',
+        description: 'Documentation standard and framework for all agents'
+      },
+      {
         id: 'tasks',
         title: 'Task Management',
         path: 'features/tasks',
