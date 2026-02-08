@@ -4,7 +4,6 @@ import { supabase } from '@/integrations/supabase/client';
 import { useBusinessContext } from '@/contexts/BusinessContext';
 import { useBusinesses } from '@/hooks/useBusinesses';
 import { DashboardLayout } from '@/components/layout/DashboardLayout';
-import { DashboardHeader } from '@/components/DashboardHeader';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -158,14 +157,23 @@ export default function Communications() {
       businessName={selectedBusiness?.name}
     >
       <main className="container mx-auto px-4 py-6 space-y-6">
-        <DashboardHeader
-          title="Communication Center"
-          subtitle="Manage campaigns, track messages, and monitor engagement"
-          showBusinessSelector
-          selectedBusinessId={selectedBusiness?.id}
-          businesses={businesses}
-          onBusinessChange={handleBusinessChange}
-        />
+        {/* Page Header */}
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+          <div>
+            <h1 className="text-xl sm:text-2xl font-bold text-slate-900">Communication Center</h1>
+            <p className="text-slate-500 text-xs sm:text-sm mt-0.5">Manage campaigns, track messages, and monitor engagement</p>
+          </div>
+          <div className="flex gap-2">
+            <Button variant="outline" size="sm" onClick={() => refetchCampaigns()}>
+              <RefreshCw className="h-4 w-4 mr-2" />
+              Refresh
+            </Button>
+            <Button size="sm">
+              <Plus className="h-4 w-4 mr-2" />
+              New Campaign
+            </Button>
+          </div>
+        </div>
 
         {/* Stats Cards */}
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4">
@@ -242,24 +250,12 @@ export default function Communications() {
 
         {/* Main Content Tabs */}
         <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-4">
-          <div className="flex items-center justify-between">
-            <TabsList>
-              <TabsTrigger value="overview">Overview</TabsTrigger>
-              <TabsTrigger value="campaigns">SMS Campaigns</TabsTrigger>
-              <TabsTrigger value="email">Email Marketing</TabsTrigger>
-              <TabsTrigger value="inbox">Inbox</TabsTrigger>
-            </TabsList>
-            <div className="flex gap-2">
-              <Button variant="outline" size="sm" onClick={() => refetchCampaigns()}>
-                <RefreshCw className="h-4 w-4 mr-2" />
-                Refresh
-              </Button>
-              <Button size="sm">
-                <Plus className="h-4 w-4 mr-2" />
-                New Campaign
-              </Button>
-            </div>
-          </div>
+          <TabsList>
+            <TabsTrigger value="overview">Overview</TabsTrigger>
+            <TabsTrigger value="campaigns">SMS Campaigns</TabsTrigger>
+            <TabsTrigger value="email">Email Marketing</TabsTrigger>
+            <TabsTrigger value="inbox">Inbox</TabsTrigger>
+          </TabsList>
 
           {/* Overview Tab */}
           <TabsContent value="overview" className="space-y-4">
