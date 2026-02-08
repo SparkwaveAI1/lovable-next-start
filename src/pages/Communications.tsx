@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useBusinessContext } from '@/contexts/BusinessContext';
 import { useBusinesses } from '@/hooks/useBusinesses';
@@ -9,6 +9,8 @@ import { PageContent } from '@/components/layout/PageLayout';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
+import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription } from '@/components/ui/sheet';
+import { ScrollArea } from '@/components/ui/scroll-area';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
@@ -35,9 +37,45 @@ import {
   Clock,
   Reply,
   Plus,
-  RefreshCw
+  RefreshCw,
+  Phone,
+  Bot,
+  User,
+  Loader2,
+  AlertTriangle,
+  BarChart3,
+  Target,
+  Eye,
+  Sparkles
 } from 'lucide-react';
 import { format, formatDistanceToNow } from 'date-fns';
+import { toast } from 'sonner';
+
+interface EmailCampaign {
+  id: string;
+  name: string;
+  subject: string;
+  from_name: string;
+  from_email: string;
+  content_html: string;
+  status: string | null;
+  scheduled_for: string | null;
+  sent_at: string | null;
+  created_at: string | null;
+  total_recipients: number | null;
+  total_sent: number | null;
+  total_delivered: number | null;
+  total_opened: number | null;
+  total_clicked: number | null;
+  total_bounced: number | null;
+}
+
+interface VerifiedSender {
+  id: string;
+  name: string;
+  email: string;
+  is_default: boolean | null;
+}
 
 interface Campaign {
   id: string;
@@ -68,6 +106,28 @@ interface RecentMessage {
   contact_name?: string;
 }
 
+interface AIResponseLog {
+  id: string;
+  input_message: string;
+  response_text: string;
+  confidence_score: number | null;
+  patterns_flagged: string[] | null;
+  required_review: boolean;
+  reviewed_at: string | null;
+  review_rating: string | null;
+  created_at: string;
+  input_channel: string;
+}
+
+interface QualityMetrics {
+  passRate: number;
+  avgRevisions: number;
+  totalResponses: number;
+  reviewedCount: number;
+  flaggedCount: number;
+  failurePatterns: { pattern: string; count: number }[];
+}
+
 export default function Communications() {
   const { selectedBusiness, setSelectedBusiness } = useBusinessContext();
   const { data: businesses = [] } = useBusinesses();
@@ -84,6 +144,12 @@ export default function Communications() {
     phone: '',
     message: '',
   });
+  
+  // Conversation thread state
+  const [isThreadOpen, setIsThreadOpen] = useState(false);
+  const [selectedContactId, setSelectedContactId] = useState<string | null>(null);
+  const [replyMessage, setReplyMessage] = useState('');
+  const [isSendingReply, setIsSendingReply] = useState(false);
 
   const handleBusinessChange = (businessId: string) => {
     const business = businesses.find(b => b.id === businessId);
@@ -175,6 +241,69 @@ export default function Communications() {
     enabled: !!selectedBusiness?.id,
     refetchInterval: 10000, // Refresh every 10 seconds
   });
+
+  // Fetch selected contact details
+  const { data: selectedContact } = useQuery({
+    queryKey: ['contact', selectedContactId],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('contacts')
+        .select('id, first_name, last_name, phone, email')
+        .eq('id', selectedContactId)
+        .single();
+      if (error) throw error;
+      return data;
+    },
+    enabled: !!selectedContactId,
+  });
+
+  // Fetch conversation thread for selected contact
+  const { data: threadMessages = [], refetch: refetchThread } = useQuery({
+    queryKey: ['thread-messages', selectedContactId],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('sms_messages')
+        .select('id, direction, message, created_at, ai_response')
+        .eq('contact_id', selectedContactId)
+        .order('created_at', { ascending: true });
+      if (error) throw error;
+      return data;
+    },
+    enabled: !!selectedContactId && isThreadOpen,
+    refetchInterval: 5000, // Refresh every 5 seconds when open
+  });
+
+  // Open conversation thread
+  const openThread = (contactId: string) => {
+    setSelectedContactId(contactId);
+    setIsThreadOpen(true);
+  };
+
+  // Send reply in thread
+  const handleSendReply = async () => {
+    if (!replyMessage.trim() || !selectedContactId || !selectedContact?.phone) return;
+    
+    setIsSendingReply(true);
+    try {
+      const { error } = await supabase
+        .from('sms_messages')
+        .insert({
+          contact_id: selectedContactId,
+          message: replyMessage,
+          direction: 'outbound',
+          ai_response: false,
+        });
+      
+      if (error) throw error;
+      
+      setReplyMessage('');
+      refetchThread();
+    } catch (err) {
+      console.error('Failed to send reply:', err);
+    } finally {
+      setIsSendingReply(false);
+    }
+  };
 
   // Calculate stats
   const stats = {
@@ -482,8 +611,8 @@ export default function Communications() {
                       {recentMessages.slice(0, 10).map(msg => (
                         <div 
                           key={msg.id} 
-                          className="flex items-start gap-3 text-sm p-2 rounded-lg hover:bg-slate-50 cursor-pointer transition-colors"
-                          onClick={() => msg.contact_id && navigate(`/contacts?id=${msg.contact_id}`)}
+                          className="flex items-start gap-3 text-sm p-2 rounded-lg hover:bg-slate-50 dark:hover:bg-slate-800 cursor-pointer transition-colors"
+                          onClick={() => msg.contact_id && openThread(msg.contact_id)}
                         >
                           <div className={`p-1 rounded ${msg.direction === 'inbound' ? 'bg-blue-100' : 'bg-green-100'}`}>
                             {msg.direction === 'inbound' ? (
@@ -655,6 +784,96 @@ export default function Communications() {
           </TabsContent>
         </Tabs>
       </PageContent>
+
+      {/* Conversation Thread Sheet */}
+      <Sheet open={isThreadOpen} onOpenChange={setIsThreadOpen}>
+        <SheetContent side="right" className="w-full sm:max-w-lg flex flex-col p-0">
+          <SheetHeader className="px-6 py-4 border-b">
+            <SheetTitle className="flex items-center gap-2">
+              <User className="h-5 w-5" />
+              {selectedContact 
+                ? `${selectedContact.first_name || ''} ${selectedContact.last_name || ''}`.trim() || 'Unknown Contact'
+                : 'Loading...'}
+            </SheetTitle>
+            <SheetDescription className="flex items-center gap-2">
+              <Phone className="h-4 w-4" />
+              {selectedContact?.phone || 'No phone number'}
+            </SheetDescription>
+          </SheetHeader>
+
+          {/* Messages area */}
+          <ScrollArea className="flex-1 px-4 py-4">
+            <div className="space-y-4">
+              {threadMessages.length === 0 ? (
+                <p className="text-center text-muted-foreground py-8">No messages yet</p>
+              ) : (
+                threadMessages.map(msg => (
+                  <div
+                    key={msg.id}
+                    className={`flex ${msg.direction === 'outbound' ? 'justify-end' : 'justify-start'}`}
+                  >
+                    <div
+                      className={`max-w-[80%] rounded-lg px-4 py-2 ${
+                        msg.direction === 'outbound'
+                          ? 'bg-primary text-primary-foreground'
+                          : 'bg-muted'
+                      }`}
+                    >
+                      <p className="text-sm whitespace-pre-wrap">{msg.message}</p>
+                      <div className="flex items-center gap-2 mt-1">
+                        <span className="text-xs opacity-70">
+                          {format(new Date(msg.created_at), 'MMM d, h:mm a')}
+                        </span>
+                        {msg.ai_response && (
+                          <Badge variant="outline" className="text-xs py-0 h-5 gap-1">
+                            <Bot className="h-3 w-3" />
+                            AI
+                          </Badge>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                ))
+              )}
+            </div>
+          </ScrollArea>
+
+          {/* Reply input */}
+          <div className="border-t px-4 py-4">
+            <div className="flex gap-2">
+              <Textarea
+                placeholder="Type your message..."
+                value={replyMessage}
+                onChange={(e) => setReplyMessage(e.target.value)}
+                className="min-h-[80px] resize-none"
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter' && !e.shiftKey) {
+                    e.preventDefault();
+                    handleSendReply();
+                  }
+                }}
+              />
+            </div>
+            <div className="flex justify-between items-center mt-2">
+              <span className="text-xs text-muted-foreground">
+                Press Enter to send, Shift+Enter for new line
+              </span>
+              <Button 
+                onClick={handleSendReply} 
+                disabled={!replyMessage.trim() || isSendingReply}
+                size="sm"
+              >
+                {isSendingReply ? (
+                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                ) : (
+                  <Send className="h-4 w-4 mr-2" />
+                )}
+                Send
+              </Button>
+            </div>
+          </div>
+        </SheetContent>
+      </Sheet>
     </DashboardLayout>
   );
 }
