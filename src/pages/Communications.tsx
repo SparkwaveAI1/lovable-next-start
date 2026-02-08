@@ -5,6 +5,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { useBusinessContext } from '@/contexts/BusinessContext';
 import { useBusinesses } from '@/hooks/useBusinesses';
 import { DashboardLayout } from '@/components/layout/DashboardLayout';
+import { PageContent } from '@/components/layout/PageLayout';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
@@ -78,6 +79,11 @@ export default function Communications() {
     channel: 'sms',
     message_template: '',
   });
+  const [isComposeOpen, setIsComposeOpen] = useState(false);
+  const [composeMessage, setComposeMessage] = useState({
+    phone: '',
+    message: '',
+  });
 
   const handleBusinessChange = (businessId: string) => {
     const business = businesses.find(b => b.id === businessId);
@@ -105,6 +111,29 @@ export default function Communications() {
       refetchCampaigns();
     } catch (err) {
       console.error('Failed to create campaign:', err);
+    }
+  };
+
+  const handleSendMessage = async () => {
+    if (!composeMessage.phone || !composeMessage.message) return;
+    
+    try {
+      const { error } = await supabase
+        .from('sms_messages')
+        .insert({
+          phone_number: composeMessage.phone,
+          message: composeMessage.message,
+          direction: 'outbound',
+          status: 'pending',
+          business_id: selectedBusiness?.id,
+        });
+      
+      if (error) throw error;
+      
+      setIsComposeOpen(false);
+      setComposeMessage({ phone: '', message: '' });
+    } catch (err) {
+      console.error('Failed to send message:', err);
     }
   };
 
@@ -193,7 +222,7 @@ export default function Communications() {
       }}
       businessName={selectedBusiness?.name}
     >
-      <main className="container mx-auto px-4 py-6 space-y-6">
+      <PageContent className="space-y-6">
         {/* Page Header */}
         <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
           <div>
@@ -261,6 +290,51 @@ export default function Communications() {
                   </Button>
                   <Button onClick={handleCreateCampaign} disabled={!newCampaign.name || !newCampaign.message_template}>
                     Create Campaign
+                  </Button>
+                </DialogFooter>
+              </DialogContent>
+            </Dialog>
+            <Dialog open={isComposeOpen} onOpenChange={setIsComposeOpen}>
+              <DialogTrigger asChild>
+                <Button size="sm" variant="outline">
+                  <Send className="h-4 w-4 mr-2" />
+                  Compose
+                </Button>
+              </DialogTrigger>
+              <DialogContent>
+                <DialogHeader>
+                  <DialogTitle>Compose Message</DialogTitle>
+                  <DialogDescription>
+                    Send a quick SMS to any phone number.
+                  </DialogDescription>
+                </DialogHeader>
+                <div className="space-y-4 py-4">
+                  <div className="space-y-2">
+                    <Label htmlFor="phone">Phone Number</Label>
+                    <Input
+                      id="phone"
+                      placeholder="+1 555 123 4567"
+                      value={composeMessage.phone}
+                      onChange={(e) => setComposeMessage(prev => ({ ...prev, phone: e.target.value }))}
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="sms-message">Message</Label>
+                    <Textarea
+                      id="sms-message"
+                      placeholder="Type your message..."
+                      value={composeMessage.message}
+                      onChange={(e) => setComposeMessage(prev => ({ ...prev, message: e.target.value }))}
+                      rows={4}
+                    />
+                  </div>
+                </div>
+                <DialogFooter>
+                  <Button variant="outline" onClick={() => setIsComposeOpen(false)}>
+                    Cancel
+                  </Button>
+                  <Button onClick={handleSendMessage} disabled={!composeMessage.phone || !composeMessage.message}>
+                    Send Message
                   </Button>
                 </DialogFooter>
               </DialogContent>
@@ -580,7 +654,7 @@ export default function Communications() {
             </Card>
           </TabsContent>
         </Tabs>
-      </main>
+      </PageContent>
     </DashboardLayout>
   );
 }
