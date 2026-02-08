@@ -28,6 +28,7 @@ import {
   TableRow 
 } from '@/components/ui/table';
 import { Progress } from '@/components/ui/progress';
+import { HelpTooltip } from '@/components/ui/help-tooltip';
 import { 
   MessageSquare, 
   Mail, 
@@ -1072,6 +1073,11 @@ export default function Communications() {
                   <CardTitle className="flex items-center gap-2">
                     <TrendingUp className="h-5 w-5" />
                     Active Campaigns
+                    <HelpTooltip 
+                      text="Campaigns are automated outreach sequences. Track sent messages, replies, and engagement rates in real-time."
+                      docsLink="/docs/campaigns"
+                      size="sm"
+                    />
                   </CardTitle>
                   <CardDescription>Currently running outreach</CardDescription>
                 </CardHeader>

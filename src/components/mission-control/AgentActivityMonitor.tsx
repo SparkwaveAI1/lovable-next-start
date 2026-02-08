@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { cn } from "@/lib/utils";
 import { supabase } from "@/integrations/supabase/client";
 import { useBusinessContext } from "@/contexts/BusinessContext";
+import { HelpTooltip } from "@/components/ui/help-tooltip";
 import { 
   Activity, 
   Bot, 
@@ -221,6 +222,11 @@ export function AgentActivityMonitor({ className, agents: externalAgents = [] }:
       <div className="px-4 py-3 border-b border-slate-200 flex items-center gap-2 shrink-0">
         <Activity className="h-4 w-4 text-blue-600" />
         <h3 className="font-semibold text-sm text-slate-900">Agent Activity</h3>
+        <HelpTooltip 
+          text="Agents are AI workers that handle tasks automatically. This panel shows their real-time status and active tasks."
+          docsLink="/docs/agents"
+          size="sm"
+        />
         <span className="text-xs text-slate-400">
           {externalAgents.filter(a => a.status === 'working' || a.status === 'active').length} active
           {tasks.length > 0 && ` · ${tasks.length} task${tasks.length !== 1 ? 's' : ''} running`}

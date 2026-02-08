@@ -5,6 +5,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Checkbox } from '@/components/ui/checkbox';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
+import { HelpTooltip } from '@/components/ui/help-tooltip';
 import {
   Select,
   SelectContent,
@@ -229,7 +230,14 @@ export function ScreenerBuilder({
         <CardHeader className="pb-4">
           <div className="flex items-center justify-between">
             <div>
-              <CardTitle className="text-lg">Screener Builder</CardTitle>
+              <div className="flex items-center gap-2">
+                <CardTitle className="text-lg">Screener Builder</CardTitle>
+                <HelpTooltip 
+                  text="Create custom filters to find stocks and crypto that match your criteria. Combine multiple rules with AND/OR logic."
+                  docsLink="/docs/screener"
+                  size="sm"
+                />
+              </div>
               <p className="text-sm text-gray-500 mt-1">
                 Build rules to find securities matching your criteria
               </p>
