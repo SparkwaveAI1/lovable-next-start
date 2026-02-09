@@ -6,6 +6,7 @@ import {
   Menu,
   X,
   MessageCircle,
+  HelpCircle,
 } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { Button } from "@/components/ui/button"
@@ -18,6 +19,7 @@ import { CommandCenterPanel } from "@/components/layout/CommandCenterPanel"
 import sparkwaveIcon from "@/assets/sparkwave-icon.png"
 import { supabase } from "@/integrations/supabase/client"
 import { RicoChatModal } from "@/components/mission-control"
+import { HelpPanel } from "@/components/help"
 
 interface DashboardLayoutProps {
   children: React.ReactNode
@@ -41,6 +43,7 @@ export function DashboardLayout({
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false)
   const [mobileOpen, setMobileOpen] = useState(false)
   const [chatModalOpen, setChatModalOpen] = useState(false)
+  const [helpPanelOpen, setHelpPanelOpen] = useState(false)
   const [commandPanelCollapsed, setCommandPanelCollapsed] = useState(() => {
     const saved = localStorage.getItem("sparkwave-command-panel-collapsed")
     return saved ? JSON.parse(saved) : false
@@ -82,6 +85,24 @@ export function DashboardLayout({
   useEffect(() => {
     setMobileOpen(false)
   }, [location.pathname])
+
+  // Keyboard shortcut: "?" opens help panel
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      // Only trigger if not in an input/textarea
+      const target = e.target as HTMLElement
+      if (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.isContentEditable) {
+        return
+      }
+      // "?" key (Shift + /)
+      if (e.key === '?' || (e.shiftKey && e.key === '/')) {
+        e.preventDefault()
+        setHelpPanelOpen(prev => !prev)
+      }
+    }
+    document.addEventListener('keydown', handleKeyDown)
+    return () => document.removeEventListener('keydown', handleKeyDown)
+  }, [])
 
   // Persist sidebar collapsed state
   useEffect(() => {
@@ -187,6 +208,17 @@ export function DashboardLayout({
               <Button 
                 variant="ghost" 
                 size="icon"
+                onClick={() => setHelpPanelOpen(true)}
+                className="text-gray-500 hover:text-gray-900 hover:bg-gray-100"
+                aria-label="Help"
+                title="Help & Documentation"
+              >
+                <HelpCircle className="h-5 w-5" />
+              </Button>
+
+              <Button 
+                variant="ghost" 
+                size="icon"
                 className="text-gray-500 hover:text-gray-900 hover:bg-gray-100 hidden sm:flex"
                 aria-label="Settings"
               >
@@ -240,6 +272,13 @@ export function DashboardLayout({
       <div className="hidden lg:block">
         <CommandCenterPanel />
       </div>
+
+      {/* Help Panel - contextual documentation */}
+      <HelpPanel
+        isOpen={helpPanelOpen}
+        onClose={() => setHelpPanelOpen(false)}
+        currentPage={location.pathname}
+      />
     </div>
   )
 }
