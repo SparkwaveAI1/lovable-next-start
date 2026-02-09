@@ -1,18 +1,22 @@
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { CheckCircle2, ArrowRight, Bot, Zap } from "lucide-react";
+import { CheckCircle2, ArrowRight, Bot, Zap, Star } from "lucide-react";
 
 interface PricingTiersProps {
   onBookAudit?: () => void;
   onBookDiscovery?: () => void;
+  onApplyFounding?: () => void;
   showGuarantee?: boolean;
+  showFoundingProgram?: boolean;
 }
 
 export function PricingTiers({ 
   onBookAudit = () => window.open('https://calendly.com/scott-sparkwave/30min', '_blank'),
   onBookDiscovery = () => window.open('https://calendly.com/scott-sparkwave/30min', '_blank'),
-  showGuarantee = true
+  onApplyFounding = () => window.open('https://calendly.com/scott-sparkwave/30min', '_blank'),
+  showGuarantee = true,
+  showFoundingProgram = true
 }: PricingTiersProps) {
   return (
     <div className="space-y-8">
@@ -155,6 +159,56 @@ export function PricingTiers({
           </CardContent>
         </Card>
       </div>
+
+      {/* Founding 20 Program - Per Quality Gate Recommendations */}
+      {showFoundingProgram && (
+        <Card className="mt-8 bg-gradient-to-r from-amber-900/30 to-amber-800/20 border-amber-500/30">
+          <CardContent className="p-8">
+            <div className="flex flex-col items-center text-center">
+              <div className="w-16 h-16 rounded-full bg-amber-600/20 flex items-center justify-center mb-4">
+                <Star className="w-8 h-8 text-amber-400" />
+              </div>
+              <h3 className="text-2xl font-bold text-white mb-4">🏆 FOUNDING 20</h3>
+              <p className="text-gray-300 mb-6 max-w-2xl">
+                We're taking 20 founding customers. You get more than a discount.
+              </p>
+              
+              <div className="grid sm:grid-cols-2 gap-4 mb-6 text-left max-w-xl">
+                <div className="flex items-center gap-2 text-gray-300 text-sm">
+                  <CheckCircle2 className="w-4 h-4 text-amber-400 flex-shrink-0" />
+                  <span><strong className="text-white">25% off FOREVER</strong> (price never increases)</span>
+                </div>
+                <div className="flex items-center gap-2 text-gray-300 text-sm">
+                  <CheckCircle2 className="w-4 h-4 text-amber-400 flex-shrink-0" />
+                  <span>Direct Slack channel with founders</span>
+                </div>
+                <div className="flex items-center gap-2 text-gray-300 text-sm">
+                  <CheckCircle2 className="w-4 h-4 text-amber-400 flex-shrink-0" />
+                  <span>Vote on features we build next</span>
+                </div>
+                <div className="flex items-center gap-2 text-gray-300 text-sm">
+                  <CheckCircle2 className="w-4 h-4 text-amber-400 flex-shrink-0" />
+                  <span>Your use case shapes the product</span>
+                </div>
+              </div>
+
+              <p className="text-gray-400 text-sm mb-4">
+                We want customers who want to build <span className="text-white">WITH</span> us, not just buy <span className="text-white">FROM</span> us.
+              </p>
+              
+              <p className="text-amber-400 font-bold text-lg mb-6">8 spots remaining.</p>
+              
+              <Button 
+                className="bg-amber-600 hover:bg-amber-700 text-white px-8 py-6 text-lg"
+                onClick={onApplyFounding}
+              >
+                Apply for Founding Access
+                <ArrowRight className="w-4 h-4 ml-2" />
+              </Button>
+            </div>
+          </CardContent>
+        </Card>
+      )}
     </div>
   );
 }

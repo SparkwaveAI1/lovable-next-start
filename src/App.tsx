@@ -42,6 +42,7 @@ import TwitterAnalytics from "./pages/TwitterAnalytics";
 import FAQ from "./pages/FAQ";
 import ContentVisibility from "./pages/ContentVisibility";
 import AutomationAudit from "./pages/AutomationAudit";
+import ROICalculator from "./pages/ROICalculator";
 import ProtectedRoute from "./components/ProtectedRoute";
 import { ErrorBoundary } from "./components/ErrorBoundary";
 import { BusinessProvider } from "@/contexts/BusinessContext";
@@ -64,6 +65,7 @@ const App = () => (
             <Route path="/auth" element={<Auth />} />
             <Route path="/book" element={<Book />} />
             <Route path="/audit" element={<AutomationAudit />} />
+            <Route path="/roi-calculator" element={<ROICalculator />} />
             <Route path="/sales" element={<Sales />} />
             <Route path="/about" element={<About />} />
             <Route path="/automation" element={<AutomationApp />} />

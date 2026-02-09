@@ -5,71 +5,49 @@ import {
   Bot,
   MessageSquare,
   Calendar,
-  Mail,
   Clock,
   CheckCircle2,
   ArrowRight,
   Zap,
   Shield,
   BarChart3,
-  Users
+  Play,
+  Users,
+  Quote
 } from "lucide-react";
+import { PricingTiers } from "@/components/landing/PricingTiers";
 
 export default function AutomationApp() {
   const handleBookCall = () => {
     window.open('https://calendly.com/scott-sparkwave/30min', '_blank');
   };
 
-  const features = [
-    {
-      icon: MessageSquare,
-      title: "Instant Lead Response",
-      description: "AI responds to every inquiry in seconds — SMS, email, web forms. No lead waits, no lead gets forgotten.",
-      color: "text-blue-400",
-      bg: "bg-blue-600/20"
-    },
-    {
-      icon: Calendar,
-      title: "Automatic Booking",
-      description: "Qualified leads get booked directly into your calendar. No back-and-forth, no scheduling headaches.",
-      color: "text-emerald-400",
-      bg: "bg-emerald-600/20"
-    },
-    {
-      icon: Mail,
-      title: "Smart Follow-Up",
-      description: "Persistent, personalized follow-up sequences that adapt based on customer responses and behavior.",
-      color: "text-violet-400",
-      bg: "bg-violet-600/20"
-    },
-    {
-      icon: Clock,
-      title: "24/7 Availability",
-      description: "Your AI assistant never sleeps. Night owls, early birds, weekends — every inquiry gets handled.",
-      color: "text-amber-400",
-      bg: "bg-amber-600/20"
-    },
-    {
-      icon: Shield,
-      title: "Quality Control",
-      description: "Every AI response runs through evaluation criteria before sending. Errors get caught, not customers.",
-      color: "text-red-400",
-      bg: "bg-red-600/20"
-    },
-    {
-      icon: BarChart3,
-      title: "Self-Improving",
-      description: "The system learns from every interaction. Response quality goes up automatically over time.",
-      color: "text-cyan-400",
-      bg: "bg-cyan-600/20"
-    }
+  const stats = [
+    { value: "14+", label: "Local businesses trust us" },
+    { value: "94%", label: "Response accuracy" },
+    { value: "<30s", label: "Response time" },
+    { value: "2x", label: "More leads converted" }
   ];
 
-  const stats = [
-    { value: "94%", label: "First-pass accuracy" },
-    { value: "<3s", label: "Average response time" },
-    { value: "24/7", label: "Always available" },
-    { value: "2x", label: "More leads converted" }
+  const howItWorksSteps = [
+    {
+      step: 1,
+      title: "Connect Your Leads",
+      description: "You plug in your website form, Facebook ads, or CRM. Takes 15 minutes.",
+      icon: Zap
+    },
+    {
+      step: 2,
+      title: "AI Takes Over",
+      description: "Every inquiry gets an instant, personalized response. Your AI books qualified leads directly into your calendar—no back-and-forth.",
+      icon: Bot
+    },
+    {
+      step: 3,
+      title: "You Close Deals",
+      description: "Show up to appointments with warm, qualified leads. Your AI handled the grunt work. You do what you're best at.",
+      icon: CheckCircle2
+    }
   ];
 
   return (
@@ -82,16 +60,17 @@ export default function AutomationApp() {
             AI Automation Platform
           </Badge>
           
-          <h1 className="text-4xl sm:text-5xl lg:text-6xl font-bold text-white mb-6 leading-tight">
-            Your AI Employee That
+          <h1 className="text-4xl sm:text-5xl lg:text-6xl font-bold text-white mb-4 leading-tight">
+            Never Miss Another Lead.
             <span className="block bg-gradient-to-r from-blue-400 via-purple-400 to-pink-400 bg-clip-text text-transparent">
-              Never Drops the Ball
+              Even When You're Busy Living Your Life.
             </span>
           </h1>
           
           <p className="text-xl text-gray-400 max-w-2xl mx-auto mb-10">
-            Sparkwave handles your lead response, follow-up, and customer communication 
-            automatically — so you can focus on running your business.
+            Your AI assistant responds to every inquiry in under 30 seconds, 
+            books appointments automatically, and follows up until they buy—
+            so you can coach, consult, or just sleep.
           </p>
 
           <div className="flex flex-col sm:flex-row items-center justify-center gap-4 mb-12">
@@ -100,12 +79,12 @@ export default function AutomationApp() {
               className="w-full sm:w-auto bg-gradient-to-r from-violet-600 to-indigo-600 hover:from-violet-700 hover:to-indigo-700 text-white px-8 py-6 text-lg font-semibold rounded-xl"
               onClick={handleBookCall}
             >
-              <Calendar className="w-5 h-5 mr-2" />
-              See It In Action
+              <Play className="w-5 h-5 mr-2" />
+              See It Handle Your Leads
             </Button>
           </div>
 
-          {/* Stats */}
+          {/* Stats Bar */}
           <div className="grid grid-cols-2 md:grid-cols-4 gap-6 max-w-3xl mx-auto">
             {stats.map((stat, i) => (
               <div key={i} className="text-center">
@@ -117,22 +96,48 @@ export default function AutomationApp() {
         </div>
       </section>
 
-      {/* Problem Section */}
+      {/* Problem Section - Rewritten with narrative */}
       <section className="py-16 px-4 bg-slate-900/30">
         <div className="max-w-5xl mx-auto">
-          <h2 className="text-3xl font-bold text-white text-center mb-4">The Problem We Solve</h2>
-          <p className="text-xl text-gray-400 text-center max-w-3xl mx-auto mb-12">
-            Small businesses lose customers every day because they can't respond fast enough. 
-            Studies show 78% of customers buy from whoever responds first.
-          </p>
+          <h2 className="text-3xl sm:text-4xl font-bold text-white text-center mb-4">
+            You're Losing <span className="text-red-400">$12,000/Month</span> to Slow Response Time
+          </h2>
+          
+          {/* Narrative */}
+          <div className="max-w-3xl mx-auto mb-12">
+            <div className="prose prose-invert prose-lg text-gray-400 text-center">
+              <p className="mb-4">Here's what's happening right now:</p>
+              <p className="mb-4">
+                Someone just found your website. They're interested. <span className="text-white">Ready to buy.</span><br />
+                They fill out your contact form.
+              </p>
+              <p className="text-2xl text-gray-300 my-6">And wait.</p>
+              <p className="mb-4">
+                You're coaching a class. On a job site. In a meeting. Asleep.
+              </p>
+              <p className="mb-4">
+                By the time you see the notification, they've already messaged 
+                your competitor. They responded in 2 minutes. <span className="text-red-400">You didn't.</span>
+              </p>
+              <p className="mb-4">
+                This isn't about working harder. You're already working hard enough.<br />
+                This is about being in 10 places at once.
+              </p>
+              <p className="mb-4 text-white font-medium">
+                That's not humanly possible.<br />
+                That's exactly what your AI assistant does.
+              </p>
+            </div>
+          </div>
 
+          {/* Problem Cards */}
           <div className="grid md:grid-cols-3 gap-8">
             <Card className="bg-slate-900/50 border-slate-800 border-red-500/20">
               <CardContent className="p-6 text-center">
                 <div className="text-4xl mb-4">😫</div>
-                <h3 className="text-lg font-semibold text-white mb-2">Leads Go Cold</h3>
+                <h3 className="text-lg font-semibold text-white mb-2">"Lead Went Cold"</h3>
                 <p className="text-gray-400 text-sm">
-                  By the time you respond hours later, they've already called your competitor.
+                  They inquired at 9pm. You responded at 9am. They bought from someone else.
                 </p>
               </CardContent>
             </Card>
@@ -140,19 +145,19 @@ export default function AutomationApp() {
             <Card className="bg-slate-900/50 border-slate-800 border-red-500/20">
               <CardContent className="p-6 text-center">
                 <div className="text-4xl mb-4">🤯</div>
-                <h3 className="text-lg font-semibold text-white mb-2">Follow-Up Falls Apart</h3>
+                <h3 className="text-lg font-semibold text-white mb-2">"Follow-Up Never Happened"</h3>
                 <p className="text-gray-400 text-sm">
-                  You meant to follow up, but life got in the way. Another opportunity lost.
+                  You meant to call back. Life got in the way. Another $3,000 walked away.
                 </p>
               </CardContent>
             </Card>
 
             <Card className="bg-slate-900/50 border-slate-800 border-red-500/20">
               <CardContent className="p-6 text-center">
-                <div className="text-4xl mb-4">😴</div>
-                <h3 className="text-lg font-semibold text-white mb-2">After-Hours Inquiries</h3>
+                <div className="text-4xl mb-4">⏰</div>
+                <h3 className="text-lg font-semibold text-white mb-2">"First to Respond Wins"</h3>
                 <p className="text-gray-400 text-sm">
-                  People browse at night. Your leads come in when you're asleep. They don't wait.
+                  78% of customers buy from whoever responds FIRST. Are you first?
                 </p>
               </CardContent>
             </Card>
@@ -160,114 +165,229 @@ export default function AutomationApp() {
         </div>
       </section>
 
-      {/* Features Section */}
+      {/* How It Works Section - Simplified to 3 Steps */}
       <section className="py-16 px-4">
         <div className="max-w-5xl mx-auto">
-          <h2 className="text-3xl font-bold text-white text-center mb-4">How Sparkwave Works</h2>
+          <h2 className="text-3xl sm:text-4xl font-bold text-white text-center mb-4">
+            Your 24/7 Sales Team in 3 Steps
+          </h2>
           <p className="text-xl text-gray-400 text-center max-w-3xl mx-auto mb-12">
-            Done-for-you automation that handles customer communication from first touch to booked appointment.
+            No complicated setup. No learning curve. Just results.
           </p>
 
-          <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
-            {features.map((feature, i) => (
-              <Card key={i} className="bg-slate-900/50 border-slate-800 hover:border-slate-700 transition-colors">
-                <CardContent className="p-6">
-                  <div className={`w-12 h-12 rounded-xl ${feature.bg} flex items-center justify-center mb-4`}>
-                    <feature.icon className={`w-6 h-6 ${feature.color}`} />
+          <div className="grid md:grid-cols-3 gap-8">
+            {howItWorksSteps.map((item) => (
+              <div key={item.step} className="text-center">
+                <div className="relative">
+                  <div className="w-16 h-16 rounded-full bg-gradient-to-r from-violet-600 to-indigo-600 flex items-center justify-center mx-auto mb-4">
+                    <span className="text-2xl font-bold text-white">{item.step}</span>
                   </div>
-                  <h3 className="text-lg font-semibold text-white mb-2">{feature.title}</h3>
-                  <p className="text-gray-400 text-sm">{feature.description}</p>
-                </CardContent>
-              </Card>
+                  {item.step < 3 && (
+                    <div className="hidden md:block absolute top-8 left-[60%] w-[80%] h-0.5 bg-gradient-to-r from-violet-600/50 to-transparent" />
+                  )}
+                </div>
+                <h3 className="text-xl font-semibold text-white mb-3">{item.title}</h3>
+                <p className="text-gray-400">{item.description}</p>
+              </div>
             ))}
           </div>
         </div>
       </section>
 
-      {/* How It's Different */}
+      {/* Social Proof Section */}
       <section className="py-16 px-4 bg-slate-900/30">
         <div className="max-w-5xl mx-auto">
-          <h2 className="text-3xl font-bold text-white text-center mb-12">Not Just Another Chatbot</h2>
-          
-          <div className="grid md:grid-cols-2 gap-8">
-            <Card className="bg-slate-900/50 border-slate-800">
-              <CardHeader>
-                <CardTitle className="text-white flex items-center gap-2">
-                  <Zap className="w-5 h-5 text-amber-400" />
-                  Generic AI Tools
-                </CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-3">
-                <div className="flex items-start gap-2 text-gray-400">
-                  <span className="text-red-400">✗</span>
-                  <span>Generic responses that feel robotic</span>
-                </div>
-                <div className="flex items-start gap-2 text-gray-400">
-                  <span className="text-red-400">✗</span>
-                  <span>No quality control — errors go to customers</span>
-                </div>
-                <div className="flex items-start gap-2 text-gray-400">
-                  <span className="text-red-400">✗</span>
-                  <span>You set it up, you maintain it</span>
-                </div>
-                <div className="flex items-start gap-2 text-gray-400">
-                  <span className="text-red-400">✗</span>
-                  <span>Doesn't improve over time</span>
-                </div>
-              </CardContent>
-            </Card>
+          <h2 className="text-3xl font-bold text-white text-center mb-12">
+            Real Businesses. Real Results.
+          </h2>
 
-            <Card className="bg-slate-900/50 border-violet-500/30 border-2">
-              <CardHeader>
-                <CardTitle className="text-white flex items-center gap-2">
-                  <Bot className="w-5 h-5 text-violet-400" />
-                  Sparkwave Automation
-                </CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-3">
-                <div className="flex items-start gap-2 text-gray-300">
-                  <CheckCircle2 className="w-5 h-5 text-emerald-400 flex-shrink-0" />
-                  <span>Responses trained on your business, your voice</span>
+          {/* Featured Case Study */}
+          <Card className="bg-slate-900/50 border-violet-500/30 mb-8">
+            <CardContent className="p-8">
+              <div className="flex flex-col lg:flex-row gap-8 items-center">
+                <div className="flex-1">
+                  <Quote className="w-10 h-10 text-violet-400 mb-4" />
+                  <blockquote className="text-xl text-gray-300 italic mb-6">
+                    "I was losing leads because I couldn't get to my phone while coaching. 
+                    Now every inquiry gets handled instantly—even at 2 AM. I went from 
+                    weekly newsletters to contacting prospects at 10x the rate."
+                  </blockquote>
+                  <div className="flex items-center gap-4">
+                    <div className="w-12 h-12 rounded-full bg-gradient-to-r from-violet-600 to-indigo-600 flex items-center justify-center">
+                      <span className="text-white font-bold">SJ</span>
+                    </div>
+                    <div>
+                      <p className="text-white font-semibold">Scott Johnson</p>
+                      <p className="text-gray-400 text-sm">Fight Flow Academy • MMA Gym, Durham NC</p>
+                    </div>
+                  </div>
                 </div>
-                <div className="flex items-start gap-2 text-gray-300">
-                  <CheckCircle2 className="w-5 h-5 text-emerald-400 flex-shrink-0" />
-                  <span>Every response evaluated before sending</span>
+                <div className="w-full lg:w-80">
+                  <div className="bg-slate-800/50 rounded-xl p-6">
+                    <h4 className="text-emerald-400 font-semibold mb-4 text-center">📈 Results</h4>
+                    <div className="space-y-3">
+                      <div className="flex justify-between items-center">
+                        <span className="text-gray-400">Trial bookings</span>
+                        <span className="text-emerald-400 font-bold">+175%</span>
+                      </div>
+                      <div className="flex justify-between items-center">
+                        <span className="text-gray-400">Outreach capacity</span>
+                        <span className="text-emerald-400 font-bold">10x</span>
+                      </div>
+                      <div className="flex justify-between items-center">
+                        <span className="text-gray-400">Response time</span>
+                        <span className="text-emerald-400 font-bold">&lt;30 seconds</span>
+                      </div>
+                      <div className="flex justify-between items-center">
+                        <span className="text-gray-400">Availability</span>
+                        <span className="text-emerald-400 font-bold">24/7</span>
+                      </div>
+                    </div>
+                  </div>
                 </div>
-                <div className="flex items-start gap-2 text-gray-300">
-                  <CheckCircle2 className="w-5 h-5 text-emerald-400 flex-shrink-0" />
-                  <span>Done-for-you setup and ongoing optimization</span>
-                </div>
-                <div className="flex items-start gap-2 text-gray-300">
-                  <CheckCircle2 className="w-5 h-5 text-emerald-400 flex-shrink-0" />
-                  <span>Self-improving — gets smarter automatically</span>
-                </div>
-              </CardContent>
-            </Card>
+              </div>
+            </CardContent>
+          </Card>
+
+          {/* Trust Badges */}
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+            {[
+              { icon: Shield, text: "94% First-Pass Accuracy" },
+              { icon: Clock, text: "<3 Second Response Time" },
+              { icon: Calendar, text: "24/7 Availability" },
+              { icon: Zap, text: "Works With Your Tools" }
+            ].map((badge, i) => (
+              <div key={i} className="flex items-center gap-3 p-4 bg-slate-900/50 rounded-xl border border-slate-800">
+                <badge.icon className="w-5 h-5 text-emerald-400" />
+                <span className="text-gray-300 text-sm">{badge.text}</span>
+              </div>
+            ))}
           </div>
         </div>
       </section>
 
-      {/* CTA */}
-      <section className="py-20 px-4">
-        <div className="max-w-3xl mx-auto text-center">
-          <h2 className="text-3xl font-bold text-white mb-4">
-            Ready to Stop Losing Leads?
-          </h2>
-          <p className="text-xl text-gray-400 mb-8">
-            See how Sparkwave can handle your customer communication — 
-            automatically, accurately, 24/7.
-          </p>
-          <Button 
-            size="lg" 
-            className="bg-gradient-to-r from-violet-600 to-indigo-600 hover:from-violet-700 hover:to-indigo-700 text-white px-8 py-6 text-lg"
-            onClick={handleBookCall}
-          >
-            <Calendar className="w-5 h-5 mr-2" />
-            Book a Demo
-            <ArrowRight className="w-5 h-5 ml-2" />
-          </Button>
+      {/* Founder's Message Section (NEW) */}
+      <section className="py-16 px-4">
+        <div className="max-w-3xl mx-auto">
+          <Card className="bg-gradient-to-br from-slate-900 to-slate-800 border-slate-700">
+            <CardContent className="p-8 md:p-12">
+              <h2 className="text-2xl font-bold text-white mb-6">Why I Built This</h2>
+              
+              <div className="prose prose-invert prose-lg">
+                <p className="text-gray-300 mb-4">
+                  I built Sparkwave because I watched my friend lose his business.
+                </p>
+                <p className="text-gray-300 mb-4">
+                  Not because his service was bad. Not because he lacked skill.
+                  Because he couldn't respond fast enough.
+                </p>
+                <p className="text-gray-300 mb-4">
+                  He'd be coaching a class at 7pm when leads came in. By the time 
+                  he got home at 10pm, they'd already signed up with his competitor 
+                  across town.
+                </p>
+                <p className="text-gray-300 mb-4">
+                  Good business owners lose every day—not because they're bad at 
+                  what they do, but because they can't be everywhere at once.
+                </p>
+                <p className="text-gray-400 mb-4 italic">
+                  That's not a character flaw. That's physics.
+                </p>
+                <p className="text-white mb-4 font-medium">
+                  So I built something that could.
+                </p>
+                <p className="text-gray-300 mb-6">
+                  Sparkwave isn't about replacing you. It's about <span className="text-violet-400">multiplying you.</span><br />
+                  Being in 10 places at once. Responding at 2 AM when you're asleep.
+                  Following up on day 5 when you forgot.
+                </p>
+                <p className="text-white font-semibold mb-0">
+                  You do what you're great at. Your AI handles the rest.
+                </p>
+              </div>
+
+              <div className="flex items-center gap-4 mt-8 pt-6 border-t border-slate-700">
+                <div className="w-14 h-14 rounded-full bg-gradient-to-r from-violet-600 to-indigo-600 flex items-center justify-center">
+                  <span className="text-white font-bold text-lg">SJ</span>
+                </div>
+                <div>
+                  <p className="text-white font-semibold">Scott Johnson</p>
+                  <p className="text-gray-400">Founder, Sparkwave</p>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
         </div>
       </section>
+
+      {/* Pricing Section */}
+      <section className="py-16 px-4 bg-slate-900/30">
+        <div className="max-w-5xl mx-auto">
+          <h2 className="text-3xl sm:text-4xl font-bold text-white text-center mb-4">
+            Your AI Employee Costs Less Than Your Worst Month of Lost Leads
+          </h2>
+          <p className="text-xl text-gray-400 text-center max-w-3xl mx-auto mb-12">
+            Pick your plan. Start this week. See ROI in 30 days or get your money back.
+          </p>
+
+          <PricingTiers 
+            onBookAudit={handleBookCall}
+            onBookDiscovery={handleBookCall}
+            onApplyFounding={handleBookCall}
+          />
+        </div>
+      </section>
+
+      {/* Final CTA Section */}
+      <section className="py-20 px-4">
+        <div className="max-w-3xl mx-auto text-center">
+          <h2 className="text-3xl sm:text-4xl font-bold text-white mb-6">
+            Every Hour You Wait, You're Losing Leads
+          </h2>
+          <div className="prose prose-invert prose-lg mx-auto mb-8">
+            <p className="text-gray-400">
+              Right now, somewhere, someone is looking for exactly what you offer.
+              They're going to reach out to you—and two of your competitors.
+            </p>
+            <p className="text-gray-400">
+              <span className="text-white font-medium">Whoever responds first wins.</span>
+            </p>
+            <p className="text-gray-400">
+              Your AI responds in 30 seconds. 24 hours a day. 7 days a week.
+              Even while you sleep.
+            </p>
+          </div>
+          <Button 
+            size="lg" 
+            className="bg-gradient-to-r from-violet-600 to-indigo-600 hover:from-violet-700 hover:to-indigo-700 text-white px-10 py-7 text-lg rounded-xl"
+            onClick={handleBookCall}
+          >
+            <Play className="w-5 h-5 mr-2" />
+            See It In Action
+            <ArrowRight className="w-5 h-5 ml-2" />
+          </Button>
+          <p className="text-gray-500 text-sm mt-4">
+            No credit card. No sales pressure. Just a conversation.
+          </p>
+        </div>
+      </section>
+
+      {/* Sticky Footer CTA for Mobile */}
+      <div className="fixed bottom-0 left-0 right-0 p-4 bg-slate-950/95 border-t border-slate-800 md:hidden z-50">
+        <div className="flex items-center justify-between max-w-lg mx-auto">
+          <span className="text-white text-sm font-medium">Ready to stop losing leads?</span>
+          <Button 
+            className="bg-gradient-to-r from-violet-600 to-indigo-600 text-white"
+            onClick={handleBookCall}
+          >
+            Book Demo
+            <ArrowRight className="w-4 h-4 ml-1" />
+          </Button>
+        </div>
+      </div>
+
+      {/* Spacer for mobile sticky footer */}
+      <div className="h-20 md:hidden" />
     </div>
   );
 }
