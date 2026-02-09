@@ -20,6 +20,7 @@ import {
   TrendingUp,
   MessageSquare,
   Twitter,
+  HelpCircle,
 } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { Button } from "@/components/ui/button"
@@ -76,6 +77,7 @@ const navGroups: NavGroup[] = [
     collapsible: true,
     items: [
       { label: "Docs", href: "/docs", icon: BookOpen },
+      { label: "FAQ", href: "/faq", icon: HelpCircle },
       { label: "Investments", href: "/investments", icon: TrendingUp },
     ],
   },
