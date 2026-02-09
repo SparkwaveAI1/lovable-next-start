@@ -40,6 +40,8 @@ import Blog from "./pages/Blog";
 import BlogPost from "./pages/BlogPost";
 import TwitterAnalytics from "./pages/TwitterAnalytics";
 import FAQ from "./pages/FAQ";
+import ContentVisibility from "./pages/ContentVisibility";
+import AutomationAudit from "./pages/AutomationAudit";
 import ProtectedRoute from "./components/ProtectedRoute";
 import { ErrorBoundary } from "./components/ErrorBoundary";
 import { BusinessProvider } from "@/contexts/BusinessContext";
@@ -61,6 +63,7 @@ const App = () => (
             <Routes>
             <Route path="/auth" element={<Auth />} />
             <Route path="/book" element={<Book />} />
+            <Route path="/audit" element={<AutomationAudit />} />
             <Route path="/sales" element={<Sales />} />
             <Route path="/about" element={<About />} />
             <Route path="/automation" element={<AutomationApp />} />
@@ -93,6 +96,7 @@ const App = () => (
             <Route path="/communications" element={<ProtectedRoute><ErrorBoundary><Communications /></ErrorBoundary></ProtectedRoute>} />
             <Route path="/twitter-analytics" element={<ProtectedRoute><ErrorBoundary><TwitterAnalytics /></ErrorBoundary></ProtectedRoute>} />
             <Route path="/faq" element={<ProtectedRoute><ErrorBoundary><FAQ /></ErrorBoundary></ProtectedRoute>} />
+            <Route path="/content-visibility" element={<ProtectedRoute><ErrorBoundary><ContentVisibility /></ErrorBoundary></ProtectedRoute>} />
             {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
             <Route path="*" element={<NotFound />} />
             </Routes>

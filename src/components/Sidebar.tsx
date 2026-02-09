@@ -20,6 +20,7 @@ import {
   MessageSquare,
   Twitter,
   HelpCircle,
+  Eye,
 } from "lucide-react"
 import { cn } from "@/lib/utils"
 import sparkwaveIcon from "@/assets/sparkwave-icon.png"
@@ -67,6 +68,7 @@ const navGroups: NavGroup[] = [
     label: "Content",
     items: [
       { label: "Content Center", href: "/content-center", icon: FileText },
+      { label: "Content Visibility", href: "/content-visibility", icon: Eye },
       { label: "Media Library", href: "/media-library", icon: Image },
     ],
   },

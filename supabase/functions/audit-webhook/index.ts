@@ -329,6 +329,7 @@ serve(async (req) => {
     console.log("Audit result stored:", auditResult.id);
 
     // Also upsert to contacts table for CRM integration
+    // Note: lead_score stored in metadata.audit_score (not as separate column)
     const { error: contactError } = await supabase
       .from("contacts")
       .upsert({
@@ -337,12 +338,12 @@ serve(async (req) => {
         last_name: contact.name.split(" ").slice(1).join(" ") || null,
         company_name: contact.company || null,
         source: "automation_audit",
-        lead_score: scores.total,
         pipeline_stage: scores.total >= 55 ? "qualified" : "lead",
         tags: ["automation_audit", `grade_${grade.toLowerCase()}`],
         metadata: {
           audit_id: auditResult.id,
           audit_score: scores.total,
+          lead_score: scores.total, // Stored here for scoring access
           audit_grade: grade,
           weakest_domain: weakestDomain,
           domain_scores: {
@@ -362,11 +363,15 @@ serve(async (req) => {
     if (contactError) {
       console.error("Error upserting contact:", contactError);
       // Don't fail the webhook for contact errors
+    } else {
+      console.log("Contact upserted successfully for:", contact.email);
     }
 
     // Trigger follow-up automation (if the function exists)
+    let followupTriggered = false;
+    let followupError: string | null = null;
     try {
-      await supabase.functions.invoke("audit-followup", {
+      const followupResult = await supabase.functions.invoke("audit-followup", {
         body: {
           audit_id: auditResult.id,
           email: contact.email,
@@ -376,10 +381,37 @@ serve(async (req) => {
           weakest_domain: weakestDomain,
         },
       });
-      console.log("Follow-up automation triggered");
-    } catch (followupError) {
-      console.log("Follow-up function not available or failed:", followupError);
-      // Don't fail the webhook if follow-up doesn't exist yet
+
+      // Check if the function returned an error
+      if (followupResult.error) {
+        followupError = followupResult.error.message || "Unknown error from audit-followup";
+        console.error("Follow-up function returned error:", followupError);
+      } else if (followupResult.data?.success === false) {
+        followupError = followupResult.data.error || "Follow-up reported failure";
+        console.error("Follow-up function failed:", followupError);
+      } else {
+        followupTriggered = true;
+        console.log("Follow-up automation triggered successfully:", followupResult.data);
+      }
+    } catch (err: any) {
+      followupError = err.message || "Exception invoking audit-followup";
+      console.error("Follow-up function exception:", followupError);
+    }
+
+    // If follow-up failed, record it for later retry
+    if (!followupTriggered && followupError) {
+      try {
+        await supabase
+          .from("audit_results")
+          .update({
+            followup_error: followupError,
+            followup_attempted_at: new Date().toISOString(),
+          })
+          .eq("id", auditResult.id);
+        console.log("Recorded follow-up error for retry");
+      } catch (updateErr) {
+        console.error("Could not record follow-up error:", updateErr);
+      }
     }
 
     return new Response(

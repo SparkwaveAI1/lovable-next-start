@@ -77,33 +77,48 @@ export default function Services() {
         </div>
       </section>
 
-      {/* Problem/Agitation Section */}
+      {/* Problem/Agitation Section - REWRITTEN per Quality Gate */}
       <section className="py-16 px-4 bg-slate-900/30">
         <div className="max-w-4xl mx-auto">
           <h2 className="text-3xl font-bold text-white text-center mb-6">
-            You're Doing Work a Machine Could Do
+            While You Were Reading This, You Lost a Lead
           </h2>
-          <p className="text-lg text-gray-400 text-center max-w-3xl mx-auto mb-12">
-            Every hour you spend on repetitive tasks—follow-ups, scheduling, data entry—is an hour you're not growing your business.
-            <br /><br />
-            Most automation tools promise to "save you time." That's the wrong goal.
-            <br /><br />
-            <span className="text-white font-medium">The real opportunity isn't saving 5 hours. It's doing 10x more with those same hours.</span>
-          </p>
+          <div className="text-lg text-gray-400 text-center max-w-3xl mx-auto mb-12 space-y-4">
+            <p>
+              Right now, someone filled out your contact form.
+            </p>
+            <p>
+              They're interested. They're ready. They're waiting.
+            </p>
+            <p className="text-gray-500">
+              3 minutes. 5 minutes. An hour. Tomorrow?
+            </p>
+            <p>
+              By the time you see the notification, they've already messaged your competitor.
+            </p>
+            <p className="text-white font-medium pt-4">
+              This isn't about "saving time." You don't need more time.<br />
+              You need to be in 10 places at once.
+            </p>
+            <p className="text-violet-400 font-semibold">
+              That's not humanly possible.<br />
+              That's exactly why we built this.
+            </p>
+          </div>
 
-          {/* Stats Row */}
+          {/* Stats Row - More Visceral with Dollar Figures */}
           <div className="grid md:grid-cols-3 gap-6 text-center">
-            <div className="p-6 bg-slate-800/50 rounded-xl">
-              <div className="text-4xl font-bold text-red-400 mb-2">47 hours</div>
-              <p className="text-gray-400 text-sm">Average lead response time (you're losing deals)</p>
+            <div className="p-6 bg-slate-800/50 rounded-xl border border-red-500/20">
+              <div className="text-4xl font-bold text-red-400 mb-2">78%</div>
+              <p className="text-gray-400 text-sm">of leads buy from whoever responds FIRST</p>
             </div>
-            <div className="p-6 bg-slate-800/50 rounded-xl">
-              <div className="text-4xl font-bold text-amber-400 mb-2">5 minutes</div>
-              <p className="text-gray-400 text-sm">After which leads go cold (HBR study)</p>
+            <div className="p-6 bg-slate-800/50 rounded-xl border border-amber-500/20">
+              <div className="text-4xl font-bold text-amber-400 mb-2">5 min</div>
+              <p className="text-gray-400 text-sm">After this, your lead is talking to someone else</p>
             </div>
-            <div className="p-6 bg-slate-800/50 rounded-xl">
-              <div className="text-4xl font-bold text-emerald-400 mb-2">10x</div>
-              <p className="text-gray-400 text-sm">Output increase with Sparkwave automation</p>
+            <div className="p-6 bg-slate-800/50 rounded-xl border border-emerald-500/20">
+              <div className="text-4xl font-bold text-emerald-400 mb-2">$12,000</div>
+              <p className="text-gray-400 text-sm">Average revenue lost per month to slow response (SMBs)</p>
             </div>
           </div>
         </div>
@@ -172,12 +187,15 @@ export default function Services() {
         </div>
       </section>
 
-      {/* Pricing Tiers */}
+      {/* Pricing Tiers - REWRITTEN per Quality Gate */}
       <section className="py-16 px-4 bg-slate-900/30">
         <div className="max-w-5xl mx-auto">
-          <h2 className="text-3xl font-bold text-white text-center mb-4">Choose Your Multiplier</h2>
-          <p className="text-xl text-gray-400 text-center max-w-2xl mx-auto mb-12">
-            Two paths to 10x productivity. Pick the one that fits your ambition.
+          <h2 className="text-3xl font-bold text-white text-center mb-4">Pick Your Multiplier</h2>
+          <p className="text-xl text-gray-400 text-center max-w-2xl mx-auto mb-4">
+            Both options come with a guarantee:
+          </p>
+          <p className="text-lg text-emerald-400 text-center font-semibold mb-12">
+            If you don't see measurable ROI in 90 days, we refund your setup.
           </p>
 
           <div className="grid md:grid-cols-2 gap-8">
@@ -197,23 +215,29 @@ export default function Services() {
               </CardHeader>
               <CardContent>
                 <div className="mb-6">
-                  <div className="text-3xl font-bold text-white">Starting at $997<span className="text-lg text-gray-400">/month</span></div>
-                  <p className="text-sm text-gray-500">Save 2 months with annual: $9,970/year</p>
+                  <div className="text-3xl font-bold text-white">$997<span className="text-lg text-gray-400">/month</span></div>
                 </div>
 
-                <p className="text-gray-400 text-sm mb-6">
-                  An AI agent that runs your marketing 24/7. Connect it to your existing tools. Watch it work.
-                </p>
+                {/* ROI Math Box */}
+                <div className="p-4 bg-emerald-900/20 border border-emerald-500/30 rounded-lg mb-6">
+                  <h4 className="text-emerald-400 font-semibold text-sm mb-2">THE ROI MATH</h4>
+                  <p className="text-gray-300 text-sm mb-2">
+                    Average client closes <span className="text-white font-semibold">3 extra deals/month</span> from faster response
+                  </p>
+                  <p className="text-emerald-400 font-semibold">→ $9,000-15,000 in new revenue</p>
+                  <div className="mt-3 pt-3 border-t border-emerald-500/20">
+                    <p className="text-gray-400 text-xs">Cost: $997/month · Typical return: <span className="text-emerald-400">9-15x</span></p>
+                  </div>
+                </div>
 
-                <ul className="space-y-3 mb-8">
+                <ul className="space-y-3 mb-6">
                   {[
                     "LLM-powered Marketing Agent",
                     "Connects to GoHighLevel, HubSpot, or your CRM",
                     "Instant lead response (sub-30-second)",
                     "AI-written email & SMS sequences",
                     "Simple control dashboard",
-                    "Weekly performance reports",
-                    "Standard support (48hr response)"
+                    "Weekly performance reports"
                   ].map((feature, i) => (
                     <li key={i} className="flex items-center gap-2 text-gray-300 text-sm">
                       <CheckCircle2 className="w-4 h-4 text-blue-400 flex-shrink-0" />
@@ -223,7 +247,7 @@ export default function Services() {
                 </ul>
 
                 <div className="p-3 bg-slate-800/50 rounded-lg mb-6 text-sm text-gray-400">
-                  <strong className="text-white">Best for:</strong> Small businesses who want marketing on autopilot. You focus on closing—the AI handles the rest.
+                  <strong className="text-white">Built for:</strong> The owner coaching classes at 7 PM while leads hit the website. The contractor on a job site who can't check their phone. You're already working hard enough. This works while you do.
                 </div>
 
                 <Button 
@@ -233,15 +257,15 @@ export default function Services() {
                   Start Your Marketing Agent
                   <ArrowRight className="w-4 h-4 ml-2" />
                 </Button>
+                <p className="text-gray-500 text-xs text-center mt-2">90-day ROI guarantee</p>
               </CardContent>
             </Card>
 
             {/* Tier 2: Full Clawdbot System */}
-            <Card className="bg-slate-900/50 border-amber-500/30 relative overflow-hidden">
+            <Card className="bg-slate-900/50 border-violet-500/30 relative overflow-hidden">
               <div className="absolute top-4 right-4">
-                <Badge className="bg-amber-600/20 text-amber-400 border-amber-500/30">
-                  <Star className="w-3 h-3 mr-1" />
-                  PREMIUM
+                <Badge className="bg-violet-600/20 text-violet-400 border-violet-500/30">
+                  FOR SERIOUS OPERATORS
                 </Badge>
               </div>
               <CardHeader>
@@ -254,24 +278,29 @@ export default function Services() {
               <CardContent>
                 <div className="mb-6">
                   <div className="text-3xl font-bold text-white">$3,000 setup + $1,497<span className="text-lg text-gray-400">/mo</span></div>
-                  <p className="text-sm text-gray-500">Custom quote for complex needs</p>
                 </div>
 
-                <p className="text-gray-400 text-sm mb-6">
-                  Your own autonomous AI system—like having a full-time digital employee that never sleeps. Customized. Extensible. Yours.
-                </p>
+                {/* Value Comparison Box */}
+                <div className="p-4 bg-violet-900/20 border border-violet-500/30 rounded-lg mb-6">
+                  <h4 className="text-violet-400 font-semibold text-sm mb-2">WHAT YOU'RE ACTUALLY BUYING</h4>
+                  <p className="text-gray-300 text-sm mb-2">
+                    A full-time marketing + ops person costs <span className="text-white font-semibold">$4,500/month+</span>
+                  </p>
+                  <p className="text-violet-400 font-semibold">This does more, never sleeps, costs less.</p>
+                  <div className="mt-3 pt-3 border-t border-violet-500/20">
+                    <p className="text-gray-400 text-xs">Fight Flow result: <span className="text-violet-400">175% more trial bookings</span></p>
+                  </div>
+                </div>
 
-                <ul className="space-y-3 mb-8">
+                <ul className="space-y-3 mb-6">
                   {[
                     "Everything in AI Marketing Agent",
                     "Complete autonomous Clawdbot (like Rico)",
                     "Customized to YOUR workflows",
                     "Multi-channel (email, SMS, social, calls)",
                     "AI agents that coordinate and hand off",
-                    "Extensible—add capabilities over time",
                     "Priority support (same-day)",
-                    "Quarterly strategy calls",
-                    "Custom integrations"
+                    "Quarterly strategy calls"
                   ].map((feature, i) => (
                     <li key={i} className="flex items-center gap-2 text-gray-300 text-sm">
                       <CheckCircle2 className="w-4 h-4 text-violet-400 flex-shrink-0" />
@@ -281,7 +310,7 @@ export default function Services() {
                 </ul>
 
                 <div className="p-3 bg-slate-800/50 rounded-lg mb-6 text-sm text-gray-400">
-                  <strong className="text-white">Best for:</strong> Businesses ready for true autonomy. An AI that thinks, adapts, and gets smarter. The future of how businesses operate.
+                  <strong className="text-white">Built for:</strong> The operator who wants a competitive weapon. You've automated the basics. Now you want an AI that thinks, adapts, and runs entire workflows autonomously. This is the system that runs while you sleep.
                 </div>
 
                 <Button 
@@ -291,36 +320,57 @@ export default function Services() {
                   Book a Discovery Call
                   <ArrowRight className="w-4 h-4 ml-2" />
                 </Button>
+                <p className="text-gray-500 text-xs text-center mt-2">We'll show you exactly what we'd build</p>
               </CardContent>
             </Card>
           </div>
         </div>
       </section>
 
-      {/* Founding Customer Banner */}
+      {/* Founding 20 Banner - REWRITTEN per Quality Gate */}
       <section className="py-12 px-4">
         <div className="max-w-4xl mx-auto">
           <Card className="bg-gradient-to-r from-amber-900/30 to-amber-800/20 border-amber-500/30">
             <CardContent className="p-8">
-              <div className="flex flex-col md:flex-row items-center gap-6">
-                <div className="flex-shrink-0">
-                  <div className="w-16 h-16 rounded-full bg-amber-600/20 flex items-center justify-center">
-                    <Star className="w-8 h-8 text-amber-400" />
+              <div className="flex flex-col items-center text-center">
+                <div className="w-16 h-16 rounded-full bg-amber-600/20 flex items-center justify-center mb-4">
+                  <Star className="w-8 h-8 text-amber-400" />
+                </div>
+                <h3 className="text-2xl font-bold text-white mb-4">🏆 FOUNDING 20</h3>
+                <p className="text-gray-300 mb-6 max-w-2xl">
+                  We're taking 20 founding customers. You get more than a discount.
+                </p>
+                
+                <div className="grid sm:grid-cols-2 gap-4 mb-6 text-left max-w-xl">
+                  <div className="flex items-center gap-2 text-gray-300 text-sm">
+                    <CheckCircle2 className="w-4 h-4 text-amber-400 flex-shrink-0" />
+                    <span><strong className="text-white">25% off FOREVER</strong> (price never increases)</span>
+                  </div>
+                  <div className="flex items-center gap-2 text-gray-300 text-sm">
+                    <CheckCircle2 className="w-4 h-4 text-amber-400 flex-shrink-0" />
+                    <span>Direct Slack channel with founders</span>
+                  </div>
+                  <div className="flex items-center gap-2 text-gray-300 text-sm">
+                    <CheckCircle2 className="w-4 h-4 text-amber-400 flex-shrink-0" />
+                    <span>Vote on features we build next</span>
+                  </div>
+                  <div className="flex items-center gap-2 text-gray-300 text-sm">
+                    <CheckCircle2 className="w-4 h-4 text-amber-400 flex-shrink-0" />
+                    <span>Your use case shapes the product</span>
                   </div>
                 </div>
-                <div className="flex-1 text-center md:text-left">
-                  <h3 className="text-xl font-bold text-white mb-2">Founding Customer Program</h3>
-                  <p className="text-gray-400 mb-4">
-                    Be one of our first 20 customers. Get 25% off for life (locked, never increases), 
-                    direct input on features, first access to new capabilities, and a direct line to founders.
-                  </p>
-                  <p className="text-amber-400 font-semibold">12 founding spots remaining.</p>
-                </div>
+
+                <p className="text-gray-400 text-sm mb-4">
+                  We want customers who want to build <span className="text-white">WITH</span> us, not just buy <span className="text-white">FROM</span> us.
+                </p>
+                
+                <p className="text-amber-400 font-bold text-lg mb-6">8 spots remaining.</p>
+                
                 <Button 
-                  className="bg-amber-600 hover:bg-amber-700 text-white px-6"
+                  className="bg-amber-600 hover:bg-amber-700 text-white px-8 py-6 text-lg"
                   onClick={handleBookAudit}
                 >
-                  Claim Your Spot
+                  Apply for Founding Access
                   <ArrowRight className="w-4 h-4 ml-2" />
                 </Button>
               </div>
