@@ -122,6 +122,39 @@ interface AIResponseLog {
   input_channel: string;
 }
 
+interface EmailSend {
+  id: string;
+  to_email: string | null;
+  subject: string | null;
+  status: string | null;
+  sent_at: string | null;
+  opened_at: string | null;
+  clicked_at: string | null;
+  created_at: string | null;
+  contact_id: string | null;
+  contact?: {
+    email: string | null;
+    first_name: string | null;
+    last_name: string | null;
+  };
+}
+
+// Unified activity item for merged feed
+interface ActivityItem {
+  id: string;
+  type: 'sms' | 'email';
+  direction?: string;
+  message?: string;
+  subject?: string;
+  to?: string;
+  status?: string;
+  created_at: string;
+  ai_response?: boolean;
+  contact_id?: string | null;
+  opened_at?: string | null;
+  clicked_at?: string | null;
+}
+
 interface QualityMetrics {
   passRate: number;
   avgRevisions: number;
@@ -542,7 +575,7 @@ export default function Communications() {
     }
   };
 
-  // Fetch recent messages
+  // Fetch recent SMS messages
   const { data: recentMessages = [], isLoading: messagesLoading } = useQuery({
     queryKey: ['recent-messages', selectedBusiness?.id],
     queryFn: async () => {
@@ -564,6 +597,64 @@ export default function Communications() {
     enabled: !!selectedBusiness?.id,
     refetchInterval: 10000, // Refresh every 10 seconds
   });
+
+  // Fetch recent email sends
+  const { data: recentEmails = [], isLoading: emailsLoading } = useQuery({
+    queryKey: ['recent-emails', selectedBusiness?.id],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('email_sends')
+        .select(`
+          id,
+          to_email,
+          subject,
+          status,
+          sent_at,
+          opened_at,
+          clicked_at,
+          created_at,
+          contact_id,
+          contact:contacts(email, first_name, last_name)
+        `)
+        .order('created_at', { ascending: false })
+        .limit(20);
+      if (error) throw error;
+      return data as EmailSend[];
+    },
+    enabled: !!selectedBusiness?.id,
+    refetchInterval: 10000,
+  });
+
+  // Merge and sort SMS + Email activity
+  const mergedActivity = useMemo((): ActivityItem[] => {
+    const smsItems: ActivityItem[] = recentMessages.map(msg => ({
+      id: msg.id,
+      type: 'sms' as const,
+      direction: msg.direction,
+      message: msg.message,
+      created_at: msg.created_at,
+      ai_response: msg.ai_response,
+      contact_id: msg.contact_id,
+    }));
+
+    const emailItems: ActivityItem[] = recentEmails.map(email => ({
+      id: email.id,
+      type: 'email' as const,
+      direction: 'outbound',
+      subject: email.subject || 'No subject',
+      to: email.to_email || email.contact?.email || 'Unknown',
+      status: email.status || 'pending',
+      created_at: email.created_at || email.sent_at || new Date().toISOString(),
+      contact_id: email.contact_id,
+      opened_at: email.opened_at,
+      clicked_at: email.clicked_at,
+    }));
+
+    // Merge and sort by created_at descending
+    return [...smsItems, ...emailItems]
+      .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())
+      .slice(0, 20);
+  }, [recentMessages, recentEmails]);
 
   // Fetch AI quality metrics
   // TODO: Replace sample data with real queries once ai_response_logs table is populated
@@ -1115,34 +1206,66 @@ export default function Communications() {
                     <MessageSquare className="h-5 w-5" />
                     Recent Activity
                   </CardTitle>
-                  <CardDescription>Latest messages</CardDescription>
+                  <CardDescription>Latest SMS and email activity</CardDescription>
                 </CardHeader>
                 <CardContent>
-                  {messagesLoading ? (
+                  {messagesLoading && emailsLoading ? (
                     <p className="text-center py-4">Loading...</p>
-                  ) : recentMessages.length === 0 ? (
-                    <p className="text-muted-foreground text-center py-4">No recent messages</p>
+                  ) : mergedActivity.length === 0 ? (
+                    <p className="text-muted-foreground text-center py-4">No recent activity</p>
                   ) : (
                     <div className="space-y-3 max-h-80 overflow-y-auto">
-                      {recentMessages.slice(0, 10).map(msg => (
+                      {mergedActivity.slice(0, 10).map(item => (
                         <div 
-                          key={msg.id} 
+                          key={`${item.type}-${item.id}`} 
                           className="flex items-start gap-3 text-sm p-2 rounded-lg hover:bg-slate-50 dark:hover:bg-slate-800 cursor-pointer transition-colors"
-                          onClick={() => msg.contact_id && openThread(msg.contact_id)}
+                          onClick={() => item.type === 'sms' && item.contact_id && openThread(item.contact_id)}
                         >
-                          <div className={`p-1 rounded ${msg.direction === 'inbound' ? 'bg-blue-100' : 'bg-green-100'}`}>
-                            {msg.direction === 'inbound' ? (
-                              <Reply className="h-3 w-3 text-blue-600" />
-                            ) : (
-                              <Send className="h-3 w-3 text-green-600" />
-                            )}
-                          </div>
+                          {item.type === 'sms' ? (
+                            <div className={`p-1 rounded ${item.direction === 'inbound' ? 'bg-blue-100' : 'bg-green-100'}`}>
+                              {item.direction === 'inbound' ? (
+                                <Reply className="h-3 w-3 text-blue-600" />
+                              ) : (
+                                <Send className="h-3 w-3 text-green-600" />
+                              )}
+                            </div>
+                          ) : (
+                            <div className={`p-1 rounded ${item.status === 'opened' || item.opened_at ? 'bg-purple-100' : item.status === 'clicked' || item.clicked_at ? 'bg-emerald-100' : 'bg-orange-100'}`}>
+                              <Mail className={`h-3 w-3 ${item.status === 'opened' || item.opened_at ? 'text-purple-600' : item.status === 'clicked' || item.clicked_at ? 'text-emerald-600' : 'text-orange-600'}`} />
+                            </div>
+                          )}
                           <div className="flex-1 min-w-0">
-                            <p className="truncate">{msg.message}</p>
-                            <p className="text-xs text-muted-foreground">
-                              {formatDistanceToNow(new Date(msg.created_at), { addSuffix: true })}
-                              {msg.ai_response && <Badge variant="outline" className="ml-2 text-xs">AI</Badge>}
-                            </p>
+                            {item.type === 'sms' ? (
+                              <p className="truncate">{item.message}</p>
+                            ) : (
+                              <div>
+                                <p className="truncate font-medium">{item.subject}</p>
+                                <p className="truncate text-muted-foreground text-xs">To: {item.to}</p>
+                              </div>
+                            )}
+                            <div className="flex items-center gap-2 text-xs text-muted-foreground mt-1">
+                              <span>{formatDistanceToNow(new Date(item.created_at), { addSuffix: true })}</span>
+                              {item.type === 'sms' && item.ai_response && (
+                                <Badge variant="outline" className="text-xs py-0">AI</Badge>
+                              )}
+                              {item.type === 'email' && (
+                                <>
+                                  <Badge variant="outline" className="text-xs py-0">Email</Badge>
+                                  {item.opened_at && (
+                                    <Badge className="bg-purple-500 text-xs py-0">
+                                      <Eye className="h-2 w-2 mr-1" />
+                                      Opened
+                                    </Badge>
+                                  )}
+                                  {item.clicked_at && (
+                                    <Badge className="bg-emerald-500 text-xs py-0">
+                                      <Target className="h-2 w-2 mr-1" />
+                                      Clicked
+                                    </Badge>
+                                  )}
+                                </>
+                              )}
+                            </div>
                           </div>
                         </div>
                       ))}
@@ -1519,42 +1642,88 @@ export default function Communications() {
           <TabsContent value="inbox">
             <Card>
               <CardHeader>
-                <CardTitle>Message Inbox</CardTitle>
-                <CardDescription>All inbound and outbound messages</CardDescription>
+                <CardTitle>Communications Inbox</CardTitle>
+                <CardDescription>All SMS and email communications</CardDescription>
               </CardHeader>
               <CardContent>
-                {messagesLoading ? (
-                  <p className="text-center py-8">Loading messages...</p>
-                ) : recentMessages.length === 0 ? (
-                  <p className="text-muted-foreground text-center py-8">No messages yet</p>
+                {messagesLoading && emailsLoading ? (
+                  <p className="text-center py-8">Loading communications...</p>
+                ) : mergedActivity.length === 0 ? (
+                  <p className="text-muted-foreground text-center py-8">No communications yet</p>
                 ) : (
                   <Table>
                     <TableHeader>
                       <TableRow>
+                        <TableHead>Channel</TableHead>
                         <TableHead>Direction</TableHead>
-                        <TableHead>Message</TableHead>
-                        <TableHead>Type</TableHead>
+                        <TableHead>Content</TableHead>
+                        <TableHead>Status</TableHead>
                         <TableHead>Time</TableHead>
                       </TableRow>
                     </TableHeader>
                     <TableBody>
-                      {recentMessages.map(msg => (
-                        <TableRow key={msg.id}>
+                      {mergedActivity.map(item => (
+                        <TableRow key={`${item.type}-${item.id}`}>
                           <TableCell>
-                            <Badge variant={msg.direction === 'inbound' ? 'default' : 'secondary'}>
-                              {msg.direction === 'inbound' ? '📥 In' : '📤 Out'}
+                            <Badge variant="outline" className="gap-1">
+                              {item.type === 'sms' ? (
+                                <>
+                                  <MessageSquare className="h-3 w-3" />
+                                  SMS
+                                </>
+                              ) : (
+                                <>
+                                  <Mail className="h-3 w-3" />
+                                  Email
+                                </>
+                              )}
                             </Badge>
                           </TableCell>
-                          <TableCell className="max-w-md truncate">{msg.message}</TableCell>
                           <TableCell>
-                            {msg.ai_response ? (
-                              <Badge variant="outline">AI Response</Badge>
-                            ) : msg.direction === 'outbound' ? (
-                              <Badge variant="outline">Manual</Badge>
-                            ) : null}
+                            <Badge variant={item.direction === 'inbound' ? 'default' : 'secondary'}>
+                              {item.direction === 'inbound' ? '📥 In' : '📤 Out'}
+                            </Badge>
+                          </TableCell>
+                          <TableCell className="max-w-md">
+                            {item.type === 'sms' ? (
+                              <span className="truncate block">{item.message}</span>
+                            ) : (
+                              <div>
+                                <span className="font-medium truncate block">{item.subject}</span>
+                                <span className="text-xs text-muted-foreground">To: {item.to}</span>
+                              </div>
+                            )}
+                          </TableCell>
+                          <TableCell>
+                            {item.type === 'sms' ? (
+                              item.ai_response ? (
+                                <Badge variant="outline">AI Response</Badge>
+                              ) : item.direction === 'outbound' ? (
+                                <Badge variant="outline">Manual</Badge>
+                              ) : null
+                            ) : (
+                              <div className="flex gap-1 flex-wrap">
+                                <Badge 
+                                  variant="outline" 
+                                  className={
+                                    item.clicked_at ? 'bg-emerald-50 text-emerald-700' :
+                                    item.opened_at ? 'bg-purple-50 text-purple-700' :
+                                    item.status === 'delivered' ? 'bg-blue-50 text-blue-700' :
+                                    item.status === 'sent' ? 'bg-green-50 text-green-700' :
+                                    ''
+                                  }
+                                >
+                                  {item.clicked_at ? 'Clicked' :
+                                   item.opened_at ? 'Opened' :
+                                   item.status === 'delivered' ? 'Delivered' :
+                                   item.status === 'sent' ? 'Sent' :
+                                   item.status || 'Pending'}
+                                </Badge>
+                              </div>
+                            )}
                           </TableCell>
                           <TableCell className="text-muted-foreground">
-                            {formatDistanceToNow(new Date(msg.created_at), { addSuffix: true })}
+                            {formatDistanceToNow(new Date(item.created_at), { addSuffix: true })}
                           </TableCell>
                         </TableRow>
                       ))}
