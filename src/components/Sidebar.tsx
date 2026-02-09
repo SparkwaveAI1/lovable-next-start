@@ -1,5 +1,5 @@
 import { useState } from "react"
-import { Link, useLocation, useNavigate } from "react-router-dom"
+import { Link, useLocation } from "react-router-dom"
 import {
   LayoutDashboard,
   Users,
@@ -11,7 +11,6 @@ import {
   CalendarDays,
   Rocket,
   Bot,
-  Plus,
   ChevronLeft,
   ChevronRight,
   ChevronDown,
@@ -23,7 +22,6 @@ import {
   HelpCircle,
 } from "lucide-react"
 import { cn } from "@/lib/utils"
-import { Button } from "@/components/ui/button"
 import sparkwaveIcon from "@/assets/sparkwave-icon.png"
 
 interface NavItem {
@@ -96,7 +94,6 @@ interface SidebarProps {
 
 export function Sidebar({ isSuperAdmin, collapsed = false, onToggleCollapse, businessName }: SidebarProps) {
   const location = useLocation()
-  const navigate = useNavigate()
   const [collapsedGroups, setCollapsedGroups] = useState<Record<string, boolean>>({
     Reference: true, // Reference section collapsed by default
   })
@@ -147,21 +144,6 @@ export function Sidebar({ isSuperAdmin, collapsed = false, onToggleCollapse, bus
             <span className="text-indigo-300 text-xs">Automation Center</span>
           </div>
         )}
-      </div>
-
-      {/* Create New Button */}
-      <div className={cn("px-3 pt-4 pb-2", collapsed && "px-2")}>
-        <Button
-          onClick={() => navigate("/content-center")}
-          className={cn(
-            "w-full bg-indigo-600 hover:bg-indigo-500 text-white font-medium transition-colors",
-            collapsed ? "px-0 justify-center" : "justify-start gap-2"
-          )}
-          size={collapsed ? "icon" : "default"}
-        >
-          <Plus className="h-4 w-4" />
-          {!collapsed && <span>Create New</span>}
-        </Button>
       </div>
 
       {/* Main Navigation */}

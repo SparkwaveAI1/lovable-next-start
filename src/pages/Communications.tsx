@@ -961,14 +961,14 @@ export default function Communications() {
               <RefreshCw className="h-4 w-4 mr-2" />
               Refresh
             </Button>
-            <Dialog open={isNewCampaignOpen} onOpenChange={setIsNewCampaignOpen}>
+            <Dialog open={isNewCampaignOpen} onOpenChange={(open) => { setIsNewCampaignOpen(open); if (!open) resetCampaignForm(); }}>
               <DialogTrigger asChild>
                 <Button size="sm">
                   <Plus className="h-4 w-4 mr-2" />
                   New Campaign
                 </Button>
               </DialogTrigger>
-              <DialogContent>
+              <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
                 <DialogHeader>
                   <DialogTitle>Create New Campaign</DialogTitle>
                   <DialogDescription>
@@ -1010,13 +1010,204 @@ export default function Communications() {
                       rows={4}
                     />
                   </div>
+                  
+                  {/* Audience Selector */}
+                  <div className="space-y-3 pt-2 border-t">
+                    <Label className="flex items-center gap-2">
+                      <Users className="h-4 w-4" />
+                      Target Audience
+                    </Label>
+                    <RadioGroup
+                      value={audienceType}
+                      onValueChange={(value) => setAudienceType(value as AudienceType)}
+                      className="space-y-2"
+                    >
+                      <div className="flex items-center space-x-2">
+                        <RadioGroupItem value="all" id="audience-all" />
+                        <Label htmlFor="audience-all" className="font-normal cursor-pointer">
+                          All contacts ({allContacts.length})
+                        </Label>
+                      </div>
+                      <div className="flex items-center space-x-2">
+                        <RadioGroupItem value="by_tag" id="audience-tag" />
+                        <Label htmlFor="audience-tag" className="font-normal cursor-pointer">
+                          By tag
+                        </Label>
+                      </div>
+                      <div className="flex items-center space-x-2">
+                        <RadioGroupItem value="by_status" id="audience-status" />
+                        <Label htmlFor="audience-status" className="font-normal cursor-pointer">
+                          By status
+                        </Label>
+                      </div>
+                      <div className="flex items-center space-x-2">
+                        <RadioGroupItem value="by_source" id="audience-source" />
+                        <Label htmlFor="audience-source" className="font-normal cursor-pointer">
+                          By source
+                        </Label>
+                      </div>
+                      <div className="flex items-center space-x-2">
+                        <RadioGroupItem value="manual" id="audience-manual" />
+                        <Label htmlFor="audience-manual" className="font-normal cursor-pointer">
+                          Select manually
+                        </Label>
+                      </div>
+                    </RadioGroup>
+
+                    {/* Tag Selection */}
+                    {audienceType === 'by_tag' && (
+                      <div className="space-y-2 pl-6">
+                        <Label className="text-sm text-muted-foreground">Select tags:</Label>
+                        {availableTags.length === 0 ? (
+                          <p className="text-sm text-muted-foreground">No tags available</p>
+                        ) : (
+                          <div className="flex flex-wrap gap-2">
+                            {availableTags.map(tag => (
+                              <Badge
+                                key={tag.id}
+                                variant={selectedTags.includes(tag.slug) ? "default" : "outline"}
+                                className="cursor-pointer hover:opacity-80 transition-opacity"
+                                style={selectedTags.includes(tag.slug) && tag.color ? { backgroundColor: tag.color } : undefined}
+                                onClick={() => {
+                                  setSelectedTags(prev =>
+                                    prev.includes(tag.slug)
+                                      ? prev.filter(t => t !== tag.slug)
+                                      : [...prev, tag.slug]
+                                  );
+                                }}
+                              >
+                                {tag.name}
+                              </Badge>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                    )}
+
+                    {/* Status Selection */}
+                    {audienceType === 'by_status' && (
+                      <div className="space-y-2 pl-6">
+                        <Label className="text-sm text-muted-foreground">Select statuses:</Label>
+                        <div className="space-y-2">
+                          {STATUS_OPTIONS.map(status => (
+                            <div key={status.value} className="flex items-center space-x-2">
+                              <Checkbox
+                                id={`status-${status.value}`}
+                                checked={selectedStatuses.includes(status.value)}
+                                onCheckedChange={(checked) => {
+                                  setSelectedStatuses(prev =>
+                                    checked
+                                      ? [...prev, status.value]
+                                      : prev.filter(s => s !== status.value)
+                                  );
+                                }}
+                              />
+                              <Label htmlFor={`status-${status.value}`} className="font-normal cursor-pointer">
+                                {status.label}
+                              </Label>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Source Selection */}
+                    {audienceType === 'by_source' && (
+                      <div className="space-y-2 pl-6">
+                        <Label className="text-sm text-muted-foreground">Select sources:</Label>
+                        <div className="space-y-2">
+                          {SOURCE_OPTIONS.map(source => (
+                            <div key={source.value} className="flex items-center space-x-2">
+                              <Checkbox
+                                id={`source-${source.value}`}
+                                checked={selectedSources.includes(source.value)}
+                                onCheckedChange={(checked) => {
+                                  setSelectedSources(prev =>
+                                    checked
+                                      ? [...prev, source.value]
+                                      : prev.filter(s => s !== source.value)
+                                  );
+                                }}
+                              />
+                              <Label htmlFor={`source-${source.value}`} className="font-normal cursor-pointer">
+                                {source.label}
+                              </Label>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Manual Contact Selection */}
+                    {audienceType === 'manual' && (
+                      <div className="space-y-2 pl-6">
+                        <Label className="text-sm text-muted-foreground">Select contacts:</Label>
+                        {contactsLoading ? (
+                          <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                            <Loader2 className="h-4 w-4 animate-spin" />
+                            Loading contacts...
+                          </div>
+                        ) : (
+                          <ScrollArea className="h-48 border rounded-md p-2">
+                            <div className="space-y-2">
+                              {allContacts.map(contact => (
+                                <div key={contact.id} className="flex items-center space-x-2">
+                                  <Checkbox
+                                    id={`contact-${contact.id}`}
+                                    checked={selectedContactIds.includes(contact.id)}
+                                    onCheckedChange={(checked) => {
+                                      setSelectedContactIds(prev =>
+                                        checked
+                                          ? [...prev, contact.id]
+                                          : prev.filter(id => id !== contact.id)
+                                      );
+                                    }}
+                                  />
+                                  <Label htmlFor={`contact-${contact.id}`} className="font-normal cursor-pointer text-sm">
+                                    {contact.first_name || contact.last_name
+                                      ? `${contact.first_name || ''} ${contact.last_name || ''}`.trim()
+                                      : contact.email || contact.phone || 'Unknown'}
+                                    {contact.status && (
+                                      <span className="text-muted-foreground ml-2">({contact.status})</span>
+                                    )}
+                                  </Label>
+                                </div>
+                              ))}
+                            </div>
+                          </ScrollArea>
+                        )}
+                      </div>
+                    )}
+
+                    {/* Recipient Count Preview */}
+                    <div className="flex items-center gap-2 pt-2 text-sm">
+                      <Target className="h-4 w-4 text-muted-foreground" />
+                      <span className="text-muted-foreground">Recipients:</span>
+                      <Badge variant={recipientCount > 0 ? "default" : "secondary"}>
+                        {contactsLoading ? '...' : recipientCount}
+                      </Badge>
+                      {recipientCount === 0 && audienceType !== 'all' && (
+                        <span className="text-amber-600 text-xs">Select at least one filter option</span>
+                      )}
+                    </div>
+                  </div>
                 </div>
                 <DialogFooter>
-                  <Button variant="outline" onClick={() => setIsNewCampaignOpen(false)}>
+                  <Button variant="outline" onClick={() => { setIsNewCampaignOpen(false); resetCampaignForm(); }}>
                     Cancel
                   </Button>
-                  <Button onClick={handleCreateCampaign} disabled={!newCampaign.name || !newCampaign.message_template}>
-                    Create Campaign
+                  <Button 
+                    onClick={handleCreateCampaign} 
+                    disabled={!newCampaign.name || !newCampaign.message_template || recipientCount === 0 || isCreatingCampaign}
+                  >
+                    {isCreatingCampaign ? (
+                      <>
+                        <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                        Creating...
+                      </>
+                    ) : (
+                      `Create Campaign (${recipientCount})`
+                    )}
                   </Button>
                 </DialogFooter>
               </DialogContent>
