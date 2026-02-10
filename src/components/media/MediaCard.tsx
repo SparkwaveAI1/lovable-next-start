@@ -1,6 +1,6 @@
 import { Card } from "@/components/ui/card"
 import { cn } from "@/lib/utils"
-import { Download, Pencil, Trash2, Calendar, HardDrive, Play, Video, Share2 } from "lucide-react"
+import { Download, Pencil, Trash2, Calendar, HardDrive, Play, Video } from "lucide-react"
 import { StatusBadge } from "@/components/ui/status-badge"
 
 interface MediaCardProps {
@@ -18,7 +18,6 @@ interface MediaCardProps {
   onDownload?: () => void
   onEdit?: () => void
   onDelete?: () => void
-  onShare?: () => void
   onClick?: () => void
   className?: string
 }
@@ -37,7 +36,6 @@ export function MediaCard({
   onDownload,
   onEdit,
   onDelete,
-  onShare,
   onClick,
   className,
 }: MediaCardProps) {
@@ -47,13 +45,13 @@ export function MediaCard({
       className={cn("overflow-hidden group cursor-pointer", className)}
       onClick={onClick}
     >
-      {/* Thumbnail with 4:3 aspect ratio for better media fit */}
-      <div className="relative aspect-[4/3] bg-gray-100 overflow-hidden">
+      {/* Thumbnail with fixed aspect ratio */}
+      <div className="relative aspect-square bg-gray-100 overflow-hidden">
         {fileType === "image" ? (
           <img
             src={filePath}
             alt={title}
-            className="w-full h-full object-contain bg-gray-50 transition-transform duration-300 group-hover:scale-105"
+            className="w-full h-full object-cover transition-transform duration-300 group-hover:scale-105"
           />
         ) : fileType === "video" ? (
           <div className="relative w-full h-full">
@@ -61,7 +59,7 @@ export function MediaCard({
               <img
                 src={thumbnailUrl}
                 alt={title}
-                className="w-full h-full object-contain bg-gray-50 transition-transform duration-300 group-hover:scale-105"
+                className="w-full h-full object-cover transition-transform duration-300 group-hover:scale-105"
               />
             ) : (
               <div className="absolute inset-0 flex flex-col items-center justify-center bg-gradient-to-br from-gray-100 to-gray-200">
@@ -83,25 +81,14 @@ export function MediaCard({
             <button
               onClick={(e) => { e.stopPropagation(); onDownload(); }}
               className="p-2 bg-white rounded-lg shadow-lg hover:bg-gray-100 transition-colors"
-              title="Download"
             >
               <Download className="h-4 w-4 text-gray-700" />
-            </button>
-          )}
-          {onShare && (
-            <button
-              onClick={(e) => { e.stopPropagation(); onShare(); }}
-              className="p-2 bg-white rounded-lg shadow-lg hover:bg-blue-50 transition-colors"
-              title="Share"
-            >
-              <Share2 className="h-4 w-4 text-blue-600" />
             </button>
           )}
           {onEdit && (
             <button
               onClick={(e) => { e.stopPropagation(); onEdit(); }}
               className="p-2 bg-white rounded-lg shadow-lg hover:bg-gray-100 transition-colors"
-              title="Edit"
             >
               <Pencil className="h-4 w-4 text-gray-700" />
             </button>
@@ -110,7 +97,6 @@ export function MediaCard({
             <button
               onClick={(e) => { e.stopPropagation(); onDelete(); }}
               className="p-2 bg-white rounded-lg shadow-lg hover:bg-red-50 transition-colors"
-              title="Delete"
             >
               <Trash2 className="h-4 w-4 text-red-600" />
             </button>
