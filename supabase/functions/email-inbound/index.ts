@@ -731,6 +731,7 @@ serve(async (req) => {
       body_text: replyText,
       body_html: rawEmailBody.includes('<') ? rawEmailBody : null,
       contact_id: contact.id,
+      business_id: businessId,
       status: 'new',
       notified: false,
       raw_payload: rawPayload
