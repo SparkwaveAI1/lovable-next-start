@@ -722,6 +722,26 @@ serve(async (req) => {
       }
     });
 
+    // Also insert into email_replies table for dedicated reply tracking
+    const { error: replyInsertError } = await supabase.from('email_replies').insert({
+      from_email: senderEmail,
+      from_name: emailData.from,
+      to_email: toEmail,
+      subject: emailData.subject,
+      body_text: replyText,
+      body_html: rawEmailBody.includes('<') ? rawEmailBody : null,
+      contact_id: contact.id,
+      status: 'new',
+      notified: false,
+      raw_payload: rawPayload
+    });
+
+    if (replyInsertError) {
+      console.error('📧 Failed to insert into email_replies:', replyInsertError.message);
+    } else {
+      console.log('📧 ✅ Logged to email_replies table');
+    }
+
     return new Response(
       JSON.stringify({
         received: true,

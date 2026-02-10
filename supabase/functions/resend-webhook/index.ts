@@ -60,6 +60,37 @@ serve(async (req) => {
     console.log('📬 Event type:', event.type);
     console.log('📬 Email ID:', event.data.email_id);
 
+    // ============================================================
+    // ALWAYS log to email_events first (captures ALL emails including cold outreach)
+    // ============================================================
+    try {
+      const { error: eventLogError } = await supabase
+        .from('email_events')
+        .insert({
+          email_id: event.data.email_id,
+          event_type: event.type,
+          recipient: event.data.to?.[0] || null,
+          timestamp: event.created_at || new Date().toISOString(),
+          metadata: {
+            from: event.data.from,
+            to: event.data.to,
+            subject: event.data.subject,
+            click: event.data.click || null,
+            bounce: event.data.bounce || null,
+            headers: event.data.headers || null,
+            raw_event: event,
+          },
+        });
+
+      if (eventLogError) {
+        console.error('⚠️ Failed to log to email_events:', eventLogError);
+      } else {
+        console.log('✅ Logged to email_events table');
+      }
+    } catch (logErr) {
+      console.error('⚠️ Error logging event:', logErr);
+    }
+
     // Find the send record by resend_id
     const { data: sendRecord, error: findError } = await supabase
       .from('email_sends')
