@@ -37,25 +37,24 @@ interface AdvisorFeedback {
 
 interface ContentQueueItem {
   id: string;
-  content_text: string;
-  content_type: string;
-  media_urls: string[] | null;
+  content: string;
   brand: string;
   platform: string;
-  account_handle: string | null;
+  account: string | null;
+  status: string;
   scheduled_time: string | null;
-  timezone: string;
   advisor_score: number | null;
   advisor_feedback: AdvisorFeedback | null;
-  style_used: string | null;
-  pillar_used: string | null;
-  status: string;
+  reviewer_notes: string | null;
+  image_urls: string[] | null;
+  pillar: string | null;
+  style: string | null;
   created_by: string | null;
-  created_at: string;
   reviewed_by: string | null;
-  reviewed_at: string | null;
-  review_notes: string | null;
-  priority: number;
+  created_at: string;
+  updated_at: string;
+  posted_at: string | null;
+  post_url: string | null;
 }
 
 type SortField = 'scheduled_time' | 'advisor_score' | 'created_at';
@@ -187,7 +186,7 @@ export default function ContentReviewPage() {
       };
 
       if (notes) {
-        updateData.review_notes = notes;
+        updateData.reviewer_notes = notes;
       }
 
       const { error } = await supabase
@@ -417,7 +416,7 @@ export default function ContentReviewPage() {
                     <div className="flex items-center gap-3">
                       <div className="flex items-center gap-2 text-sm">
                         {getPlatformIcon(item.platform)}
-                        <span className="font-medium">{item.account_handle || item.platform}</span>
+                        <span className="font-medium">{item.account || item.platform}</span>
                       </div>
                       <Badge 
                         variant="outline" 
@@ -425,12 +424,12 @@ export default function ContentReviewPage() {
                       >
                         {item.brand}
                       </Badge>
-                      {item.priority !== 5 && (
+                      {5 !== 5 && (
                         <Badge 
                           variant="outline" 
-                          className={priorityLabels[item.priority]?.color || priorityLabels[5].color}
+                          className={priorityLabels[5]?.color || priorityLabels[5].color}
                         >
-                          {priorityLabels[item.priority]?.label || "Normal"}
+                          {priorityLabels[5]?.label || "Normal"}
                         </Badge>
                       )}
                     </div>
@@ -452,11 +451,11 @@ export default function ContentReviewPage() {
                 <CardContent className="space-y-4">
                   <div className="bg-gray-50 rounded-lg p-4">
                     <p className="whitespace-pre-wrap text-sm leading-relaxed">
-                      {item.content_text}
+                      {item.content}
                     </p>
-                    {item.media_urls && item.media_urls.length > 0 && (
+                    {item.image_urls && item.image_urls.length > 0 && (
                       <div className="mt-3 flex flex-wrap gap-2">
-                        {item.media_urls.map((url, idx) => (
+                        {item.image_urls.map((url, idx) => (
                           <a 
                             key={idx} 
                             href={url} 
@@ -484,11 +483,11 @@ export default function ContentReviewPage() {
 
                   {/* Meta info */}
                   <div className="flex flex-wrap items-center gap-4 text-xs text-muted-foreground">
-                    {item.style_used && (
-                      <span>Style: <span className="font-medium text-foreground">{item.style_used}</span></span>
+                    {item.style && (
+                      <span>Style: <span className="font-medium text-foreground">{item.style}</span></span>
                     )}
-                    {item.pillar_used && (
-                      <span>Pillar: <span className="font-medium text-foreground">{item.pillar_used}</span></span>
+                    {item.pillar && (
+                      <span>Pillar: <span className="font-medium text-foreground">{item.pillar}</span></span>
                     )}
                     <span>Created by: <span className="font-medium text-foreground">{item.created_by || "unknown"}</span></span>
                     <span>{formatToEasternCompact(item.created_at)}</span>
@@ -551,12 +550,12 @@ export default function ContentReviewPage() {
                   )}
 
                   {/* Review notes if rejected/revision */}
-                  {item.review_notes && (
+                  {item.reviewer_notes && (
                     <div className="flex items-start gap-2 p-3 bg-yellow-50 border border-yellow-200 rounded-lg">
                       <AlertCircle className="h-4 w-4 text-yellow-600 mt-0.5 flex-shrink-0" />
                       <div>
                         <p className="text-sm font-medium text-yellow-800">Review Notes</p>
-                        <p className="text-sm text-yellow-700">{item.review_notes}</p>
+                        <p className="text-sm text-yellow-700">{item.reviewer_notes}</p>
                       </div>
                     </div>
                   )}
@@ -619,7 +618,7 @@ export default function ContentReviewPage() {
             <div className="space-y-4">
               {revisionDialog.item && (
                 <div className="bg-gray-50 rounded-lg p-3 text-sm">
-                  <p className="line-clamp-3">{revisionDialog.item.content_text}</p>
+                  <p className="line-clamp-3">{revisionDialog.item.content}</p>
                 </div>
               )}
               <Textarea
