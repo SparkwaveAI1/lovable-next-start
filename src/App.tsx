@@ -43,6 +43,7 @@ import FAQ from "./pages/FAQ";
 import ContentVisibility from "./pages/ContentVisibility";
 import AutomationAudit from "./pages/AutomationAudit";
 import ROICalculator from "./pages/ROICalculator";
+import Onboarding from "./pages/Onboarding";
 import ProtectedRoute from "./components/ProtectedRoute";
 import { ErrorBoundary } from "./components/ErrorBoundary";
 import { BusinessProvider } from "@/contexts/BusinessContext";
@@ -63,6 +64,7 @@ const App = () => (
             <AssistantButton />
             <Routes>
             <Route path="/auth" element={<Auth />} />
+            <Route path="/onboarding" element={<Onboarding />} />
             <Route path="/book" element={<Book />} />
             <Route path="/audit" element={<AutomationAudit />} />
             <Route path="/roi-calculator" element={<ROICalculator />} />
