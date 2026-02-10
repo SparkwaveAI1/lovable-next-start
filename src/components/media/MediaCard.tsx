@@ -42,23 +42,15 @@ export function MediaCard({
   onClick,
   className,
 }: MediaCardProps) {
-  const [imageLoaded, setImageLoaded] = useState(false)
   const [imageError, setImageError] = useState(false)
-  const [thumbLoaded, setThumbLoaded] = useState(false)
   const [thumbError, setThumbError] = useState(false)
 
-  // DEBUG: Log what we're receiving
-  console.log('[MediaCard]', { title, filePath, fileType, thumbnailUrl })
-
-  // Reset loading state when filePath or thumbnailUrl changes
+  // Reset error state when filePath changes
   useEffect(() => {
-    setImageLoaded(false)
     setImageError(false)
-    console.log('[MediaCard] filePath:', filePath, 'fileType:', fileType)
-  }, [filePath, fileType])
+  }, [filePath])
 
   useEffect(() => {
-    setThumbLoaded(false)
     setThumbError(false)
   }, [thumbnailUrl])
 
@@ -72,44 +64,38 @@ export function MediaCard({
       <div className="relative aspect-video bg-gray-100 overflow-hidden">
         {fileType === "image" ? (
           <>
-            {/* Loading/Error fallback */}
-            {(!imageLoaded || imageError) && (
+            {/* Error fallback */}
+            {imageError && (
               <div className="absolute inset-0 flex flex-col items-center justify-center bg-gradient-to-br from-gray-100 to-gray-200">
                 <ImageIcon className="w-12 h-12 text-gray-400" />
-                {imageError && <span className="text-xs text-gray-400 mt-1">Failed to load</span>}
+                <span className="text-xs text-gray-400 mt-1">Failed to load</span>
               </div>
             )}
             <img
               src={filePath}
               alt={title}
-              onLoad={() => setImageLoaded(true)}
               onError={() => setImageError(true)}
-              className={cn(
-                "w-full h-full object-contain transition-transform duration-300 group-hover:scale-105",
-                (!imageLoaded || imageError) && "opacity-0"
-              )}
+              className="w-full h-full object-contain transition-transform duration-300 group-hover:scale-105"
+              loading="lazy"
             />
           </>
         ) : fileType === "video" ? (
           <div className="relative w-full h-full">
             {thumbnailUrl ? (
               <>
-                {/* Loading/Error fallback for video thumbnail */}
-                {(!thumbLoaded || thumbError) && (
+                {/* Error fallback for video thumbnail */}
+                {thumbError && (
                   <div className="absolute inset-0 flex flex-col items-center justify-center bg-gradient-to-br from-gray-100 to-gray-200">
                     <Video className="w-12 h-12 text-gray-400" />
-                    {thumbError && <span className="text-xs text-gray-400 mt-1">Thumbnail unavailable</span>}
+                    <span className="text-xs text-gray-400 mt-1">Thumbnail unavailable</span>
                   </div>
                 )}
                 <img
                   src={thumbnailUrl}
                   alt={title}
-                  onLoad={() => setThumbLoaded(true)}
                   onError={() => setThumbError(true)}
-                  className={cn(
-                    "w-full h-full object-contain transition-transform duration-300 group-hover:scale-105",
-                    (!thumbLoaded || thumbError) && "opacity-0"
-                  )}
+                  className="w-full h-full object-contain transition-transform duration-300 group-hover:scale-105"
+                  loading="lazy"
                 />
               </>
             ) : (
