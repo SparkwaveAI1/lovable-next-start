@@ -46,12 +46,12 @@ export function MediaCard({
       onClick={onClick}
     >
       {/* Thumbnail with fixed aspect ratio */}
-      <div className="relative aspect-square bg-gray-100 overflow-hidden">
+      <div className="relative aspect-square bg-gray-200 overflow-hidden">
         {fileType === "image" ? (
           <img
             src={filePath}
             alt={title}
-            className="w-full h-full object-cover transition-transform duration-300 group-hover:scale-105"
+            className="w-full h-full object-contain transition-transform duration-300 group-hover:scale-105"
           />
         ) : fileType === "video" ? (
           <div className="relative w-full h-full">
@@ -59,7 +59,7 @@ export function MediaCard({
               <img
                 src={thumbnailUrl}
                 alt={title}
-                className="w-full h-full object-cover transition-transform duration-300 group-hover:scale-105"
+                className="w-full h-full object-contain transition-transform duration-300 group-hover:scale-105"
               />
             ) : (
               <div className="absolute inset-0 flex flex-col items-center justify-center bg-gradient-to-br from-gray-100 to-gray-200">
