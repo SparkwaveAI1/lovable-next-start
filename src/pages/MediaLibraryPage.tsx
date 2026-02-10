@@ -101,12 +101,15 @@ export default function MediaLibraryPage() {
 
   const loadMedia = async () => {
     setLoading(true);
+    console.log('[MediaLibrary] loadMedia called, selectedBusiness:', selectedBusiness?.id, selectedBusiness?.name);
     try {
       const { data, error } = await supabase
         .from('media_assets')
         .select('*')
         .eq('business_id', selectedBusiness?.id)
         .order('created_at', { ascending: false });
+
+      console.log('[MediaLibrary] Query result:', { count: data?.length, error, firstItem: data?.[0] });
 
       if (error) throw error;
 

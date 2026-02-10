@@ -47,11 +47,15 @@ export function MediaCard({
   const [thumbLoaded, setThumbLoaded] = useState(false)
   const [thumbError, setThumbError] = useState(false)
 
+  // DEBUG: Log what we're receiving
+  console.log('[MediaCard]', { title, filePath, fileType, thumbnailUrl })
+
   // Reset loading state when filePath or thumbnailUrl changes
   useEffect(() => {
     setImageLoaded(false)
     setImageError(false)
-  }, [filePath])
+    console.log('[MediaCard] filePath:', filePath, 'fileType:', fileType)
+  }, [filePath, fileType])
 
   useEffect(() => {
     setThumbLoaded(false)
