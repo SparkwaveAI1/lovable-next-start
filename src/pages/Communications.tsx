@@ -53,6 +53,8 @@ import {
 } from 'lucide-react';
 import { format, formatDistanceToNow } from 'date-fns';
 import { toast } from 'sonner';
+import { EmailSequencesList } from '@/components/email/EmailSequencesList';
+import { EmailCampaignSequenceBuilder } from '@/components/email/EmailCampaignSequenceBuilder';
 
 interface EmailCampaign {
   id: string;
@@ -257,6 +259,9 @@ export default function Communications() {
   
   // Email campaign state
   const [isEmailCampaignOpen, setIsEmailCampaignOpen] = useState(false);
+  const [emailSubTab, setEmailSubTab] = useState<'campaigns' | 'sequences'>('campaigns');
+  const [isSequenceBuilderOpen, setIsSequenceBuilderOpen] = useState(false);
+  const [editingSequenceId, setEditingSequenceId] = useState<string | null>(null);
   const [newEmailCampaign, setNewEmailCampaign] = useState({
     name: '',
     subject: '',
@@ -1535,6 +1540,60 @@ export default function Communications() {
 
           {/* Email Marketing Tab */}
           <TabsContent value="email" className="space-y-6">
+            {/* Email Sub-Tabs */}
+            <div className="flex items-center gap-4 border-b pb-2">
+              <Button 
+                variant={emailSubTab === 'campaigns' ? 'default' : 'ghost'} 
+                size="sm"
+                onClick={() => setEmailSubTab('campaigns')}
+              >
+                <Mail className="h-4 w-4 mr-2" />
+                Single Campaigns
+              </Button>
+              <Button 
+                variant={emailSubTab === 'sequences' ? 'default' : 'ghost'} 
+                size="sm"
+                onClick={() => setEmailSubTab('sequences')}
+              >
+                <Clock className="h-4 w-4 mr-2" />
+                Email Sequences
+              </Button>
+            </div>
+
+            {/* Sequence Builder View */}
+            {emailSubTab === 'sequences' && isSequenceBuilderOpen && selectedBusiness && (
+              <EmailCampaignSequenceBuilder
+                businessId={selectedBusiness.id}
+                sequenceId={editingSequenceId || undefined}
+                onSave={(id) => {
+                  setIsSequenceBuilderOpen(false);
+                  setEditingSequenceId(null);
+                }}
+                onCancel={() => {
+                  setIsSequenceBuilderOpen(false);
+                  setEditingSequenceId(null);
+                }}
+              />
+            )}
+
+            {/* Sequences List View */}
+            {emailSubTab === 'sequences' && !isSequenceBuilderOpen && selectedBusiness && (
+              <EmailSequencesList
+                businessId={selectedBusiness.id}
+                onCreateNew={() => {
+                  setEditingSequenceId(null);
+                  setIsSequenceBuilderOpen(true);
+                }}
+                onEdit={(id) => {
+                  setEditingSequenceId(id);
+                  setIsSequenceBuilderOpen(true);
+                }}
+              />
+            )}
+
+            {/* Single Campaigns View */}
+            {emailSubTab === 'campaigns' && (
+              <>
             {/* Email Stats Cards */}
             <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
               <Card>
@@ -1827,6 +1886,8 @@ export default function Communications() {
                 )}
               </CardContent>
             </Card>
+              </>
+            )}
           </TabsContent>
 
           {/* Inbox Tab */}
