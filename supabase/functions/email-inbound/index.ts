@@ -44,6 +44,28 @@ interface DirectEmailPayload {
 }
 
 /**
+ * Parse plus-addressed email to extract business ID
+ * Format: sparkwave+{business_id}@reply.sparkwave-ai.com
+ * Returns null if no plus-tag found (will default to Sparkwave)
+ */
+function parseBusinessIdFromPlusAddress(toAddress: string): string | null {
+  if (!toAddress) return null;
+  
+  // Match sparkwave+{business_id}@reply.sparkwave-ai.com
+  const plusMatch = toAddress.match(/sparkwave\+([a-f0-9-]+)@reply\.sparkwave-ai\.com/i);
+  
+  if (plusMatch && plusMatch[1]) {
+    console.log('📧 Extracted business_id from plus-address:', plusMatch[1]);
+    return plusMatch[1];
+  }
+  
+  return null;
+}
+
+// Default Sparkwave business ID for emails without plus-addressing
+const SPARKWAVE_DEFAULT_BUSINESS_ID = '5a9bbfcf-fae5-4063-9780-bcbe366bae88';
+
+/**
  * Extract just the new reply content, removing quoted original messages
  */
 function extractReplyContent(fullBody: string): string {
@@ -218,39 +240,62 @@ serve(async (req) => {
 
     console.log('Sender email:', senderEmail);
 
-    // Determine business from the "to" address by looking up agent_config
-    // The "to" address should match a from_email in agent_config
+    // Extract the raw "to" email for lookup
     const toEmailMatch = toAddress?.match(/<([^>]+)>/) || [null, toAddress];
     const toEmail = toEmailMatch[1]?.toLowerCase().trim() || toAddress?.toLowerCase().trim();
-    console.log('Looking up business for to address:', toEmail);
+    console.log('📧 Looking up business for to address:', toEmail);
 
     let businessId: string | null = null;
     let businessName: string = 'the business';
 
-    // Try to find business by the receiving email address
-    const { data: agentConfigMatch } = await supabase
-      .from('agent_config')
-      .select('business_id, businesses(name)')
-      .ilike('from_email', toEmail || '')
-      .single();
-
-    if (agentConfigMatch) {
-      businessId = agentConfigMatch.business_id;
-      businessName = (agentConfigMatch.businesses as any)?.name || 'the business';
-      console.log('Found business from to address:', businessId, businessName);
-    } else {
-      // Fallback: get the first/default business
-      const { data: defaultBusiness } = await supabase
+    // PRIORITY 1: Parse plus-address for business routing (multi-tenant support)
+    // Format: sparkwave+{business_id}@reply.sparkwave-ai.com
+    const plusAddressBusinessId = parseBusinessIdFromPlusAddress(toEmail || '');
+    
+    if (plusAddressBusinessId) {
+      // Validate the business ID exists
+      const { data: businessFromPlus } = await supabase
         .from('businesses')
         .select('id, name')
-        .limit(1)
+        .eq('id', plusAddressBusinessId)
+        .single();
+      
+      if (businessFromPlus) {
+        businessId = businessFromPlus.id;
+        businessName = businessFromPlus.name;
+        console.log('📧 ✅ Routed via plus-address to business:', businessId, businessName);
+      } else {
+        console.log('📧 ⚠️ Plus-address business ID not found in database:', plusAddressBusinessId);
+      }
+    }
+    
+    // PRIORITY 2: Try agent_config lookup by from_email (legacy method)
+    if (!businessId) {
+      const { data: agentConfigMatch } = await supabase
+        .from('agent_config')
+        .select('business_id, businesses(name)')
+        .ilike('from_email', toEmail || '')
         .single();
 
-      if (defaultBusiness) {
-        businessId = defaultBusiness.id;
-        businessName = defaultBusiness.name;
-        console.log('Using default business:', businessId, businessName);
+      if (agentConfigMatch) {
+        businessId = agentConfigMatch.business_id;
+        businessName = (agentConfigMatch.businesses as any)?.name || 'the business';
+        console.log('📧 Found business from agent_config:', businessId, businessName);
       }
+    }
+    
+    // PRIORITY 3: Default to Sparkwave (NOT Fight Flow or first business)
+    // This ensures stray emails go to Sparkwave, not Fight Flow
+    if (!businessId) {
+      businessId = SPARKWAVE_DEFAULT_BUSINESS_ID;
+      const { data: sparkwaveBusiness } = await supabase
+        .from('businesses')
+        .select('name')
+        .eq('id', businessId)
+        .single();
+      
+      businessName = sparkwaveBusiness?.name || 'Sparkwave AI';
+      console.log('📧 No routing match found - defaulting to Sparkwave:', businessId, businessName);
     }
 
     if (!businessId) {
@@ -635,6 +680,10 @@ serve(async (req) => {
       </div>
     `;
 
+    // Generate plus-addressed reply-to for proper routing on future replies
+    const plusAddressedReplyTo = `sparkwave+${businessId}@reply.sparkwave-ai.com`;
+    console.log('📧 Sending response with plus-addressed reply-to:', plusAddressedReplyTo);
+    
     const emailResponse = await fetch(`${supabaseUrl}/functions/v1/send-email`, {
       method: 'POST',
       headers: {
@@ -647,7 +696,9 @@ serve(async (req) => {
         html: emailHtml,
         from_email: fromEmail,
         from_name: fromName,
-        contact_id: contact.id
+        contact_id: contact.id,
+        business_id: businessId,
+        reply_to: plusAddressedReplyTo
       })
     });
 

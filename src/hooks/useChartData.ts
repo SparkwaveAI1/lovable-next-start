@@ -1,7 +1,7 @@
 import { useQuery } from '@tanstack/react-query';
 
-const SUPABASE_URL = 'https://wrsoacujxcskydlzgopa.supabase.co';
-const ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Indyc29hY3VqeGNza3lkbHpnb3BhIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NDk2MDUyMTEsImV4cCI6MjA2NTE4MTIxMX0.TyzOJ0_qZ6nwHW_p9tTd4RZ8FtP7rg8u_Ow92phO7rc';
+const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL;
+const ANON_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY;
 
 export type TimeRange = '1D' | '1W' | '1M' | '3M' | '1Y' | 'ALL';
 

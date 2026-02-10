@@ -32,6 +32,20 @@ interface SendEmailRequest {
   test_email?: string;
 }
 
+/**
+ * Generate plus-addressed reply-to email for multi-tenant routing
+ * Format: sparkwave+{business_id}@reply.sparkwave-ai.com
+ */
+function generatePlusAddressedReplyTo(businessId: string | undefined, existingReplyTo: string | undefined): string {
+  // If no business ID, use base address (will default to Sparkwave in inbound)
+  if (!businessId) {
+    return existingReplyTo || 'sparkwave@reply.sparkwave-ai.com';
+  }
+  
+  // Generate plus-addressed email for routing
+  return `sparkwave+${businessId}@reply.sparkwave-ai.com`;
+}
+
 interface EmailPayload {
   from: string;
   to: string[];
@@ -111,13 +125,16 @@ serve(async (req) => {
         first_name: 'Test', last_name: 'User', email: body.test_email
       });
 
+      // Use plus-addressed reply-to for multi-tenant routing
+      const testReplyTo = generatePlusAddressedReplyTo(campaign.business_id, campaign.reply_to);
+      
       const result = await withRetry(
         () => sendViaResend(resendApiKey, {
           from: `${campaign.from_name || 'Test'} <${campaign.from_email || 'noreply@example.com'}>`,
           to: [body.test_email!],
           subject: `[TEST] ${personalizedSubject}`,
           html: personalizedHtml,
-          reply_to: campaign.reply_to,
+          reply_to: testReplyTo,
         }),
         EMAIL_RETRY_OPTIONS
       );
@@ -144,6 +161,10 @@ serve(async (req) => {
 
     console.log(`[${requestId}] Sending to:`, body.to);
 
+    // Use plus-addressed reply-to for multi-tenant routing
+    const singleReplyTo = generatePlusAddressedReplyTo(body.business_id, body.reply_to);
+    console.log(`[${requestId}] Using plus-addressed reply-to:`, singleReplyTo);
+
     const result = await withRetry(
       () => sendViaResend(resendApiKey, {
         from: `${fromName} <${fromEmail}>`,
@@ -151,7 +172,7 @@ serve(async (req) => {
         subject: body.subject!,
         html: body.html!,
         text: body.text,
-        reply_to: body.reply_to,
+        reply_to: singleReplyTo,
       }),
       EMAIL_RETRY_OPTIONS
     );
@@ -277,6 +298,9 @@ async function sendCampaign(
             return;
           }
 
+          // Use plus-addressed reply-to for multi-tenant routing
+          const campaignReplyTo = generatePlusAddressedReplyTo(campaign.business_id, campaign.reply_to);
+          
           // Use retry for each email send
           const result = await withRetry(
             () => sendViaResend(resendApiKey, {
@@ -285,7 +309,7 @@ async function sendCampaign(
               subject: personalizedSubject,
               html: personalizedHtml,
               text: personalizedText,
-              reply_to: campaign.reply_to,
+              reply_to: campaignReplyTo,
               headers: {
                 'X-Campaign-Id': campaignId,
                 'X-Send-Id': sendRecord.id,
