@@ -15,6 +15,7 @@ import {
   ChevronRight,
   ChevronDown,
   ClipboardList,
+  ClipboardCheck,
   BookOpen,
   TrendingUp,
   MessageSquare,
@@ -68,6 +69,7 @@ const navGroups: NavGroup[] = [
     label: "Content",
     items: [
       { label: "Content Center", href: "/content-center", icon: FileText },
+      { label: "Content Review", href: "/content-review", icon: ClipboardCheck },
       { label: "Content Visibility", href: "/content-visibility", icon: Eye },
       { label: "Media Library", href: "/media-library", icon: Image },
     ],
