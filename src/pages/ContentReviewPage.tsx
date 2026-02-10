@@ -182,7 +182,7 @@ export default function ContentReviewPage() {
       const updateData: Record<string, unknown> = {
         status: newStatus,
         reviewed_by: user?.email || "scott",
-        reviewed_at: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
       };
 
       if (notes) {
