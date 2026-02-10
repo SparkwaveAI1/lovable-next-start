@@ -1,7 +1,7 @@
 import { useState, useEffect } from "react"
 import { Card } from "@/components/ui/card"
 import { cn } from "@/lib/utils"
-import { Download, Pencil, Trash2, Calendar, HardDrive, Play, Video, Image as ImageIcon } from "lucide-react"
+import { Download, Pencil, Trash2, Calendar, HardDrive, Play, Video, Image as ImageIcon, Share2 } from "lucide-react"
 import { StatusBadge } from "@/components/ui/status-badge"
 
 interface MediaCardProps {
@@ -17,6 +17,7 @@ interface MediaCardProps {
   tags: string[]
   isAnalyzing?: boolean
   onDownload?: () => void
+  onShare?: () => void
   onEdit?: () => void
   onDelete?: () => void
   onClick?: () => void
@@ -35,6 +36,7 @@ export function MediaCard({
   tags,
   isAnalyzing = false,
   onDownload,
+  onShare,
   onEdit,
   onDelete,
   onClick,
@@ -42,12 +44,19 @@ export function MediaCard({
 }: MediaCardProps) {
   const [imageLoaded, setImageLoaded] = useState(false)
   const [imageError, setImageError] = useState(false)
+  const [thumbLoaded, setThumbLoaded] = useState(false)
+  const [thumbError, setThumbError] = useState(false)
 
-  // Reset loading state when filePath changes
+  // Reset loading state when filePath or thumbnailUrl changes
   useEffect(() => {
     setImageLoaded(false)
     setImageError(false)
   }, [filePath])
+
+  useEffect(() => {
+    setThumbLoaded(false)
+    setThumbError(false)
+  }, [thumbnailUrl])
 
   return (
     <Card
@@ -80,11 +89,25 @@ export function MediaCard({
         ) : fileType === "video" ? (
           <div className="relative w-full h-full">
             {thumbnailUrl ? (
-              <img
-                src={thumbnailUrl}
-                alt={title}
-                className="w-full h-full object-contain transition-transform duration-300 group-hover:scale-105"
-              />
+              <>
+                {/* Loading/Error fallback for video thumbnail */}
+                {(!thumbLoaded || thumbError) && (
+                  <div className="absolute inset-0 flex flex-col items-center justify-center bg-gradient-to-br from-gray-100 to-gray-200">
+                    <Video className="w-12 h-12 text-gray-400" />
+                    {thumbError && <span className="text-xs text-gray-400 mt-1">Thumbnail unavailable</span>}
+                  </div>
+                )}
+                <img
+                  src={thumbnailUrl}
+                  alt={title}
+                  onLoad={() => setThumbLoaded(true)}
+                  onError={() => setThumbError(true)}
+                  className={cn(
+                    "w-full h-full object-contain transition-transform duration-300 group-hover:scale-105",
+                    (!thumbLoaded || thumbError) && "opacity-0"
+                  )}
+                />
+              </>
             ) : (
               <div className="absolute inset-0 flex flex-col items-center justify-center bg-gradient-to-br from-gray-100 to-gray-200">
                 <Video className="w-12 h-12 text-gray-400" />
@@ -105,8 +128,18 @@ export function MediaCard({
             <button
               onClick={(e) => { e.stopPropagation(); onDownload(); }}
               className="p-2 bg-white rounded-lg shadow-lg hover:bg-gray-100 transition-colors"
+              title="Download"
             >
               <Download className="h-4 w-4 text-gray-700" />
+            </button>
+          )}
+          {onShare && (
+            <button
+              onClick={(e) => { e.stopPropagation(); onShare(); }}
+              className="p-2 bg-white rounded-lg shadow-lg hover:bg-gray-100 transition-colors"
+              title="Share"
+            >
+              <Share2 className="h-4 w-4 text-gray-700" />
             </button>
           )}
           {onEdit && (
