@@ -46,7 +46,7 @@ export function MediaCard({
       onClick={onClick}
     >
       {/* Thumbnail with fixed aspect ratio */}
-      <div className="relative aspect-square bg-gray-100 overflow-hidden">
+      <div className="relative aspect-video bg-gray-100 overflow-hidden">
         {fileType === "image" ? (
           <img
             src={filePath}
