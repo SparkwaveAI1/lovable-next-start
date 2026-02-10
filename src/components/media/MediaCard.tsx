@@ -1,6 +1,7 @@
+import { useState, useEffect } from "react"
 import { Card } from "@/components/ui/card"
 import { cn } from "@/lib/utils"
-import { Download, Pencil, Trash2, Calendar, HardDrive, Play, Video } from "lucide-react"
+import { Download, Pencil, Trash2, Calendar, HardDrive, Play, Video, Image as ImageIcon } from "lucide-react"
 import { StatusBadge } from "@/components/ui/status-badge"
 
 interface MediaCardProps {
@@ -39,6 +40,15 @@ export function MediaCard({
   onClick,
   className,
 }: MediaCardProps) {
+  const [imageLoaded, setImageLoaded] = useState(false)
+  const [imageError, setImageError] = useState(false)
+
+  // Reset loading state when filePath changes
+  useEffect(() => {
+    setImageLoaded(false)
+    setImageError(false)
+  }, [filePath])
+
   return (
     <Card
       variant="interactive"
@@ -48,11 +58,25 @@ export function MediaCard({
       {/* Thumbnail with fixed aspect ratio */}
       <div className="relative aspect-video bg-gray-100 overflow-hidden">
         {fileType === "image" ? (
-          <img
-            src={filePath}
-            alt={title}
-            className="w-full h-full object-contain transition-transform duration-300 group-hover:scale-105"
-          />
+          <>
+            {/* Loading/Error fallback */}
+            {(!imageLoaded || imageError) && (
+              <div className="absolute inset-0 flex flex-col items-center justify-center bg-gradient-to-br from-gray-100 to-gray-200">
+                <ImageIcon className="w-12 h-12 text-gray-400" />
+                {imageError && <span className="text-xs text-gray-400 mt-1">Failed to load</span>}
+              </div>
+            )}
+            <img
+              src={filePath}
+              alt={title}
+              onLoad={() => setImageLoaded(true)}
+              onError={() => setImageError(true)}
+              className={cn(
+                "w-full h-full object-contain transition-transform duration-300 group-hover:scale-105",
+                (!imageLoaded || imageError) && "opacity-0"
+              )}
+            />
+          </>
         ) : fileType === "video" ? (
           <div className="relative w-full h-full">
             {thumbnailUrl ? (
