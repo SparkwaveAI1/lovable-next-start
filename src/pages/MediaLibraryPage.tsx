@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { useBusinesses } from '@/hooks/useBusinesses';
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
@@ -20,6 +20,7 @@ import { PageHeader, PageContent } from "@/components/layout/PageLayout";
 import { Progress } from "@/components/ui/progress";
 import { format } from "date-fns";
 import { useContentFilter } from "@/hooks/useContentFilter";
+import { trackDownload, trackShare } from "@/lib/analyticsService";
 
 interface MediaAsset {
   id: string;
@@ -510,6 +511,14 @@ export default function MediaLibraryPage() {
 
   const handleDownload = async (item: MediaAsset) => {
     try {
+      // Track the download
+      trackDownload(
+        item.business_id,
+        item.id,
+        item.file_type as 'image' | 'video',
+        { fileName: item.file_name, fileSize: item.file_size }
+      );
+
       // For videos, use direct download link to avoid CORS and memory issues
       if (item.file_type === 'video') {
         const a = document.createElement('a');
@@ -556,6 +565,39 @@ export default function MediaLibraryPage() {
       toast.error(`Failed to download ${item.file_type}: ${error instanceof Error ? error.message : 'Unknown error'}`);
     }
   };
+
+  const handleShare = useCallback(async (item: MediaAsset) => {
+    try {
+      // Track the share
+      const contentType = item.file_type as 'image' | 'video';
+      
+      // Try native share API first
+      if (navigator.share) {
+        try {
+          await navigator.share({
+            title: item.file_name,
+            text: item.description || 'Check out this content',
+            url: item.file_path,
+          });
+          trackShare(item.business_id, item.id, contentType, 'web');
+          toast.success('Shared successfully');
+        } catch (err) {
+          // User cancelled share
+          if ((err as Error).name !== 'AbortError') {
+            throw err;
+          }
+        }
+      } else {
+        // Fallback: copy link to clipboard
+        await navigator.clipboard.writeText(item.file_path);
+        trackShare(item.business_id, item.id, contentType, 'web', { shareUrl: item.file_path });
+        toast.success('Link copied to clipboard');
+      }
+    } catch (error) {
+      console.error('Error sharing:', error);
+      toast.error('Failed to share');
+    }
+  }, []);
 
   const formatFileSize = (bytes: number) => {
     if (bytes < 1024) return bytes + ' B';
@@ -759,6 +801,7 @@ export default function MediaLibraryPage() {
                       isAnalyzing={!item.description}
                       onClick={() => setSelectedMedia(item)}
                       onDownload={() => handleDownload(item)}
+                      onShare={() => handleShare(item)}
                       onEdit={() => {
                         setEditingMedia(item);
                         setEditDescription(item.description || '');

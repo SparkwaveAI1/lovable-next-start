@@ -1,7 +1,9 @@
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Download, Edit2, Trash2 } from "lucide-react";
+import { Download, Edit2, Trash2, Share2 } from "lucide-react";
+import { useEffect, useRef, useCallback } from "react";
+import { trackImageView, trackVideoPlay, trackVideoComplete, trackShare, trackDownload } from "@/lib/analyticsService";
 
 interface MediaAsset {
   id: string;
@@ -28,6 +30,7 @@ interface MediaViewerDialogProps {
   onDownload: () => void;
   onEdit: () => void;
   onDelete: () => void;
+  onShare?: () => void;
 }
 
 export function MediaViewerDialog({
@@ -36,8 +39,90 @@ export function MediaViewerDialog({
   onOpenChange,
   onDownload,
   onEdit,
-  onDelete
+  onDelete,
+  onShare
 }: MediaViewerDialogProps) {
+  const videoRef = useRef<HTMLVideoElement>(null);
+  const viewTrackedRef = useRef<string | null>(null);
+  const playTrackedRef = useRef<boolean>(false);
+
+  // Track view when dialog opens
+  useEffect(() => {
+    if (open && media && viewTrackedRef.current !== media.id) {
+      viewTrackedRef.current = media.id;
+      playTrackedRef.current = false; // Reset play tracking for new media
+      
+      if (media.file_type === 'image') {
+        trackImageView(media.business_id, media.id, { source: 'media_viewer' });
+      }
+    }
+  }, [open, media?.id, media?.business_id, media?.file_type]);
+
+  // Track video play and completion
+  const handleVideoPlay = useCallback(() => {
+    if (media && !playTrackedRef.current) {
+      playTrackedRef.current = true;
+      trackVideoPlay(media.business_id, media.id, { autoplay: false });
+    }
+  }, [media?.business_id, media?.id]);
+
+  const handleVideoEnded = useCallback(() => {
+    if (media && videoRef.current) {
+      const duration = videoRef.current.duration;
+      trackVideoComplete(media.business_id, media.id, {
+        watchedDuration: duration,
+        totalDuration: duration,
+        percentWatched: 100,
+      });
+    }
+  }, [media?.business_id, media?.id]);
+
+  // Handle download with tracking
+  const handleDownload = useCallback(() => {
+    if (media) {
+      trackDownload(
+        media.business_id,
+        media.id,
+        media.file_type as 'image' | 'video',
+        { fileName: media.file_name, fileSize: media.file_size }
+      );
+    }
+    onDownload();
+  }, [media, onDownload]);
+
+  // Handle share with tracking
+  const handleShare = useCallback(async () => {
+    if (!media) return;
+
+    // Try native share API first
+    if (navigator.share) {
+      try {
+        await navigator.share({
+          title: media.file_name,
+          text: media.description || 'Check out this content',
+          url: media.file_path,
+        });
+        trackShare(media.business_id, media.id, media.file_type as 'image' | 'video', 'web');
+      } catch (err) {
+        // User cancelled or share failed
+        console.log('Share cancelled');
+      }
+    } else {
+      // Fallback: copy to clipboard
+      try {
+        await navigator.clipboard.writeText(media.file_path);
+        trackShare(media.business_id, media.id, media.file_type as 'image' | 'video', 'web', {
+          shareUrl: media.file_path
+        });
+        // Could show a toast here
+      } catch (err) {
+        console.error('Copy failed:', err);
+      }
+    }
+    
+    if (onShare) onShare();
+  }, [media, onShare]);
+
   if (!media) return null;
 
   const formatFileSize = (bytes: number) => {
@@ -60,11 +145,14 @@ export function MediaViewerDialog({
               />
             ) : (
               <video
+                ref={videoRef}
                 src={media.file_path}
                 controls
                 autoPlay
                 playsInline
                 className="max-w-full max-h-[70vh] object-contain"
+                onPlay={handleVideoPlay}
+                onEnded={handleVideoEnded}
               />
             )}
           </div>
@@ -130,7 +218,7 @@ export function MediaViewerDialog({
                 <Button
                   variant="outline"
                   size="sm"
-                  onClick={onDownload}
+                  onClick={handleDownload}
                   className="flex-1"
                 >
                   <Download className="w-4 h-4 mr-2" />
@@ -139,11 +227,18 @@ export function MediaViewerDialog({
                 <Button
                   variant="outline"
                   size="sm"
-                  onClick={onEdit}
+                  onClick={handleShare}
                   className="flex-1"
                 >
-                  <Edit2 className="w-4 h-4 mr-2" />
-                  Edit
+                  <Share2 className="w-4 h-4 mr-2" />
+                  Share
+                </Button>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={onEdit}
+                >
+                  <Edit2 className="w-4 h-4" />
                 </Button>
                 <Button
                   variant="destructive"
