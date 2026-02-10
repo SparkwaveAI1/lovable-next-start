@@ -163,7 +163,9 @@ export default function ContentReviewPage() {
           loadItems();
         }
       )
-      .subscribe();
+      .subscribe((status, err) => {
+        if (err) console.warn('Realtime subscription error (content queue):', err.message);
+      });
 
     return () => {
       supabase.removeChannel(channel);

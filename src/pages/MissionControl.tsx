@@ -98,6 +98,7 @@ export default function MissionControl() {
     const channelSuffix = isAll ? 'all' : (businessId || 'global');
 
     // Subscribe to global agents (always)
+    // Note: Subscriptions may fail silently if Realtime is not enabled on Supabase project
     const globalAgentsChannel = supabase
       .channel(`mc_agents_global_${channelSuffix}`)
       .on('postgres_changes', { event: '*', schema: 'public', table: 'mc_agents', filter: `scope=eq.global` },
@@ -106,7 +107,11 @@ export default function MissionControl() {
           else if (payload.eventType === 'UPDATE') setAgents(prev => prev.map(a => a.id === (payload.new as Agent).id ? payload.new as Agent : a));
           else if (payload.eventType === 'DELETE') setAgents(prev => prev.filter(a => a.id !== (payload.old as Agent).id));
         }
-      ).subscribe();
+      ).subscribe((status, err) => {
+        if (err) {
+          console.warn('Realtime subscription error (global agents):', err.message);
+        }
+      });
 
     // Subscribe to business-specific agents (if business selected, or all agents if "All" selected)
     let businessAgentsChannel: ReturnType<typeof supabase.channel> | null = null;
@@ -123,7 +128,9 @@ export default function MissionControl() {
             else if (payload.eventType === 'UPDATE') setAgents(prev => prev.map(a => a.id === agent.id ? agent : a));
             else if (payload.eventType === 'DELETE') setAgents(prev => prev.filter(a => a.id !== (payload.old as Agent).id));
           }
-        ).subscribe();
+        ).subscribe((status, err) => {
+          if (err) console.warn('Realtime subscription error (all agents):', err.message);
+        });
     } else if (businessId) {
       businessAgentsChannel = supabase
         .channel(`mc_agents_business_${businessId}`)
@@ -136,7 +143,9 @@ export default function MissionControl() {
             else if (payload.eventType === 'UPDATE') setAgents(prev => prev.map(a => a.id === agent.id ? agent : a));
             else if (payload.eventType === 'DELETE') setAgents(prev => prev.filter(a => a.id !== (payload.old as Agent).id));
           }
-        ).subscribe();
+        ).subscribe((status, err) => {
+          if (err) console.warn('Realtime subscription error (business agents):', err.message);
+        });
     }
 
     // Subscribe to tasks (filter by business if selected, or all if "All")
@@ -150,7 +159,9 @@ export default function MissionControl() {
           else if (payload.eventType === 'UPDATE') setTasks(prev => prev.map(t => t.id === (payload.new as Task).id ? payload.new as Task : t));
           else if (payload.eventType === 'DELETE') setTasks(prev => prev.filter(t => t.id !== (payload.old as Task).id));
         }
-      ).subscribe();
+      ).subscribe((status, err) => {
+        if (err) console.warn('Realtime subscription error (tasks):', err.message);
+      });
 
     // Subscribe to ALL activities (always global - Scott wants to see everything)
     const activitiesChannel = supabase
@@ -161,7 +172,9 @@ export default function MissionControl() {
           else if (payload.eventType === 'UPDATE') setActivities(prev => prev.map(a => a.id === (payload.new as Activity).id ? payload.new as Activity : a));
           else if (payload.eventType === 'DELETE') setActivities(prev => prev.filter(a => a.id !== (payload.old as Activity).id));
         }
-      ).subscribe();
+      ).subscribe((status, err) => {
+        if (err) console.warn('Realtime subscription error (activities):', err.message);
+      });
 
     return () => {
       supabase.removeChannel(globalAgentsChannel);

@@ -92,7 +92,9 @@ export default function MediaLibraryPage() {
           loadMedia();
         }
       )
-      .subscribe();
+      .subscribe((status, err) => {
+        if (err) console.warn('Realtime subscription error (media assets):', err.message);
+      });
 
     return () => {
       supabase.removeChannel(channel);

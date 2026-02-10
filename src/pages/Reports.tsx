@@ -73,7 +73,9 @@ export default function Reports() {
             description: `${REPORT_TYPE_ICONS[(payload.new as Report).type]} ${(payload.new as Report).title}`,
           });
         }
-      ).subscribe();
+      ).subscribe((status, err) => {
+        if (err) console.warn('Realtime subscription error (reports):', err.message);
+      });
 
     return () => {
       supabase.removeChannel(channel);

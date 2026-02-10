@@ -75,32 +75,24 @@ export function MediaCard({
               src={filePath}
               alt={title}
               onError={() => setImageError(true)}
-              className="w-full h-full object-contain transition-transform duration-300 group-hover:scale-105"
+              className="w-full h-full object-cover transition-transform duration-300 group-hover:scale-105"
               loading="lazy"
             />
           </>
         ) : fileType === "video" ? (
           <div className="relative w-full h-full">
-            {thumbnailUrl ? (
-              <>
-                {/* Error fallback for video thumbnail */}
-                {thumbError && (
-                  <div className="absolute inset-0 flex flex-col items-center justify-center bg-gradient-to-br from-gray-100 to-gray-200">
-                    <Video className="w-12 h-12 text-gray-400" />
-                    <span className="text-xs text-gray-400 mt-1">Thumbnail unavailable</span>
-                  </div>
-                )}
-                <img
-                  src={thumbnailUrl}
-                  alt={title}
-                  onError={() => setThumbError(true)}
-                  className="w-full h-full object-contain transition-transform duration-300 group-hover:scale-105"
-                  loading="lazy"
-                />
-              </>
+            {thumbnailUrl && !thumbError ? (
+              <img
+                src={thumbnailUrl}
+                alt={title}
+                onError={() => setThumbError(true)}
+                className="w-full h-full object-cover transition-transform duration-300 group-hover:scale-105"
+                loading="lazy"
+              />
             ) : (
-              <div className="absolute inset-0 flex flex-col items-center justify-center bg-gradient-to-br from-gray-100 to-gray-200">
-                <Video className="w-12 h-12 text-gray-400" />
+              <div className="absolute inset-0 flex flex-col items-center justify-center bg-gradient-to-br from-indigo-100 to-purple-100">
+                <Video className="w-16 h-16 text-indigo-400" />
+                <span className="text-sm text-indigo-500 mt-2 font-medium">Video</span>
               </div>
             )}
             {/* Play button overlay for videos */}
