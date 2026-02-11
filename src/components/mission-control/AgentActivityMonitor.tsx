@@ -3,6 +3,7 @@ import { cn } from "@/lib/utils";
 import { supabase } from "@/integrations/supabase/client";
 import { useBusinessContext } from "@/contexts/BusinessContext";
 import { HelpTooltip } from "@/components/ui/help-tooltip";
+import { useToast } from "@/components/ui/use-toast";
 import { 
   Activity, 
   Bot, 
@@ -10,7 +11,8 @@ import {
   CheckCircle2, 
   AlertCircle, 
   Clock,
-  Sparkles
+  Sparkles,
+  Play
 } from "lucide-react";
 
 export interface ActiveAgentTask {
@@ -125,6 +127,36 @@ export function AgentActivityMonitor({ className, agents: externalAgents = [] }:
   const { selectedBusiness } = useBusinessContext();
   const [tasks, setTasks] = useState<ActiveAgentTask[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  const [isRestarting, setIsRestarting] = useState(false);
+  const { toast } = useToast();
+
+  // Restart queue handler - calls edge function
+  const handleRestartQueue = async () => {
+    setIsRestarting(true);
+    try {
+      const { data, error } = await supabase.functions.invoke('restart-queue', {
+        method: 'POST',
+        body: {}
+      });
+      
+      if (error) throw error;
+      
+      toast({
+        title: "Queue Restarted",
+        description: data.message || `${data.available_count} tasks available`,
+        variant: data.available_count > 0 ? "default" : "destructive"
+      });
+    } catch (err) {
+      console.error('Error restarting queue:', err);
+      toast({
+        title: "Failed to restart queue",
+        description: err instanceof Error ? err.message : 'Unknown error',
+        variant: "destructive"
+      });
+    } finally {
+      setIsRestarting(false);
+    }
+  };
 
   // Fetch active tasks - ALWAYS GLOBAL (all businesses)
   useEffect(() => {
@@ -219,18 +251,33 @@ export function AgentActivityMonitor({ className, agents: externalAgents = [] }:
   return (
     <div className={cn("flex flex-col bg-white rounded-xl border border-slate-200 overflow-hidden", className)}>
       {/* Header */}
-      <div className="px-4 py-3 border-b border-slate-200 flex items-center gap-2 shrink-0">
-        <Activity className="h-4 w-4 text-blue-600" />
-        <h3 className="font-semibold text-sm text-slate-900">Agent Activity</h3>
-        <HelpTooltip 
-          text="Agents are AI workers that handle tasks automatically. This panel shows their real-time status and active tasks."
-          docsLink="/docs/agents"
-          size="sm"
-        />
-        <span className="text-xs text-slate-400">
-          {externalAgents.filter(a => a.status === 'working' || a.status === 'active').length} active
-          {tasks.length > 0 && ` · ${tasks.length} task${tasks.length !== 1 ? 's' : ''} running`}
-        </span>
+      <div className="px-4 py-3 border-b border-slate-200 flex items-center justify-between shrink-0">
+        <div className="flex items-center gap-2">
+          <Activity className="h-4 w-4 text-blue-600" />
+          <h3 className="font-semibold text-sm text-slate-900">Agent Activity</h3>
+          <HelpTooltip 
+            text="Agents are AI workers that handle tasks automatically. This panel shows their real-time status and active tasks."
+            docsLink="/docs/agents"
+            size="sm"
+          />
+          <span className="text-xs text-slate-400">
+            {externalAgents.filter(a => a.status === 'working' || a.status === 'active').length} active
+            {tasks.length > 0 && ` · ${tasks.length} task${tasks.length !== 1 ? 's' : ''} running`}
+          </span>
+        </div>
+        <button
+          onClick={handleRestartQueue}
+          disabled={isRestarting}
+          className="flex items-center gap-1.5 px-2.5 py-1.5 bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 disabled:cursor-not-allowed text-white rounded-lg transition-colors text-xs font-medium"
+          title="Restart queue processing"
+        >
+          {isRestarting ? (
+            <Loader2 className="h-3.5 w-3.5 animate-spin" />
+          ) : (
+            <Play className="h-3.5 w-3.5" />
+          )}
+          <span className="hidden sm:inline">Restart Queue</span>
+        </button>
       </div>
 
       {/* Task List */}
