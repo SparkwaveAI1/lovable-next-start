@@ -789,7 +789,7 @@ export default function MediaLibraryPage() {
               </Card>
             ) : (
               <ScrollArea className="h-[calc(100vh-400px)] sm:h-[600px]">
-                <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-3 sm:gap-4 pr-2 sm:pr-4 items-start content-start">
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 sm:gap-6 pr-2 sm:pr-4">
                   {filteredMedia.map((item) => (
                     <MediaCard
                       key={item.id}

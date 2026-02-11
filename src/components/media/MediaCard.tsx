@@ -60,8 +60,8 @@ export function MediaCard({
       className={cn("overflow-hidden group cursor-pointer", className)}
       onClick={onClick}
     >
-      {/* Thumbnail with fixed aspect ratio */}
-      <div className="relative aspect-video bg-gray-100 overflow-hidden">
+      {/* Thumbnail with square aspect ratio */}
+      <div className="relative aspect-square bg-gray-100 overflow-hidden">
         {fileType === "image" ? (
           <>
             {/* Error fallback */}
