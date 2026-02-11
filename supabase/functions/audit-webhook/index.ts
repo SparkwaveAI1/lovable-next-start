@@ -243,6 +243,9 @@ serve(async (req) => {
   try {
     const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
     const supabaseKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
+    // SERVICE_ROLE_JWT is the actual JWT for calling edge functions
+    // SUPABASE_SERVICE_ROLE_KEY from Deno auto-inject may not be a valid JWT
+    const serviceRoleJwt = Deno.env.get("SERVICE_ROLE_JWT") || supabaseKey;
     const webhookSecret = Deno.env.get("AUDIT_WEBHOOK_SECRET");
 
     // Validate webhook secret if configured
@@ -367,31 +370,44 @@ serve(async (req) => {
       console.log("Contact upserted successfully for:", contact.email);
     }
 
-    // Trigger follow-up automation (if the function exists)
+    // Trigger follow-up automation via direct HTTP call
+    // Note: supabase.functions.invoke() doesn't work well from within edge functions
     let followupTriggered = false;
     let followupError: string | null = null;
     try {
-      const followupResult = await supabase.functions.invoke("audit-followup", {
-        body: {
-          audit_id: auditResult.id,
-          email: contact.email,
-          name: contact.name,
-          score: scores.total,
-          grade: grade,
-          weakest_domain: weakestDomain,
+      const followupPayload = {
+        audit_id: auditResult.id,
+        email: contact.email,
+        name: contact.name,
+        score: scores.total,
+        grade: grade,
+        weakest_domain: weakestDomain,
+      };
+      
+      console.log("Calling audit-followup for:", followupPayload.email);
+      const followupUrl = `${supabaseUrl}/functions/v1/audit-followup`;
+      
+      const followupResponse = await fetch(followupUrl, {
+        method: "POST",
+        headers: {
+          "Authorization": `Bearer ${serviceRoleJwt}`,
+          "Content-Type": "application/json",
         },
+        body: JSON.stringify(followupPayload),
       });
 
+      const followupData = await followupResponse.json();
+
       // Check if the function returned an error
-      if (followupResult.error) {
-        followupError = followupResult.error.message || "Unknown error from audit-followup";
+      if (!followupResponse.ok) {
+        followupError = followupData.error || `HTTP ${followupResponse.status}`;
         console.error("Follow-up function returned error:", followupError);
-      } else if (followupResult.data?.success === false) {
-        followupError = followupResult.data.error || "Follow-up reported failure";
+      } else if (followupData.success === false) {
+        followupError = followupData.error || "Follow-up reported failure";
         console.error("Follow-up function failed:", followupError);
       } else {
         followupTriggered = true;
-        console.log("Follow-up automation triggered successfully:", followupResult.data);
+        console.log("Follow-up automation triggered successfully:", followupData);
       }
     } catch (err: any) {
       followupError = err.message || "Exception invoking audit-followup";

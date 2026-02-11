@@ -172,6 +172,22 @@ export default function ContentReviewPage() {
     };
   }, [loadItems]);
 
+  // Map brand slugs to business UUIDs
+  const getBusinessIdFromBrand = (brand: string): string | null => {
+    const brandMap: Record<string, string> = {
+      'sparkwave': '5a9bbfcf-fae5-4063-9780-bcbe366bae88',
+      'sparkwave-ai': '5a9bbfcf-fae5-4063-9780-bcbe366bae88',
+      'charx': '350b8fcb-9bfe-4b53-9548-c6ffdb1d3cb5',
+      'charx-world': '350b8fcb-9bfe-4b53-9548-c6ffdb1d3cb5',
+      'personaai': '18d0dbb1-a82d-4477-a9f8-816a1fa2ee08',
+      'persona-ai': '18d0dbb1-a82d-4477-a9f8-816a1fa2ee08',
+      'fightflow': '456dc53b-d9d9-41b0-bc33-4f4c4a791eff',
+      'fight-flow-academy': '456dc53b-d9d9-41b0-bc33-4f4c4a791eff',
+      'barnum': '350b8fcb-9bfe-4b53-9548-c6ffdb1d3cb5', // Barnum is CharX's PT Barnum
+    };
+    return brandMap[brand.toLowerCase()] || null;
+  };
+
   const updateStatus = async (
     itemId: string, 
     newStatus: "approved" | "rejected" | "revision_requested",
@@ -198,8 +214,56 @@ export default function ContentReviewPage() {
 
       if (error) throw error;
 
+      // When approved, also insert into scheduled_content for Library/scheduling
+      if (newStatus === "approved") {
+        const item = items.find(i => i.id === itemId);
+        if (item) {
+          const businessId = getBusinessIdFromBrand(item.brand);
+          
+          if (businessId) {
+            // Check if already exists (prevent duplicates on re-approval)
+            const { data: existing } = await supabase
+              .from("scheduled_content")
+              .select("id")
+              .contains("metadata", { source_id: itemId })
+              .maybeSingle();
+
+            if (!existing) {
+              const { error: insertError } = await supabase
+                .from("scheduled_content")
+                .insert({
+                  business_id: businessId,
+                  content: item.content,
+                  platform: item.platform,
+                  content_type: 'post',
+                  topic: item.pillar || null,
+                  scheduled_for: item.scheduled_time || new Date().toISOString(),
+                  approval_status: 'approved',
+                  approved_at: new Date().toISOString(),
+                  status: 'draft',
+                  metadata: {
+                    source: 'content_queue',
+                    source_id: item.id,
+                    advisor_score: item.advisor_score,
+                    style: item.style,
+                    account: item.account,
+                    image_urls: item.image_urls
+                  }
+                });
+
+              if (insertError) {
+                console.error("Error inserting to scheduled_content:", insertError);
+                // Don't throw - content_queue update succeeded
+              }
+            }
+          } else {
+            console.warn(`No business ID mapping for brand: ${item.brand}`);
+          }
+        }
+      }
+
       const messages = {
-        approved: "Content approved and queued for posting",
+        approved: "Content approved and added to Library",
         rejected: "Content rejected",
         revision_requested: "Revision request sent to agent",
       };
