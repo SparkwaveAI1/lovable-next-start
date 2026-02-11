@@ -32,7 +32,7 @@ import {
   Loader2,
   ArrowLeft 
 } from 'lucide-react';
-import { CampaignBuilder } from '@/components/email/CampaignBuilder';
+import { EnhancedCampaignBuilder } from '@/components/email/EnhancedCampaignBuilder';
 import { CampaignQueueMonitor } from '@/components/email/CampaignQueueMonitor';
 import { useToast } from '@/hooks/use-toast';
 import { format } from 'date-fns';
@@ -193,7 +193,7 @@ export default function EmailMarketing() {
           <h1 className="text-2xl font-bold mb-6">
             {viewMode === 'create' ? 'Create Campaign' : 'Edit Campaign'}
           </h1>
-          <CampaignBuilder
+          <EnhancedCampaignBuilder
             businessId={selectedBusiness.id}
             campaignId={editingCampaignId || undefined}
             onSave={handleSaveComplete}

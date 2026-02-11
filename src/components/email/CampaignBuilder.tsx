@@ -103,12 +103,14 @@ export function CampaignBuilder({ businessId, campaignId, onSave, onCancel }: Ca
       // Map legacy target_type to new audience type
       const targetType = data.target_type as string;
       setAudience({
-        type: (targetType === 'all' || targetType === 'tags' || targetType === 'segment' || targetType === 'leads' || targetType === 'customers') 
+        type: (targetType === 'all' || targetType === 'tags' || targetType === 'segment' || targetType === 'leads' || targetType === 'customers' || targetType === 'manual' || targetType === 'import') 
           ? targetType as AudienceSelection['type']
           : 'all',
         tags: data.target_tags || [],
         tagsMatch: (data.target_tags_match as 'all' | 'any') || 'any',
         segmentId: data.target_segment_id || null,
+        manualContactIds: data.target_manual_contacts || [],
+        importedContacts: data.target_imported_contacts || [],
       });
     }
   };
@@ -132,6 +134,8 @@ export function CampaignBuilder({ businessId, campaignId, onSave, onCancel }: Ca
         target_tags: audience.type === 'tags' ? audience.tags : [],
         target_tags_match: audience.tagsMatch,
         target_segment_id: audience.type === 'segment' ? audience.segmentId : null,
+        target_manual_contacts: audience.type === 'manual' ? audience.manualContactIds : [],
+        target_imported_contacts: audience.type === 'import' ? audience.importedContacts : [],
         status: 'draft'
       };
 

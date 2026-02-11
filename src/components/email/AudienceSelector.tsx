@@ -2,20 +2,28 @@ import React, { useState, useEffect } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { Label } from '@/components/ui/label';
+import { Input } from '@/components/ui/input';
+import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Badge } from '@/components/ui/badge';
 import { Checkbox } from '@/components/ui/checkbox';
-import { Loader2, Users, Tag, Filter, X, Eye, UserCheck, UserPlus, Settings2 } from 'lucide-react';
+import { Loader2, Users, Tag, Filter, X, Eye, UserCheck, UserPlus, Settings2, MousePointer, Upload } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
-export type AudienceType = 'all' | 'leads' | 'customers' | 'tags' | 'segment';
+export type AudienceType = 'all' | 'leads' | 'customers' | 'tags' | 'segment' | 'manual' | 'import';
 
 export interface AudienceSelection {
   type: AudienceType;
   tags: string[];
   tagsMatch: 'all' | 'any';
   segmentId: string | null;
+  manualContactIds: string[];
+  importedContacts: Array<{
+    email: string;
+    first_name?: string;
+    last_name?: string;
+  }>;
 }
 
 interface ContactTag {
@@ -78,6 +86,18 @@ const AUDIENCE_TYPES = [
     description: 'Use a saved segment',
     icon: Settings2,
   },
+  {
+    value: 'manual' as const,
+    label: 'Manual Select',
+    description: 'Pick individual contacts',
+    icon: MousePointer,
+  },
+  {
+    value: 'import' as const,
+    label: 'Import List',
+    description: 'Upload a contact list',
+    icon: Upload,
+  },
 ];
 
 // Map audience types to contact status filters
@@ -96,6 +116,8 @@ export function AudienceSelector({
   const [recipientCount, setRecipientCount] = useState<number | null>(null);
   const [previewContacts, setPreviewContacts] = useState<PreviewContact[]>([]);
   const [isLoadingPreview, setIsLoadingPreview] = useState(false);
+  const [searchQuery, setSearchQuery] = useState('');
+  const [isUploading, setIsUploading] = useState(false);
 
   // Fetch available tags for this business
   const { data: tags = [], isLoading: loadingTags } = useQuery({
@@ -129,12 +151,37 @@ export function AudienceSelector({
     enabled: !!businessId,
   });
 
+  // Fetch all contacts for manual selection
+  const { data: allContacts = [], isLoading: loadingContacts } = useQuery({
+    queryKey: ['all-contacts', businessId, searchQuery],
+    queryFn: async () => {
+      let query = supabase
+        .from('contacts')
+        .select('id, email, first_name, last_name, status')
+        .eq('business_id', businessId)
+        .eq('email_status', 'subscribed')
+        .not('email', 'is', null)
+        .order('first_name');
+      
+      if (searchQuery) {
+        query = query.or(
+          `first_name.ilike.%${searchQuery}%,last_name.ilike.%${searchQuery}%,email.ilike.%${searchQuery}%`
+        );
+      }
+      
+      const { data, error } = await query.limit(100);
+      if (error) throw error;
+      return data as PreviewContact[];
+    },
+    enabled: !!businessId && value.type === 'manual',
+  });
+
   // Preview recipients when targeting changes
   useEffect(() => {
     if (businessId) {
       previewRecipients();
     }
-  }, [businessId, value.type, value.tags, value.tagsMatch, value.segmentId]);
+  }, [businessId, value.type, value.tags, value.tagsMatch, value.segmentId, value.manualContactIds, value.importedContacts]);
 
   const previewRecipients = async () => {
     setIsLoadingPreview(true);
@@ -167,6 +214,36 @@ export function AudienceSelector({
           setIsLoadingPreview(false);
           return;
         }
+      } else if (value.type === 'manual') {
+        // For manual selection, get the selected contacts
+        if (value.manualContactIds.length > 0) {
+          const { data, error } = await supabase
+            .from('contacts')
+            .select('id, email, first_name, last_name')
+            .eq('business_id', businessId)
+            .in('id', value.manualContactIds);
+          
+          if (!error) {
+            setRecipientCount(data.length);
+            setPreviewContacts(data as PreviewContact[]);
+          }
+        } else {
+          setRecipientCount(0);
+          setPreviewContacts([]);
+        }
+        setIsLoadingPreview(false);
+        return;
+      } else if (value.type === 'import') {
+        // For imported contacts, use the imported list
+        setRecipientCount(value.importedContacts.length);
+        setPreviewContacts(value.importedContacts.map((contact, index) => ({
+          id: `import-${index}`,
+          email: contact.email,
+          first_name: contact.first_name || null,
+          last_name: contact.last_name || null,
+        })));
+        setIsLoadingPreview(false);
+        return;
       }
 
       const { data, count, error } = await query.limit(5);
@@ -197,7 +274,65 @@ export function AudienceSelector({
       tags: type === 'tags' ? value.tags : [],
       // Clear segment if switching away from segment mode
       segmentId: type === 'segment' ? value.segmentId : null,
+      // Clear manual selection if switching away from manual mode
+      manualContactIds: type === 'manual' ? value.manualContactIds : [],
+      // Clear imported contacts if switching away from import mode
+      importedContacts: type === 'import' ? value.importedContacts : [],
     });
+  };
+
+  const toggleContactSelection = (contactId: string) => {
+    const newSelection = value.manualContactIds.includes(contactId)
+      ? value.manualContactIds.filter(id => id !== contactId)
+      : [...value.manualContactIds, contactId];
+    onChange({ ...value, manualContactIds: newSelection });
+  };
+
+  const handleFileUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+
+    if (!file.name.endsWith('.csv')) {
+      alert('Please upload a CSV file');
+      return;
+    }
+
+    setIsUploading(true);
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      try {
+        const csv = e.target?.result as string;
+        const lines = csv.split('\n').filter(line => line.trim());
+        const headers = lines[0].split(',').map(h => h.trim().toLowerCase());
+        
+        // Find column indices
+        const emailIdx = headers.findIndex(h => h.includes('email'));
+        const firstNameIdx = headers.findIndex(h => h.includes('first') && h.includes('name'));
+        const lastNameIdx = headers.findIndex(h => h.includes('last') && h.includes('name'));
+        
+        if (emailIdx === -1) {
+          alert('CSV must have an email column');
+          setIsUploading(false);
+          return;
+        }
+
+        const contacts = lines.slice(1).map(line => {
+          const values = line.split(',').map(v => v.trim().replace(/['"]/g, ''));
+          return {
+            email: values[emailIdx],
+            first_name: firstNameIdx >= 0 ? values[firstNameIdx] : undefined,
+            last_name: lastNameIdx >= 0 ? values[lastNameIdx] : undefined,
+          };
+        }).filter(contact => contact.email && contact.email.includes('@'));
+
+        onChange({ ...value, importedContacts: contacts });
+      } catch (err) {
+        alert('Error parsing CSV file');
+      } finally {
+        setIsUploading(false);
+      }
+    };
+    reader.readAsText(file);
   };
 
   const getTagColor = (color: string | null) => {
@@ -353,6 +488,121 @@ export function AudienceSelector({
         </div>
       )}
 
+      {/* Manual Contact Selection */}
+      {value.type === 'manual' && (
+        <div className="space-y-3">
+          <div>
+            <Label>Search Contacts</Label>
+            <Input
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              placeholder="Search by name or email..."
+              className="mt-1"
+            />
+          </div>
+
+          {loadingContacts ? (
+            <div className="flex items-center gap-2 py-2">
+              <Loader2 className="h-4 w-4 animate-spin" />
+              <span className="text-sm text-muted-foreground">Loading contacts...</span>
+            </div>
+          ) : allContacts.length === 0 ? (
+            <p className="text-sm text-muted-foreground py-2">
+              No contacts found.
+            </p>
+          ) : (
+            <div className="max-h-60 overflow-y-auto border rounded-md p-2 space-y-2">
+              {allContacts.map(contact => {
+                const isSelected = value.manualContactIds.includes(contact.id);
+                return (
+                  <div
+                    key={contact.id}
+                    className={cn(
+                      'flex items-center justify-between p-2 rounded cursor-pointer hover:bg-muted',
+                      isSelected && 'bg-muted'
+                    )}
+                    onClick={() => toggleContactSelection(contact.id)}
+                  >
+                    <div className="flex items-center gap-2">
+                      <Checkbox checked={isSelected} readOnly />
+                      <div>
+                        <span className="text-sm font-medium">
+                          {contact.first_name || ''} {contact.last_name || ''}
+                        </span>
+                        <div className="text-xs text-muted-foreground">
+                          {contact.email}
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+
+          {value.manualContactIds.length > 0 && (
+            <p className="text-sm text-muted-foreground">
+              {value.manualContactIds.length} contact{value.manualContactIds.length !== 1 ? 's' : ''} selected
+            </p>
+          )}
+        </div>
+      )}
+
+      {/* Import List */}
+      {value.type === 'import' && (
+        <div className="space-y-3">
+          <div>
+            <Label htmlFor="csv-upload">Upload Contact List (CSV)</Label>
+            <Input
+              id="csv-upload"
+              type="file"
+              accept=".csv"
+              onChange={handleFileUpload}
+              disabled={isUploading}
+              className="mt-1"
+            />
+            <p className="text-xs text-muted-foreground mt-1">
+              CSV should have columns: email (required), first_name, last_name
+            </p>
+          </div>
+
+          {isUploading && (
+            <div className="flex items-center gap-2 py-2">
+              <Loader2 className="h-4 w-4 animate-spin" />
+              <span className="text-sm text-muted-foreground">Processing file...</span>
+            </div>
+          )}
+
+          {value.importedContacts.length > 0 && (
+            <div className="border rounded-md p-3 bg-muted/30">
+              <p className="text-sm font-medium mb-2">
+                {value.importedContacts.length} contact{value.importedContacts.length !== 1 ? 's' : ''} imported
+              </p>
+              <div className="max-h-40 overflow-y-auto space-y-1">
+                {value.importedContacts.slice(0, 5).map((contact, index) => (
+                  <div key={index} className="text-xs text-muted-foreground">
+                    {contact.first_name || ''} {contact.last_name || ''} ({contact.email})
+                  </div>
+                ))}
+                {value.importedContacts.length > 5 && (
+                  <div className="text-xs text-muted-foreground font-medium">
+                    ...and {value.importedContacts.length - 5} more
+                  </div>
+                )}
+              </div>
+              <Button
+                variant="outline"
+                size="sm"
+                className="mt-2"
+                onClick={() => onChange({ ...value, importedContacts: [] })}
+              >
+                Clear List
+              </Button>
+            </div>
+          )}
+        </div>
+      )}
+
       {/* Recipient Preview */}
       <div className="border rounded-lg p-4 bg-muted/30">
         <div className="flex items-center justify-between mb-3">
@@ -389,6 +639,10 @@ export function AudienceSelector({
               ? 'Select tags to see matching contacts'
               : value.type === 'segment' && !value.segmentId
               ? 'Select a segment to see contacts'
+              : value.type === 'manual' && value.manualContactIds.length === 0
+              ? 'Select contacts to see preview'
+              : value.type === 'import' && value.importedContacts.length === 0
+              ? 'Upload a CSV file to see contacts'
               : recipientCount === 0
               ? 'No contacts match this targeting'
               : 'Loading preview...'}
@@ -428,6 +682,8 @@ export function useAudienceSelection(initial?: Partial<AudienceSelection>): [
     tags: initial?.tags || [],
     tagsMatch: initial?.tagsMatch || 'any',
     segmentId: initial?.segmentId || null,
+    manualContactIds: initial?.manualContactIds || [],
+    importedContacts: initial?.importedContacts || [],
   });
 
   return [selection, setSelection];
@@ -439,4 +695,6 @@ export const DEFAULT_AUDIENCE_SELECTION: AudienceSelection = {
   tags: [],
   tagsMatch: 'any',
   segmentId: null,
+  manualContactIds: [],
+  importedContacts: [],
 };
