@@ -75,7 +75,7 @@ export function MediaCard({
               src={filePath}
               alt={title}
               onError={() => setImageError(true)}
-              className="w-full h-full object-cover transition-transform duration-300 group-hover:scale-105"
+              className="absolute inset-0 w-full h-full object-cover transition-transform duration-300 group-hover:scale-105"
               loading="lazy"
             />
           </>
@@ -86,7 +86,7 @@ export function MediaCard({
                 src={thumbnailUrl}
                 alt={title}
                 onError={() => setThumbError(true)}
-                className="w-full h-full object-cover transition-transform duration-300 group-hover:scale-105"
+                className="absolute inset-0 w-full h-full object-cover transition-transform duration-300 group-hover:scale-105"
                 loading="lazy"
               />
             ) : (
