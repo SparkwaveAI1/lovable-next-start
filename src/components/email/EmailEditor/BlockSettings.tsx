@@ -7,7 +7,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Separator } from '@/components/ui/separator';
 import { Slider } from '@/components/ui/slider';
 import { Textarea } from '@/components/ui/textarea';
-import { Copy, Trash2, Palette, Settings, Type, Layout, Spacing } from 'lucide-react';
+import { Copy, Trash2, Palette, Settings, Type, Layout, Move } from 'lucide-react';
 import { EmailBlock, GlobalStyles } from './types';
 import { cn } from '@/lib/utils';
 
@@ -270,7 +270,7 @@ function ContentSettings({ blockType, content, onChange }: any) {
         <Card>
           <CardHeader className="pb-3">
             <CardTitle className="text-sm flex items-center gap-2">
-              <Spacing className="h-4 w-4" />
+              <Move className="h-4 w-4" />
               Spacer Settings
             </CardTitle>
           </CardHeader>
@@ -473,7 +473,7 @@ function LayoutSettings({ styles, onChange }: any) {
     <Card>
       <CardHeader className="pb-3">
         <CardTitle className="text-sm flex items-center gap-2">
-          <Spacing className="h-4 w-4" />
+          <Move className="h-4 w-4" />
           Spacing
         </CardTitle>
       </CardHeader>
