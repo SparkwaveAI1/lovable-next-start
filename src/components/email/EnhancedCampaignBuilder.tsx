@@ -30,6 +30,7 @@ import { Calendar as CalendarComponent } from '@/components/ui/calendar';
 import { AudienceSelector, AudienceSelection, DEFAULT_AUDIENCE_SELECTION } from './AudienceSelector';
 import { RichTextEditor } from './RichTextEditor';
 import { EmailPreview } from './EmailPreview';
+import { EmailEditor, EmailEditorState, generateEmailHtml, validateEmailContent } from './EmailEditor';
 
 interface EnhancedCampaignBuilderProps {
   businessId: string;
@@ -55,6 +56,19 @@ export function EnhancedCampaignBuilder({ businessId, campaignId, onSave, onCanc
   const [name, setName] = useState('');
   const [subject, setSubject] = useState('');
   const [contentHtml, setContentHtml] = useState('');
+  const [emailEditorState, setEmailEditorState] = useState<EmailEditorState>({
+    blocks: [],
+    globalStyles: {
+      fontFamily: 'Inter, sans-serif',
+      backgroundColor: '#ffffff',
+      primaryColor: '#2563eb',
+      textColor: '#111827',
+      linkColor: '#2563eb',
+      maxWidth: '600px',
+      padding: '20px',
+    },
+  });
+  const [useVisualEditor, setUseVisualEditor] = useState(true);
   const [selectedSenderId, setSelectedSenderId] = useState<string | null>(null);
   const [audience, setAudience] = useState<AudienceSelection>(DEFAULT_AUDIENCE_SELECTION);
   
@@ -118,6 +132,18 @@ export function EnhancedCampaignBuilder({ businessId, campaignId, onSave, onCanc
       setSubject(data.subject || '');
       setContentHtml(data.content_html || '');
       
+      // Load visual editor content if available
+      if (data.content_json && Array.isArray(data.content_json)) {
+        setEmailEditorState({
+          blocks: data.content_json,
+          globalStyles: data.global_styles || emailEditorState.globalStyles,
+        });
+        setUseVisualEditor(true);
+      } else {
+        // Use HTML editor for legacy campaigns
+        setUseVisualEditor(false);
+      }
+      
       // Handle scheduling
       if (data.scheduled_for) {
         setScheduleMode('scheduled');
@@ -167,6 +193,14 @@ export function EnhancedCampaignBuilder({ businessId, campaignId, onSave, onCanc
         throw new Error('Please select a verified sender');
       }
       
+      // Validate visual editor content if using visual editor
+      if (useVisualEditor) {
+        const validationErrors = validateEmailContent(emailEditorState);
+        if (validationErrors.length > 0) {
+          throw new Error(`Please fix the following issues:\n${validationErrors.join('\n')}`);
+        }
+      }
+      
       const scheduledAt = getScheduledDateTime();
       
       // Map audience type to database schema
@@ -181,11 +215,16 @@ export function EnhancedCampaignBuilder({ businessId, campaignId, onSave, onCanc
         }
       };
 
+      // Generate HTML from visual editor or use raw HTML
+      const finalContentHtml = useVisualEditor ? generateEmailHtml(emailEditorState) : contentHtml;
+
       const campaignData = {
         business_id: businessId,
         name,
         subject,
-        content_html: contentHtml,
+        content_html: finalContentHtml,
+        content_json: useVisualEditor ? emailEditorState.blocks : null,
+        global_styles: useVisualEditor ? emailEditorState.globalStyles : null,
         from_name: selectedSender.name,
         from_email: selectedSender.email,
         audience_type: mapAudienceType(audience.type),
@@ -299,7 +338,7 @@ export function EnhancedCampaignBuilder({ businessId, campaignId, onSave, onCanc
           {/* Preview Button */}
           <Dialog open={isPreviewOpen} onOpenChange={setIsPreviewOpen}>
             <DialogTrigger asChild>
-              <Button variant="outline" disabled={!contentHtml}>
+              <Button variant="outline" disabled={!contentHtml && (!useVisualEditor || emailEditorState.blocks.length === 0)}>
                 <Eye className="h-4 w-4 mr-2" />
                 Preview
               </Button>
@@ -333,7 +372,7 @@ export function EnhancedCampaignBuilder({ businessId, campaignId, onSave, onCanc
               </DialogHeader>
               <EmailPreview
                 subject={subject}
-                content={contentHtml}
+                content={useVisualEditor ? generateEmailHtml(emailEditorState) : contentHtml}
                 senderName={selectedSender?.name || ''}
                 senderEmail={selectedSender?.email || ''}
                 mode={previewMode}
@@ -395,7 +434,25 @@ export function EnhancedCampaignBuilder({ businessId, campaignId, onSave, onCanc
         <TabsContent value="content" className="space-y-6">
           <Card>
             <CardHeader>
-              <CardTitle>Email Content</CardTitle>
+              <CardTitle className="flex items-center justify-between">
+                Email Content
+                <div className="flex items-center gap-2">
+                  <Button
+                    variant={useVisualEditor ? 'default' : 'outline'}
+                    size="sm"
+                    onClick={() => setUseVisualEditor(true)}
+                  >
+                    Visual Editor
+                  </Button>
+                  <Button
+                    variant={!useVisualEditor ? 'default' : 'outline'}
+                    size="sm"
+                    onClick={() => setUseVisualEditor(false)}
+                  >
+                    HTML Editor
+                  </Button>
+                </div>
+              </CardTitle>
             </CardHeader>
             <CardContent className="space-y-4">
               <div>
@@ -421,17 +478,34 @@ export function EnhancedCampaignBuilder({ businessId, campaignId, onSave, onCanc
                 </p>
               </div>
 
-              <div>
-                <Label htmlFor="content">Email Body</Label>
-                <RichTextEditor
-                  value={contentHtml}
-                  onChange={setContentHtml}
-                  placeholder="Design your email content..."
-                />
-                <p className="text-xs text-muted-foreground mt-1">
-                  Available tokens: {'{first_name}'}, {'{last_name}'}, {'{email}'}
-                </p>
-              </div>
+              {useVisualEditor ? (
+                <div>
+                  <Label>Email Design</Label>
+                  <div className="border rounded-lg overflow-hidden" style={{ height: '600px' }}>
+                    <EmailEditor
+                      value={emailEditorState}
+                      onChange={setEmailEditorState}
+                      className="h-full"
+                    />
+                  </div>
+                  <p className="text-xs text-muted-foreground mt-1">
+                    Use the visual editor to design your email with drag-and-drop blocks.
+                    Available tokens: {'{first_name}'}, {'{last_name}'}, {'{email}'}
+                  </p>
+                </div>
+              ) : (
+                <div>
+                  <Label htmlFor="content">Email Body (HTML)</Label>
+                  <RichTextEditor
+                    value={contentHtml}
+                    onChange={setContentHtml}
+                    placeholder="Design your email content..."
+                  />
+                  <p className="text-xs text-muted-foreground mt-1">
+                    Available tokens: {'{first_name}'}, {'{last_name}'}, {'{email}'}
+                  </p>
+                </div>
+              )}
             </CardContent>
           </Card>
         </TabsContent>
@@ -599,7 +673,14 @@ export function EnhancedCampaignBuilder({ businessId, campaignId, onSave, onCanc
         
         <Button
           onClick={() => saveCampaign.mutate()}
-          disabled={!name || !subject || !contentHtml || !selectedSenderId || saveCampaign.isPending}
+          disabled={
+            !name || 
+            !subject || 
+            (!useVisualEditor && !contentHtml) ||
+            (useVisualEditor && emailEditorState.blocks.length === 0) ||
+            !selectedSenderId || 
+            saveCampaign.isPending
+          }
         >
           {saveCampaign.isPending && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
           {scheduleMode === 'scheduled' ? 'Schedule Campaign' : 'Save Draft'}
