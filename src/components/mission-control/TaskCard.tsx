@@ -226,7 +226,7 @@ export function TaskCard({ task, agents, onClick, onEdit, onDelete, isDragging }
               <Tag className="h-2.5 w-2.5" />
               {tag}
             </span>
-          )}
+          ))}
           {task.tags.filter(t => !t.startsWith('owner:')).length > 3 && (
             <span className="text-[10px] text-slate-400">+{task.tags.filter(t => !t.startsWith('owner:')).length - 3}</span>
           )}
