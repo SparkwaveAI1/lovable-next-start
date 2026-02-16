@@ -30,6 +30,7 @@ interface KanbanBoardProps {
   onTaskStatusChange?: (taskId: string, newStatus: TaskStatus) => Promise<void>;
   onTaskEdit?: (task: Task) => void;
   onTaskDelete?: (taskId: string) => void;
+  onDeleteComplete?: () => void;
   onTaskReorder?: (taskId: string, newIndex: number, status: TaskStatus) => Promise<void>;
 }
 
@@ -48,7 +49,7 @@ const columnStyles: Record<TaskStatus, { headerBg: string; countBg: string; drop
   done: { headerBg: 'bg-emerald-50', countBg: 'bg-emerald-100 text-emerald-700', dropBg: 'bg-emerald-50' },
 };
 
-export function KanbanBoard({ tasks, agents, onTaskClick, onAddTask, onTaskStatusChange, onTaskEdit, onTaskDelete, onTaskReorder }: KanbanBoardProps) {
+export function KanbanBoard({ tasks, agents, onTaskClick, onAddTask, onTaskStatusChange, onTaskEdit, onTaskDelete, onDeleteComplete, onTaskReorder }: KanbanBoardProps) {
   const [activeTask, setActiveTask] = useState<Task | null>(null);
   const [overId, setOverId] = useState<string | null>(null);
   const counts = getColumnCounts(tasks);
@@ -202,6 +203,7 @@ export function KanbanBoard({ tasks, agents, onTaskClick, onAddTask, onTaskStatu
                         onClick={() => onTaskClick?.(task)}
                         onEdit={onTaskEdit}
                         onDelete={onTaskDelete}
+                        onDeleteComplete={onDeleteComplete}
                         isDragging={activeTask?.id === task.id}
                       />
                     ))

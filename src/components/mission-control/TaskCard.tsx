@@ -3,8 +3,20 @@ import { CSS } from "@dnd-kit/utilities";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { cn } from "@/lib/utils";
 import type { Task, TaskPriority, Agent } from "@/types/mission-control";
-import { Clock, Tag, GripVertical, FileText, ChevronDown, ChevronUp, ExternalLink, Bot, User, Users, Edit, Trash } from "lucide-react";
+import { Clock, Tag, GripVertical, FileText, ChevronDown, ChevronUp, ExternalLink, Bot, User, Users, Edit, Trash, Loader2 } from "lucide-react";
 import { useState } from "react";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
+import { supabase } from "@/integrations/supabase/client";
+import { useToast } from "@/components/ui/use-toast";
 
 type TaskOwner = 'agent' | 'human' | 'cooperative' | null;
 
@@ -53,6 +65,7 @@ interface TaskCardProps {
   onClick?: () => void;
   onEdit?: (task: Task) => void;
   onDelete?: (taskId: string) => void;
+  onDeleteComplete?: () => void;
   isDragging?: boolean;
 }
 
@@ -128,8 +141,12 @@ function formatRelativeTime(dateString: string): string {
   return `${diffDays}d ago`;
 }
 
-export function TaskCard({ task, agents, onClick, onEdit, onDelete, isDragging }: TaskCardProps) {
+export function TaskCard({ task, agents, onClick, onEdit, onDelete, onDeleteComplete, isDragging }: TaskCardProps) {
   const [summaryExpanded, setSummaryExpanded] = useState(false);
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+  const [isDeleting, setIsDeleting] = useState(false);
+  const { toast } = useToast();
+  
   const priority = priorityConfig[task.priority];
   const owner = getOwnerFromTags(task.tags);
   const ownerStyle = owner ? ownerConfig[owner] : null;
@@ -156,157 +173,237 @@ export function TaskCard({ task, agents, onClick, onEdit, onDelete, isDragging }
 
   const handleDelete = (e: React.MouseEvent) => {
     e.stopPropagation();
-    onDelete?.(task.id);
+    setShowDeleteConfirm(true);
+  };
+
+  const handleConfirmDelete = async () => {
+    setIsDeleting(true);
+
+    try {
+      const { error } = await supabase
+        .from("mc_tasks")
+        .delete()
+        .eq("id", task.id);
+
+      if (error) throw error;
+
+      // Log activity
+      await supabase.from("mc_activities").insert({
+        type: "task_deleted",
+        agent_id: null,
+        task_id: null,
+        message: `Task "${task.title}" deleted`,
+        metadata: { 
+          task_id: task.id,
+          task_title: task.title,
+          source: "mission-control-ui",
+        },
+        business_id: task.business_id,
+        created_at: new Date().toISOString(),
+      });
+
+      toast({
+        title: "Task deleted",
+        description: `"${task.title}" has been deleted`,
+      });
+
+      setShowDeleteConfirm(false);
+      
+      // Call the onDelete callback if provided (for legacy compatibility)
+      onDelete?.(task.id);
+      
+      // Call onDeleteComplete to trigger UI refresh
+      onDeleteComplete?.();
+    } catch (err) {
+      console.error("Failed to delete task:", err);
+      toast({
+        title: "Failed to delete task",
+        description: err instanceof Error ? err.message : "Unknown error",
+        variant: "destructive",
+      });
+    } finally {
+      setIsDeleting(false);
+    }
   };
 
   return (
-    <div
-      onClick={onClick}
-      className={cn(
-        "rounded-lg border border-slate-200 border-l-4 p-3 cursor-pointer",
-        "hover:shadow-md hover:border-slate-300 transition-all",
-        ownerStyle ? ownerStyle.borderColor : priority.className,
-        priority.cardBg || "bg-white",
-        isDragging && "shadow-xl ring-2 ring-violet-400 opacity-90 rotate-2"
-      )}
-    >
-      {/* Header with priority, drag handle, edit, and delete */}
-      <div className="flex items-start gap-2">
-        <div className="flex-1">
-          {/* Priority pill tag + Owner badge + Title */}
-          <div className="flex items-center gap-1.5 mb-1 flex-wrap">
-            <span className={cn(
-              "inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-semibold",
-              priority.tagBg,
-              priority.tagText
-            )}>
-              {priority.label}
-            </span>
-            {ownerStyle && (
+    <>
+      <div
+        onClick={onClick}
+        className={cn(
+          "rounded-lg border border-slate-200 border-l-4 p-3 cursor-pointer",
+          "hover:shadow-md hover:border-slate-300 transition-all",
+          ownerStyle ? ownerStyle.borderColor : priority.className,
+          priority.cardBg || "bg-white",
+          isDragging && "shadow-xl ring-2 ring-violet-400 opacity-90 rotate-2"
+        )}
+      >
+        {/* Header with priority, drag handle, edit, and delete */}
+        <div className="flex items-start gap-2">
+          <div className="flex-1">
+            {/* Priority pill tag + Owner badge + Title */}
+            <div className="flex items-center gap-1.5 mb-1 flex-wrap">
               <span className={cn(
-                "inline-flex items-center gap-0.5 px-2 py-0.5 rounded-full text-[10px] font-semibold",
-                ownerStyle.badgeBg,
-                ownerStyle.badgeText
+                "inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-semibold",
+                priority.tagBg,
+                priority.tagText
               )}>
-                {ownerStyle.icon}
-                {ownerStyle.label}
+                {priority.label}
               </span>
-            )}
-            <h4 className="font-medium text-slate-900 text-sm line-clamp-2">
-              {task.title}
-            </h4>
+              {ownerStyle && (
+                <span className={cn(
+                  "inline-flex items-center gap-0.5 px-2 py-0.5 rounded-full text-[10px] font-semibold",
+                  ownerStyle.badgeBg,
+                  ownerStyle.badgeText
+                )}>
+                  {ownerStyle.icon}
+                  {ownerStyle.label}
+                </span>
+              )}
+              <h4 className="font-medium text-slate-900 text-sm line-clamp-2">
+                {task.title}
+              </h4>
+            </div>
+          </div>
+          <div className="flex items-start gap-2">
+            <GripVertical className="h-4 w-4 text-slate-300 shrink-0 mt-0.5" />
+            <button onClick={handleEdit} className="p-1 hover:bg-slate-100 rounded transition-colors">
+              <Edit className="h-4 w-4 text-slate-500" />
+            </button>
+            <button onClick={handleDelete} className="p-1 hover:bg-slate-100 rounded transition-colors">
+              <Trash className="h-4 w-4 text-slate-500" />
+            </button>
           </div>
         </div>
-        <div className="flex items-start gap-2">
-          <GripVertical className="h-4 w-4 text-slate-300 shrink-0 mt-0.5" />
-          <button onClick={handleEdit} className="p-1 hover:bg-slate-100 rounded transition-colors">
-            <Edit className="h-4 w-4 text-slate-500" />
-          </button>
-          <button onClick={handleDelete} className="p-1 hover:bg-slate-100 rounded transition-colors">
-            <Trash className="h-4 w-4 text-slate-500" />
-          </button>
-        </div>
-      </div>
 
-      {/* Description preview */}
-      {task.description && (
-        <p className="text-xs text-slate-500 line-clamp-2 mb-2 ml-5">
-          {task.description}
-        </p>
-      )}
+        {/* Description preview */}
+        {task.description && (
+          <p className="text-xs text-slate-500 line-clamp-2 mb-2 ml-5">
+            {task.description}
+          </p>
+        )}
 
-      {/* Tags */}
-      {task.tags.filter(t => !t.startsWith('owner:')).length > 0 && (
-        <div className="flex flex-wrap gap-1 mb-2 ml-5">
-          {task.tags.filter(t => !t.startsWith('owner:')).slice(0, 3).map((tag) => (
-            <span
-              key={tag}
-              className="inline-flex items-center gap-0.5 text-[10px] px-1.5 py-0.5 rounded bg-slate-100 text-slate-600"
-            >
-              <Tag className="h-2.5 w-2.5" />
-              {tag}
-            </span>
-          ))}
-          {task.tags.filter(t => !t.startsWith('owner:')).length > 3 && (
-            <span className="text-[10px] text-slate-400">+{task.tags.filter(t => !t.startsWith('owner:')).length - 3}</span>
-          )}
-        </div>
-      )}
-
-      {/* Document Link & Work Summary */}
-      {(hasDocument || hasSummary) && (
-        <div className="ml-5 mb-2 space-y-1">
-          {/* Document link button */}
-          {hasDocument && (
-            <button
-              onClick={handleDocumentClick}
-              className="inline-flex items-center gap-1.5 text-xs text-violet-600 hover:text-violet-800 hover:underline transition-colors"
-            >
-              <FileText className="h-3.5 w-3.5" />
-              <span>View Document</span>
-              <ExternalLink className="h-3 w-3" />
-            </button>
-          )}
-          
-          {/* Work summary toggle */}
-          {hasSummary && (
-            <div>
-              <button
-                onClick={handleSummaryToggle}
-                className="inline-flex items-center gap-1 text-xs text-slate-500 hover:text-slate-700 transition-colors"
+        {/* Tags */}
+        {task.tags.filter(t => !t.startsWith('owner:')).length > 0 && (
+          <div className="flex flex-wrap gap-1 mb-2 ml-5">
+            {task.tags.filter(t => !t.startsWith('owner:')).slice(0, 3).map((tag) => (
+              <span
+                key={tag}
+                className="inline-flex items-center gap-0.5 text-[10px] px-1.5 py-0.5 rounded bg-slate-100 text-slate-600"
               >
-                {summaryExpanded ? (
-                  <ChevronUp className="h-3.5 w-3.5" />
-                ) : (
-                  <ChevronDown className="h-3.5 w-3.5" />
-                )}
-                <span>{summaryExpanded ? 'Hide Summary' : 'Show Summary'}</span>
+                <Tag className="h-2.5 w-2.5" />
+                {tag}
+              </span>
+            ))}
+            {task.tags.filter(t => !t.startsWith('owner:')).length > 3 && (
+              <span className="text-[10px] text-slate-400">+{task.tags.filter(t => !t.startsWith('owner:')).length - 3}</span>
+            )}
+          </div>
+        )}
+
+        {/* Document Link & Work Summary */}
+        {(hasDocument || hasSummary) && (
+          <div className="ml-5 mb-2 space-y-1">
+            {/* Document link button */}
+            {hasDocument && (
+              <button
+                onClick={handleDocumentClick}
+                className="inline-flex items-center gap-1.5 text-xs text-violet-600 hover:text-violet-800 hover:underline transition-colors"
+              >
+                <FileText className="h-3.5 w-3.5" />
+                <span>View Document</span>
+                <ExternalLink className="h-3 w-3" />
               </button>
-              
-              {summaryExpanded && (
-                <div className="mt-1.5 p-2 bg-slate-50 rounded text-xs text-slate-600 border border-slate-200">
-                  {task.work_summary}
-                </div>
-              )}
-            </div>
-          )}
-        </div>
-      )}
+            )}
+            
+            {/* Work summary toggle */}
+            {hasSummary && (
+              <div>
+                <button
+                  onClick={handleSummaryToggle}
+                  className="inline-flex items-center gap-1 text-xs text-slate-500 hover:text-slate-700 transition-colors"
+                >
+                  {summaryExpanded ? (
+                    <ChevronUp className="h-3.5 w-3.5" />
+                  ) : (
+                    <ChevronDown className="h-3.5 w-3.5" />
+                  )}
+                  <span>{summaryExpanded ? 'Hide Summary' : 'Show Summary'}</span>
+                </button>
+                
+                {summaryExpanded && (
+                  <div className="mt-1.5 p-2 bg-slate-50 rounded text-xs text-slate-600 border border-slate-200">
+                    {task.work_summary}
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
+        )}
 
-      {/* Footer: Assignees + Timestamp */}
-      <div className="flex items-center justify-between mt-2 pt-2 border-t border-slate-100">
-        {/* Assignee avatars */}
-        <div className="flex -space-x-2">
-          {assignees.length > 0 ? (
-            assignees.slice(0, 3).map((agent) => (
-              <Avatar key={agent.id} className="h-6 w-6 border-2 border-white">
-                <AvatarImage src={agent.avatar_url || undefined} alt={agent.name} />
-                <AvatarFallback className="bg-gradient-to-br from-violet-500 to-indigo-600 text-white text-[10px] font-medium">
-                  {getInitials(agent.name)}
-                </AvatarFallback>
-              </Avatar>
-            ))
-          ) : (
-            <span className="text-xs text-slate-400 italic">Unassigned</span>
-          )}
-          {assignees.length > 3 && (
-            <div className="h-6 w-6 rounded-full bg-slate-200 border-2 border-white flex items-center justify-center">
-              <span className="text-[10px] text-slate-600">+{assignees.length - 3}</span>
-            </div>
-          )}
-        </div>
+        {/* Footer: Assignees + Timestamp */}
+        <div className="flex items-center justify-between mt-2 pt-2 border-t border-slate-100">
+          {/* Assignee avatars */}
+          <div className="flex -space-x-2">
+            {assignees.length > 0 ? (
+              assignees.slice(0, 3).map((agent) => (
+                <Avatar key={agent.id} className="h-6 w-6 border-2 border-white">
+                  <AvatarImage src={agent.avatar_url || undefined} alt={agent.name} />
+                  <AvatarFallback className="bg-gradient-to-br from-violet-500 to-indigo-600 text-white text-[10px] font-medium">
+                    {getInitials(agent.name)}
+                  </AvatarFallback>
+                </Avatar>
+              ))
+            ) : (
+              <span className="text-xs text-slate-400 italic">Unassigned</span>
+            )}
+            {assignees.length > 3 && (
+              <div className="h-6 w-6 rounded-full bg-slate-200 border-2 border-white flex items-center justify-center">
+                <span className="text-[10px] text-slate-600">+{assignees.length - 3}</span>
+              </div>
+            )}
+          </div>
 
-        {/* Timestamp */}
-        <span className="flex items-center gap-1 text-[10px] text-slate-400">
-          <Clock className="h-3 w-3" />
-          {formatRelativeTime(task.updated_at)}
-        </span>
+          {/* Timestamp */}
+          <span className="flex items-center gap-1 text-[10px] text-slate-400">
+            <Clock className="h-3 w-3" />
+            {formatRelativeTime(task.updated_at)}
+          </span>
+        </div>
       </div>
-    </div>
+
+      <AlertDialog open={showDeleteConfirm} onOpenChange={setShowDeleteConfirm}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete Task</AlertDialogTitle>
+            <AlertDialogDescription>
+              Are you sure you want to delete "{task.title}"? This action cannot be undone.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={isDeleting}>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={handleConfirmDelete}
+              disabled={isDeleting}
+              className="bg-red-600 hover:bg-red-700"
+            >
+              {isDeleting ? (
+                <>
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  Deleting...
+                </>
+              ) : (
+                "Delete"
+              )}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+    </>
   );
 }
 
-export function SortableTaskCard({ task, agents, onClick, onEdit, onDelete, isDragging }: SortableTaskCardProps) {
+export function SortableTaskCard({ task, agents, onClick, onEdit, onDelete, onDeleteComplete, isDragging }: SortableTaskCardProps) {
   const {
     attributes,
     listeners,
@@ -337,6 +434,7 @@ export function SortableTaskCard({ task, agents, onClick, onEdit, onDelete, isDr
         onClick={onClick}
         onEdit={onEdit}
         onDelete={onDelete}
+        onDeleteComplete={onDeleteComplete}
         isDragging={isDragging || isSortableDragging}
       />
     </div>

@@ -227,13 +227,14 @@ export default function MissionControl() {
   };
 
   const handleTaskDelete = async (taskId: string) => {
-    // The actual deletion is handled in EditTaskDialog
-    // This handler is called from the quick delete button on the card
-    const task = tasks.find(t => t.id === taskId);
-    if (task) {
-      setEditingTask(task);
-      setEditTaskDialogOpen(true);
-    }
+    // This is called for legacy compatibility
+    // The actual deletion is now handled directly in TaskCard
+    console.log('Task deleted:', taskId);
+  };
+  
+  const handleTaskDeleteComplete = async () => {
+    // Refresh data after successful deletion
+    await fetchData();
   };
 
   const handleTaskReorder = async (taskId: string, newIndex: number, status: TaskStatus) => {
@@ -386,6 +387,7 @@ export default function MissionControl() {
               onTaskStatusChange={handleTaskStatusChange}
               onTaskEdit={handleTaskEdit}
               onTaskDelete={handleTaskDelete}
+              onDeleteComplete={handleTaskDeleteComplete}
               onTaskReorder={handleTaskReorder}
             />
           </div>
