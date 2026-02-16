@@ -3,7 +3,7 @@ import { CSS } from "@dnd-kit/utilities";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { cn } from "@/lib/utils";
 import type { Task, TaskPriority, Agent } from "@/types/mission-control";
-import { Clock, Tag, GripVertical, FileText, ChevronDown, ChevronUp, ExternalLink, Bot, User, Users } from "lucide-react";
+import { Clock, Tag, GripVertical, FileText, ChevronDown, ChevronUp, ExternalLink, Bot, User, Users, Edit, Trash } from "lucide-react";
 import { useState } from "react";
 
 type TaskOwner = 'agent' | 'human' | 'cooperative' | null;
@@ -51,6 +51,8 @@ interface TaskCardProps {
   task: Task;
   agents: Agent[];
   onClick?: () => void;
+  onEdit?: (task: Task) => void;
+  onDelete?: (taskId: string) => void;
   isDragging?: boolean;
 }
 
@@ -126,7 +128,7 @@ function formatRelativeTime(dateString: string): string {
   return `${diffDays}d ago`;
 }
 
-export function TaskCard({ task, agents, onClick, isDragging }: TaskCardProps) {
+export function TaskCard({ task, agents, onClick, onEdit, onDelete, isDragging }: TaskCardProps) {
   const [summaryExpanded, setSummaryExpanded] = useState(false);
   const priority = priorityConfig[task.priority];
   const owner = getOwnerFromTags(task.tags);
@@ -147,6 +149,16 @@ export function TaskCard({ task, agents, onClick, isDragging }: TaskCardProps) {
     setSummaryExpanded(!summaryExpanded);
   };
 
+  const handleEdit = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    onEdit?.(task);
+  };
+
+  const handleDelete = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    onDelete?.(task.id);
+  };
+
   return (
     <div
       onClick={onClick}
@@ -158,7 +170,7 @@ export function TaskCard({ task, agents, onClick, isDragging }: TaskCardProps) {
         isDragging && "shadow-xl ring-2 ring-violet-400 opacity-90 rotate-2"
       )}
     >
-      {/* Header with priority and drag handle */}
+      {/* Header with priority, drag handle, edit, and delete */}
       <div className="flex items-start gap-2">
         <div className="flex-1">
           {/* Priority pill tag + Owner badge + Title */}
@@ -185,7 +197,15 @@ export function TaskCard({ task, agents, onClick, isDragging }: TaskCardProps) {
             </h4>
           </div>
         </div>
-        <GripVertical className="h-4 w-4 text-slate-300 shrink-0 mt-0.5" />
+        <div className="flex items-start gap-2">
+          <GripVertical className="h-4 w-4 text-slate-300 shrink-0 mt-0.5" />
+          <button onClick={handleEdit} className="p-1 hover:bg-slate-100 rounded transition-colors">
+            <Edit className="h-4 w-4 text-slate-500" />
+          </button>
+          <button onClick={handleDelete} className="p-1 hover:bg-slate-100 rounded transition-colors">
+            <Trash className="h-4 w-4 text-slate-500" />
+          </button>
+        </div>
       </div>
 
       {/* Description preview */}
@@ -206,7 +226,7 @@ export function TaskCard({ task, agents, onClick, isDragging }: TaskCardProps) {
               <Tag className="h-2.5 w-2.5" />
               {tag}
             </span>
-          ))}
+          )}
           {task.tags.filter(t => !t.startsWith('owner:')).length > 3 && (
             <span className="text-[10px] text-slate-400">+{task.tags.filter(t => !t.startsWith('owner:')).length - 3}</span>
           )}
@@ -286,7 +306,7 @@ export function TaskCard({ task, agents, onClick, isDragging }: TaskCardProps) {
   );
 }
 
-export function SortableTaskCard({ task, agents, onClick, isDragging }: SortableTaskCardProps) {
+export function SortableTaskCard({ task, agents, onClick, onEdit, onDelete, isDragging }: SortableTaskCardProps) {
   const {
     attributes,
     listeners,
@@ -315,6 +335,8 @@ export function SortableTaskCard({ task, agents, onClick, isDragging }: Sortable
         task={task}
         agents={agents}
         onClick={onClick}
+        onEdit={onEdit}
+        onDelete={onDelete}
         isDragging={isDragging || isSortableDragging}
       />
     </div>

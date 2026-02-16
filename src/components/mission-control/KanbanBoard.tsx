@@ -14,6 +14,7 @@ import {
 import {
   SortableContext,
   verticalListSortingStrategy,
+  arrayMove,
 } from "@dnd-kit/sortable";
 import { cn } from "@/lib/utils";
 import { SortableTaskCard, TaskCard } from "./TaskCard";
@@ -27,6 +28,9 @@ interface KanbanBoardProps {
   onTaskClick?: (task: Task) => void;
   onAddTask?: (status: TaskStatus) => void;
   onTaskStatusChange?: (taskId: string, newStatus: TaskStatus) => Promise<void>;
+  onTaskEdit?: (task: Task) => void;
+  onTaskDelete?: (taskId: string) => void;
+  onTaskReorder?: (taskId: string, newIndex: number, status: TaskStatus) => Promise<void>;
 }
 
 function getColumnCounts(tasks: Task[]): Record<TaskStatus, number> {
@@ -44,7 +48,7 @@ const columnStyles: Record<TaskStatus, { headerBg: string; countBg: string; drop
   done: { headerBg: 'bg-emerald-50', countBg: 'bg-emerald-100 text-emerald-700', dropBg: 'bg-emerald-50' },
 };
 
-export function KanbanBoard({ tasks, agents, onTaskClick, onAddTask, onTaskStatusChange }: KanbanBoardProps) {
+export function KanbanBoard({ tasks, agents, onTaskClick, onAddTask, onTaskStatusChange, onTaskEdit, onTaskDelete, onTaskReorder }: KanbanBoardProps) {
   const [activeTask, setActiveTask] = useState<Task | null>(null);
   const [overId, setOverId] = useState<string | null>(null);
   const counts = getColumnCounts(tasks);
@@ -81,22 +85,35 @@ export function KanbanBoard({ tasks, agents, onTaskClick, onAddTask, onTaskStatu
     const task = tasks.find((t) => t.id === taskId);
     if (!task) return;
 
-    // Determine target column
+    // Determine target column and position
     let targetStatus: TaskStatus | null = null;
+    let targetTask: Task | null = null;
 
-    // Check if dropped on a column
+    // Check if dropped on a column header
     if (KANBAN_COLUMNS.some((col) => col.id === over.id)) {
       targetStatus = over.id as TaskStatus;
     } else {
       // Dropped on another task - find which column it's in
-      const targetTask = tasks.find((t) => t.id === over.id);
+      targetTask = tasks.find((t) => t.id === over.id) || null;
       if (targetTask) {
         targetStatus = targetTask.status;
       }
     }
 
-    // If status changed, call the callback
-    if (targetStatus && targetStatus !== task.status && onTaskStatusChange) {
+    if (!targetStatus) return;
+
+    // If moving to same column (reordering)
+    if (targetStatus === task.status && targetTask && onTaskReorder) {
+      const columnTasks = tasks.filter((t) => t.status === targetStatus);
+      const oldIndex = columnTasks.findIndex((t) => t.id === taskId);
+      const newIndex = columnTasks.findIndex((t) => t.id === targetTask.id);
+      
+      if (oldIndex !== -1 && newIndex !== -1 && oldIndex !== newIndex) {
+        // Calculate the new position
+        await onTaskReorder(taskId, newIndex, targetStatus);
+      }
+    } else if (targetStatus !== task.status && onTaskStatusChange) {
+      // Moving to different column
       await onTaskStatusChange(taskId, targetStatus);
     }
   };
@@ -183,6 +200,8 @@ export function KanbanBoard({ tasks, agents, onTaskClick, onAddTask, onTaskStatu
                         task={task}
                         agents={agents}
                         onClick={() => onTaskClick?.(task)}
+                        onEdit={onTaskEdit}
+                        onDelete={onTaskDelete}
                         isDragging={activeTask?.id === task.id}
                       />
                     ))

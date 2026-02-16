@@ -4,7 +4,7 @@ export type AgentStatus = 'working' | 'idle' | 'blocked' | 'active' | 'offline';
 export type AgentLevel = 'lead' | 'specialist' | 'intern';
 export type TaskStatus = 'inbox' | 'assigned' | 'in_progress' | 'review' | 'done';
 export type TaskPriority = 'critical' | 'high' | 'medium' | 'low';
-export type ActivityType = 'task_created' | 'task_updated' | 'status_changed' | 'message_sent' | 'decision_made' | 'document_created';
+export type ActivityType = 'task_created' | 'task_updated' | 'task_deleted' | 'status_changed' | 'message_sent' | 'decision_made' | 'document_created';
 
 export interface Agent {
   id: string;

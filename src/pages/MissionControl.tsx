@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback } from "react";
 import { DashboardLayout } from "@/components/layout/DashboardLayout";
 import { PageContent } from "@/components/layout/PageLayout";
-import { AgentCard, KanbanBoard, ActivityFeed, StatsBar, RicoChat, ScottsActionItems, AgentActivityMonitor, HealthDashboard, AnalyticsMonitor, AddTaskDialog, QualityDashboard } from "@/components/mission-control";
+import { AgentCard, KanbanBoard, ActivityFeed, StatsBar, RicoChat, ScottsActionItems, AgentActivityMonitor, HealthDashboard, AnalyticsMonitor, AddTaskDialog, EditTaskDialog, QualityDashboard } from "@/components/mission-control";
 import { useBusinessContext } from "@/contexts/BusinessContext";
 import { useBusinesses } from "@/hooks/useBusinesses";
 import { supabase } from "@/integrations/supabase/client";
@@ -22,6 +22,8 @@ export default function MissionControl() {
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [addTaskDialogOpen, setAddTaskDialogOpen] = useState(false);
+  const [editTaskDialogOpen, setEditTaskDialogOpen] = useState(false);
+  const [editingTask, setEditingTask] = useState<Task | null>(null);
 
   // Fetch data from Supabase mc_ tables, filtered by selected business
   // Global agents (scope='global') are always included regardless of business selection
@@ -218,6 +220,64 @@ export default function MissionControl() {
 
   const handleTaskClick = (task: Task) => console.log("Task clicked:", task);
   const handleAgentClick = (agent: Agent) => setSelectedAgent(selectedAgent?.id === agent.id ? null : agent);
+  
+  const handleTaskEdit = (task: Task) => {
+    setEditingTask(task);
+    setEditTaskDialogOpen(true);
+  };
+
+  const handleTaskDelete = async (taskId: string) => {
+    // The actual deletion is handled in EditTaskDialog
+    // This handler is called from the quick delete button on the card
+    const task = tasks.find(t => t.id === taskId);
+    if (task) {
+      setEditingTask(task);
+      setEditTaskDialogOpen(true);
+    }
+  };
+
+  const handleTaskReorder = async (taskId: string, newIndex: number, status: TaskStatus) => {
+    const task = tasks.find(t => t.id === taskId);
+    if (!task) return;
+
+    try {
+      // Log the reorder activity
+      await supabase.from('mc_activities').insert({
+        type: 'task_updated',
+        agent_id: agents[0]?.id || null,
+        task_id: taskId,
+        message: `Reordered "${task.title}" within ${status.replace('_', ' ')}`,
+        metadata: { 
+          action: 'reorder',
+          status: status,
+          newIndex: newIndex,
+          source: 'mission-control-ui'
+        },
+        business_id: selectedBusiness?.id || null
+      });
+
+      // Update the task's updated_at to reflect the change
+      await supabase
+        .from('mc_tasks')
+        .update({ updated_at: new Date().toISOString() })
+        .eq('id', taskId);
+
+      toast({ 
+        title: "Task reordered", 
+        description: `"${task.title}" position updated` 
+      });
+      
+      // Refresh data to reflect changes
+      await fetchData();
+    } catch (err) {
+      console.error('Failed to reorder task:', err);
+      toast({ 
+        title: "Failed to reorder task", 
+        description: err instanceof Error ? err.message : 'Unknown error', 
+        variant: "destructive" 
+      });
+    }
+  };
 
   // Check if "All Businesses" is selected
   const isAllBusinessesSelected = selectedBusiness?.id === ALL_BUSINESSES_ID;
@@ -324,6 +384,9 @@ export default function MissionControl() {
               agents={agents}
               onTaskClick={handleTaskClick}
               onTaskStatusChange={handleTaskStatusChange}
+              onTaskEdit={handleTaskEdit}
+              onTaskDelete={handleTaskDelete}
+              onTaskReorder={handleTaskReorder}
             />
           </div>
         </div>
@@ -352,6 +415,15 @@ export default function MissionControl() {
           onOpenChange={setAddTaskDialogOpen}
           businessId={isAllBusinessesSelected ? null : (selectedBusiness?.id || null)}
           onTaskCreated={() => fetchData()}
+        />
+
+        {/* Edit Task Dialog */}
+        <EditTaskDialog
+          open={editTaskDialogOpen}
+          onOpenChange={setEditTaskDialogOpen}
+          task={editingTask}
+          onTaskUpdated={() => fetchData()}
+          onTaskDeleted={() => fetchData()}
         />
 
       </PageContent>
