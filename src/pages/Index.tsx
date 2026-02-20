@@ -10,6 +10,7 @@ import { TodaysConversations } from "@/components/dashboard/TodaysConversations"
 import { TodaysClasses } from "@/components/dashboard/TodaysClasses"
 import { RecentBookings } from "@/components/dashboard/RecentBookings"
 import { QuickActions } from "@/components/dashboard/QuickActions"
+import { FightFlowDashboard } from "@/components/dashboard/FightFlowDashboard"
 
 const Index = () => {
   const { selectedBusiness, setSelectedBusiness } = useBusinessContext();
@@ -86,6 +87,16 @@ const Index = () => {
                 onContactClick={(contactId) => setSelectedContactId(contactId)}
               />
             </div>
+
+            {/* Fight Flow At-a-Glance */}
+            {(selectedBusiness.name.toLowerCase().includes('fight') || selectedBusiness.slug?.toLowerCase().includes('fight')) && (
+              <div className="mt-8">
+                <FightFlowDashboard
+                  businessId={selectedBusiness.id}
+                  onContactClick={(contactId) => setSelectedContactId(contactId)}
+                />
+              </div>
+            )}
           </>
         ) : (
           <div className="text-center py-16 bg-white rounded-xl border border-gray-200">

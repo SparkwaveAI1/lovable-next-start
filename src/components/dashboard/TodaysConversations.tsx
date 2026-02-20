@@ -94,7 +94,7 @@ export function TodaysConversations({ businessId, onContactClick }: TodaysConver
     queryFn: async () => {
       const twentyFourHoursAgo = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
 
-      // Get recent messages with thread and contact info
+      // Get recent messages with thread and contact info, filtered by business
       const { data: messages, error } = await supabase
         .from('sms_messages')
         .select(`
@@ -109,6 +109,7 @@ export function TodaysConversations({ businessId, onContactClick }: TodaysConver
             status,
             needs_human_review,
             created_at,
+            business_id,
             contacts!inner (
               id,
               first_name,
@@ -118,6 +119,7 @@ export function TodaysConversations({ businessId, onContactClick }: TodaysConver
             )
           )
         `)
+        .eq('conversation_threads.business_id', businessId)
         .gte('created_at', twentyFourHoursAgo)
         .order('created_at', { ascending: false });
 

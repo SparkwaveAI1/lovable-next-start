@@ -454,6 +454,70 @@ serve(async (req) => {
       .eq('thread_id', thread.id)
       .order('created_at', { ascending: true });
 
+    // ========================================
+    // Detect returning contact (gap > 7 days since last message)
+    // ========================================
+    const currentTime = new Date();
+    const priorMessages = messageHistory || [];
+    const lastMessageBefore = priorMessages
+      .filter(m => m.direction === 'inbound')
+      .slice(-2, -1)[0]; // Second-to-last inbound (not the current one)
+
+    let returningContactContext = '';
+    let isReturningContact = false;
+
+    if (lastMessageBefore) {
+      const lastMsgDate = new Date(lastMessageBefore.created_at);
+      const daysSinceLast = Math.floor((currentTime.getTime() - lastMsgDate.getTime()) / (1000 * 60 * 60 * 24));
+
+      if (daysSinceLast >= 7) {
+        isReturningContact = true;
+
+        // Find any booking promises in prior AI messages
+        const bookingPromises = priorMessages
+          .filter(m => m.direction === 'outbound')
+          .filter(m => /booked|scheduled|set you up|confirmed|see you/i.test(m.message))
+          .map(m => m.message.substring(0, 120));
+
+        // Find expressed preferences
+        const classPrefs = priorMessages
+          .filter(m => m.direction === 'inbound')
+          .filter(m => /muay thai|boxing|bjj|grappling|kickboxing|mma/i.test(m.message))
+          .map(m => m.message.substring(0, 80));
+
+        returningContactContext = `
+=== RETURNING CONTACT — ${daysSinceLast} DAYS SINCE LAST MESSAGE ===
+This person has contacted us before. They are NOT a new lead. Reference their prior conversation naturally.
+
+${bookingPromises.length > 0 ? `PRIOR COMMITMENTS MADE (check if they followed through):\n${bookingPromises.map(p => `- "${p}"`).join('\n')}` : ''}
+
+${classPrefs.length > 0 ? `THEIR EXPRESSED INTERESTS:\n${classPrefs.map(p => `- "${p}"`).join('\n')}` : ''}
+
+INSTRUCTIONS FOR RETURNING CONTACT:
+- Acknowledge they're coming back (briefly, naturally — not robotically)
+- Reference what they discussed before if relevant
+- If we promised them something (booking, etc.) and they're asking about it again, acknowledge it directly
+- They already know us — skip the intro pitch
+- If they're asking about pricing/membership, they're hot — flag with "I'll have Scott reach out to you directly about that!" and set needs_human_review = true
+=== END RETURNING CONTACT CONTEXT ===`;
+
+        console.log(`🔄 Returning contact detected: ${daysSinceLast} days since last message`);
+      }
+    }
+
+    // Flag returning contacts asking about pricing for Scott's personal follow-up
+    const isPricingInquiry = /price|cost|how much|membership|monthly|fee|rate/i.test(body);
+    if (isReturningContact && isPricingInquiry) {
+      await supabase
+        .from('conversation_threads')
+        .update({
+          needs_human_review: true,
+          conversation_state: 'hot_re_engagement'
+        })
+        .eq('id', thread.id);
+      console.log('🔥 Hot re-engagement: returning contact asking about pricing — flagged for Scott');
+    }
+
     // Get business context
     const { data: business } = await supabase
       .from('businesses')
@@ -546,7 +610,7 @@ serve(async (req) => {
           contactName: contactName,
           threadId: thread.id,
           conversationHistory: historyText,
-          knowledgeBase: knowledgeText,
+          knowledgeBase: (knowledgeText || '') + (returningContactContext ? '\n\n' + returningContactContext : ''),
           scheduleText: scheduleText,
           todaysSchedule: todaysScheduleText,
           currentDay: currentDayName
