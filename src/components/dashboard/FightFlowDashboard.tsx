@@ -25,9 +25,8 @@ interface FightFlowAppointment {
   contact_name: string | null;
   contact_phone: string | null;
   contact_email: string | null;
-  time_et: string | null;
-  service: string | null;
-  date_et: string | null;
+  session_start: string | null;
+  service_name: string | null;
 }
 
 interface RecentContact {
@@ -219,9 +218,10 @@ function TrialClassesPanel() {
       // Fetch today's appointments
       const { data: appts, error: apptError } = await supabase
         .from('fightflow_appointments')
-        .select('id, contact_name, contact_phone, contact_email, time_et, service, date_et')
-        .eq('date_et', todayET)
-        .order('time_et', { ascending: true });
+        .select('id, contact_name, contact_phone, contact_email, session_start, service_name')
+        .gte('session_start', `${todayET}T00:00:00`)
+        .lte('session_start', `${todayET}T23:59:59`)
+        .order('session_start', { ascending: true });
 
       if (apptError) {
         console.error('Error fetching appointments:', apptError);
@@ -306,10 +306,10 @@ function TrialClassesPanel() {
                       {appt.contact_name ?? '—'}
                     </td>
                     <td className="py-2 pr-4 text-gray-600">
-                      {appt.time_et ?? '—'}
+                      {appt.session_start ? new Date(appt.session_start).toLocaleTimeString('en-US', { timeZone: 'America/New_York', hour: 'numeric', minute: '2-digit' }) : '—'}
                     </td>
                     <td className="py-2 pr-4 text-gray-600">
-                      {appt.service ?? '—'}
+                      {appt.service_name ?? '—'}
                     </td>
                     <td className="py-2 pr-4">
                       <LeadStatusBadge status={appt.lead_status} />

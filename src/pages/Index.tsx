@@ -64,6 +64,16 @@ const Index = () => {
               <QuickActions />
             </div>
 
+            {/* Fight Flow At-a-Glance — TOP of dashboard when Fight Flow selected */}
+            {(selectedBusiness.name.toLowerCase().includes('fight') || selectedBusiness.slug?.toLowerCase().includes('fight')) && (
+              <div className="mb-8">
+                <FightFlowDashboard
+                  businessId={selectedBusiness.id}
+                  onContactClick={(contactId) => setSelectedContactId(contactId)}
+                />
+              </div>
+            )}
+
             {/* Main Content Grid */}
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-8">
               {/* Today's Conversations - Takes 2 columns */}
@@ -87,16 +97,6 @@ const Index = () => {
                 onContactClick={(contactId) => setSelectedContactId(contactId)}
               />
             </div>
-
-            {/* Fight Flow At-a-Glance */}
-            {(selectedBusiness.name.toLowerCase().includes('fight') || selectedBusiness.slug?.toLowerCase().includes('fight')) && (
-              <div className="mt-8">
-                <FightFlowDashboard
-                  businessId={selectedBusiness.id}
-                  onContactClick={(contactId) => setSelectedContactId(contactId)}
-                />
-              </div>
-            )}
           </>
         ) : (
           <div className="text-center py-16 bg-white rounded-xl border border-gray-200">
