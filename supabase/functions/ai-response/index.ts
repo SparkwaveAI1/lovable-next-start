@@ -1,5 +1,4 @@
-import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
-import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
+import { createClient } from "npm:@supabase/supabase-js@2";
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -641,7 +640,7 @@ Respond ONLY with the new message. No explanations.`;
   }
 }
 
-serve(async (req) => {
+Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') {
     return new Response('ok', { headers: corsHeaders });
   }
@@ -796,6 +795,13 @@ If someone says "I'm good", "not interested", "already signed up elsewhere", or 
 - Do NOT try to change their mind
 - Do NOT ask follow-up questions
 - Do NOT make small talk
+
+=== PRICING RESPONSES ===
+When you state any pricing information (membership cost, monthly fee, trial cost, etc.):
+ALWAYS follow up IMMEDIATELY with: "Would that work for you?"
+This is non-negotiable — every pricing statement must end with "Would that work for you?" to surface objections and keep the conversation alive.
+Example: "Our unlimited membership is $149/month. Would that work for you?"
+Do NOT skip this follow-up question after pricing, even if you think they'll say yes.
 
 === IF THEY WANT TO BOOK ===
 Only if they express genuine interest in trying a class:
