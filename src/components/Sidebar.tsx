@@ -52,6 +52,7 @@ const navGroups: NavGroup[] = [
     label: "AI & Automation",
     items: [
       { label: "Agents", href: "/agents", icon: Bot },
+      { label: "Agent Chat", href: "/agent-chat", icon: MessageSquare },
       { label: "Reports", href: "/reports", icon: ClipboardList },
       { label: "Twitter Analytics", href: "/twitter-analytics", icon: Twitter },
     ],

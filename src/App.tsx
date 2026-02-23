@@ -44,6 +44,7 @@ import ContentVisibility from "./pages/ContentVisibility";
 import ContentReviewPage from "./pages/ContentReviewPage";
 import AutomationAudit from "./pages/AutomationAudit";
 import ROICalculator from "./pages/ROICalculator";
+import AgentChat from "./pages/AgentChat";
 import Onboarding from "./pages/Onboarding";
 import ProtectedRoute from "./components/ProtectedRoute";
 import { ErrorBoundary } from "./components/ErrorBoundary";
@@ -103,6 +104,7 @@ const App = () => (
             <Route path="/faq" element={<ProtectedRoute><ErrorBoundary><FAQ /></ErrorBoundary></ProtectedRoute>} />
             <Route path="/content-visibility" element={<ProtectedRoute><ErrorBoundary><ContentVisibility /></ErrorBoundary></ProtectedRoute>} />
             <Route path="/content-review" element={<ProtectedRoute><ErrorBoundary><ContentReviewPage /></ErrorBoundary></ProtectedRoute>} />
+            <Route path="/agent-chat" element={<ProtectedRoute><ErrorBoundary><AgentChat /></ErrorBoundary></ProtectedRoute>} />
             {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
             <Route path="*" element={<NotFound />} />
             </Routes>
