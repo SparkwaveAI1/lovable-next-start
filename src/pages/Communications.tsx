@@ -73,6 +73,7 @@ interface EmailCampaign {
   total_opened: number | null;
   total_clicked: number | null;
   total_bounced: number | null;
+  agent_name: string | null;
 }
 
 interface VerifiedSender {
@@ -109,6 +110,7 @@ interface RecentMessage {
   ai_response: boolean;
   contact_id: string;
   contact_name?: string;
+  agent_name: string | null;
 }
 
 interface AIResponseLog {
@@ -155,6 +157,7 @@ interface ActivityItem {
   contact_id?: string | null;
   opened_at?: string | null;
   clicked_at?: string | null;
+  agent_name?: string | null;
 }
 
 interface QualityMetrics {
@@ -257,6 +260,9 @@ export default function Communications() {
   const [replyMessage, setReplyMessage] = useState('');
   const [isSendingReply, setIsSendingReply] = useState(false);
   
+  // Agent filter state
+  const [agentFilter, setAgentFilter] = useState<'all' | 'Rico' | 'Iris'>('all');
+
   // Email campaign state
   const [isEmailCampaignOpen, setIsEmailCampaignOpen] = useState(false);
   const [emailSubTab, setEmailSubTab] = useState<'campaigns' | 'sequences'>('campaigns');
@@ -396,13 +402,19 @@ export default function Communications() {
 
   // Fetch email campaigns
   const { data: emailCampaigns = [], isLoading: emailCampaignsLoading, refetch: refetchEmailCampaigns } = useQuery({
-    queryKey: ['email-campaigns', selectedBusiness?.id],
+    queryKey: ['email-campaigns', selectedBusiness?.id, agentFilter],
     queryFn: async () => {
-      const { data, error } = await supabase
+      let query = supabase
         .from('email_campaigns')
         .select('*')
         .eq('business_id', selectedBusiness?.id)
         .order('created_at', { ascending: false });
+      if (agentFilter === 'Iris') {
+        query = query.eq('agent_name', 'Iris');
+      } else if (agentFilter === 'Rico') {
+        query = query.or('agent_name.eq.Rico,agent_name.is.null');
+      }
+      const { data, error } = await query;
       if (error) throw error;
       return data as EmailCampaign[];
     },
@@ -592,7 +604,8 @@ export default function Communications() {
           message,
           created_at,
           ai_response,
-          contact_id
+          contact_id,
+          agent_name
         `)
         .order('created_at', { ascending: false })
         .limit(20);
@@ -640,6 +653,7 @@ export default function Communications() {
       created_at: msg.created_at,
       ai_response: msg.ai_response,
       contact_id: msg.contact_id,
+      agent_name: msg.agent_name,
     }));
 
     const emailItems: ActivityItem[] = recentEmails.map(email => ({
@@ -1665,7 +1679,17 @@ export default function Communications() {
                     Create and manage email campaigns
                   </CardDescription>
                 </div>
-                <div className="flex gap-2">
+                <div className="flex gap-2 items-center">
+                  <Select value={agentFilter} onValueChange={(v) => setAgentFilter(v as 'all' | 'Rico' | 'Iris')}>
+                    <SelectTrigger className="w-[120px] h-8 text-sm">
+                      <SelectValue placeholder="All agents" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="all">All Agents</SelectItem>
+                      <SelectItem value="Rico">Rico</SelectItem>
+                      <SelectItem value="Iris">Iris</SelectItem>
+                    </SelectContent>
+                  </Select>
                   <Button variant="outline" size="sm" onClick={() => refetchEmailCampaigns()}>
                     <RefreshCw className="h-4 w-4 mr-2" />
                     Refresh
@@ -1841,6 +1865,7 @@ export default function Communications() {
                       <TableRow>
                         <TableHead>Campaign</TableHead>
                         <TableHead>Subject</TableHead>
+                        <TableHead>Agent</TableHead>
                         <TableHead>Status</TableHead>
                         <TableHead className="text-right">Sent</TableHead>
                         <TableHead className="text-right">Delivered</TableHead>
@@ -1858,10 +1883,16 @@ export default function Communications() {
                         const clickRate = campaign.total_sent && campaign.total_sent > 0 
                           ? ((campaign.total_clicked || 0) / campaign.total_sent * 100).toFixed(1) 
                           : '0';
+                        const agentName = campaign.agent_name || 'Rico';
                         return (
                           <TableRow key={campaign.id} className="cursor-pointer hover:bg-muted/50">
                             <TableCell className="font-medium">{campaign.name}</TableCell>
                             <TableCell className="max-w-[200px] truncate">{campaign.subject}</TableCell>
+                            <TableCell>
+                              <Badge variant={agentName === 'Iris' ? 'default' : 'secondary'} className={agentName === 'Iris' ? 'bg-purple-500 text-white' : ''}>
+                                {agentName}
+                              </Badge>
+                            </TableCell>
                             <TableCell>{getEmailStatusBadge(campaign.status)}</TableCell>
                             <TableCell className="text-right">{campaign.total_sent || 0}</TableCell>
                             <TableCell className="text-right">{campaign.total_delivered || 0}</TableCell>
@@ -1908,6 +1939,7 @@ export default function Communications() {
                       <TableRow>
                         <TableHead>Channel</TableHead>
                         <TableHead>Direction</TableHead>
+                        <TableHead>Agent</TableHead>
                         <TableHead>Content</TableHead>
                         <TableHead>Status</TableHead>
                         <TableHead>Time</TableHead>
@@ -1935,6 +1967,13 @@ export default function Communications() {
                             <Badge variant={item.direction === 'inbound' ? 'default' : 'secondary'}>
                               {item.direction === 'inbound' ? '📥 In' : '📤 Out'}
                             </Badge>
+                          </TableCell>
+                          <TableCell>
+                            {item.agent_name ? (
+                              <Badge variant="default" className={item.agent_name === 'Iris' ? 'bg-purple-500 text-white' : 'bg-slate-500 text-white'}>
+                                {item.agent_name}
+                              </Badge>
+                            ) : null}
                           </TableCell>
                           <TableCell className="max-w-md">
                             {item.type === 'sms' ? (
