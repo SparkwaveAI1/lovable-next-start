@@ -41,6 +41,179 @@ function isSpamMessage(message: string): boolean {
   return SPAM_PATTERNS.some(pattern => pattern.test(trimmed));
 }
 
+// ========================================
+// INSTRUCTOR CONFIG & RESPONSE HANDLER
+// ========================================
+
+const INSTRUCTOR_CONFIG = [
+  { name: "Anthony Bui", phone: "+19198181415" },
+  { name: "Damien Robinson", phone: "+19195210630" },
+  { name: "Daison Reich", phone: "+16363285065" },
+  { name: "Aileen Rossouw", phone: "+19727541242" },
+  { name: "Courtney", phone: "+19197587325" },
+  { name: "Adam Avendano", phone: "+18633263431" },
+  { name: "James", phone: "+18159157802" },
+  { name: "Mavrick Vo", phone: "+19197254644" },
+];
+
+async function handleInstructorResponse(
+  instructor: { name: string; phone: string },
+  body: string,
+  supabase: any
+): Promise<Response> {
+  const corsHeaders = {
+    'Access-Control-Allow-Origin': '*',
+    'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
+  };
+
+  const instructorFirstName = instructor.name.split(' ')[0];
+  console.log(`👩‍🏫 Instructor response from ${instructor.name}: "${body}"`);
+
+  try {
+    // 1. Find most recent post_class check for this instructor (within 8 hours)
+    const { data: checks, error: checkErr } = await supabase
+      .from('fightflow_instructor_checks')
+      .select('*')
+      .eq('instructor_phone', instructor.phone)
+      .eq('check_type', 'post_class')
+      .is('attendance_confirmed', null)
+      .gte('created_at', new Date(Date.now() - 8 * 60 * 60 * 1000).toISOString())
+      .order('created_at', { ascending: false })
+      .limit(1);
+
+    if (checkErr) {
+      console.error('Error fetching instructor check:', checkErr.message);
+    }
+
+    const check = checks?.[0];
+
+    if (!check) {
+      console.log(`No pending post_class check found for ${instructor.name} in the last 8 hours`);
+      // Still reply gracefully
+      await sendTwilioSMS(instructor.phone, `Thanks ${instructorFirstName}! We don't have a pending check right now, but we appreciate the reply! 🙌`);
+      return new Response(
+        '<?xml version="1.0" encoding="UTF-8"?><Response></Response>',
+        { headers: { ...corsHeaders, 'Content-Type': 'text/xml; charset=utf-8' } }
+      );
+    }
+
+    // 2. Parse response
+    const normalized = body.trim().toLowerCase();
+    const isYes = normalized.startsWith('y');
+    const isNo = normalized.startsWith('n');
+
+    if (!isYes && !isNo) {
+      console.log(`Unrecognized instructor response: "${body}"`);
+      await sendTwilioSMS(instructor.phone, `Got it — can you reply YES or NO?`);
+      return new Response(
+        '<?xml version="1.0" encoding="UTF-8"?><Response></Response>',
+        { headers: { ...corsHeaders, 'Content-Type': 'text/xml; charset=utf-8' } }
+      );
+    }
+
+    // 3. Update check record
+    const attendanceConfirmed = isYes;
+    await supabase
+      .from('fightflow_instructor_checks')
+      .update({
+        attendance_confirmed: attendanceConfirmed,
+        response: body,
+        responded_at: new Date().toISOString(),
+      })
+      .eq('id', check.id);
+
+    console.log(`✅ Updated check ${check.id}: attendance_confirmed=${attendanceConfirmed}`);
+
+    if (isYes) {
+      // 4. If YES → trigger day+1 follow-up
+      const studentFirstName = (check.student_name || '').split(' ')[0];
+      const day1Message = `Hey ${studentFirstName}! Hope your first class at Fight Flow was amazing! How did it feel? 🥊`;
+
+      // Try to find existing day+1 sequence step for this appointment
+      const { data: existingStep } = await supabase
+        .from('fightflow_sequence_steps')
+        .select('*')
+        .eq('appointment_id', check.appointment_id)
+        .eq('step_name', 'day_plus_1')
+        .in('status', ['pending', 'scheduled'])
+        .order('created_at', { ascending: false })
+        .limit(1)
+        .single();
+
+      if (existingStep) {
+        // Accelerate: schedule for 30 minutes from now
+        const fireAt = new Date(Date.now() + 30 * 60 * 1000).toISOString();
+        await supabase
+          .from('fightflow_sequence_steps')
+          .update({ scheduled_for: fireAt })
+          .eq('id', existingStep.id);
+        console.log(`⏩ Accelerated day+1 step ${existingStep.id} → fires at ${fireAt}`);
+      } else {
+        // Create a new day+1 step
+        const fireAt = new Date(Date.now() + 30 * 60 * 1000).toISOString();
+        await supabase
+          .from('fightflow_sequence_steps')
+          .insert({
+            appointment_id: check.appointment_id,
+            step_name: 'day_plus_1',
+            step_order: 1,
+            channel: 'sms',
+            scheduled_for: fireAt,
+            status: 'pending',
+            message_content: day1Message,
+          });
+        console.log(`📝 Created new day+1 step for appointment ${check.appointment_id}`);
+      }
+
+      // Reply to instructor
+      await sendTwilioSMS(instructor.phone, `Thanks ${instructorFirstName}! Got it. 🙌`);
+
+    } else {
+      // If NO → update, reply to instructor
+      await sendTwilioSMS(instructor.phone, `Thanks ${instructorFirstName}! We'll follow up with them.`);
+    }
+
+  } catch (err: any) {
+    console.error('Instructor handler error:', err.message);
+  }
+
+  return new Response(
+    '<?xml version="1.0" encoding="UTF-8"?><Response></Response>',
+    { headers: { ...corsHeaders, 'Content-Type': 'text/xml; charset=utf-8' } }
+  );
+}
+
+async function sendTwilioSMS(to: string, message: string): Promise<void> {
+  const accountSid = Deno.env.get('TWILIO_ACCOUNT_SID') || Deno.env.get('TWILIO_SID');
+  const authToken = Deno.env.get('TWILIO_AUTH_TOKEN');
+  const twilioFromNumber = Deno.env.get('TWILIO_PHONE_NUMBER');
+
+  if (!accountSid || !authToken || !twilioFromNumber) {
+    console.error('Missing Twilio credentials for instructor reply');
+    return;
+  }
+
+  const params = new URLSearchParams({ From: twilioFromNumber, To: to, Body: message });
+  const res = await fetch(
+    `https://api.twilio.com/2010-04-01/Accounts/${accountSid}/Messages.json`,
+    {
+      method: 'POST',
+      headers: {
+        'Authorization': `Basic ${btoa(`${accountSid}:${authToken}`)}`,
+        'Content-Type': 'application/x-www-form-urlencoded',
+      },
+      body: params.toString(),
+    }
+  );
+
+  if (!res.ok) {
+    console.error(`Twilio instructor reply failed: ${res.status} ${await res.text()}`);
+  } else {
+    const r = await res.json();
+    console.log(`📱 Instructor reply sent to ${to}, SID: ${r.sid}`);
+  }
+}
+
 // Phone normalization function for E.164 format
 function normalizePhoneNumber(phoneNumber: string): string | null {
   if (!phoneNumber) return null;
@@ -234,6 +407,16 @@ serve(async (req) => {
         '<?xml version="1.0" encoding="UTF-8"?><Response></Response>',
         { headers: { ...corsHeaders, 'Content-Type': 'text/xml; charset=utf-8' } }
       );
+    }
+
+    // ========================================
+    // STEP 0.7: CHECK IF SENDER IS AN INSTRUCTOR
+    // Route to instructor handler — NEVER to AI chatbot
+    // ========================================
+    const instructor = INSTRUCTOR_CONFIG.find(i => i.phone === from);
+    if (instructor) {
+      console.log(`👩‍🏫 Instructor message detected from ${instructor.name} (${from})`);
+      return handleInstructorResponse(instructor, body, supabase);
     }
 
     // STEP 1: Determine which business this SMS is for
