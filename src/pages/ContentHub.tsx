@@ -11,22 +11,39 @@ import { useBusinessContext } from "@/contexts/BusinessContext";
 type Tab = "library" | "calendar" | "repurpose";
 
 const TABS: { id: Tab; label: string; icon: React.ComponentType<{ className?: string }> }[] = [
-  { id: "library", label: "Library", icon: Library },
-  { id: "calendar", label: "Calendar", icon: Calendar },
+  { id: "library",   label: "Library",   icon: Library },
+  { id: "calendar",  label: "Calendar",  icon: Calendar },
   { id: "repurpose", label: "Repurpose", icon: RefreshCw },
 ];
 
+/**
+ * Maps business slugs (from the `businesses` table) to the short brand names
+ * used in content_queue.brand. These must stay in sync with whatever the crons
+ * write — they are NOT derived from the slug automatically.
+ */
+const SLUG_TO_BRAND: Record<string, string> = {
+  "sparkwave-ai":      "sparkwave",
+  "charx-world":       "charx",
+  "persona-ai":        "persona",
+  "fight-flow-academy": "fightflow",
+};
+
 export default function ContentHub() {
   const { selectedBusiness } = useBusinessContext();
-  const brand = selectedBusiness?.slug ?? "";
 
-  const [activeTab, setActiveTab] = useState<Tab>("library");
-  const [composeOpen, setComposeOpen] = useState(false);
+  // Short brand name for content_queue queries (e.g. "charx")
+  const brand = selectedBusiness
+    ? (SLUG_TO_BRAND[selectedBusiness.slug] ?? selectedBusiness.slug)
+    : "";
+
+  // UUID for scheduled_content queries
+  const businessId = selectedBusiness?.id ?? "";
+
+  const [activeTab, setActiveTab]           = useState<Tab>("library");
+  const [composeOpen, setComposeOpen]       = useState(false);
   const [libraryRefreshKey, setLibraryRefreshKey] = useState(0);
 
-  const handleSaved = () => {
-    setLibraryRefreshKey(k => k + 1);
-  };
+  const handleSaved = () => setLibraryRefreshKey(k => k + 1);
 
   return (
     <DashboardLayout>
@@ -35,7 +52,9 @@ export default function ContentHub() {
         <div className="flex items-center justify-between px-6 py-5 border-b border-slate-200 bg-white">
           <div>
             <h1 className="text-2xl font-bold text-slate-900">Content Hub</h1>
-            <p className="text-sm text-slate-500 mt-0.5">Manage, schedule, and repurpose your content</p>
+            <p className="text-sm text-slate-500 mt-0.5">
+              Manage, schedule, and repurpose your content
+            </p>
           </div>
 
           <Button
@@ -49,11 +68,15 @@ export default function ContentHub() {
         </div>
 
         {!brand ? (
-          /* Empty state — no business selected */
+          /* No business selected */
           <div className="flex-1 flex flex-col items-center justify-center gap-4 bg-slate-50">
             <Building2 className="h-16 w-16 text-slate-200" />
-            <h2 className="text-lg font-semibold text-slate-600">Select a business to get started</h2>
-            <p className="text-sm text-slate-400">Choose a business from the selector in the header to manage its content.</p>
+            <h2 className="text-lg font-semibold text-slate-600">
+              Select a business to get started
+            </h2>
+            <p className="text-sm text-slate-400">
+              Choose a business from the selector in the header to manage its content.
+            </p>
           </div>
         ) : (
           <>
@@ -81,8 +104,16 @@ export default function ContentHub() {
 
             {/* Tab content */}
             <div className="flex-1 overflow-auto px-6 py-6 bg-slate-50">
-              {activeTab === "library" && <ContentLibrary key={libraryRefreshKey} brand={brand} />}
-              {activeTab === "calendar" && <ContentCalendar brand={brand} />}
+              {activeTab === "library" && (
+                <ContentLibrary
+                  key={libraryRefreshKey}
+                  brand={brand}
+                  businessId={businessId}
+                />
+              )}
+              {activeTab === "calendar" && (
+                <ContentCalendar brand={brand} businessId={businessId} />
+              )}
               {activeTab === "repurpose" && <RepurposePanel brand={brand} />}
             </div>
           </>
@@ -95,6 +126,7 @@ export default function ContentHub() {
         onClose={() => setComposeOpen(false)}
         onSaved={handleSaved}
         brand={brand}
+        businessId={businessId}
       />
     </DashboardLayout>
   );

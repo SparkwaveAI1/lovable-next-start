@@ -1,10 +1,9 @@
 import { useState, useEffect, useCallback } from "react";
 import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
 import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
-import { ChevronLeft, ChevronRight, Loader2 } from "lucide-react";
-import { ComposePanel } from "./ComposePanel";
+import { ChevronLeft, ChevronRight, Loader2, CalendarOff } from "lucide-react";
+import { ComposePanel, ComposableItem } from "./ComposePanel";
 import {
   DndContext,
   DragEndEvent,
@@ -15,6 +14,8 @@ import {
 } from "@dnd-kit/core";
 import { useDraggable, useDroppable } from "@dnd-kit/core";
 
+// ─── Types ────────────────────────────────────────────────────────────────────
+
 interface ScheduledItem {
   id: string;
   content: string;
@@ -24,15 +25,19 @@ interface ScheduledItem {
   status: string | null;
 }
 
+// ─── Constants ────────────────────────────────────────────────────────────────
+
 const PLATFORM_COLORS: Record<string, string> = {
-  twitter: "bg-sky-500",
-  linkedin: "bg-blue-600",
+  twitter:   "bg-sky-500",
+  linkedin:  "bg-blue-600",
   instagram: "bg-pink-500",
-  tiktok: "bg-slate-700",
-  facebook: "bg-indigo-600",
+  tiktok:    "bg-slate-700",
+  facebook:  "bg-indigo-600",
 };
 
 const DAYS_OF_WEEK = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
+
+// ─── Utilities ────────────────────────────────────────────────────────────────
 
 function getDaysInMonth(year: number, month: number) {
   return new Date(year, month + 1, 0).getDate();
@@ -43,10 +48,29 @@ function getFirstDayOfMonth(year: number, month: number) {
 }
 
 function isSameDay(a: Date, b: Date) {
-  return a.getFullYear() === b.getFullYear() &&
-    a.getMonth() === b.getMonth() &&
-    a.getDate() === b.getDate();
+  return (
+    a.getFullYear() === b.getFullYear() &&
+    a.getMonth()    === b.getMonth()    &&
+    a.getDate()     === b.getDate()
+  );
 }
+
+/** Convert a raw scheduled_content row → ComposableItem for ComposePanel */
+function toComposable(item: ScheduledItem, brand: string): ComposableItem {
+  return {
+    id:           item.id,
+    content:      item.content,
+    platform:     item.platform,
+    format:       item.content_type,
+    status:       item.status,
+    scheduled_at: item.scheduled_for,
+    brand,
+    image_urls:   null,
+    source:       "scheduled",
+  };
+}
+
+// ─── DnD sub-components ───────────────────────────────────────────────────────
 
 interface DraggableChipProps {
   item: ScheduledItem;
@@ -55,7 +79,7 @@ interface DraggableChipProps {
 
 function DraggableChip({ item, onClick }: DraggableChipProps) {
   const { attributes, listeners, setNodeRef, isDragging } = useDraggable({ id: item.id });
-  const platform = item.platform?.split(",")[0] ?? "twitter";
+  const platform   = item.platform?.split(",")[0] ?? "twitter";
   const colorClass = PLATFORM_COLORS[platform] ?? "bg-slate-500";
 
   return (
@@ -111,81 +135,100 @@ function DroppableDay({ dateKey, date, items, isToday, isCurrentMonth, onDayClic
   );
 }
 
+// ─── Main component ───────────────────────────────────────────────────────────
+
 interface ContentCalendarProps {
+  /** Short brand name (used for ComposePanel brand pass-through) */
   brand: string;
+  /** Business UUID — used for scheduled_content.business_id filter */
+  businessId: string;
 }
 
-export function ContentCalendar({ brand }: ContentCalendarProps) {
+export function ContentCalendar({ brand, businessId }: ContentCalendarProps) {
   const { toast } = useToast();
-  const today = new Date();
-  const [currentDate, setCurrentDate] = useState(new Date(today.getFullYear(), today.getMonth(), 1));
-  const [items, setItems] = useState<ScheduledItem[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [composeOpen, setComposeOpen] = useState(false);
-  const [defaultDate, setDefaultDate] = useState<Date | null>(null);
-  const [editItem, setEditItem] = useState<ScheduledItem | null>(null);
-  const [activeId, setActiveId] = useState<string | null>(null);
+  const today     = new Date();
+
+  const [currentDate, setCurrentDate]   = useState(new Date(today.getFullYear(), today.getMonth(), 1));
+  const [items, setItems]               = useState<ScheduledItem[]>([]);
+  const [unscheduled, setUnscheduled]   = useState<ScheduledItem[]>([]);
+  const [loading, setLoading]           = useState(true);
+  const [composeOpen, setComposeOpen]   = useState(false);
+  const [defaultDate, setDefaultDate]   = useState<Date | null>(null);
+  const [editItem, setEditItem]         = useState<ComposableItem | null>(null);
+  const [activeId, setActiveId]         = useState<string | null>(null);
 
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 5 } }));
 
+  // ─── Fetch scheduled + unscheduled items ─────────────────────────────────
   const fetchItems = useCallback(async () => {
-    if (!brand) {
+    if (!businessId) {
       setItems([]);
+      setUnscheduled([]);
       setLoading(false);
       return;
     }
     setLoading(true);
     try {
       const start = new Date(currentDate.getFullYear(), currentDate.getMonth() - 1, 1);
-      const end = new Date(currentDate.getFullYear(), currentDate.getMonth() + 2, 0);
+      const end   = new Date(currentDate.getFullYear(), currentDate.getMonth() + 2, 0);
 
-      const { data, error } = await supabase
-        .from("scheduled_content")
-        .select("id, content, platform, content_type, scheduled_for, status")
-        .gte("scheduled_for", start.toISOString())
-        .lte("scheduled_for", end.toISOString())
-        .order("scheduled_for", { ascending: true });
+      const [scheduledRes, unscheduledRes] = await Promise.all([
+        // Items with a scheduled date in the visible window
+        supabase
+          .from("scheduled_content")
+          .select("id, content, platform, content_type, scheduled_for, status")
+          .eq("business_id", businessId)
+          .gte("scheduled_for", start.toISOString())
+          .lte("scheduled_for", end.toISOString())
+          .order("scheduled_for", { ascending: true }),
 
-      if (error) throw error;
-      setItems((data ?? []) as ScheduledItem[]);
+        // Items with NO scheduled date (need scheduling)
+        supabase
+          .from("scheduled_content")
+          .select("id, content, platform, content_type, scheduled_for, status")
+          .eq("business_id", businessId)
+          .is("scheduled_for", null)
+          .order("created_at", { ascending: false })
+          .limit(50),
+      ]);
+
+      if (scheduledRes.error)   throw scheduledRes.error;
+      if (unscheduledRes.error) throw unscheduledRes.error;
+
+      setItems((scheduledRes.data ?? []) as ScheduledItem[]);
+      setUnscheduled((unscheduledRes.data ?? []) as ScheduledItem[]);
     } catch (e) {
       toast({ title: "Error loading calendar", description: String(e), variant: "destructive" });
     } finally {
       setLoading(false);
     }
-  }, [brand, currentDate, toast]);
+  }, [businessId, currentDate, toast]);
 
   useEffect(() => { fetchItems(); }, [fetchItems]);
 
+  // ─── Calendar grid helpers ────────────────────────────────────────────────
   const getItemsForDate = (date: Date) =>
     items.filter(item => item.scheduled_for && isSameDay(new Date(item.scheduled_for), date));
 
-  const year = currentDate.getFullYear();
-  const month = currentDate.getMonth();
-  const daysInMonth = getDaysInMonth(year, month);
-  const firstDay = getFirstDayOfMonth(year, month);
+  const year         = currentDate.getFullYear();
+  const month        = currentDate.getMonth();
+  const daysInMonth  = getDaysInMonth(year, month);
+  const firstDay     = getFirstDayOfMonth(year, month);
   const prevMonthDays = getDaysInMonth(year, month - 1);
 
-  // Build calendar grid
   const calendarDays: { date: Date; isCurrentMonth: boolean }[] = [];
-
-  // Previous month trailing days
-  for (let i = firstDay - 1; i >= 0; i--) {
+  for (let i = firstDay - 1; i >= 0; i--)
     calendarDays.push({ date: new Date(year, month - 1, prevMonthDays - i), isCurrentMonth: false });
-  }
-  // Current month
-  for (let d = 1; d <= daysInMonth; d++) {
+  for (let d = 1; d <= daysInMonth; d++)
     calendarDays.push({ date: new Date(year, month, d), isCurrentMonth: true });
-  }
-  // Next month leading days
   const remaining = 42 - calendarDays.length;
-  for (let d = 1; d <= remaining; d++) {
+  for (let d = 1; d <= remaining; d++)
     calendarDays.push({ date: new Date(year, month + 1, d), isCurrentMonth: false });
-  }
 
   const prevMonth = () => setCurrentDate(new Date(year, month - 1, 1));
   const nextMonth = () => setCurrentDate(new Date(year, month + 1, 1));
 
+  // ─── Handlers ─────────────────────────────────────────────────────────────
   const handleDayClick = (date: Date) => {
     setDefaultDate(date);
     setEditItem(null);
@@ -193,8 +236,13 @@ export function ContentCalendar({ brand }: ContentCalendarProps) {
   };
 
   const handleChipClick = (item: ScheduledItem) => {
-    // Open compose with edit
-    setEditItem(item);
+    setEditItem(toComposable(item, brand));
+    setDefaultDate(null);
+    setComposeOpen(true);
+  };
+
+  const handleUnscheduledClick = (item: ScheduledItem) => {
+    setEditItem(toComposable(item, brand));
     setDefaultDate(null);
     setComposeOpen(true);
   };
@@ -205,15 +253,23 @@ export function ContentCalendar({ brand }: ContentCalendarProps) {
 
     if (!over || active.id === over.id) return;
 
-    const itemId = String(active.id);
-    const dateKey = String(over.id); // format: "YYYY-MM-DD"
+    const itemId  = String(active.id);
+    const dateKey = String(over.id);
     const newDate = new Date(dateKey + "T12:00:00");
 
-    // Optimistic update
-    const previousItems = [...items];
-    setItems(prev => prev.map(item =>
-      item.id === itemId ? { ...item, scheduled_for: newDate.toISOString() } : item
-    ));
+    const previousItems     = [...items];
+    const previousUnscheduled = [...unscheduled];
+
+    // Optimistic update — move from unscheduled to scheduled if needed
+    const wasUnscheduled = unscheduled.find(i => i.id === itemId);
+    if (wasUnscheduled) {
+      setUnscheduled(prev => prev.filter(i => i.id !== itemId));
+      setItems(prev => [...prev, { ...wasUnscheduled, scheduled_for: newDate.toISOString() }]);
+    } else {
+      setItems(prev =>
+        prev.map(item => item.id === itemId ? { ...item, scheduled_for: newDate.toISOString() } : item)
+      );
+    }
 
     try {
       const { error } = await supabase
@@ -223,8 +279,8 @@ export function ContentCalendar({ brand }: ContentCalendarProps) {
 
       if (error) throw error;
     } catch (e) {
-      // Revert on error
       setItems(previousItems);
+      setUnscheduled(previousUnscheduled);
       toast({ title: "Failed to reschedule", description: String(e), variant: "destructive" });
     }
   };
@@ -232,7 +288,7 @@ export function ContentCalendar({ brand }: ContentCalendarProps) {
   const monthName = currentDate.toLocaleDateString("en-US", { month: "long", year: "numeric" });
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-6">
       {/* Header */}
       <div className="flex items-center justify-between">
         <h2 className="text-lg font-semibold text-slate-800">{monthName}</h2>
@@ -241,7 +297,11 @@ export function ContentCalendar({ brand }: ContentCalendarProps) {
           <Button variant="outline" size="icon" onClick={prevMonth}>
             <ChevronLeft className="h-4 w-4" />
           </Button>
-          <Button variant="outline" size="sm" onClick={() => setCurrentDate(new Date(today.getFullYear(), today.getMonth(), 1))}>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => setCurrentDate(new Date(today.getFullYear(), today.getMonth(), 1))}
+          >
             Today
           </Button>
           <Button variant="outline" size="icon" onClick={nextMonth}>
@@ -251,7 +311,11 @@ export function ContentCalendar({ brand }: ContentCalendarProps) {
       </div>
 
       {/* Calendar grid */}
-      <DndContext sensors={sensors} onDragStart={e => setActiveId(String(e.active.id))} onDragEnd={handleDragEnd}>
+      <DndContext
+        sensors={sensors}
+        onDragStart={e => setActiveId(String(e.active.id))}
+        onDragEnd={handleDragEnd}
+      >
         <div className="bg-white rounded-xl border border-slate-200 overflow-hidden">
           {/* Day headers */}
           <div className="grid grid-cols-7 bg-slate-50 border-b border-slate-200">
@@ -265,7 +329,7 @@ export function ContentCalendar({ brand }: ContentCalendarProps) {
             {calendarDays.map(({ date, isCurrentMonth }) => {
               const dateKey = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`;
               const dayItems = getItemsForDate(date);
-              const isToday = isSameDay(date, today);
+              const isToday  = isSameDay(date, today);
 
               return (
                 <DroppableDay
@@ -286,11 +350,67 @@ export function ContentCalendar({ brand }: ContentCalendarProps) {
         <DragOverlay>
           {activeId ? (
             <div className="bg-indigo-600 text-white text-xs px-2 py-1 rounded shadow-lg opacity-90">
-              {items.find(i => i.id === activeId)?.content.slice(0, 30)}…
+              {[...items, ...unscheduled].find(i => i.id === activeId)?.content.slice(0, 30)}…
             </div>
           ) : null}
         </DragOverlay>
       </DndContext>
+
+      {/* ─── Unscheduled items section ──────────────────────────────────── */}
+      {(unscheduled.length > 0 || (!loading && businessId)) && (
+        <div className="bg-white rounded-xl border border-slate-200 overflow-hidden">
+          <div className="flex items-center gap-2 px-4 py-3 border-b border-slate-100 bg-slate-50">
+            <CalendarOff className="h-4 w-4 text-amber-500" />
+            <h3 className="text-sm font-semibold text-slate-700">
+              Unscheduled ({unscheduled.length})
+            </h3>
+            <p className="text-xs text-slate-400 ml-1">
+              — click an item to schedule it
+            </p>
+          </div>
+
+          {unscheduled.length === 0 ? (
+            <div className="px-4 py-6 text-center text-sm text-slate-400">
+              All content is scheduled ✓
+            </div>
+          ) : (
+            <div className="divide-y divide-slate-100">
+              {unscheduled.map(item => {
+                const platform  = item.platform?.split(",")[0] ?? "";
+                const colorDot  = PLATFORM_COLORS[platform] ?? "bg-slate-400";
+                return (
+                  <button
+                    key={item.id}
+                    onClick={() => handleUnscheduledClick(item)}
+                    className="w-full text-left px-4 py-3 hover:bg-indigo-50 transition-colors flex items-start gap-3 group"
+                  >
+                    <span className={`mt-1.5 h-2 w-2 rounded-full flex-shrink-0 ${colorDot}`} />
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm text-slate-700 line-clamp-2 group-hover:text-indigo-700">
+                        {item.content}
+                      </p>
+                      <div className="flex items-center gap-2 mt-1">
+                        {platform && (
+                          <span className="text-xs text-slate-400">{platform}</span>
+                        )}
+                        {item.content_type && (
+                          <span className="text-xs text-slate-300">·</span>
+                        )}
+                        {item.content_type && (
+                          <span className="text-xs text-slate-400">{item.content_type}</span>
+                        )}
+                      </div>
+                    </div>
+                    <span className="text-xs text-indigo-500 opacity-0 group-hover:opacity-100 transition-opacity flex-shrink-0 mt-1">
+                      Schedule →
+                    </span>
+                  </button>
+                );
+              })}
+            </div>
+          )}
+        </div>
+      )}
 
       {/* Compose slide-over */}
       <ComposePanel
@@ -298,7 +418,9 @@ export function ContentCalendar({ brand }: ContentCalendarProps) {
         onClose={() => { setComposeOpen(false); setEditItem(null); setDefaultDate(null); }}
         onSaved={fetchItems}
         defaultDate={defaultDate}
+        editItem={editItem}
         brand={brand}
+        businessId={businessId}
       />
     </div>
   );
