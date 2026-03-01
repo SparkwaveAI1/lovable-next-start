@@ -21,6 +21,7 @@ import {
   Twitter,
   HelpCircle,
   LayoutPanelLeft,
+  Settings,
 } from "lucide-react"
 import { cn } from "@/lib/utils"
 import sparkwaveIcon from "@/assets/sparkwave-icon.png"
@@ -52,6 +53,7 @@ const navGroups: NavGroup[] = [
     items: [
       { label: "Agents", href: "/agents", icon: Bot },
       { label: "Agent Chat", href: "/agent-chat", icon: MessageSquare },
+      { label: "System Operations", href: "/system-operations", icon: Settings },
       { label: "Reports", href: "/reports", icon: ClipboardList },
       { label: "Twitter Analytics", href: "/twitter-analytics", icon: Twitter },
     ],
