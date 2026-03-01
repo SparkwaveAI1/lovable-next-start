@@ -15,13 +15,12 @@ import {
   ChevronRight,
   ChevronDown,
   ClipboardList,
-  ClipboardCheck,
   BookOpen,
   TrendingUp,
   MessageSquare,
   Twitter,
   HelpCircle,
-  Eye,
+  LayoutPanelLeft,
 } from "lucide-react"
 import { cn } from "@/lib/utils"
 import sparkwaveIcon from "@/assets/sparkwave-icon.png"
@@ -69,9 +68,7 @@ const navGroups: NavGroup[] = [
   {
     label: "Content",
     items: [
-      { label: "Content Center", href: "/content-center", icon: FileText },
-      { label: "Content Review", href: "/content-review", icon: ClipboardCheck },
-      { label: "Content Visibility", href: "/content-visibility", icon: Eye },
+      { label: "Content Hub", href: "/content-hub", icon: LayoutPanelLeft },
       { label: "Media Library", href: "/media-library", icon: Image },
     ],
   },

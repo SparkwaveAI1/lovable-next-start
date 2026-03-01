@@ -376,6 +376,7 @@ export function useIsRouteEnabled(businessId?: string, routePath?: string): bool
     '/bookings': 'booking',
     '/mission-control': 'mission_control',
     '/communications': 'communications',
+    '/content-hub': 'content_center',
     '/content-center': 'content_center',
     '/content-visibility': 'content_center',
     '/media-library': 'media_library',

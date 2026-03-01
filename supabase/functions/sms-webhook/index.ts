@@ -299,6 +299,141 @@ async function findOrCreateContact(
   return { ...newContact, isNew: true };
 }
 
+// ========================================
+// SMS BOOKING DETECTION & RECORDING
+// ========================================
+
+function mapServiceName(rawService: string): string {
+  const lower = rawService.toLowerCase();
+  if (lower.includes('muay thai')) return 'Muay Thai';
+  if (lower.includes('boxing bootcamp') || lower.includes('boxing boot camp')) return 'Boxing Bootcamp';
+  if (lower.includes('boxing skills') || lower.includes('boxing class')) return 'Boxing Skills';
+  if (lower.includes('kickboxing')) return 'Kickboxing Bootcamp';
+  if (lower.includes('grappling') || lower.includes('bjj') || lower.includes('submission')) return 'Submission Grappling';
+  if (lower.includes('mma') || lower.includes('mixed martial arts')) return 'MMA Skills and Sparring';
+  if (lower.includes('self defense') || lower.includes('self-defense')) return 'Self Defense';
+  // kids/youth/junior or unrecognized — return as-is
+  return rawService;
+}
+
+function computeNextOccurrenceET(dayOfWeekStr: string, timeStr: string): Date | null {
+  const dayMap: Record<string, number> = {
+    'sunday': 0, 'monday': 1, 'tuesday': 2, 'wednesday': 3,
+    'thursday': 4, 'friday': 5, 'saturday': 6
+  };
+
+  const targetDayNum = dayMap[dayOfWeekStr.toLowerCase()];
+  if (targetDayNum === undefined) return null;
+
+  // Parse time string like "6:00 PM" or "6 PM"
+  const timeMatch = timeStr.match(/(\d{1,2})(?::(\d{2}))?\s*(AM|PM)/i);
+  if (!timeMatch) return null;
+
+  let hours = parseInt(timeMatch[1]);
+  const minutes = parseInt(timeMatch[2] || '0');
+  const ampm = timeMatch[3].toUpperCase();
+
+  if (ampm === 'PM' && hours !== 12) hours += 12;
+  if (ampm === 'AM' && hours === 12) hours = 0;
+
+  // Get current date components in Eastern time
+  const now = new Date();
+  const etDateParts = new Intl.DateTimeFormat('en-US', {
+    timeZone: 'America/New_York',
+    year: 'numeric', month: '2-digit', day: '2-digit'
+  }).formatToParts(now);
+
+  const etYear = parseInt(etDateParts.find(p => p.type === 'year')!.value);
+  const etMonth = parseInt(etDateParts.find(p => p.type === 'month')!.value) - 1; // 0-indexed
+  const etDay = parseInt(etDateParts.find(p => p.type === 'day')!.value);
+
+  // Current day of week in ET
+  const currentDayNum = new Date(etYear, etMonth, etDay).getDay();
+
+  // Days until target — STRICTLY positive (minimum 1 day from now)
+  let daysUntil = targetDayNum - currentDayNum;
+  if (daysUntil <= 0) daysUntil += 7;
+
+  // Target date in ET (JS handles month overflow automatically)
+  const targetEtDay = etDay + daysUntil;
+
+  // Convert ET date+time to UTC using offset trick:
+  // 1. Start with approx UTC assuming UTC-5 (EST)
+  // 2. Check what ET actually shows for that UTC moment
+  // 3. Adjust by the difference (handles both EDT -4 and EST -5)
+  const approxUtc = new Date(Date.UTC(etYear, etMonth, targetEtDay, hours + 5, minutes));
+
+  const etCheckParts = new Intl.DateTimeFormat('en-US', {
+    timeZone: 'America/New_York',
+    hour: '2-digit', minute: '2-digit', hour12: false
+  }).formatToParts(approxUtc);
+
+  const checkHour = parseInt(etCheckParts.find(p => p.type === 'hour')!.value);
+  const checkMinute = parseInt(etCheckParts.find(p => p.type === 'minute')!.value);
+
+  // Adjust: desired ET time - actual ET time (in minutes)
+  const desiredMinutes = hours * 60 + minutes;
+  const actualMinutes = checkHour * 60 + checkMinute;
+  const diffMs = (desiredMinutes - actualMinutes) * 60 * 1000;
+
+  return new Date(approxUtc.getTime() + diffMs);
+}
+
+async function detectBookingConfirmation(
+  aiResponse: string,
+  conversationContext: Array<{ role: string; content: string }>
+): Promise<{ is_booking: boolean; service?: string; day?: string; time?: string }> {
+  const openaiKey = Deno.env.get('OPENAI_API_KEY');
+  if (!openaiKey) {
+    console.log('📅 No OpenAI key — skipping booking detection');
+    return { is_booking: false };
+  }
+
+  const contextText = conversationContext.slice(-3)
+    .map(m => `${m.role}: ${m.content}`)
+    .join('\n');
+
+  const response = await fetch('https://api.openai.com/v1/chat/completions', {
+    method: 'POST',
+    headers: {
+      'Authorization': `Bearer ${openaiKey}`,
+      'Content-Type': 'application/json'
+    },
+    body: JSON.stringify({
+      model: 'gpt-4o-mini',
+      messages: [
+        {
+          role: 'system',
+          content: 'Does this AI response confirm a specific class booking? Look for confirmation of: a service type, a day of week, and a time. If all three are present, extract them. Respond ONLY as JSON: { "is_booking": true, "service": "...", "day": "Monday", "time": "6:00 PM" } or { "is_booking": false }. Be conservative — only return true if ALL THREE (service, day, time) are explicit.'
+        },
+        {
+          role: 'user',
+          content: `Conversation context:\n${contextText}\n\nAI response to classify:\n${aiResponse}`
+        }
+      ],
+      max_tokens: 100,
+      temperature: 0
+    })
+  });
+
+  if (!response.ok) {
+    console.error(`📅 Booking detection API error: ${response.status}`);
+    return { is_booking: false };
+  }
+
+  const data = await response.json();
+  const content = data.choices?.[0]?.message?.content?.trim() || '';
+
+  try {
+    // Strip possible markdown code fences
+    const cleaned = content.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim();
+    return JSON.parse(cleaned);
+  } catch {
+    console.error('📅 Failed to parse booking detection JSON:', content);
+    return { is_booking: false };
+  }
+}
+
 serve(async (req) => {
   if (req.method === 'OPTIONS') {
     return new Response('ok', { headers: corsHeaders });
@@ -974,6 +1109,88 @@ INSTRUCTIONS FOR RETURNING CONTACT:
           processed_data: { contact_id: contact.id, thread_id: thread.id }
         });
       }
+    }
+
+    // ========================================
+    // STEP 7: BOOKING DETECTION → fightflow_appointments
+    // Non-blocking: errors logged but never prevent SMS from being sent
+    // ========================================
+    try {
+      const bookingResult = await detectBookingConfirmation(responseMessage, conversationMessages);
+
+      if (bookingResult.is_booking && bookingResult.service && bookingResult.day && bookingResult.time) {
+        const mappedService = mapServiceName(bookingResult.service);
+        console.log(`📅 Booking detected: ${mappedService} on ${bookingResult.day} at ${bookingResult.time}`);
+
+        const sessionStartUTC = computeNextOccurrenceET(bookingResult.day, bookingResult.time);
+
+        if (sessionStartUTC) {
+          const sessionEndUTC = new Date(sessionStartUTC.getTime() + 75 * 60 * 1000);
+
+          // Build contact info from existing contact record
+          const bookingContactName = contact.first_name && contact.first_name !== 'SMS Contact'
+            ? `${contact.first_name} ${contact.last_name || ''}`.trim()
+            : 'SMS Contact';
+          const bookingContactEmail = (contact as any).email || null;
+          const bookingContactPhone = (contact as any).phone || from;
+
+          // Idempotency check: ±1 day window
+          const windowStart = new Date(sessionStartUTC.getTime() - 24 * 60 * 60 * 1000).toISOString();
+          const windowEnd = new Date(sessionStartUTC.getTime() + 24 * 60 * 60 * 1000).toISOString();
+
+          let idempotencyQuery = supabase
+            .from('fightflow_appointments')
+            .select('id')
+            .eq('service_name', mappedService)
+            .gte('session_start', windowStart)
+            .lte('session_start', windowEnd);
+
+          if (bookingContactEmail) {
+            idempotencyQuery = idempotencyQuery.eq('contact_email', bookingContactEmail);
+          } else {
+            idempotencyQuery = idempotencyQuery.eq('contact_phone', bookingContactPhone);
+          }
+
+          const { data: existingBooking } = await idempotencyQuery.limit(1);
+
+          if (existingBooking && existingBooking.length > 0) {
+            console.log('📅 Booking already exists for this contact/service/date — skipping');
+          } else {
+            // Format date/time in ET for logging
+            const etLogStr = sessionStartUTC.toLocaleString('en-US', {
+              timeZone: 'America/New_York',
+              weekday: 'short', year: 'numeric', month: 'short', day: 'numeric',
+              hour: 'numeric', minute: '2-digit', hour12: true
+            });
+
+            const { error: insertError } = await supabase
+              .from('fightflow_appointments')
+              .insert({
+                wix_booking_id: `sms-confirmed-${crypto.randomUUID()}`,
+                contact_name: bookingContactName,
+                contact_email: bookingContactEmail,
+                contact_phone: bookingContactPhone,
+                service_name: mappedService,
+                session_start: sessionStartUTC.toISOString(),
+                session_end: sessionEndUTC.toISOString(),
+                status: 'confirmed',
+                sequence_enrolled: false,
+                location: '900 East Six Forks Road, Raleigh, NC, USA',
+                notes: 'Booked via SMS conversation'
+              });
+
+            if (insertError) {
+              console.error('📅 Failed to insert SMS booking:', insertError.message);
+            } else {
+              console.log(`📅 SMS booking created: ${bookingContactName} — ${mappedService} ${etLogStr}`);
+            }
+          }
+        } else {
+          console.error(`📅 Could not compute date for: ${bookingResult.day} ${bookingResult.time}`);
+        }
+      }
+    } catch (bookingDetectionError: any) {
+      console.error('📅 Booking detection error (non-fatal):', bookingDetectionError.message);
     }
 
     // Return empty TwiML

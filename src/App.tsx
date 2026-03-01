@@ -2,12 +2,12 @@ import { Toaster } from "@/components/ui/toaster";
 import { Toaster as Sonner } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { BrowserRouter, Routes, Route } from "react-router-dom";
+import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import { Analytics } from "@/components/Analytics";
 import { AssistantButton } from "@/components/assistant";
 import Index from "./pages/Index";
 import NotFound from "./pages/NotFound";
-import ContentCenter from "./pages/ContentCenter";
+import ContentHub from "./pages/ContentHub";
 import Contacts from "./pages/Contacts";
 import MediaLibraryPage from "./pages/MediaLibraryPage";
 import EmployeeUpload from "./pages/EmployeeUpload";
@@ -40,8 +40,7 @@ import Blog from "./pages/Blog";
 import BlogPost from "./pages/BlogPost";
 import TwitterAnalytics from "./pages/TwitterAnalytics";
 import FAQ from "./pages/FAQ";
-import ContentVisibility from "./pages/ContentVisibility";
-import ContentReviewPage from "./pages/ContentReviewPage";
+// ContentVisibility and ContentReviewPage removed — redirected to /content-hub
 import AutomationAudit from "./pages/AutomationAudit";
 import ROICalculator from "./pages/ROICalculator";
 import AgentChat from "./pages/AgentChat";
@@ -82,7 +81,9 @@ const App = () => (
             <Route path="/upload" element={<EmployeeUpload />} />
             <Route path="/" element={<ProtectedRoute><ErrorBoundary><Index /></ErrorBoundary></ProtectedRoute>} />
             <Route path="/contacts" element={<ProtectedRoute><ErrorBoundary><Contacts /></ErrorBoundary></ProtectedRoute>} />
-            <Route path="/content-center" element={<ProtectedRoute><ErrorBoundary><ContentCenter /></ErrorBoundary></ProtectedRoute>} />
+            <Route path="/content-hub" element={<ProtectedRoute><ErrorBoundary><ContentHub /></ErrorBoundary></ProtectedRoute>} />
+            <Route path="/content-center" element={<Navigate replace to="/content-hub" />} />
+            <Route path="/content" element={<Navigate replace to="/content-hub" />} />
             <Route path="/media-library" element={<ProtectedRoute><ErrorBoundary><MediaLibraryPage /></ErrorBoundary></ProtectedRoute>} />
             <Route path="/service-requests" element={<ProtectedRoute><ErrorBoundary><ServiceRequests /></ErrorBoundary></ProtectedRoute>} />
             <Route path="/late-setup" element={<ProtectedRoute><ErrorBoundary><LateSetup /></ErrorBoundary></ProtectedRoute>} />
@@ -102,8 +103,8 @@ const App = () => (
             <Route path="/communications" element={<ProtectedRoute><ErrorBoundary><Communications /></ErrorBoundary></ProtectedRoute>} />
             <Route path="/twitter-analytics" element={<ProtectedRoute><ErrorBoundary><TwitterAnalytics /></ErrorBoundary></ProtectedRoute>} />
             <Route path="/faq" element={<ProtectedRoute><ErrorBoundary><FAQ /></ErrorBoundary></ProtectedRoute>} />
-            <Route path="/content-visibility" element={<ProtectedRoute><ErrorBoundary><ContentVisibility /></ErrorBoundary></ProtectedRoute>} />
-            <Route path="/content-review" element={<ProtectedRoute><ErrorBoundary><ContentReviewPage /></ErrorBoundary></ProtectedRoute>} />
+            <Route path="/content-visibility" element={<Navigate replace to="/content-hub" />} />
+            <Route path="/content-review" element={<Navigate replace to="/content-hub" />} />
             <Route path="/agent-chat" element={<ProtectedRoute><ErrorBoundary><AgentChat /></ErrorBoundary></ProtectedRoute>} />
             {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
             <Route path="*" element={<NotFound />} />

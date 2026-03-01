@@ -1,804 +1,295 @@
-import * as React from "react";
-import {
-  format,
-  startOfMonth,
-  endOfMonth,
-  startOfWeek,
-  endOfWeek,
-  eachDayOfInterval,
-  isSameMonth,
-  isSameDay,
-  addMonths,
-  subMonths,
-  addWeeks,
-  subWeeks,
-  isToday,
-  parseISO,
-} from "date-fns";
+import { useState, useEffect, useCallback } from "react";
+import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
+import { useToast } from "@/hooks/use-toast";
+import { supabase } from "@/integrations/supabase/client";
+import { ChevronLeft, ChevronRight, Loader2 } from "lucide-react";
+import { ComposePanel } from "./ComposePanel";
 import {
   DndContext,
   DragEndEvent,
   DragOverlay,
-  DragStartEvent,
-  useDraggable,
-  useDroppable,
   PointerSensor,
   useSensor,
   useSensors,
 } from "@dnd-kit/core";
-import {
-  ChevronLeft,
-  ChevronRight,
-  Calendar as CalendarIcon,
-  Twitter,
-  Mail,
-  MessageSquare,
-  Linkedin,
-  Star,
-  Clock,
-  Eye,
-} from "lucide-react";
-import { cn } from "@/lib/utils";
-import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-  DialogDescription,
-  DialogFooter,
-} from "@/components/ui/dialog";
-import {
-  Tooltip,
-  TooltipContent,
-  TooltipProvider,
-  TooltipTrigger,
-} from "@/components/ui/tooltip";
-import { Badge } from "@/components/ui/badge";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
+import { useDraggable, useDroppable } from "@dnd-kit/core";
 
-// ============================================================================
-// Types
-// ============================================================================
-
-export type ContentPlatform = "twitter" | "email" | "sms" | "linkedin";
-export type ContentStatus = "draft" | "scheduled" | "published" | "failed";
-
-export interface ContentItem {
+interface ScheduledItem {
   id: string;
-  title: string;
   content: string;
-  platform: ContentPlatform;
-  scheduledFor: Date | string;
-  status: ContentStatus;
-  qualityScore?: number;
-  createdBy?: string;
-  createdAt?: Date | string;
-  mediaUrl?: string;
+  platform: string;
+  content_type: string | null;
+  scheduled_for: string | null;
+  status: string | null;
 }
 
-export interface ContentCalendarProps {
-  items: ContentItem[];
-  onItemClick?: (item: ContentItem) => void;
-  onItemReschedule?: (item: ContentItem, newDate: Date) => void;
-  onDateClick?: (date: Date) => void;
-  className?: string;
-}
-
-type ViewMode = "month" | "week";
-
-// ============================================================================
-// Platform Configuration
-// ============================================================================
-
-const platformConfig: Record<
-  ContentPlatform,
-  {
-    color: string;
-    bgColor: string;
-    borderColor: string;
-    hoverColor: string;
-    icon: React.ElementType;
-    label: string;
-  }
-> = {
-  twitter: {
-    color: "text-blue-600",
-    bgColor: "bg-blue-50",
-    borderColor: "border-blue-200",
-    hoverColor: "hover:bg-blue-100",
-    icon: Twitter,
-    label: "Twitter",
-  },
-  email: {
-    color: "text-green-600",
-    bgColor: "bg-green-50",
-    borderColor: "border-green-200",
-    hoverColor: "hover:bg-green-100",
-    icon: Mail,
-    label: "Email",
-  },
-  sms: {
-    color: "text-yellow-600",
-    bgColor: "bg-yellow-50",
-    borderColor: "border-yellow-200",
-    hoverColor: "hover:bg-yellow-100",
-    icon: MessageSquare,
-    label: "SMS",
-  },
-  linkedin: {
-    color: "text-purple-600",
-    bgColor: "bg-purple-50",
-    borderColor: "border-purple-200",
-    hoverColor: "hover:bg-purple-100",
-    icon: Linkedin,
-    label: "LinkedIn",
-  },
+const PLATFORM_COLORS: Record<string, string> = {
+  twitter: "bg-sky-500",
+  linkedin: "bg-blue-600",
+  instagram: "bg-pink-500",
+  tiktok: "bg-slate-700",
+  facebook: "bg-indigo-600",
 };
 
-const statusConfig: Record<
-  ContentStatus,
-  { color: string; label: string }
-> = {
-  draft: { color: "bg-gray-100 text-gray-600", label: "Draft" },
-  scheduled: { color: "bg-blue-100 text-blue-600", label: "Scheduled" },
-  published: { color: "bg-green-100 text-green-600", label: "Published" },
-  failed: { color: "bg-red-100 text-red-600", label: "Failed" },
-};
+const DAYS_OF_WEEK = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
 
-// ============================================================================
-// Quality Score Badge
-// ============================================================================
-
-function QualityScoreBadge({ score }: { score: number }) {
-  const getScoreColor = (score: number) => {
-    if (score >= 8) return "text-green-600 bg-green-50";
-    if (score >= 6) return "text-yellow-600 bg-yellow-50";
-    return "text-red-600 bg-red-50";
-  };
-
-  return (
-    <div
-      className={cn(
-        "inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-xs font-medium",
-        getScoreColor(score)
-      )}
-    >
-      <Star className="h-3 w-3" />
-      {score.toFixed(1)}
-    </div>
-  );
+function getDaysInMonth(year: number, month: number) {
+  return new Date(year, month + 1, 0).getDate();
 }
 
-// ============================================================================
-// Draggable Content Item
-// ============================================================================
+function getFirstDayOfMonth(year: number, month: number) {
+  return new Date(year, month, 1).getDay();
+}
 
-interface DraggableContentItemProps {
-  item: ContentItem;
+function isSameDay(a: Date, b: Date) {
+  return a.getFullYear() === b.getFullYear() &&
+    a.getMonth() === b.getMonth() &&
+    a.getDate() === b.getDate();
+}
+
+interface DraggableChipProps {
+  item: ScheduledItem;
   onClick: () => void;
-  isCompact?: boolean;
 }
 
-function DraggableContentItem({
-  item,
-  onClick,
-  isCompact = false,
-}: DraggableContentItemProps) {
-  const { attributes, listeners, setNodeRef, isDragging } = useDraggable({
-    id: item.id,
-    data: item,
-  });
-
-  const platform = platformConfig[item.platform];
-  const Icon = platform.icon;
-
-  const scheduledDate =
-    typeof item.scheduledFor === "string"
-      ? parseISO(item.scheduledFor)
-      : item.scheduledFor;
-
-  return (
-    <TooltipProvider>
-      <Tooltip delayDuration={300}>
-        <TooltipTrigger asChild>
-          <div
-            ref={setNodeRef}
-            {...attributes}
-            {...listeners}
-            onClick={(e) => {
-              e.stopPropagation();
-              onClick();
-            }}
-            className={cn(
-              "group cursor-grab active:cursor-grabbing rounded-md border px-2 py-1.5 text-xs transition-all",
-              platform.bgColor,
-              platform.borderColor,
-              platform.hoverColor,
-              isDragging && "opacity-50 shadow-lg scale-105",
-              isCompact && "px-1.5 py-1"
-            )}
-          >
-            <div className="flex items-center gap-1.5">
-              <Icon className={cn("h-3 w-3 shrink-0", platform.color)} />
-              <span className="truncate font-medium text-gray-900">
-                {item.title || item.content.slice(0, 30)}
-              </span>
-            </div>
-            {!isCompact && (
-              <div className="flex items-center gap-2 mt-1 text-gray-500">
-                <Clock className="h-2.5 w-2.5" />
-                <span>{format(scheduledDate, "h:mm a")}</span>
-              </div>
-            )}
-          </div>
-        </TooltipTrigger>
-        <TooltipContent side="right" className="max-w-xs">
-          <div className="space-y-2">
-            <div className="flex items-center justify-between gap-4">
-              <div className="flex items-center gap-2">
-                <Icon className={cn("h-4 w-4", platform.color)} />
-                <span className="font-medium">{platform.label}</span>
-              </div>
-              {item.qualityScore !== undefined && (
-                <QualityScoreBadge score={item.qualityScore} />
-              )}
-            </div>
-            <p className="text-sm text-gray-600 line-clamp-3">
-              {item.content}
-            </p>
-            <div className="flex items-center justify-between text-xs text-gray-500">
-              <span>{format(scheduledDate, "MMM d, yyyy 'at' h:mm a")}</span>
-              <Badge
-                variant="secondary"
-                className={cn("text-xs", statusConfig[item.status].color)}
-              >
-                {statusConfig[item.status].label}
-              </Badge>
-            </div>
-          </div>
-        </TooltipContent>
-      </Tooltip>
-    </TooltipProvider>
-  );
-}
-
-// ============================================================================
-// Drag Overlay Content Item (shown while dragging)
-// ============================================================================
-
-function DragOverlayItem({ item }: { item: ContentItem }) {
-  const platform = platformConfig[item.platform];
-  const Icon = platform.icon;
-
-  return (
-    <div
-      className={cn(
-        "rounded-md border px-2 py-1.5 text-xs shadow-lg",
-        platform.bgColor,
-        platform.borderColor
-      )}
-    >
-      <div className="flex items-center gap-1.5">
-        <Icon className={cn("h-3 w-3 shrink-0", platform.color)} />
-        <span className="truncate font-medium text-gray-900">
-          {item.title || item.content.slice(0, 30)}
-        </span>
-      </div>
-    </div>
-  );
-}
-
-// ============================================================================
-// Droppable Day Cell
-// ============================================================================
-
-interface DroppableDayCellProps {
-  date: Date;
-  items: ContentItem[];
-  isCurrentMonth: boolean;
-  isToday: boolean;
-  onItemClick: (item: ContentItem) => void;
-  onDateClick: () => void;
-  isWeekView?: boolean;
-}
-
-function DroppableDayCell({
-  date,
-  items,
-  isCurrentMonth,
-  isToday: isTodayDate,
-  onItemClick,
-  onDateClick,
-  isWeekView = false,
-}: DroppableDayCellProps) {
-  const { setNodeRef, isOver } = useDroppable({
-    id: format(date, "yyyy-MM-dd"),
-    data: { date },
-  });
-
-  const maxVisible = isWeekView ? 8 : 3;
-  const visibleItems = items.slice(0, maxVisible);
-  const hiddenCount = items.length - maxVisible;
-
-  // Group by platform for summary
-  const platformCounts = items.reduce((acc, item) => {
-    acc[item.platform] = (acc[item.platform] || 0) + 1;
-    return acc;
-  }, {} as Record<ContentPlatform, number>);
+function DraggableChip({ item, onClick }: DraggableChipProps) {
+  const { attributes, listeners, setNodeRef, isDragging } = useDraggable({ id: item.id });
+  const platform = item.platform?.split(",")[0] ?? "twitter";
+  const colorClass = PLATFORM_COLORS[platform] ?? "bg-slate-500";
 
   return (
     <div
       ref={setNodeRef}
-      onClick={onDateClick}
-      className={cn(
-        "min-h-[100px] border-r border-b p-1.5 transition-colors cursor-pointer",
-        isCurrentMonth ? "bg-white" : "bg-gray-50",
-        isOver && "bg-blue-50 ring-2 ring-blue-400 ring-inset",
-        isTodayDate && "bg-blue-50/50",
-        isWeekView && "min-h-[200px]"
-      )}
+      {...listeners}
+      {...attributes}
+      onClick={e => { e.stopPropagation(); onClick(); }}
+      className={`${colorClass} text-white text-xs px-1.5 py-0.5 rounded truncate cursor-grab active:cursor-grabbing transition-opacity ${isDragging ? "opacity-30" : ""}`}
+      title={item.content}
     >
-      {/* Date header */}
-      <div className="flex items-center justify-between mb-1">
-        <span
-          className={cn(
-            "inline-flex items-center justify-center w-6 h-6 text-sm rounded-full",
-            isTodayDate && "bg-blue-600 text-white font-semibold",
-            !isCurrentMonth && "text-gray-400"
-          )}
-        >
-          {format(date, "d")}
-        </span>
-        {/* Platform summary badges */}
-        {items.length > 0 && !isWeekView && (
-          <div className="flex gap-0.5">
-            {Object.entries(platformCounts).map(([platform, count]) => {
-              const config = platformConfig[platform as ContentPlatform];
-              const Icon = config.icon;
+      {item.content.slice(0, 20)}{item.content.length > 20 ? "…" : ""}
+    </div>
+  );
+}
+
+interface DroppableDayProps {
+  dateKey: string;
+  date: Date;
+  items: ScheduledItem[];
+  isToday: boolean;
+  isCurrentMonth: boolean;
+  onDayClick: (date: Date) => void;
+  onChipClick: (item: ScheduledItem) => void;
+}
+
+function DroppableDay({ dateKey, date, items, isToday, isCurrentMonth, onDayClick, onChipClick }: DroppableDayProps) {
+  const { setNodeRef, isOver } = useDroppable({ id: dateKey });
+
+  return (
+    <div
+      ref={setNodeRef}
+      onClick={() => onDayClick(date)}
+      className={`min-h-[80px] p-1.5 border-b border-r border-slate-100 cursor-pointer transition-colors
+        ${isOver ? "bg-indigo-50" : "hover:bg-slate-50"}
+        ${!isCurrentMonth ? "opacity-40" : ""}
+      `}
+    >
+      <div className={`text-xs font-medium w-6 h-6 flex items-center justify-center rounded-full mb-1 ${
+        isToday ? "bg-indigo-600 text-white" : "text-slate-600"
+      }`}>
+        {date.getDate()}
+      </div>
+      <div className="space-y-0.5">
+        {items.slice(0, 3).map(item => (
+          <DraggableChip key={item.id} item={item} onClick={() => onChipClick(item)} />
+        ))}
+        {items.length > 3 && (
+          <div className="text-xs text-slate-400 pl-1">+{items.length - 3} more</div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+export function ContentCalendar() {
+  const { toast } = useToast();
+  const today = new Date();
+  const [currentDate, setCurrentDate] = useState(new Date(today.getFullYear(), today.getMonth(), 1));
+  const [items, setItems] = useState<ScheduledItem[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [composeOpen, setComposeOpen] = useState(false);
+  const [defaultDate, setDefaultDate] = useState<Date | null>(null);
+  const [editItem, setEditItem] = useState<ScheduledItem | null>(null);
+  const [activeId, setActiveId] = useState<string | null>(null);
+
+  const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 5 } }));
+
+  const fetchItems = useCallback(async () => {
+    setLoading(true);
+    try {
+      const start = new Date(currentDate.getFullYear(), currentDate.getMonth() - 1, 1);
+      const end = new Date(currentDate.getFullYear(), currentDate.getMonth() + 2, 0);
+
+      const { data, error } = await supabase
+        .from("scheduled_content")
+        .select("id, content, platform, content_type, scheduled_for, status")
+        .gte("scheduled_for", start.toISOString())
+        .lte("scheduled_for", end.toISOString())
+        .order("scheduled_for", { ascending: true });
+
+      if (error) throw error;
+      setItems((data ?? []) as ScheduledItem[]);
+    } catch (e) {
+      toast({ title: "Error loading calendar", description: String(e), variant: "destructive" });
+    } finally {
+      setLoading(false);
+    }
+  }, [currentDate, toast]);
+
+  useEffect(() => { fetchItems(); }, [fetchItems]);
+
+  const getItemsForDate = (date: Date) =>
+    items.filter(item => item.scheduled_for && isSameDay(new Date(item.scheduled_for), date));
+
+  const year = currentDate.getFullYear();
+  const month = currentDate.getMonth();
+  const daysInMonth = getDaysInMonth(year, month);
+  const firstDay = getFirstDayOfMonth(year, month);
+  const prevMonthDays = getDaysInMonth(year, month - 1);
+
+  // Build calendar grid
+  const calendarDays: { date: Date; isCurrentMonth: boolean }[] = [];
+
+  // Previous month trailing days
+  for (let i = firstDay - 1; i >= 0; i--) {
+    calendarDays.push({ date: new Date(year, month - 1, prevMonthDays - i), isCurrentMonth: false });
+  }
+  // Current month
+  for (let d = 1; d <= daysInMonth; d++) {
+    calendarDays.push({ date: new Date(year, month, d), isCurrentMonth: true });
+  }
+  // Next month leading days
+  const remaining = 42 - calendarDays.length;
+  for (let d = 1; d <= remaining; d++) {
+    calendarDays.push({ date: new Date(year, month + 1, d), isCurrentMonth: false });
+  }
+
+  const prevMonth = () => setCurrentDate(new Date(year, month - 1, 1));
+  const nextMonth = () => setCurrentDate(new Date(year, month + 1, 1));
+
+  const handleDayClick = (date: Date) => {
+    setDefaultDate(date);
+    setEditItem(null);
+    setComposeOpen(true);
+  };
+
+  const handleChipClick = (item: ScheduledItem) => {
+    // Open compose with edit
+    setEditItem(item);
+    setDefaultDate(null);
+    setComposeOpen(true);
+  };
+
+  const handleDragEnd = async (event: DragEndEvent) => {
+    const { active, over } = event;
+    setActiveId(null);
+
+    if (!over || active.id === over.id) return;
+
+    const itemId = String(active.id);
+    const dateKey = String(over.id); // format: "YYYY-MM-DD"
+    const newDate = new Date(dateKey + "T12:00:00");
+
+    // Optimistic update
+    const previousItems = [...items];
+    setItems(prev => prev.map(item =>
+      item.id === itemId ? { ...item, scheduled_for: newDate.toISOString() } : item
+    ));
+
+    try {
+      const { error } = await supabase
+        .from("scheduled_content")
+        .update({ scheduled_for: newDate.toISOString() })
+        .eq("id", itemId);
+
+      if (error) throw error;
+    } catch (e) {
+      // Revert on error
+      setItems(previousItems);
+      toast({ title: "Failed to reschedule", description: String(e), variant: "destructive" });
+    }
+  };
+
+  const monthName = currentDate.toLocaleDateString("en-US", { month: "long", year: "numeric" });
+
+  return (
+    <div className="space-y-4">
+      {/* Header */}
+      <div className="flex items-center justify-between">
+        <h2 className="text-lg font-semibold text-slate-800">{monthName}</h2>
+        <div className="flex items-center gap-2">
+          {loading && <Loader2 className="h-4 w-4 animate-spin text-slate-400" />}
+          <Button variant="outline" size="icon" onClick={prevMonth}>
+            <ChevronLeft className="h-4 w-4" />
+          </Button>
+          <Button variant="outline" size="sm" onClick={() => setCurrentDate(new Date(today.getFullYear(), today.getMonth(), 1))}>
+            Today
+          </Button>
+          <Button variant="outline" size="icon" onClick={nextMonth}>
+            <ChevronRight className="h-4 w-4" />
+          </Button>
+        </div>
+      </div>
+
+      {/* Calendar grid */}
+      <DndContext sensors={sensors} onDragStart={e => setActiveId(String(e.active.id))} onDragEnd={handleDragEnd}>
+        <div className="bg-white rounded-xl border border-slate-200 overflow-hidden">
+          {/* Day headers */}
+          <div className="grid grid-cols-7 bg-slate-50 border-b border-slate-200">
+            {DAYS_OF_WEEK.map(d => (
+              <div key={d} className="text-center text-xs font-semibold text-slate-500 py-2">{d}</div>
+            ))}
+          </div>
+
+          {/* Days */}
+          <div className="grid grid-cols-7">
+            {calendarDays.map(({ date, isCurrentMonth }) => {
+              const dateKey = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`;
+              const dayItems = getItemsForDate(date);
+              const isToday = isSameDay(date, today);
+
               return (
-                <div
-                  key={platform}
-                  className={cn(
-                    "flex items-center gap-0.5 px-1 py-0.5 rounded text-xs",
-                    config.bgColor,
-                    config.color
-                  )}
-                >
-                  <Icon className="h-2.5 w-2.5" />
-                  {count > 1 && <span>{count}</span>}
-                </div>
+                <DroppableDay
+                  key={dateKey}
+                  dateKey={dateKey}
+                  date={date}
+                  items={dayItems}
+                  isToday={isToday}
+                  isCurrentMonth={isCurrentMonth}
+                  onDayClick={handleDayClick}
+                  onChipClick={handleChipClick}
+                />
               );
             })}
           </div>
-        )}
-      </div>
-
-      {/* Content items */}
-      <div className="space-y-1">
-        {visibleItems.map((item) => (
-          <DraggableContentItem
-            key={item.id}
-            item={item}
-            onClick={() => onItemClick(item)}
-            isCompact={!isWeekView && items.length > 2}
-          />
-        ))}
-        {hiddenCount > 0 && (
-          <button
-            onClick={(e) => {
-              e.stopPropagation();
-              onDateClick();
-            }}
-            className="w-full text-xs text-gray-500 hover:text-gray-700 py-0.5"
-          >
-            +{hiddenCount} more
-          </button>
-        )}
-      </div>
-    </div>
-  );
-}
-
-// ============================================================================
-// Content Detail Dialog
-// ============================================================================
-
-interface ContentDetailDialogProps {
-  item: ContentItem | null;
-  open: boolean;
-  onOpenChange: (open: boolean) => void;
-}
-
-function ContentDetailDialog({
-  item,
-  open,
-  onOpenChange,
-}: ContentDetailDialogProps) {
-  if (!item) return null;
-
-  const platform = platformConfig[item.platform];
-  const Icon = platform.icon;
-  const scheduledDate =
-    typeof item.scheduledFor === "string"
-      ? parseISO(item.scheduledFor)
-      : item.scheduledFor;
-
-  return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-lg">
-        <DialogHeader>
-          <div className="flex items-center gap-2">
-            <div
-              className={cn(
-                "p-2 rounded-lg",
-                platform.bgColor,
-                platform.borderColor,
-                "border"
-              )}
-            >
-              <Icon className={cn("h-5 w-5", platform.color)} />
-            </div>
-            <div>
-              <DialogTitle>{item.title || "Content Item"}</DialogTitle>
-              <DialogDescription>
-                {platform.label} • {format(scheduledDate, "MMMM d, yyyy 'at' h:mm a")}
-              </DialogDescription>
-            </div>
-          </div>
-        </DialogHeader>
-
-        <div className="space-y-4">
-          {/* Status and Quality */}
-          <div className="flex items-center gap-3">
-            <Badge
-              variant="secondary"
-              className={statusConfig[item.status].color}
-            >
-              {statusConfig[item.status].label}
-            </Badge>
-            {item.qualityScore !== undefined && (
-              <QualityScoreBadge score={item.qualityScore} />
-            )}
-          </div>
-
-          {/* Content preview */}
-          <div className="rounded-lg border bg-gray-50 p-4">
-            <p className="text-sm text-gray-700 whitespace-pre-wrap">
-              {item.content}
-            </p>
-          </div>
-
-          {/* Media preview */}
-          {item.mediaUrl && (
-            <div className="rounded-lg border overflow-hidden">
-              <img
-                src={item.mediaUrl}
-                alt="Content media"
-                className="w-full h-48 object-cover"
-              />
-            </div>
-          )}
-
-          {/* Metadata */}
-          <div className="grid grid-cols-2 gap-4 text-sm">
-            <div>
-              <p className="text-gray-500">Scheduled For</p>
-              <p className="font-medium">
-                {format(scheduledDate, "MMM d, yyyy")}
-              </p>
-              <p className="text-gray-600">{format(scheduledDate, "h:mm a")}</p>
-            </div>
-            {item.createdBy && (
-              <div>
-                <p className="text-gray-500">Created By</p>
-                <p className="font-medium">{item.createdBy}</p>
-              </div>
-            )}
-          </div>
         </div>
 
-        <DialogFooter>
-          <Button variant="outline" onClick={() => onOpenChange(false)}>
-            Close
-          </Button>
-          <Button>
-            <Eye className="h-4 w-4 mr-2" />
-            View Full Details
-          </Button>
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
-  );
-}
-
-// ============================================================================
-// Platform Legend
-// ============================================================================
-
-function PlatformLegend() {
-  return (
-    <div className="flex items-center gap-4 text-sm text-gray-600">
-      {Object.entries(platformConfig).map(([key, config]) => {
-        const Icon = config.icon;
-        return (
-          <div key={key} className="flex items-center gap-1.5">
-            <div
-              className={cn(
-                "p-1 rounded",
-                config.bgColor,
-                config.borderColor,
-                "border"
-              )}
-            >
-              <Icon className={cn("h-3 w-3", config.color)} />
+        <DragOverlay>
+          {activeId ? (
+            <div className="bg-indigo-600 text-white text-xs px-2 py-1 rounded shadow-lg opacity-90">
+              {items.find(i => i.id === activeId)?.content.slice(0, 30)}…
             </div>
-            <span>{config.label}</span>
-          </div>
-        );
-      })}
-    </div>
-  );
-}
+          ) : null}
+        </DragOverlay>
+      </DndContext>
 
-// ============================================================================
-// Main Content Calendar Component
-// ============================================================================
-
-export function ContentCalendar({
-  items,
-  onItemClick,
-  onItemReschedule,
-  onDateClick,
-  className,
-}: ContentCalendarProps) {
-  const [currentDate, setCurrentDate] = React.useState(new Date());
-  const [viewMode, setViewMode] = React.useState<ViewMode>("month");
-  const [selectedItem, setSelectedItem] = React.useState<ContentItem | null>(
-    null
-  );
-  const [dialogOpen, setDialogOpen] = React.useState(false);
-  const [activeItem, setActiveItem] = React.useState<ContentItem | null>(null);
-
-  // DnD sensors
-  const sensors = useSensors(
-    useSensor(PointerSensor, {
-      activationConstraint: {
-        distance: 8,
-      },
-    })
-  );
-
-  // Navigation
-  const goToPrevious = () => {
-    if (viewMode === "month") {
-      setCurrentDate(subMonths(currentDate, 1));
-    } else {
-      setCurrentDate(subWeeks(currentDate, 1));
-    }
-  };
-
-  const goToNext = () => {
-    if (viewMode === "month") {
-      setCurrentDate(addMonths(currentDate, 1));
-    } else {
-      setCurrentDate(addWeeks(currentDate, 1));
-    }
-  };
-
-  const goToToday = () => {
-    setCurrentDate(new Date());
-  };
-
-  // Generate calendar days
-  const calendarDays = React.useMemo(() => {
-    if (viewMode === "month") {
-      const monthStart = startOfMonth(currentDate);
-      const monthEnd = endOfMonth(currentDate);
-      const calendarStart = startOfWeek(monthStart);
-      const calendarEnd = endOfWeek(monthEnd);
-      return eachDayOfInterval({ start: calendarStart, end: calendarEnd });
-    } else {
-      const weekStart = startOfWeek(currentDate);
-      const weekEnd = endOfWeek(currentDate);
-      return eachDayOfInterval({ start: weekStart, end: weekEnd });
-    }
-  }, [currentDate, viewMode]);
-
-  // Group items by date
-  const itemsByDate = React.useMemo(() => {
-    const grouped: Record<string, ContentItem[]> = {};
-    items.forEach((item) => {
-      const date =
-        typeof item.scheduledFor === "string"
-          ? parseISO(item.scheduledFor)
-          : item.scheduledFor;
-      const key = format(date, "yyyy-MM-dd");
-      if (!grouped[key]) {
-        grouped[key] = [];
-      }
-      grouped[key].push(item);
-    });
-    // Sort items within each day by time
-    Object.keys(grouped).forEach((key) => {
-      grouped[key].sort((a, b) => {
-        const dateA =
-          typeof a.scheduledFor === "string"
-            ? parseISO(a.scheduledFor)
-            : a.scheduledFor;
-        const dateB =
-          typeof b.scheduledFor === "string"
-            ? parseISO(b.scheduledFor)
-            : b.scheduledFor;
-        return dateA.getTime() - dateB.getTime();
-      });
-    });
-    return grouped;
-  }, [items]);
-
-  // Drag handlers
-  const handleDragStart = (event: DragStartEvent) => {
-    const item = event.active.data.current as ContentItem;
-    setActiveItem(item);
-  };
-
-  const handleDragEnd = (event: DragEndEvent) => {
-    const { active, over } = event;
-    setActiveItem(null);
-
-    if (!over) return;
-
-    const item = active.data.current as ContentItem;
-    const targetDate = (over.data.current as { date: Date })?.date;
-
-    if (!targetDate) return;
-
-    // Check if the date actually changed
-    const currentDate =
-      typeof item.scheduledFor === "string"
-        ? parseISO(item.scheduledFor)
-        : item.scheduledFor;
-
-    if (!isSameDay(currentDate, targetDate)) {
-      // Keep the same time, just change the date
-      const newScheduledFor = new Date(targetDate);
-      newScheduledFor.setHours(currentDate.getHours());
-      newScheduledFor.setMinutes(currentDate.getMinutes());
-      newScheduledFor.setSeconds(currentDate.getSeconds());
-
-      onItemReschedule?.(item, newScheduledFor);
-    }
-  };
-
-  const handleItemClick = (item: ContentItem) => {
-    setSelectedItem(item);
-    setDialogOpen(true);
-    onItemClick?.(item);
-  };
-
-  const handleDateClick = (date: Date) => {
-    onDateClick?.(date);
-  };
-
-  const weekDays = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
-
-  return (
-    <Card className={cn("w-full", className)}>
-      <CardHeader className="pb-4">
-        {/* Header controls */}
-        <div className="flex items-center justify-between gap-4 flex-wrap">
-          <div className="flex items-center gap-2">
-            <CalendarIcon className="h-5 w-5 text-gray-500" />
-            <CardTitle className="text-xl">
-              {viewMode === "month"
-                ? format(currentDate, "MMMM yyyy")
-                : `Week of ${format(startOfWeek(currentDate), "MMM d, yyyy")}`}
-            </CardTitle>
-          </div>
-
-          <div className="flex items-center gap-2">
-            {/* View mode toggle */}
-            <Select
-              value={viewMode}
-              onValueChange={(v) => setViewMode(v as ViewMode)}
-            >
-              <SelectTrigger className="w-[120px]">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="month">Month</SelectItem>
-                <SelectItem value="week">Week</SelectItem>
-              </SelectContent>
-            </Select>
-
-            {/* Navigation */}
-            <div className="flex items-center gap-1">
-              <Button variant="outline" size="icon" onClick={goToPrevious}>
-                <ChevronLeft className="h-4 w-4" />
-              </Button>
-              <Button variant="outline" size="sm" onClick={goToToday}>
-                Today
-              </Button>
-              <Button variant="outline" size="icon" onClick={goToNext}>
-                <ChevronRight className="h-4 w-4" />
-              </Button>
-            </div>
-          </div>
-        </div>
-
-        {/* Legend */}
-        <div className="mt-4">
-          <PlatformLegend />
-        </div>
-      </CardHeader>
-
-      <CardContent className="p-0">
-        <DndContext
-          sensors={sensors}
-          onDragStart={handleDragStart}
-          onDragEnd={handleDragEnd}
-        >
-          <div className="border-t border-l">
-            {/* Day headers */}
-            <div className="grid grid-cols-7">
-              {weekDays.map((day) => (
-                <div
-                  key={day}
-                  className="border-r border-b px-2 py-2 text-center text-sm font-medium text-gray-500 bg-gray-50"
-                >
-                  {day}
-                </div>
-              ))}
-            </div>
-
-            {/* Calendar grid */}
-            <div className="grid grid-cols-7">
-              {calendarDays.map((day) => {
-                const dateKey = format(day, "yyyy-MM-dd");
-                const dayItems = itemsByDate[dateKey] || [];
-
-                return (
-                  <DroppableDayCell
-                    key={dateKey}
-                    date={day}
-                    items={dayItems}
-                    isCurrentMonth={isSameMonth(day, currentDate)}
-                    isToday={isToday(day)}
-                    onItemClick={handleItemClick}
-                    onDateClick={() => handleDateClick(day)}
-                    isWeekView={viewMode === "week"}
-                  />
-                );
-              })}
-            </div>
-          </div>
-
-          {/* Drag overlay */}
-          <DragOverlay>
-            {activeItem && <DragOverlayItem item={activeItem} />}
-          </DragOverlay>
-        </DndContext>
-      </CardContent>
-
-      {/* Content detail dialog */}
-      <ContentDetailDialog
-        item={selectedItem}
-        open={dialogOpen}
-        onOpenChange={setDialogOpen}
+      {/* Compose slide-over */}
+      <ComposePanel
+        open={composeOpen}
+        onClose={() => { setComposeOpen(false); setEditItem(null); setDefaultDate(null); }}
+        onSaved={fetchItems}
+        defaultDate={defaultDate}
       />
-    </Card>
+    </div>
   );
 }
-
-// ============================================================================
-// Export Types
-// ============================================================================
-
-export type { ContentCalendarProps };

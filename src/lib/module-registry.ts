@@ -95,7 +95,7 @@ export const MODULE_ROUTES: Record<ModuleSlug, string[]> = {
   [MODULE_SLUGS.BOOKING]: ['/bookings'],
   [MODULE_SLUGS.MISSION_CONTROL]: ['/mission-control'],
   [MODULE_SLUGS.COMMUNICATIONS]: ['/communications'],
-  [MODULE_SLUGS.CONTENT_CENTER]: ['/content-center', '/content-visibility'],
+  [MODULE_SLUGS.CONTENT_CENTER]: ['/content-hub', '/content-center', '/content-visibility'],
   [MODULE_SLUGS.MEDIA_LIBRARY]: ['/media-library'],
   [MODULE_SLUGS.AGENTS]: ['/agents'],
   [MODULE_SLUGS.REPORTS]: ['/reports'],

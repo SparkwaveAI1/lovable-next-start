@@ -756,7 +756,12 @@ Deno.serve(async (req) => {
         ).join('\n')}\nONLY suggest from this list.`
       : '';
 
-    const systemPrompt = `You are texting on behalf of Fight Flow Academy, a martial arts gym. You're having a real conversation with a real person — talk like a human, not a bot.
+    // Inject DB personality_prompt at top if present — controls pricing, billing, and persona-specific rules
+    const dbPersonality = agentConfig?.personality_prompt
+      ? `${agentConfig.personality_prompt}\n\n---\n\n`
+      : '';
+
+    const systemPrompt = `${dbPersonality}You are texting on behalf of Fight Flow Academy, a martial arts gym. You're having a real conversation with a real person — talk like a human, not a bot.
 
 BUSINESS: ${businessContext || 'Fight Flow Academy'}
 ${contactName ? `CUSTOMER NAME: ${contactName}` : ''}
