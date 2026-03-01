@@ -298,9 +298,15 @@ async function sendInitialOutreach(
   // Determine the response message
   let responseMessage: string;
 
-  if (inquiry && inquiry.trim().length > 0 && !isJunkMessage) {
-    // They included a real question/comment - use AI to respond
-    console.log('Inquiry provided, generating AI response...');
+  // Build the AI prompt context — either the real inquiry, or a personalized greeting prompt
+  const hasRealInquiry = inquiry && inquiry.trim().length > 0 && !isJunkMessage;
+  const aiPrompt = hasRealInquiry
+    ? inquiry!
+    : `New lead just signed up via our website contact form. Their name is ${contactName || 'a potential student'}. Please write a warm, personalized opening text message to welcome them by name and invite them to ask questions or schedule a free trial class. Do NOT use the phrase "Thanks for your interest in our programs". Make it sound like a real person texting them.`;
+
+  if (true) {
+    // Always use AI for the response — either to answer their inquiry or generate a personalized greeting
+    console.log(hasRealInquiry ? 'Inquiry provided, generating AI response...' : 'No inquiry, generating personalized AI greeting...');
 
     console.log('Knowledge base loaded:', knowledgeBase.length, 'items');
     console.log('Class schedule loaded:', classSchedule.length, 'items');
@@ -313,7 +319,7 @@ async function sendInitialOutreach(
           'Content-Type': 'application/json'
         },
         body: JSON.stringify({
-          messages: [{ role: 'user', content: inquiry }],
+          messages: [{ role: 'user', content: aiPrompt }],
           businessId: businessId,
           businessContext: businessName,
           contactName: contactName,
@@ -321,6 +327,10 @@ async function sendInitialOutreach(
           knowledgeBase: knowledgeText
         })
       });
+
+      const personalizedFallback = contactName
+        ? `Hey ${contactName}! Thanks for reaching out to Fight Flow Academy! Can I answer any questions for you or set you up with a free trial class?`
+        : `Hey! Thanks for reaching out to Fight Flow Academy! Can I answer any questions for you or set you up with a free trial class?`;
 
       if (aiResponse.ok) {
         const aiResult = await aiResponse.json();
@@ -349,7 +359,9 @@ async function sendInitialOutreach(
 
         if (isErrorMessage) {
           console.error('⚠️ AI response looks like an error, using fallback:', aiMessage);
-          responseMessage = DEFAULT_GREETING;
+          responseMessage = contactName 
+            ? `Hey ${contactName}! Thanks for reaching out to Fight Flow Academy! Can I answer any questions for you or set you up with a free trial class?`
+            : `Hey! Thanks for reaching out to Fight Flow Academy! Can I answer any questions for you or set you up with a free trial class?`;
           // Log this for monitoring
           await supabase.from('automation_logs').insert({
             business_id: endpoint.business_id,
@@ -371,7 +383,7 @@ async function sendInitialOutreach(
       } else {
         const errorText = await aiResponse.text();
         console.error('AI response failed:', aiResponse.status, errorText);
-        responseMessage = DEFAULT_GREETING;
+        responseMessage = personalizedFallback;
         // Log the failure for monitoring
         await supabase.from('automation_logs').insert({
           business_id: endpoint.business_id,
@@ -383,12 +395,8 @@ async function sendInitialOutreach(
       }
     } catch (aiError: any) {
       console.error('AI response error:', aiError.message);
-      responseMessage = DEFAULT_GREETING;
+      responseMessage = personalizedFallback;
     }
-  } else {
-    // No inquiry - use simple default
-    responseMessage = DEFAULT_GREETING;
-    console.log('No inquiry, using default message');
   }
 
   // Create conversation thread for this contact
@@ -478,7 +486,7 @@ async function sendInitialOutreach(
           contact_id: contact.id,
           phone: contact.phone,
           message: responseMessage,
-          had_inquiry: !!inquiry
+          had_inquiry: hasRealInquiry
         }
       });
     } catch (smsError: any) {

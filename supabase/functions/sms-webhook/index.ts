@@ -891,12 +891,12 @@ INSTRUCTIONS FOR RETURNING CONTACT:
       }).join('\n');
     }
 
+    // Build conversation messages from history (current inbound message already stored in Step 4)
+    // NOTE: Do NOT push `body` again — it's already included in messageHistory from the DB insert above
     const conversationMessages = messageHistory?.map(msg => ({
       role: msg.direction === 'inbound' ? 'user' : 'assistant',
       content: msg.message
     })) || [];
-
-    conversationMessages.push({ role: 'user', content: body });
 
     const historyText = messageHistory?.map(msg => {
       const role = msg.direction === 'inbound' ? 'Customer' : 'You (AI)';
