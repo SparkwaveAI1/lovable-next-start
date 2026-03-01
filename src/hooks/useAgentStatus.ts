@@ -33,12 +33,9 @@ export function useAgentStatus(options: UseAgentStatusOptions = {}): UseAgentSta
 
   // Fetch all data
   const fetchData = useCallback(async () => {
+    // agentId-only mode: fetch the single agent regardless of businessId
     if (!businessId && !agentId) {
-      setAgents([]);
-      setStatuses({});
-      setActivities([]);
-      setIsLoading(false);
-      return;
+      // No filter at all — show all agents (needed for registry overview)
     }
 
     setIsLoading(true);
@@ -51,12 +48,14 @@ export function useAgentStatus(options: UseAgentStatusOptions = {}): UseAgentSta
         .select('*')
         .order('name', { ascending: true });
 
-      if (businessId) {
-        agentsQuery = agentsQuery.eq('business_id', businessId);
-      }
       if (agentId) {
+        // Single-agent detail mode — exact ID match only
         agentsQuery = agentsQuery.eq('id', agentId);
+      } else if (businessId) {
+        // Business-scoped mode: include agents for this business AND global agents (business_id IS NULL)
+        agentsQuery = agentsQuery.or(`business_id.eq.${businessId},business_id.is.null`);
       }
+      // If neither businessId nor agentId: no filter → returns all agents
 
       const { data: agentsData, error: agentsError } = await agentsQuery;
       if (agentsError) throw agentsError;

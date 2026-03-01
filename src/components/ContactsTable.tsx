@@ -71,7 +71,8 @@ export function ContactsTable({ businessId }: { businessId: string }) {
     return formatToEasternCompact(dateString);
   };
 
-  const formatStatusLabel = (status: string) => {
+  const formatStatusLabel = (status: string | null | undefined) => {
+    if (!status) return 'Unknown';
     return status.split('_').map(word =>
       word.charAt(0).toUpperCase() + word.slice(1)
     ).join(' ');

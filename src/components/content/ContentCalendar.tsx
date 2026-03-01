@@ -2,8 +2,14 @@ import { useState, useEffect, useCallback } from "react";
 import { Button } from "@/components/ui/button";
 import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
-import { ChevronLeft, ChevronRight, Loader2, CalendarOff } from "lucide-react";
+import { ChevronLeft, ChevronRight, Loader2, CalendarOff, Plus, Pencil } from "lucide-react";
 import { ComposePanel, ComposableItem } from "./ComposePanel";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import {
   DndContext,
   DragEndEvent,
@@ -152,10 +158,13 @@ export function ContentCalendar({ brand, businessId }: ContentCalendarProps) {
   const [items, setItems]               = useState<ScheduledItem[]>([]);
   const [unscheduled, setUnscheduled]   = useState<ScheduledItem[]>([]);
   const [loading, setLoading]           = useState(true);
-  const [composeOpen, setComposeOpen]   = useState(false);
-  const [defaultDate, setDefaultDate]   = useState<Date | null>(null);
-  const [editItem, setEditItem]         = useState<ComposableItem | null>(null);
-  const [activeId, setActiveId]         = useState<string | null>(null);
+  const [composeOpen, setComposeOpen]       = useState(false);
+  const [defaultDate, setDefaultDate]       = useState<Date | null>(null);
+  const [editItem, setEditItem]             = useState<ComposableItem | null>(null);
+  const [activeId, setActiveId]             = useState<string | null>(null);
+  const [dayDetailOpen, setDayDetailOpen]   = useState(false);
+  const [dayDetailDate, setDayDetailDate]   = useState<Date | null>(null);
+  const [dayDetailItems, setDayDetailItems] = useState<ScheduledItem[]>([]);
 
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 5 } }));
 
@@ -230,9 +239,18 @@ export function ContentCalendar({ brand, businessId }: ContentCalendarProps) {
 
   // ─── Handlers ─────────────────────────────────────────────────────────────
   const handleDayClick = (date: Date) => {
-    setDefaultDate(date);
-    setEditItem(null);
-    setComposeOpen(true);
+    const dayItems = getItemsForDate(date);
+    if (dayItems.length > 0) {
+      // Show day detail panel so the user can see/edit existing content
+      setDayDetailDate(date);
+      setDayDetailItems(dayItems);
+      setDayDetailOpen(true);
+    } else {
+      // Empty day — jump straight to Compose to create new content
+      setDefaultDate(date);
+      setEditItem(null);
+      setComposeOpen(true);
+    }
   };
 
   const handleChipClick = (item: ScheduledItem) => {
@@ -411,6 +429,60 @@ export function ContentCalendar({ brand, businessId }: ContentCalendarProps) {
           )}
         </div>
       )}
+
+      {/* Day Detail Dialog — shows existing content for a day */}
+      <Dialog open={dayDetailOpen} onOpenChange={setDayDetailOpen}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>
+              {dayDetailDate
+                ? dayDetailDate.toLocaleDateString("en-US", { weekday: "long", month: "long", day: "numeric" })
+                : ""}
+            </DialogTitle>
+          </DialogHeader>
+          <div className="space-y-2 max-h-72 overflow-y-auto">
+            {dayDetailItems.map(item => {
+              const platform = item.platform?.split(",")?.[0]?.trim() ?? "";
+              return (
+                <button
+                  key={item.id}
+                  onClick={() => {
+                    setDayDetailOpen(false);
+                    setEditItem(toComposable(item, brand));
+                    setDefaultDate(null);
+                    setComposeOpen(true);
+                  }}
+                  className="w-full text-left p-3 rounded-lg border border-slate-200 hover:border-indigo-300 hover:bg-indigo-50/40 transition-colors group"
+                >
+                  <div className="flex items-start justify-between gap-2">
+                    <p className="text-sm text-slate-700 line-clamp-2 flex-1">{item.content}</p>
+                    <Pencil className="h-3.5 w-3.5 text-slate-300 group-hover:text-indigo-500 flex-shrink-0 mt-0.5 transition-colors" />
+                  </div>
+                  <div className="flex items-center gap-2 mt-1">
+                    {platform && <span className="text-xs text-slate-400">{platform}</span>}
+                    {item.status && <span className="text-xs text-slate-400 capitalize">{item.status}</span>}
+                  </div>
+                </button>
+              );
+            })}
+          </div>
+          <div className="pt-2 border-t border-slate-100">
+            <Button
+              size="sm"
+              className="w-full"
+              onClick={() => {
+                setDayDetailOpen(false);
+                setDefaultDate(dayDetailDate);
+                setEditItem(null);
+                setComposeOpen(true);
+              }}
+            >
+              <Plus className="h-4 w-4 mr-1.5" />
+              Add content for this day
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
 
       {/* Compose slide-over */}
       <ComposePanel

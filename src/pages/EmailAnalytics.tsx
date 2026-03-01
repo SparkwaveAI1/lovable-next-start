@@ -411,7 +411,7 @@ const EmailAnalytics: React.FC<EmailAnalyticsProps> = () => {
                       </div>
                       <div className="text-right">
                         <p className="text-xs text-gray-500">{formatEventTime(event.timestamp)}</p>
-                        <p className="text-xs font-medium">{event.type.split('.')[1]}</p>
+                        <p className="text-xs font-medium">{event.type?.split('.')?.[1] ?? event.type ?? 'event'}</p>
                       </div>
                     </div>
                   ))}

@@ -17,39 +17,55 @@ import {
   PopoverTrigger,
 } from "@/components/ui/popover"
 import { useBusinesses } from "@/hooks/useBusinesses"
+import { useBusinessContext } from "@/contexts/BusinessContext"
 
 // Special value for "All Businesses" option
 export const ALL_BUSINESSES_ID = "__all__"
 
 interface BusinessSwitcherProps {
+  /** Optional: override the displayed selection (backward compat). If omitted, reads from BusinessContext. */
   selectedBusinessId?: string
+  /** Optional: additional callback when selection changes (backward compat). Context is always updated. */
   onBusinessChange?: (businessId: string) => void
   showAllOption?: boolean
 }
 
-export function BusinessSwitcher({ selectedBusinessId, onBusinessChange, showAllOption = false }: BusinessSwitcherProps) {
+export function BusinessSwitcher({ selectedBusinessId: propSelectedId, onBusinessChange, showAllOption = false }: BusinessSwitcherProps) {
   const [open, setOpen] = useState(false)
   const { data: businesses = [], isLoading: loading } = useBusinesses()
-  
+  const { selectedBusiness: contextBusiness, setSelectedBusiness } = useBusinessContext()
+
   // Track last selection to debounce/dedupe race conditions between onSelect and onPointerDown
   const lastSelectionRef = useRef<{ id: string; time: number } | null>(null)
-  
-  // Centralized selection handler with debounce
+
+  // Effective selection: prop override takes precedence, else use context
+  const effectiveSelectedId = propSelectedId ?? contextBusiness?.id
+
+  // Centralized selection handler — always updates context, also calls prop callback
   const handleSelect = useCallback((businessId: string) => {
     const now = Date.now()
     // Ignore if same selection within 100ms (prevents double-firing)
-    if (lastSelectionRef.current?.id === businessId && 
+    if (lastSelectionRef.current?.id === businessId &&
         now - lastSelectionRef.current.time < 100) {
       return
     }
     lastSelectionRef.current = { id: businessId, time: now }
-    
+
+    // Always update context (this is the primary state owner)
+    if (businessId !== ALL_BUSINESSES_ID) {
+      const business = businesses.find(b => b.id === businessId)
+      if (business) {
+        setSelectedBusiness(business)
+      }
+    }
+
+    // Also call prop callback for pages that wire it explicitly (backward compat)
     onBusinessChange?.(businessId)
     setOpen(false)
-  }, [onBusinessChange])
-  
-  const selectedBusiness = businesses.find(business => business.id === selectedBusinessId)
-  const isAllSelected = selectedBusinessId === ALL_BUSINESSES_ID
+  }, [businesses, setSelectedBusiness, onBusinessChange])
+
+  const selectedBusiness = businesses.find(business => business.id === effectiveSelectedId)
+  const isAllSelected = effectiveSelectedId === ALL_BUSINESSES_ID
 
   return (
     <Popover open={open} onOpenChange={setOpen}>
@@ -68,12 +84,12 @@ export function BusinessSwitcher({ selectedBusinessId, onBusinessChange, showAll
               <Building2 className="h-4 w-4 text-primary" />
             )}
             <span className="font-medium">
-              {loading 
-                ? "Loading..." 
+              {loading
+                ? "Loading..."
                 : isAllSelected
                   ? "All Businesses"
-                  : selectedBusiness 
-                    ? selectedBusiness.name 
+                  : selectedBusiness
+                    ? selectedBusiness.name
                     : "Select business..."
               }
             </span>
@@ -93,7 +109,6 @@ export function BusinessSwitcher({ selectedBusinessId, onBusinessChange, showAll
                     value={`${ALL_BUSINESSES_ID}::All Businesses`}
                     onSelect={() => handleSelect(ALL_BUSINESSES_ID)}
                     onPointerDown={(e) => {
-                      // iOS Safari fix: handle touch events directly with debounce
                       e.preventDefault()
                       handleSelect(ALL_BUSINESSES_ID)
                     }}
@@ -122,7 +137,6 @@ export function BusinessSwitcher({ selectedBusinessId, onBusinessChange, showAll
                   value={`${business.id}::${business.name}`}
                   onSelect={() => handleSelect(business.id)}
                   onPointerDown={(e) => {
-                    // iOS Safari fix: handle touch events directly with debounce
                     e.preventDefault()
                     handleSelect(business.id)
                   }}
@@ -136,7 +150,7 @@ export function BusinessSwitcher({ selectedBusinessId, onBusinessChange, showAll
                   <Check
                     className={cn(
                       "h-4 w-4",
-                      selectedBusinessId === business.id ? "opacity-100 text-primary" : "opacity-0"
+                      effectiveSelectedId === business.id ? "opacity-100 text-primary" : "opacity-0"
                     )}
                   />
                 </CommandItem>

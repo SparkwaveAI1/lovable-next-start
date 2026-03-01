@@ -206,7 +206,9 @@ serve(async (req) => {
             contact_id: contactId,
             direction: 'outbound',
             message: message,
-            ai_response: false // Proactive outreach, not AI auto-response
+            ai_response: false, // Proactive outreach, not AI auto-response
+            phone: normalizedPhone,
+            twilio_sid: result.sid
           });
 
         if (logError) {

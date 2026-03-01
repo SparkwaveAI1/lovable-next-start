@@ -280,66 +280,66 @@ export default function Reports() {
                   {Object.keys(selectedReport.metadata || {}).length > 0 && (
                     <div className="p-4 border-b border-slate-100 bg-slate-50">
                       <div className="flex flex-wrap gap-4">
-                        {selectedReport.metadata.tasks_completed !== undefined && (
+                        {selectedReport.metadata.tasks_completed !== undefined && typeof selectedReport.metadata.tasks_completed !== 'object' && (
                           <div className="text-center">
                             <div className="text-lg font-bold text-emerald-600">
-                              {selectedReport.metadata.tasks_completed}
+                              {String(selectedReport.metadata.tasks_completed)}
                             </div>
                             <div className="text-xs text-slate-500">Completed</div>
                           </div>
                         )}
-                        {selectedReport.metadata.tasks_in_progress !== undefined && (
+                        {selectedReport.metadata.tasks_in_progress !== undefined && typeof selectedReport.metadata.tasks_in_progress !== 'object' && (
                           <div className="text-center">
                             <div className="text-lg font-bold text-blue-600">
-                              {selectedReport.metadata.tasks_in_progress}
+                              {String(selectedReport.metadata.tasks_in_progress)}
                             </div>
                             <div className="text-xs text-slate-500">In Progress</div>
                           </div>
                         )}
-                        {selectedReport.metadata.activities_logged !== undefined && (
+                        {selectedReport.metadata.activities_logged !== undefined && typeof selectedReport.metadata.activities_logged !== 'object' && (
                           <div className="text-center">
                             <div className="text-lg font-bold text-slate-700">
-                              {selectedReport.metadata.activities_logged}
+                              {String(selectedReport.metadata.activities_logged)}
                             </div>
                             <div className="text-xs text-slate-500">Activities</div>
                           </div>
                         )}
-                        {selectedReport.metadata.sms_sent !== undefined && selectedReport.metadata.sms_sent > 0 && (
+                        {selectedReport.metadata.sms_sent !== undefined && typeof selectedReport.metadata.sms_sent !== 'object' && Number(selectedReport.metadata.sms_sent) > 0 && (
                           <div className="text-center">
                             <div className="text-lg font-bold text-violet-600">
-                              {selectedReport.metadata.sms_sent}
+                              {String(selectedReport.metadata.sms_sent)}
                             </div>
                             <div className="text-xs text-slate-500">SMS Sent</div>
                           </div>
                         )}
-                        {selectedReport.metadata.emails_sent !== undefined && selectedReport.metadata.emails_sent > 0 && (
+                        {selectedReport.metadata.emails_sent !== undefined && typeof selectedReport.metadata.emails_sent !== 'object' && Number(selectedReport.metadata.emails_sent) > 0 && (
                           <div className="text-center">
                             <div className="text-lg font-bold text-indigo-600">
-                              {selectedReport.metadata.emails_sent}
+                              {String(selectedReport.metadata.emails_sent)}
                             </div>
                             <div className="text-xs text-slate-500">Emails Sent</div>
                           </div>
                         )}
-                        {selectedReport.metadata.decisions_made !== undefined && selectedReport.metadata.decisions_made > 0 && (
+                        {selectedReport.metadata.decisions_made !== undefined && typeof selectedReport.metadata.decisions_made !== 'object' && Number(selectedReport.metadata.decisions_made) > 0 && (
                           <div className="text-center">
                             <div className="text-lg font-bold text-amber-600">
-                              {selectedReport.metadata.decisions_made}
+                              {String(selectedReport.metadata.decisions_made)}
                             </div>
                             <div className="text-xs text-slate-500">Decisions</div>
                           </div>
                         )}
-                        {selectedReport.metadata.checks_passed !== undefined && (
+                        {selectedReport.metadata.checks_passed !== undefined && typeof selectedReport.metadata.checks_passed !== 'object' && (
                           <div className="text-center">
                             <div className="text-lg font-bold text-emerald-600">
-                              {selectedReport.metadata.checks_passed}
+                              {String(selectedReport.metadata.checks_passed)}
                             </div>
                             <div className="text-xs text-slate-500">Checks Passed</div>
                           </div>
                         )}
-                        {selectedReport.metadata.checks_failed !== undefined && selectedReport.metadata.checks_failed > 0 && (
+                        {selectedReport.metadata.checks_failed !== undefined && typeof selectedReport.metadata.checks_failed !== 'object' && Number(selectedReport.metadata.checks_failed) > 0 && (
                           <div className="text-center">
                             <div className="text-lg font-bold text-red-600">
-                              {selectedReport.metadata.checks_failed}
+                              {String(selectedReport.metadata.checks_failed)}
                             </div>
                             <div className="text-xs text-slate-500">Failed</div>
                           </div>
