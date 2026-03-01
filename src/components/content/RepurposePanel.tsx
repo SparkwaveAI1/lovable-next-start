@@ -24,7 +24,11 @@ const REPURPOSE_OPTIONS = [
   { label: "Article → Summary Tweet", sourceFormat: "Article", targetFormat: "Summary Tweet" },
 ];
 
-export function RepurposePanel() {
+interface RepurposePanelProps {
+  brand: string;
+}
+
+export function RepurposePanel({ brand }: RepurposePanelProps) {
   const { toast } = useToast();
   const [libraryItems, setLibraryItems] = useState<ContentItem[]>([]);
   const [loadingLibrary, setLoadingLibrary] = useState(true);
@@ -36,14 +40,20 @@ export function RepurposePanel() {
   const [rateLimitHit, setRateLimitHit] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  // Load library items
+  // Load library items filtered by brand
   useEffect(() => {
     async function load() {
+      if (!brand) {
+        setLibraryItems([]);
+        setLoadingLibrary(false);
+        return;
+      }
       setLoadingLibrary(true);
       try {
         const { data, error } = await supabase
           .from("content_queue")
           .select("id, content, platform, style, status")
+          .eq("brand", brand)
           .order("created_at", { ascending: false })
           .limit(50);
         if (error) throw error;
@@ -55,7 +65,7 @@ export function RepurposePanel() {
       }
     }
     load();
-  }, [toast]);
+  }, [brand, toast]);
 
   const selectedItem = libraryItems.find(i => i.id === selectedItemId);
   const selectedOption = REPURPOSE_OPTIONS.find(o => o.label === repurposeOption);
@@ -126,7 +136,7 @@ export function RepurposePanel() {
         content: output.trim(),
         platform,
         style: selectedOption?.targetFormat ?? "Short Post",
-        brand: "sparkwave",
+        brand,
         status: "draft",
         created_by: user.id,
       });

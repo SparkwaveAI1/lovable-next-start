@@ -40,6 +40,7 @@ interface ComposePanelProps {
   onSaved: () => void;
   editItem?: ContentItem | null;
   defaultDate?: Date | null;
+  brand?: string;
 }
 
 const FORMATS: ContentFormat[] = ["Short Post", "Thread", "Article", "Slide Deck"];
@@ -51,7 +52,7 @@ const PLATFORMS: { value: Platform; label: string; color: string }[] = [
   { value: "facebook", label: "Facebook", color: "bg-indigo-100 text-indigo-700 border-indigo-200" },
 ];
 
-export function ComposePanel({ open, onClose, onSaved, editItem, defaultDate }: ComposePanelProps) {
+export function ComposePanel({ open, onClose, onSaved, editItem, defaultDate, brand = "" }: ComposePanelProps) {
   const { toast } = useToast();
   const [content, setContent] = useState("");
   const [format, setFormat] = useState<ContentFormat | "">("");
@@ -107,7 +108,7 @@ export function ComposePanel({ open, onClose, onSaved, editItem, defaultDate }: 
       content: content.trim(),
       platform: selectedPlatforms.join(","),
       style: format,
-      brand: "sparkwave",
+      brand: brand || (editItem?.brand ?? ""),
       status,
       created_by: user.id,
       scheduled_time: scheduledTime ? scheduledTime.toISOString() : null,

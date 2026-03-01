@@ -111,7 +111,11 @@ function DroppableDay({ dateKey, date, items, isToday, isCurrentMonth, onDayClic
   );
 }
 
-export function ContentCalendar() {
+interface ContentCalendarProps {
+  brand: string;
+}
+
+export function ContentCalendar({ brand }: ContentCalendarProps) {
   const { toast } = useToast();
   const today = new Date();
   const [currentDate, setCurrentDate] = useState(new Date(today.getFullYear(), today.getMonth(), 1));
@@ -125,6 +129,11 @@ export function ContentCalendar() {
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 5 } }));
 
   const fetchItems = useCallback(async () => {
+    if (!brand) {
+      setItems([]);
+      setLoading(false);
+      return;
+    }
     setLoading(true);
     try {
       const start = new Date(currentDate.getFullYear(), currentDate.getMonth() - 1, 1);
@@ -144,7 +153,7 @@ export function ContentCalendar() {
     } finally {
       setLoading(false);
     }
-  }, [currentDate, toast]);
+  }, [brand, currentDate, toast]);
 
   useEffect(() => { fetchItems(); }, [fetchItems]);
 
@@ -289,6 +298,7 @@ export function ContentCalendar() {
         onClose={() => { setComposeOpen(false); setEditItem(null); setDefaultDate(null); }}
         onSaved={fetchItems}
         defaultDate={defaultDate}
+        brand={brand}
       />
     </div>
   );

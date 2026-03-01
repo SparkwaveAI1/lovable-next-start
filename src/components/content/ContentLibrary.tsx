@@ -45,7 +45,11 @@ const STATUS_COLORS: Record<string, string> = {
   posted: "bg-green-100 text-green-700",
 };
 
-export function ContentLibrary() {
+interface ContentLibraryProps {
+  brand: string;
+}
+
+export function ContentLibrary({ brand }: ContentLibraryProps) {
   const { toast } = useToast();
   const [items, setItems] = useState<ContentItem[]>([]);
   const [loading, setLoading] = useState(true);
@@ -59,11 +63,17 @@ export function ContentLibrary() {
   const [deleteId, setDeleteId] = useState<string | null>(null);
 
   const fetchItems = useCallback(async () => {
+    if (!brand) {
+      setItems([]);
+      setLoading(false);
+      return;
+    }
     setLoading(true);
     try {
       let q = supabase
         .from("content_queue")
         .select("id, content, platform, style, status, created_at, scheduled_time, brand, image_urls")
+        .eq("brand", brand)
         .order("created_at", { ascending: false });
 
       if (filterFormat !== "All") q = q.eq("style", filterFormat);
@@ -79,7 +89,7 @@ export function ContentLibrary() {
     } finally {
       setLoading(false);
     }
-  }, [filterFormat, filterPlatform, filterStatus, search, toast]);
+  }, [brand, filterFormat, filterPlatform, filterStatus, search, toast]);
 
   useEffect(() => {
     const timer = setTimeout(() => fetchItems(), 300);
@@ -250,6 +260,7 @@ export function ContentLibrary() {
         onClose={() => { setComposeOpen(false); setEditItem(null); }}
         onSaved={fetchItems}
         editItem={editItem}
+        brand={brand}
       />
 
       {/* Delete confirmation */}
