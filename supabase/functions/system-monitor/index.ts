@@ -1,6 +1,11 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts"
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2"
-import { corsHeaders } from "../_shared/cors.ts"
+
+const corsHeaders = {
+  "Access-Control-Allow-Origin": "*",
+  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
+  "Access-Control-Allow-Methods": "GET, POST, PUT, DELETE, OPTIONS",
+}
 
 const AGENTS = [
   { name: "Rico", ip: "5.161.190.94", port: 18789, role: "Lead Orchestrator" },
@@ -9,72 +14,62 @@ const AGENTS = [
   { name: "Jerry", ip: "5.161.184.240", port: 18789, role: "Operations Agent" },
 ]
 
-async function pingAgent(ip: string, port: number): Promise<{ online: boolean; latencyMs?: number }> {
+async function pingAgent(
+  ip: string,
+  port: number
+): Promise<{ online: boolean; latencyMs?: number }> {
   const start = Date.now()
-  try {
-    const controller = new AbortController()
-    const timeout = setTimeout(() => controller.abort(), 4000)
-    const res = await fetch(`http://${ip}:${port}/health`, {
-      signal: controller.signal,
-    })
-    clearTimeout(timeout)
-    const latencyMs = Date.now() - start
-    return { online: res.ok || res.status < 500, latencyMs }
-  } catch {
-    // Try a TCP-like check by hitting the root
+  const urls = [
+    `http://${ip}:${port}/health`,
+    `http://${ip}:${port}/`,
+  ]
+  for (const url of urls) {
     try {
-      const controller2 = new AbortController()
-      const timeout2 = setTimeout(() => controller2.abort(), 4000)
-      const res2 = await fetch(`http://${ip}:${port}/`, {
-        signal: controller2.signal,
-      })
-      clearTimeout(timeout2)
+      const controller = new AbortController()
+      const timer = setTimeout(() => controller.abort(), 5000)
+      const res = await fetch(url, { signal: controller.signal })
+      clearTimeout(timer)
       const latencyMs = Date.now() - start
+      // Any HTTP response means server is up
       return { online: true, latencyMs }
     } catch {
-      return { online: false }
+      // Try next URL
     }
   }
+  return { online: false }
 }
 
-async function fetchN8nWorkflows(apiKey: string, instanceUrl: string) {
-  try {
-    const controller = new AbortController()
-    const timeout = setTimeout(() => controller.abort(), 8000)
-    const res = await fetch(`${instanceUrl}/api/v1/workflows?active=true&limit=25`, {
-      headers: {
-        "X-N8N-API-KEY": apiKey,
-        "Accept": "application/json",
-      },
-      signal: controller.signal,
-    })
-    clearTimeout(timeout)
-    if (!res.ok) return { workflows: [], error: `HTTP ${res.status}` }
-    const data = await res.json()
-    return { workflows: data.data || [], error: null }
-  } catch (e) {
-    return { workflows: [], error: String(e) }
-  }
-}
+async function fetchN8nData(
+  apiKey: string,
+  instanceUrl: string
+): Promise<{ workflows: unknown[]; executions: unknown[]; error: string | null }> {
+  if (!apiKey) return { workflows: [], executions: [], error: "No API key" }
 
-async function fetchN8nExecutions(apiKey: string, instanceUrl: string) {
   try {
-    const controller = new AbortController()
-    const timeout = setTimeout(() => controller.abort(), 8000)
-    // Get last 25 executions across all workflows
-    const res = await fetch(`${instanceUrl}/api/v1/executions?limit=25&includeData=false`, {
-      headers: {
-        "X-N8N-API-KEY": apiKey,
-        "Accept": "application/json",
-      },
-      signal: controller.signal,
+    const wfController = new AbortController()
+    const wfTimer = setTimeout(() => wfController.abort(), 10000)
+
+    const wfRes = await fetch(`${instanceUrl}/api/v1/workflows?limit=50`, {
+      headers: { "X-N8N-API-KEY": apiKey, Accept: "application/json" },
+      signal: wfController.signal,
     })
-    clearTimeout(timeout)
-    if (!res.ok) return { executions: [], error: `HTTP ${res.status}` }
-    const data = await res.json()
-    return { executions: data.data || [], error: null }
+    clearTimeout(wfTimer)
+
+    const execController = new AbortController()
+    const execTimer = setTimeout(() => execController.abort(), 10000)
+    const execRes = await fetch(`${instanceUrl}/api/v1/executions?limit=50&includeData=false`, {
+      headers: { "X-N8N-API-KEY": apiKey, Accept: "application/json" },
+      signal: execController.signal,
+    })
+    clearTimeout(execTimer)
+
+    const workflows = wfRes.ok ? ((await wfRes.json()).data ?? []) : []
+    const executions = execRes.ok ? ((await execRes.json()).data ?? []) : []
+    const error = !wfRes.ok ? `Workflows HTTP ${wfRes.status}` : null
+
+    return { workflows, executions, error }
   } catch (e) {
-    return { executions: [], error: String(e) }
+    return { workflows: [], executions: [], error: String(e) }
   }
 }
 
@@ -90,55 +85,57 @@ serve(async (req) => {
     const n8nUrl = Deno.env.get("N8N_INSTANCE_URL") ?? "https://sparkwaveai.app.n8n.cloud"
 
     const supabase = createClient(supabaseUrl, supabaseKey)
+    const now = new Date().toISOString()
 
-    // Ping all agents in parallel
-    const agentPings = await Promise.all(
-      AGENTS.map(async (agent) => {
-        const ping = await pingAgent(agent.ip, agent.port)
-        return {
-          ...agent,
-          online: ping.online,
-          latencyMs: ping.latencyMs,
-          checkedAt: new Date().toISOString(),
-        }
-      })
+    // 1. Ping all agents in parallel
+    const pingResults = await Promise.allSettled(
+      AGENTS.map((a) => pingAgent(a.ip, a.port))
     )
 
-    // Fetch n8n data
-    let n8nData = { workflows: [], executions: [], error: null as string | null }
-    if (n8nApiKey) {
-      const [wfResult, execResult] = await Promise.all([
-        fetchN8nWorkflows(n8nApiKey, n8nUrl),
-        fetchN8nExecutions(n8nApiKey, n8nUrl),
-      ])
-      n8nData = {
-        workflows: wfResult.workflows,
-        executions: execResult.executions,
-        error: wfResult.error || execResult.error,
+    const agentStatuses = AGENTS.map((agent, i) => {
+      const result = pingResults[i]
+      const ping = result.status === "fulfilled" ? result.value : { online: false }
+      return {
+        name: agent.name,
+        ip: agent.ip,
+        port: agent.port,
+        role: agent.role,
+        online: ping.online,
+        latencyMs: ping.online ? ping.latencyMs : undefined,
+        checkedAt: now,
       }
+    })
+
+    // 2. n8n data
+    const n8nData = await fetchN8nData(n8nApiKey, n8nUrl)
+
+    // Build exec map
+    interface ExecRecord {
+      workflowId: string
+      startedAt?: string
+      createdAt?: string
+      status?: string
+    }
+    const execByWorkflow: Record<string, ExecRecord[]> = {}
+    for (const exec of n8nData.executions as ExecRecord[]) {
+      if (!execByWorkflow[exec.workflowId]) execByWorkflow[exec.workflowId] = []
+      execByWorkflow[exec.workflowId].push(exec)
     }
 
-    // Build workflow status (merge executions into workflows)
-    const execByWorkflow: Record<string, any[]> = {}
-    for (const exec of n8nData.executions) {
-      const wfId = exec.workflowId
-      if (!execByWorkflow[wfId]) execByWorkflow[wfId] = []
-      execByWorkflow[wfId].push(exec)
-    }
-
-    const workflowStatus = n8nData.workflows.map((wf: any) => {
+    interface WorkflowRecord { id: string; name: string; active: boolean }
+    const workflowStatus = (n8nData.workflows as WorkflowRecord[]).map((wf) => {
       const execs = execByWorkflow[wf.id] || []
-      const lastExec = execs.length > 0 ? execs[0] : null
+      const last = execs[0] || null
       return {
         id: wf.id,
         name: wf.name,
         active: wf.active,
-        lastRunAt: lastExec?.startedAt || lastExec?.createdAt || null,
-        lastStatus: lastExec?.status || null, // success, error, running, waiting
+        lastRunAt: last?.startedAt || last?.createdAt || null,
+        lastStatus: last?.status || null,
       }
     })
 
-    // Fetch recent errors from Supabase
+    // 3. Recent errors
     const { data: recentErrors } = await supabase
       .from("automation_logs")
       .select("id, automation_type, status, error_message, created_at, business_id")
@@ -146,65 +143,71 @@ serve(async (req) => {
       .order("created_at", { ascending: false })
       .limit(10)
 
-    // Fetch cron status from system_status_log if available
-    const { data: cronData } = await supabase
-      .from("system_status_log")
-      .select("id, registry_id, status, last_run, error_message, created_at")
-      .order("created_at", { ascending: false })
-      .limit(20)
+    // 4. Cron status
+    const [cronLogResult, registryResult] = await Promise.allSettled([
+      supabase
+        .from("system_status_log")
+        .select("id, registry_id, status, last_run, error_message, created_at")
+        .order("created_at", { ascending: false })
+        .limit(50),
+      supabase
+        .from("system_registry")
+        .select("id, name, type, category, schedule")
+        .limit(100),
+    ])
 
-    // Fetch system registry names  
-    const { data: registryItems } = await supabase
-      .from("system_registry")
-      .select("id, name, type, category, schedule")
-      .eq("type", "cron")
-      .limit(20)
+    const cronData =
+      cronLogResult.status === "fulfilled" ? (cronLogResult.value.data ?? []) : []
+    const registryItems =
+      registryResult.status === "fulfilled" ? (registryResult.value.data ?? []) : []
 
-    const registryMap: Record<string, any> = {}
-    for (const item of registryItems || []) {
+    interface RegistryRecord { id: string; name: string; type: string; schedule: string | null }
+    const registryMap: Record<string, RegistryRecord> = {}
+    for (const item of registryItems as RegistryRecord[]) {
       registryMap[item.id] = item
     }
 
-    // Build cron status list
     const seenIds = new Set<string>()
-    const cronStatus = (cronData || [])
-      .filter((entry) => {
-        if (seenIds.has(entry.registry_id)) return false
-        seenIds.add(entry.registry_id)
+    interface CronLogRecord {
+      registry_id: string
+      status: string
+      last_run: string | null
+      error_message: string | null
+      created_at: string
+    }
+    const cronStatus = (cronData as CronLogRecord[])
+      .filter((e) => {
+        // Only include entries that have a matching registry record named (not UUID-only)
+        if (!registryMap[e.registry_id]) return false
+        if (seenIds.has(e.registry_id)) return false
+        seenIds.add(e.registry_id)
         return true
       })
-      .map((entry) => ({
-        id: entry.registry_id,
-        name: registryMap[entry.registry_id]?.name || entry.registry_id,
-        schedule: registryMap[entry.registry_id]?.schedule || null,
-        status: entry.status,
-        lastRun: entry.last_run || entry.created_at,
-        errorMessage: entry.error_message,
+      .map((e) => ({
+        id: e.registry_id,
+        name: registryMap[e.registry_id]?.name || e.registry_id,
+        type: registryMap[e.registry_id]?.type || "unknown",
+        schedule: registryMap[e.registry_id]?.schedule || null,
+        status: e.status,
+        lastRun: e.last_run || e.created_at,
+        errorMessage: e.error_message,
       }))
 
     return new Response(
       JSON.stringify({
-        agents: agentPings,
-        n8n: {
-          workflows: workflowStatus,
-          error: n8nData.error,
-        },
+        agents: agentStatuses,
+        n8n: { workflows: workflowStatus, error: n8nData.error },
         recentErrors: recentErrors || [],
         cronStatus,
-        fetchedAt: new Date().toISOString(),
+        fetchedAt: now,
       }),
-      {
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
-      }
+      { headers: { ...corsHeaders, "Content-Type": "application/json" } }
     )
-  } catch (error) {
-    console.error("system-monitor error:", error)
-    return new Response(
-      JSON.stringify({ error: String(error) }),
-      {
-        status: 500,
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
-      }
-    )
+  } catch (err) {
+    console.error("system-monitor fatal:", err)
+    return new Response(JSON.stringify({ error: String(err) }), {
+      status: 500,
+      headers: { ...corsHeaders, "Content-Type": "application/json" },
+    })
   }
 })

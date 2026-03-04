@@ -50,3 +50,6 @@ verify_jwt = false
 
 [functions.market-data-service]
 verify_jwt = false
+
+[functions.system-monitor]
+verify_jwt = false
