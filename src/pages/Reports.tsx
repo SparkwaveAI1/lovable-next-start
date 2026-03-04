@@ -22,6 +22,17 @@ interface AgentLog {
   created_at: string;
 }
 
+
+interface ActivityLogEntry {
+  id: string;
+  agent: string | null;
+  event_type: string | null;
+  label: string | null;
+  status: string | null;
+  details: string | null;
+  created_at: string;
+}
+
 const AGENT_OPTIONS: Array<AgentName | 'All'> = ['All', 'Rico', 'Iris', 'Dev', 'Jerry'];
 const LOG_TYPE_OPTIONS: Array<LogType | 'All'> = ['All', 'hourly', 'daily', 'error'];
 
@@ -85,6 +96,36 @@ export default function Reports() {
   const [agentDropdownOpen, setAgentDropdownOpen] = useState(false);
   const [typeDropdownOpen, setTypeDropdownOpen] = useState(false);
   const [dateDropdownOpen, setDateDropdownOpen] = useState(false);
+
+
+  // Agent Activity Log state
+  const [activityLogs, setActivityLogs] = useState<ActivityLogEntry[]>([]);
+  const [activityLoading, setActivityLoading] = useState(true);
+  const [activityError, setActivityError] = useState<string | null>(null);
+
+  const fetchActivityLogs = useCallback(async () => {
+    setActivityLoading(true);
+    setActivityError(null);
+    try {
+      const { data, error: fetchError } = await (supabase as any)
+        .from('agent_logs')
+        .select('id, agent, event_type, label, status, details, created_at')
+        .not('agent', 'is', null)
+        .order('created_at', { ascending: false })
+        .limit(50);
+      if (fetchError) throw fetchError;
+      setActivityLogs((data || []) as ActivityLogEntry[]);
+    } catch (err) {
+      console.error('Error fetching activity logs:', err);
+      setActivityError(err instanceof Error ? err.message : 'Failed to load activity logs');
+    } finally {
+      setActivityLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    fetchActivityLogs();
+  }, [fetchActivityLogs]);
 
   // Fetch logs from agent_logs table
   const fetchLogs = useCallback(async () => {
@@ -410,6 +451,93 @@ export default function Reports() {
             </div>
           )}
         </div>
+
+        {/* Agent Activity Log Section */}
+        <div className="mt-8 bg-white rounded-xl border border-slate-200 overflow-hidden">
+          <div className="p-4 border-b border-slate-100 flex items-center justify-between">
+            <div>
+              <h2 className="font-semibold text-slate-900">Agent Activity Log</h2>
+              <p className="text-xs text-slate-400 mt-0.5">Recent agent events from all agents — last 50</p>
+            </div>
+            <button
+              onClick={() => fetchActivityLogs()}
+              disabled={activityLoading}
+              className="flex items-center gap-2 px-3 py-1.5 bg-white border border-slate-200 rounded-lg hover:bg-slate-50 transition-colors disabled:opacity-50 text-sm"
+            >
+              <RefreshCw className={`h-3.5 w-3.5 ${activityLoading ? 'animate-spin' : ''}`} />
+              Refresh
+            </button>
+          </div>
+
+          {activityError && (
+            <div className="p-4 bg-red-50 text-red-700 text-sm">
+              Failed to load activity logs: {activityError}
+            </div>
+          )}
+
+          {activityLoading ? (
+            <div className="p-10 text-center text-slate-400">
+              <RefreshCw className="h-5 w-5 animate-spin mx-auto mb-2" />
+              <p className="text-sm">Loading activity...</p>
+            </div>
+          ) : activityLogs.length === 0 ? (
+            <div className="p-10 text-center text-slate-400">
+              <FileText className="h-10 w-10 mx-auto mb-3 opacity-30" />
+              <p className="text-sm text-slate-500">No activity logged yet</p>
+            </div>
+          ) : (
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="border-b border-slate-100 bg-slate-50">
+                    <th className="px-4 py-3 text-left text-xs font-semibold text-slate-500 uppercase tracking-wide">Time</th>
+                    <th className="px-4 py-3 text-left text-xs font-semibold text-slate-500 uppercase tracking-wide">Agent</th>
+                    <th className="px-4 py-3 text-left text-xs font-semibold text-slate-500 uppercase tracking-wide">Event</th>
+                    <th className="px-4 py-3 text-left text-xs font-semibold text-slate-500 uppercase tracking-wide">Label</th>
+                    <th className="px-4 py-3 text-left text-xs font-semibold text-slate-500 uppercase tracking-wide">Status</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-50">
+                  {activityLogs.map((entry) => {
+                    const statusLower = (entry.status || '').toLowerCase();
+                    const statusColor =
+                      statusLower === 'pass'
+                        ? 'bg-emerald-100 text-emerald-700'
+                        : statusLower === 'fail'
+                        ? 'bg-red-100 text-red-700'
+                        : 'bg-amber-100 text-amber-700';
+                    return (
+                      <tr key={entry.id} className="hover:bg-slate-50 transition-colors">
+                        <td className="px-4 py-3 text-xs text-slate-400 whitespace-nowrap" title={entry.created_at}>
+                          {format(new Date(entry.created_at), 'MMM d, h:mm a')}
+                        </td>
+                        <td className="px-4 py-3">
+                          <span className={`px-2 py-0.5 rounded text-xs font-semibold ${AGENT_COLORS[entry.agent || ''] || 'bg-slate-100 text-slate-700'}`}>
+                            {entry.agent || '—'}
+                          </span>
+                        </td>
+                        <td className="px-4 py-3 text-xs text-slate-600">{entry.event_type || '—'}</td>
+                        <td className="px-4 py-3 text-xs text-slate-600 max-w-xs truncate" title={entry.label || ''}>
+                          {entry.label || '—'}
+                        </td>
+                        <td className="px-4 py-3">
+                          {entry.status ? (
+                            <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${statusColor}`}>
+                              {entry.status}
+                            </span>
+                          ) : (
+                            <span className="text-slate-300">—</span>
+                          )}
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </div>
+
       </PageContent>
     </DashboardLayout>
   );
