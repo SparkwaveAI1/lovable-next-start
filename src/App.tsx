@@ -46,6 +46,7 @@ import AutomationAudit from "./pages/AutomationAudit";
 import ROICalculator from "./pages/ROICalculator";
 import Onboarding from "./pages/Onboarding";
 import SystemMonitoring from "./pages/SystemMonitoring";
+import MonitoringPage from "./pages/Monitoring";
 import FightFlow from "./pages/FightFlow";
 import SystemOperations from "./pages/SystemOperations";
 import ProtectedRoute from "./components/ProtectedRoute";
@@ -112,6 +113,7 @@ const App = () => (
             <Route path="/content-review" element={<Navigate replace to="/content-hub" />} />
             <Route path="/agent-chat" element={<Navigate replace to="/" />} />
             <Route path="/system-monitoring" element={<ProtectedRoute><ErrorBoundary><SystemMonitoring /></ErrorBoundary></ProtectedRoute>} />
+            <Route path="/monitoring" element={<MonitoringPage />} />
             <Route path="/fight-flow" element={<ProtectedRoute><ErrorBoundary><FightFlow /></ErrorBoundary></ProtectedRoute>} />
             {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
             <Route path="*" element={<NotFound />} />
