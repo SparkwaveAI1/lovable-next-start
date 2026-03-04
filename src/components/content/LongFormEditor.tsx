@@ -38,6 +38,7 @@ type ContentType = typeof CONTENT_TYPES[number]["value"];
 interface Draft {
   id: string;
   title: string;
+  body: string | null;
   content_type: ContentType;
   created_at: string;
   status: string;
@@ -119,6 +120,17 @@ export function LongFormEditor() {
     editor.chain().focus().extendMarkRange("link").setLink({ href: url }).run();
   }, [editor]);
 
+  // ─── Load draft into editor ──────────────────────────────────────────────────
+
+  const loadDraftIntoEditor = (draft: Draft) => {
+    if (!editor) return;
+    editor.commands.setContent(draft.body ?? "");
+    setTitle(draft.title ?? "");
+    setContentType(draft.content_type as ContentType);
+    setActiveView("editor");
+    toast({ title: "Draft loaded", description: `"${draft.title}" loaded into editor.` });
+  };
+
   // ─── Save draft ─────────────────────────────────────────────────────────────
 
   const saveDraft = async () => {
@@ -155,7 +167,7 @@ export function LongFormEditor() {
     try {
       const { data, error } = await supabase
         .from("content_drafts")
-        .select("id, title, content_type, created_at, status")
+        .select("id, title, body, content_type, created_at, status")
         .order("created_at", { ascending: false })
         .limit(50);
       if (error) throw error;
@@ -436,7 +448,8 @@ export function LongFormEditor() {
               {drafts.map((draft) => (
                 <div
                   key={draft.id}
-                  className="flex items-center justify-between gap-4 bg-white border border-slate-200 rounded-lg px-4 py-3 shadow-sm"
+                  onClick={() => loadDraftIntoEditor(draft)}
+                  className="flex items-center justify-between gap-4 bg-white border border-slate-200 rounded-lg px-4 py-3 shadow-sm cursor-pointer hover:bg-indigo-50 hover:border-indigo-300 transition-colors"
                 >
                   <div className="flex flex-col gap-0.5 min-w-0">
                     <span className="font-medium text-slate-800 truncate">{draft.title || "(Untitled)"}</span>
