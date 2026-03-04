@@ -1,0 +1,573 @@
+{
+  "name": "FF Form Capture \u2014 Fight Flow (Task 1.2)",
+  "active": false,
+  "nodes": [
+    {
+      "id": "schedule-trigger",
+      "name": "Schedule Trigger",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.1,
+      "position": [
+        0,
+        0
+      ],
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "minutes",
+              "minutesInterval": 5
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "get-last-poll",
+      "name": "Get Last Poll Time",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        220,
+        0
+      ],
+      "parameters": {
+        "method": "GET",
+        "url": "https://wrsoacujxcskydlzgopa.supabase.co/rest/v1/ff_n8n_state?key=eq.form_capture_last_poll",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "apikey",
+              "value": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Indyc29hY3VqeGNza3lkbHpnb3BhIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc0OTYwNTIxMSwiZXhwIjoyMDY1MTgxMjExfQ.DfHr_M1BFep1LVWpGSDfpMeb0vXqi17Y_VXoax96CvI"
+            },
+            {
+              "name": "Authorization",
+              "value": "Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Indyc29hY3VqeGNza3lkbHpnb3BhIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc0OTYwNTIxMSwiZXhwIjoyMDY1MTgxMjExfQ.DfHr_M1BFep1LVWpGSDfpMeb0vXqi17Y_VXoax96CvI"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "set-poll-time",
+      "name": "Set Poll Time",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        440,
+        0
+      ],
+      "parameters": {
+        "mode": "manual",
+        "assignments": {
+          "assignments": [
+            {
+              "id": "last_poll",
+              "name": "last_poll",
+              "value": "={{ [0]?.value ?? '2026-01-01T00:00:00.000Z' }}",
+              "type": "string"
+            },
+            {
+              "id": "run_start",
+              "name": "run_start",
+              "value": "={{ new Date().toISOString() }}",
+              "type": "string"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "query-wix-contacts",
+      "name": "Query Wix Contacts",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        660,
+        0
+      ],
+      "parameters": {
+        "method": "POST",
+        "url": "https://www.wixapis.com/contacts/v4/contacts/query",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "IST.eyJraWQiOiJQb3pIX2FDMiIsImFsZyI6IlJTMjU2In0.eyJkYXRhIjoie1wiaWRcIjpcIjE3ZmQxODdmLWE1ODQtNGFkMi04NTQzLTg5NzJiYTQ0OGU4NlwiLFwiaWRlbnRpdHlcIjp7XCJ0eXBlXCI6XCJhcHBsaWNhdGlvblwiLFwiaWRcIjpcImQ3YmJiMjA1LTk3NmItNDlhZC04ZjA5LTUxZWZhZGE1NWI1ZVwifSxcInRlbmFudFwiOntcInR5cGVcIjpcImFjY291bnRcIixcImlkXCI6XCIzMGFlZjZlZS01MzZmLTQyNmQtYWRjNy0wOWNiN2EwZWY1MzlcIn19IiwiaWF0IjoxNzcxNDUzNzk4fQ.bGnxASokWQlFO-GnkPL4-p9zRAJpMhA5Mo-QqqRT2X5djjLBvL_jcLSlpRveHnAJVefimxO9xKmvm8tXZjIr_coi7PCL9U0xDjhNtVNbJwOxEZWJ3BBWApeiPBBlhe5I0An56cPNniN3-XnE495cs5u2zUcvEog-QU5VzQ8wM-YdnJfPPMKKn-Kv1fQVD0xHplzSbDzBivMQdvxS0KIWAyyuItHn5ojUM4znVQOVhcT_6RooQKZuADMtxp6yFDlZINmrY8CDojhe0XOn4EoC9gF40hu7UNDeaYAUFyailDqswjbWpgQY2ME-1_v-MgzdIvmRtF_B5OqVpZiEv52drg"
+            },
+            {
+              "name": "wix-site-id",
+              "value": "4bef8d9b-4a79-4253-b76c-0714a99fed62"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "contentType": "json",
+        "jsonBody": "={\n  \"query\": {\n    \"filter\": {\n      \"createdDate\": { \"\": \"{{ .last_poll }}\" }\n    },\n    \"sort\": [{ \"fieldName\": \"createdDate\", \"order\": \"ASC\" }],\n    \"paging\": { \"limit\": 50 }\n  }\n}"
+      }
+    },
+    {
+      "id": "check-has-contacts",
+      "name": "Has New Contacts?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [
+        880,
+        0
+      ],
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict"
+          },
+          "conditions": [
+            {
+              "id": "cond1",
+              "leftValue": "={{ .contacts?.length ?? 0 }}",
+              "rightValue": 0,
+              "operator": {
+                "type": "number",
+                "operation": "gt"
+              }
+            }
+          ],
+          "combinator": "and"
+        }
+      }
+    },
+    {
+      "id": "split-contacts",
+      "name": "Loop Over Contacts",
+      "type": "n8n-nodes-base.splitInBatches",
+      "typeVersion": 3,
+      "position": [
+        1100,
+        -100
+      ],
+      "parameters": {
+        "batchSize": 1,
+        "options": {}
+      }
+    },
+    {
+      "id": "extract-contact",
+      "name": "Extract Contact Fields",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        1320,
+        -100
+      ],
+      "parameters": {
+        "mode": "manual",
+        "assignments": {
+          "assignments": [
+            {
+              "id": "wix_contact_id",
+              "name": "wix_contact_id",
+              "value": "={{ .id }}",
+              "type": "string"
+            },
+            {
+              "id": "first_name",
+              "name": "first_name",
+              "value": "={{ .info?.name?.first ?? '' }}",
+              "type": "string"
+            },
+            {
+              "id": "last_name",
+              "name": "last_name",
+              "value": "={{ .info?.name?.last ?? '' }}",
+              "type": "string"
+            },
+            {
+              "id": "email",
+              "name": "email",
+              "value": "={{ .primaryInfo?.email ?? .info?.emails?.items?.[0]?.email ?? '' }}",
+              "type": "string"
+            },
+            {
+              "id": "phone",
+              "name": "phone",
+              "value": "={{ .primaryInfo?.phone ?? .info?.phones?.items?.[0]?.phone ?? '' }}",
+              "type": "string"
+            },
+            {
+              "id": "created_at",
+              "name": "created_at",
+              "value": "={{ .createdDate }}",
+              "type": "string"
+            },
+            {
+              "id": "source",
+              "name": "source",
+              "value": "={{ .source?.sourceType ?? 'WIX_FORMS' }}",
+              "type": "string"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "insert-submission",
+      "name": "Insert to fightflow_form_submissions",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1540,
+        -100
+      ],
+      "parameters": {
+        "method": "POST",
+        "url": "https://wrsoacujxcskydlzgopa.supabase.co/rest/v1/fightflow_form_submissions",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "apikey",
+              "value": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Indyc29hY3VqeGNza3lkbHpnb3BhIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc0OTYwNTIxMSwiZXhwIjoyMDY1MTgxMjExfQ.DfHr_M1BFep1LVWpGSDfpMeb0vXqi17Y_VXoax96CvI"
+            },
+            {
+              "name": "Authorization",
+              "value": "Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Indyc29hY3VqeGNza3lkbHpnb3BhIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc0OTYwNTIxMSwiZXhwIjoyMDY1MTgxMjExfQ.DfHr_M1BFep1LVWpGSDfpMeb0vXqi17Y_VXoax96CvI"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            },
+            {
+              "name": "Prefer",
+              "value": "resolution=merge-duplicates,return=representation"
+            }
+          ]
+        },
+        "sendBody": true,
+        "contentType": "json",
+        "jsonBody": "={\n  \"wix_contact_id\": \"{{ .wix_contact_id }}\",\n  \"first_name\": \"{{ .first_name }}\",\n  \"last_name\": \"{{ .last_name }}\",\n  \"email\": \"{{ .email }}\",\n  \"phone\": \"{{ .phone }}\",\n  \"created_at\": \"{{ .created_at }}\",\n  \"source\": \"{{ .source }}\",\n  \"status\": \"new\",\n  \"auto_responded\": false\n}"
+      }
+    },
+    {
+      "id": "check-has-phone",
+      "name": "Has Phone?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [
+        1760,
+        -100
+      ],
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict"
+          },
+          "conditions": [
+            {
+              "id": "cond-phone",
+              "leftValue": "={{ .item.json.phone?.length ?? 0 }}",
+              "rightValue": 9,
+              "operator": {
+                "type": "number",
+                "operation": "gte"
+              }
+            }
+          ],
+          "combinator": "and"
+        }
+      }
+    },
+    {
+      "id": "send-sms",
+      "name": "Send SMS via Edge Function",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1980,
+        -200
+      ],
+      "parameters": {
+        "method": "POST",
+        "url": "https://wrsoacujxcskydlzgopa.supabase.co/functions/v1/send-sms",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Indyc29hY3VqeGNza3lkbHpnb3BhIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc0OTYwNTIxMSwiZXhwIjoyMDY1MTgxMjExfQ.DfHr_M1BFep1LVWpGSDfpMeb0vXqi17Y_VXoax96CvI"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "contentType": "json",
+        "jsonBody": "={\n  \"to\": \"{{ .item.json.phone }}\",\n  \"message\": \"Hi {{ .item.json.first_name }}! Thanks for your interest in Fight Flow Academy. We'll be in touch shortly to get you started. Reply STOP to opt out.\"\n}",
+        "options": {
+          "response": {
+            "response": {
+              "fullResponse": false,
+              "responseFormat": "json"
+            }
+          }
+        }
+      }
+    },
+    {
+      "id": "mark-auto-responded",
+      "name": "Mark Auto Responded",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        2200,
+        -200
+      ],
+      "parameters": {
+        "method": "PATCH",
+        "url": "=https://wrsoacujxcskydlzgopa.supabase.co/rest/v1/fightflow_form_submissions?wix_contact_id=eq.{{ .item.json.wix_contact_id }}",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "apikey",
+              "value": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Indyc29hY3VqeGNza3lkbHpnb3BhIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc0OTYwNTIxMSwiZXhwIjoyMDY1MTgxMjExfQ.DfHr_M1BFep1LVWpGSDfpMeb0vXqi17Y_VXoax96CvI"
+            },
+            {
+              "name": "Authorization",
+              "value": "Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Indyc29hY3VqeGNza3lkbHpnb3BhIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc0OTYwNTIxMSwiZXhwIjoyMDY1MTgxMjExfQ.DfHr_M1BFep1LVWpGSDfpMeb0vXqi17Y_VXoax96CvI"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "contentType": "json",
+        "jsonBody": "{\"auto_responded\": true}"
+      }
+    },
+    {
+      "id": "update-poll-time",
+      "name": "Update Poll Timestamp",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        2420,
+        0
+      ],
+      "parameters": {
+        "method": "PATCH",
+        "url": "https://wrsoacujxcskydlzgopa.supabase.co/rest/v1/ff_n8n_state?key=eq.form_capture_last_poll",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "apikey",
+              "value": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Indyc29hY3VqeGNza3lkbHpnb3BhIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc0OTYwNTIxMSwiZXhwIjoyMDY1MTgxMjExfQ.DfHr_M1BFep1LVWpGSDfpMeb0vXqi17Y_VXoax96CvI"
+            },
+            {
+              "name": "Authorization",
+              "value": "Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Indyc29hY3VqeGNza3lkbHpnb3BhIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc0OTYwNTIxMSwiZXhwIjoyMDY1MTgxMjExfQ.DfHr_M1BFep1LVWpGSDfpMeb0vXqi17Y_VXoax96CvI"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "contentType": "json",
+        "jsonBody": "={\n  \"value\": \"{{ .toISO() }}\",\n  \"updated_at\": \"{{ .toISO() }}\"\n}"
+      }
+    },
+    {
+      "id": "send-telegram-error",
+      "name": "Send Telegram Error Alert",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        660,
+        300
+      ],
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.telegram.org/bot8426038205:AAFS5_4HTJWmdU_4fwo2uwPAhO06L9riVkg/sendMessage",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "contentType": "json",
+        "jsonBody": "={\n  \"chat_id\": 1687128792,\n  \"text\": \"\u26a0\ufe0f FF Form Capture n8n FAILED\n\nNode: {{ .lastNodeExecuted }}\nError: {{ .error?.message ?? 'Unknown error' }}\nRun ID: {{ .id }}\"\n}"
+      }
+    }
+  ],
+  "connections": {
+    "Schedule Trigger": {
+      "main": [
+        [
+          {
+            "node": "Get Last Poll Time",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get Last Poll Time": {
+      "main": [
+        [
+          {
+            "node": "Set Poll Time",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Set Poll Time": {
+      "main": [
+        [
+          {
+            "node": "Query Wix Contacts",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Query Wix Contacts": {
+      "main": [
+        [
+          {
+            "node": "Has New Contacts?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Has New Contacts?": {
+      "main": [
+        [
+          {
+            "node": "Loop Over Contacts",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Update Poll Timestamp",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Loop Over Contacts": {
+      "main": [
+        [
+          {
+            "node": "Extract Contact Fields",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Update Poll Timestamp",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Extract Contact Fields": {
+      "main": [
+        [
+          {
+            "node": "Insert to fightflow_form_submissions",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Insert to fightflow_form_submissions": {
+      "main": [
+        [
+          {
+            "node": "Has Phone?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Has Phone?": {
+      "main": [
+        [
+          {
+            "node": "Send SMS via Edge Function",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Loop Over Contacts",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Send SMS via Edge Function": {
+      "main": [
+        [
+          {
+            "node": "Mark Auto Responded",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Mark Auto Responded": {
+      "main": [
+        [
+          {
+            "node": "Loop Over Contacts",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1",
+    "saveManualExecutions": true,
+    "callerPolicy": "workflowsFromSameOwner",
+    "errorWorkflow": ""
+  },
+  "staticData": null,
+  "tags": []
+}
