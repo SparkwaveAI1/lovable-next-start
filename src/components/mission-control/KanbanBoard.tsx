@@ -127,7 +127,7 @@ export function KanbanBoard({ tasks, agents, onTaskClick, onAddTask, onTaskStatu
       onDragOver={handleDragOver}
       onDragEnd={handleDragEnd}
     >
-      <div className="flex gap-3 sm:gap-4 overflow-x-auto pb-4 max-h-[600px] -mx-1 px-1">
+      <div className="flex gap-3 sm:gap-4 overflow-x-auto pb-4 -mx-1 px-1">
         {KANBAN_COLUMNS.map((column) => {
           const columnTasks = tasks.filter((t) => t.status === column.id);
           const style = columnStyles[column.id];
@@ -138,7 +138,7 @@ export function KanbanBoard({ tasks, agents, onTaskClick, onAddTask, onTaskStatu
               key={column.id}
               data-column-id={column.id}
               className={cn(
-                "flex-shrink-0 w-64 sm:w-72 h-full flex flex-col rounded-xl transition-all duration-200 overflow-hidden",
+                "flex-shrink-0 w-64 sm:w-72 flex flex-col rounded-xl transition-all duration-200",
                 isOver ? style.dropBg : "bg-slate-50/50",
                 isOver && "ring-2 ring-offset-2 ring-violet-400"
               )}
@@ -178,7 +178,7 @@ export function KanbanBoard({ tasks, agents, onTaskClick, onAddTask, onTaskStatu
               >
                 <div
                   className={cn(
-                    "flex-1 p-2 space-y-2 min-h-[120px] max-h-[600px] overflow-y-auto transition-colors",
+                    "flex-1 p-2 space-y-2 min-h-[120px] max-h-[500px] overflow-y-auto transition-colors",
                     isOver && "bg-opacity-80"
                   )}
                   data-droppable-id={column.id}
