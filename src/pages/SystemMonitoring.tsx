@@ -323,21 +323,23 @@ export default function SystemMonitoring() {
   }, [fetchData])
 
   // ── Derived stats ──
-  const onlineCount = data?.agents.filter((a) => a.online).length ?? 0
-  const totalAgents = data?.agents.length ?? 4
-  const activeWorkflows = data?.n8n.workflows.filter((w) => w.active).length ?? 0
-  const cronErrors = data?.cronStatus.filter(
+  const agents = data?.agents ?? []
+  const workflows = data?.n8n?.workflows ?? []
+  const cronStatus = data?.cronStatus ?? []
+
+  const onlineCount = agents.filter((a) => a.online).length
+  const totalAgents = agents.length || 4
+  const activeWorkflows = workflows.filter((w) => w.active).length
+  const cronErrors = cronStatus.filter(
     (c) => c.status === "failed" || c.status === "error"
-  ).length ?? 0
+  ).length
 
   // ── Group crons ──
   const cronGroups: Record<string, CronStatus[]> = {}
-  if (data?.cronStatus) {
-    for (const cron of data.cronStatus) {
-      const grp = cron.group ?? "System"
-      if (!cronGroups[grp]) cronGroups[grp] = []
-      cronGroups[grp].push(cron)
-    }
+  for (const cron of cronStatus) {
+    const grp = cron.group ?? "System"
+    if (!cronGroups[grp]) cronGroups[grp] = []
+    cronGroups[grp].push(cron)
   }
 
   // Order: Fight Flow → Twitter → System
@@ -427,7 +429,7 @@ export default function SystemMonitoring() {
                     <Clock className="h-5 w-5 text-blue-600" />
                   </div>
                   <div>
-                    <p className="text-2xl font-bold text-slate-900">{data.cronStatus.length}</p>
+                    <p className="text-2xl font-bold text-slate-900">{cronStatus.length}</p>
                     <p className="text-xs text-slate-500">Total Crons</p>
                   </div>
                 </div>
@@ -457,7 +459,7 @@ export default function SystemMonitoring() {
             {/* ── Section 1: Agent Servers ── */}
             <SectionCard title="Agent Servers" icon={<Server className="h-4 w-4" />}>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                {data.agents.map((agent) => (
+                {agents.map((agent) => (
                   <AgentCard key={agent.name} agent={agent} />
                 ))}
               </div>
@@ -465,7 +467,7 @@ export default function SystemMonitoring() {
 
             {/* ── Section 2: Cron Jobs (grouped + collapsible) ── */}
             <SectionCard title="Cron Jobs" icon={<Timer className="h-4 w-4" />}>
-              {data.cronStatus.length === 0 ? (
+              {cronStatus.length === 0 ? (
                 <p className="text-sm text-slate-400 text-center py-6">
                   No cron entries found in system registry.
                 </p>
@@ -485,14 +487,14 @@ export default function SystemMonitoring() {
 
             {/* ── Section 3: n8n Workflows ── */}
             <SectionCard title="n8n Workflows" icon={<Workflow className="h-4 w-4" />}>
-              {data.n8n.error && (
+              {data.n8n?.error && (
                 <div className="mb-3 p-2 bg-red-50 text-red-600 text-xs rounded-lg border border-red-100">
                   n8n API error: {data.n8n.error}
                 </div>
               )}
-              {data.n8n.workflows.length === 0 ? (
+              {workflows.length === 0 ? (
                 <p className="text-sm text-slate-400 text-center py-6">
-                  {data.n8n.error ? "Could not load workflows" : "No workflows found"}
+                  {data.n8n?.error ? "Could not load workflows" : "No workflows found"}
                 </p>
               ) : (
                 <div className="overflow-x-auto">
@@ -511,7 +513,7 @@ export default function SystemMonitoring() {
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-slate-50">
-                      {data.n8n.workflows.map((wf) => (
+                      {workflows.map((wf) => (
                         <tr key={wf.id} className="hover:bg-slate-50 transition-colors">
                           <td className="py-2.5 pr-4 font-medium text-slate-800">{wf.name}</td>
                           <td className="py-2.5 pr-4">
@@ -542,19 +544,19 @@ export default function SystemMonitoring() {
               <div className="divide-y divide-slate-50">
                 <FightFlowStat
                   label="Last form submission received"
-                  value={data.fightflow.lastFormSubmission}
+                  value={data.fightflow?.lastFormSubmission}
                 />
                 <FightFlowStat
                   label="Last SMS sent"
-                  value={data.fightflow.lastSmsSent}
+                  value={data.fightflow?.lastSmsSent}
                 />
                 <FightFlowStat
                   label="n8n form capture last poll"
-                  value={data.fightflow.formCaptureLastPoll}
+                  value={data.fightflow?.formCaptureLastPoll}
                 />
                 <FightFlowStat
                   label="n8n immediate response last run"
-                  value={data.fightflow.immediateResponseLastRun}
+                  value={data.fightflow?.immediateResponseLastRun}
                 />
               </div>
             </SectionCard>
