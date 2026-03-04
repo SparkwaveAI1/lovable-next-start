@@ -22,6 +22,7 @@ import AdminDashboard from "./pages/AdminDashboard";
 import EmailMarketing from "./pages/EmailMarketing";
 import MissionControl from "./pages/MissionControl";
 import AgentRegistry from "./pages/AgentRegistry";
+import Agents from "./pages/Agents";
 import Bookings from "./pages/Bookings";
 import Book from "./pages/Book";
 import Reports from "./pages/Reports";
@@ -95,7 +96,8 @@ const App = () => (
             <Route path="/email-marketing" element={<ProtectedRoute><ErrorBoundary><EmailMarketing /></ErrorBoundary></ProtectedRoute>} />
             <Route path="/mission-control" element={<ProtectedRoute><ErrorBoundary><MissionControl /></ErrorBoundary></ProtectedRoute>} />
             <Route path="/system-operations" element={<ProtectedRoute><ErrorBoundary><SystemOperations /></ErrorBoundary></ProtectedRoute>} />
-            <Route path="/agents" element={<ProtectedRoute><ErrorBoundary><AgentRegistry /></ErrorBoundary></ProtectedRoute>} />
+            <Route path="/agents" element={<ProtectedRoute><ErrorBoundary><Agents /></ErrorBoundary></ProtectedRoute>} />
+            <Route path="/agent-registry" element={<ProtectedRoute><ErrorBoundary><AgentRegistry /></ErrorBoundary></ProtectedRoute>} />
             <Route path="/bookings" element={<ProtectedRoute><ErrorBoundary><Bookings /></ErrorBoundary></ProtectedRoute>} />
             <Route path="/reports" element={<ProtectedRoute><ErrorBoundary><Reports /></ErrorBoundary></ProtectedRoute>} />
             <Route path="/docs/*" element={<ProtectedRoute><ErrorBoundary><Docs /></ErrorBoundary></ProtectedRoute>} />
