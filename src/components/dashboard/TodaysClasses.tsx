@@ -61,7 +61,6 @@ export function TodaysClasses({ businessId }: TodaysClassesProps) {
       const bookingQuery = supabase.from('class_bookings') as any;
       const bookingResult = await bookingQuery
         .select('class_schedule_id')
-        .eq('business_id', businessId)
         .eq('booking_date', todayDateStr)
         .in('class_schedule_id', classIds)
         .in('status', ['confirmed', 'showed']);
