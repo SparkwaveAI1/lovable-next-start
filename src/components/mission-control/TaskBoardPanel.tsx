@@ -35,6 +35,7 @@ interface MCTask {
   priority: TaskPriority;
   tags: string[];
   project: string | null;
+  due_date: string | null;
   created_at: string;
   updated_at: string;
 }
@@ -121,6 +122,20 @@ function extractOwners(tags: string[]): string[] {
     });
 }
 
+// ─── Due date display ─────────────────────────────────────────────────────────
+
+function DueDateBadge({ due_date }: { due_date: string | null }) {
+  if (!due_date) return null;
+  const date = new Date(due_date);
+  const isPast = date < new Date();
+  const formatted = date.toLocaleDateString("en-US", { month: "short", day: "numeric" });
+  return (
+    <span className={cn("text-xs font-medium", isPast ? "text-red-600" : "text-slate-500")}>
+      📅 {formatted}
+    </span>
+  );
+}
+
 // ─── Task Card ────────────────────────────────────────────────────────────────
 
 function TaskCardItem({ task, onClick }: { task: MCTask; onClick: (t: MCTask) => void }) {
@@ -142,6 +157,7 @@ function TaskCardItem({ task, onClick }: { task: MCTask; onClick: (t: MCTask) =>
             {o}
           </span>
         ))}
+        <DueDateBadge due_date={task.due_date} />
       </div>
 
       {desc && <p className="text-xs text-slate-500 leading-relaxed">{desc}</p>}
@@ -339,6 +355,7 @@ export function TaskBoardPanel() {
   const [tasks, setTasks] = useState<MCTask[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [dbProjects, setDbProjects] = useState<string[]>([]);
 
   // Filters
   const [filterProject, setFilterProject] = useState<string>("all");
@@ -356,7 +373,7 @@ export function TaskBoardPanel() {
     try {
       const { data, error: fetchError } = await supabase
         .from("mc_tasks")
-        .select("id,title,description,status,priority,tags,project,created_at,updated_at")
+        .select("id,title,description,status,priority,tags,project,due_date,created_at,updated_at")
         .order("priority", { ascending: false })
         .order("created_at", { ascending: false });
 
@@ -369,9 +386,24 @@ export function TaskBoardPanel() {
     }
   }, []);
 
+  const fetchProjects = useCallback(async () => {
+    try {
+      const { data, error: projError } = await supabase
+        .from("projects")
+        .select("name")
+        .order("name", { ascending: true });
+      if (!projError && data) {
+        setDbProjects(data.map((p: { name: string }) => p.name).filter(Boolean));
+      }
+    } catch {
+      // silently fall back to task-derived projects
+    }
+  }, []);
+
   useEffect(() => {
     fetchTasks();
-  }, [fetchTasks]);
+    fetchProjects();
+  }, [fetchTasks, fetchProjects]);
 
   // Apply filters
   const filteredTasks = tasks.filter((t) => {
@@ -409,8 +441,9 @@ export function TaskBoardPanel() {
     )
   );
 
-  // Extract all unique projects
-  const allProjects = Array.from(new Set(tasks.map((t) => t.project).filter(Boolean))) as string[];
+  // Extract all unique projects — prefer DB list, fall back to task-derived
+  const taskProjects = Array.from(new Set(tasks.map((t) => t.project).filter(Boolean))) as string[];
+  const allProjects = dbProjects.length > 0 ? dbProjects : taskProjects;
 
   return (
     <div className="space-y-4">

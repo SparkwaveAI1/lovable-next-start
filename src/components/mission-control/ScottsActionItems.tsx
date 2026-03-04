@@ -248,7 +248,7 @@ export function ScottsActionItems({ tasks, className, onTaskClick }: ScottsActio
         <div className="p-3 space-y-2 max-h-[400px] overflow-y-auto">
           {sortedTasks.length === 0 && (
             <div className="text-center py-6 text-slate-400 text-sm">
-              ✨ All clear — nothing blocking Rico's work
+              ✨ All clear — nothing blocking Scott's work
             </div>
           )}
           {sortedTasks.map((task) => {
