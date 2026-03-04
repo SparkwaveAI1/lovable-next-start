@@ -358,12 +358,21 @@ export function QualityDashboard({ className, businessId }: QualityDashboardProp
               </div>
 
               {/* Success Rate */}
-              <div className="p-3 rounded-lg bg-slate-50 border border-slate-200">
+              <div className={cn(
+                "p-3 rounded-lg border",
+                metrics.successRate >= 80 ? "bg-slate-50 border-slate-200" : metrics.successRate >= 50 ? "bg-amber-50 border-amber-200" : "bg-red-50 border-red-200"
+              )}>
                 <div className="flex items-center gap-2 mb-1">
-                  <TrendingUp className="h-4 w-4 text-emerald-500" />
+                  <TrendingUp className={cn(
+                    "h-4 w-4",
+                    metrics.successRate >= 80 ? "text-emerald-500" : metrics.successRate >= 50 ? "text-amber-500" : "text-red-500"
+                  )} />
                   <span className="text-xs font-medium text-slate-500">Success Rate</span>
                 </div>
-                <p className="text-xl font-bold text-slate-900">
+                <p className={cn(
+                  "text-xl font-bold",
+                  metrics.successRate >= 80 ? "text-emerald-700" : metrics.successRate >= 50 ? "text-amber-700" : "text-red-700"
+                )}>
                   {metrics.successRate.toFixed(1)}%
                 </p>
                 <p className="text-xs text-slate-500">Automation ops</p>
