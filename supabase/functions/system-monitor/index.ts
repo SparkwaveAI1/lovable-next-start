@@ -14,6 +14,20 @@ const AGENTS = [
   { name: "Jerry", ip: "5.161.184.240", port: 18789, role: "Operations Agent" },
 ]
 
+// ── Module-scope type declarations ────────────────────────────────────────────
+interface WorkflowRecord { id: string; name: string; active: boolean; updatedAt?: string }
+interface RegistryRecord { id: string; name: string; category: string; schedule: string | null }
+interface CronLogRecord {
+  registry_id: string
+  status: string
+  last_run: string | null
+  next_run: string | null
+  error_message: string | null
+  created_at: string
+}
+interface N8nStateRow { key: string; value: string; updated_at: string }
+// ─────────────────────────────────────────────────────────────────────────────
+
 async function pingAgent(
   ip: string,
   port: number
@@ -96,7 +110,6 @@ serve(async (req) => {
     // ── 2. n8n Workflows (proxy — key never exposed to browser) ───────────────
     const n8nData = await fetchN8nWorkflows(n8nApiKey, n8nUrl)
 
-    interface WorkflowRecord { id: string; name: string; active: boolean; updatedAt?: string }
     const n8nWorkflows = (n8nData.workflows as WorkflowRecord[]).map((wf) => ({
       id: wf.id,
       name: wf.name,
@@ -122,16 +135,6 @@ serve(async (req) => {
       registryResult.status === "fulfilled" ? (registryResult.value.data ?? []) : []
     const cronLogs =
       cronLogResult.status === "fulfilled" ? (cronLogResult.value.data ?? []) : []
-
-    interface RegistryRecord { id: string; name: string; category: string; schedule: string | null }
-    interface CronLogRecord {
-      registry_id: string
-      status: string
-      last_run: string | null
-      next_run: string | null
-      error_message: string | null
-      created_at: string
-    }
 
     const registryMap: Record<string, RegistryRecord> = {}
     for (const item of registryItems as RegistryRecord[]) {
@@ -202,7 +205,6 @@ serve(async (req) => {
     const ffSmsData = ffSmsResult.status === "fulfilled" ? ffSmsResult.value.data : null
     const ffN8nData = ffN8nResult.status === "fulfilled" ? ffN8nResult.value.data : null
 
-    interface N8nStateRow { key: string; value: string; updated_at: string }
     const n8nStateMap: Record<string, string> = {}
     for (const row of (ffN8nData ?? []) as N8nStateRow[]) {
       n8nStateMap[row.key] = row.value ?? row.updated_at
