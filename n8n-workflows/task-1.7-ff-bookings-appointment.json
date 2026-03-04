@@ -1,0 +1,614 @@
+{
+  "name": "FF Bookings Sync + Appointment Trigger (Task 1.7)",
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "minutes",
+              "minutesInterval": 15
+            }
+          ]
+        }
+      },
+      "id": "schedule-trigger",
+      "name": "Schedule Trigger",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [0, 300]
+    },
+    {
+      "parameters": {
+        "method": "GET",
+        "url": "https://wrsoacujxcskydlzgopa.supabase.co/rest/v1/ff_n8n_state?key=eq.bookings_sync_last_poll",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "apikey",
+              "value": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Indyc29hY3VqeGNza3lkbHpnb3BhIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc0OTYwNTIxMSwiZXhwIjoyMDY1MTgxMjExfQ.DfHr_M1BFep1LVWpGSDfpMeb0vXqi17Y_VXoax96CvI"
+            },
+            {
+              "name": "Authorization",
+              "value": "Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Indyc29hY3VqeGNza3lkbHpnb3BhIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc0OTYwNTIxMSwiZXhwIjoyMDY1MTgxMjExfQ.DfHr_M1BFep1LVWpGSDfpMeb0vXqi17Y_VXoax96CvI"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "get-last-poll",
+      "name": "Get Last Poll Time",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [240, 300]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://www.wixapis.com/bookings/v2/bookings/query",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "IST.eyJraWQiOiJQb3pIX2FDMiIsImFsZyI6IlJTMjU2In0.eyJkYXRhIjoie1wiaWRcIjpcIjE3ZmQxODdmLWE1ODQtNGFkMi04NTQzLTg5NzJiYTQ0OGU4NlwiLFwiaWRlbnRpdHlcIjp7XCJ0eXBlXCI6XCJhcHBsaWNhdGlvblwiLFwiaWRcIjpcImQ3YmJiMjA1LTk3NmItNDlhZC04ZjA5LTUxZWZhZGE1NWI1ZVwifSxcInRlbmFudFwiOntcInR5cGVcIjpcImFjY291bnRcIixcImlkXCI6XCIzMGFlZjZlZS01MzZmLTQyNmQtYWRjNy0wOWNiN2EwZWY1MzlcIn19IiwiaWF0IjoxNzcxNDUzNzk4fQ.bGnxASokWQlFO-GnkPL4-p9zRAJpMhA5Mo-QqqRT2X5djjLBvL_jcLSlpRveHnAJVefimxO9xKmvm8tXZjIr_coi7PCL9U0xDjhNtVNbJwOxEZWJ3BBWApeiPBBlhe5I0An56cPNniN3-XnE495cs5u2zUcvEog-QU5VzQ8wM-YdnJfPPMKKn-Kv1fQVD0xHplzSbDzBivMQdvxS0KIWAyyuItHn5ojUM4znVQOVhcT_6RooQKZuADMtxp6yFDlZINmrY8CDojhe0XOn4EoC9gF40hu7UNDeaYAUFyailDqswjbWpgQY2ME-1_v-MgzdIvmRtF_B5OqVpZiEv52drg"
+            },
+            {
+              "name": "wix-site-id",
+              "value": "4bef8d9b-4a79-4253-b76c-0714a99fed62"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "contentType": "json",
+        "jsonBody": "={{ JSON.stringify({ query: { filter: { createdDate: { '$gte': $json[0].value } }, sort: [{ fieldName: 'createdDate', order: 'ASC' }], paging: { limit: 100 } } }) }}",
+        "options": {}
+      },
+      "id": "query-wix-bookings",
+      "name": "Query Wix Bookings",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [480, 300]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict"
+          },
+          "conditions": [
+            {
+              "id": "has-bookings",
+              "leftValue": "={{ $json.bookings ? $json.bookings.length : 0 }}",
+              "rightValue": 0,
+              "operator": {
+                "type": "number",
+                "operation": "gt"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "if-has-bookings",
+      "name": "Has New Bookings?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [720, 300]
+    },
+    {
+      "parameters": {
+        "fieldToSplitOut": "bookings",
+        "options": {}
+      },
+      "id": "split-bookings",
+      "name": "Split Bookings",
+      "type": "n8n-nodes-base.splitOut",
+      "typeVersion": 1,
+      "position": [960, 180]
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "wix_booking_id",
+              "name": "wix_booking_id",
+              "value": "={{ $json.id }}",
+              "type": "string"
+            },
+            {
+              "id": "contact_name",
+              "name": "contact_name",
+              "value": "={{ (($json.contactDetails?.firstName ?? '') + ' ' + ($json.contactDetails?.lastName ?? '')).trim() }}",
+              "type": "string"
+            },
+            {
+              "id": "contact_email",
+              "name": "contact_email",
+              "value": "={{ $json.contactDetails?.email ?? null }}",
+              "type": "string"
+            },
+            {
+              "id": "contact_phone",
+              "name": "contact_phone",
+              "value": "={{ $json.contactDetails?.phone ?? null }}",
+              "type": "string"
+            },
+            {
+              "id": "service_name",
+              "name": "service_name",
+              "value": "={{ $json.bookedEntity?.title ?? $json.bookedEntity?.titleTranslated ?? '' }}",
+              "type": "string"
+            },
+            {
+              "id": "session_start",
+              "name": "session_start",
+              "value": "={{ $json.bookedEntity?.slot?.startDate ?? $json.startDate ?? null }}",
+              "type": "string"
+            },
+            {
+              "id": "session_end",
+              "name": "session_end",
+              "value": "={{ $json.bookedEntity?.slot?.endDate ?? $json.endDate ?? null }}",
+              "type": "string"
+            },
+            {
+              "id": "status",
+              "name": "status",
+              "value": "={{ ($json.status ?? 'confirmed').toLowerCase() }}",
+              "type": "string"
+            },
+            {
+              "id": "location",
+              "name": "location",
+              "value": "={{ $json.bookedEntity?.slot?.location?.name ?? null }}",
+              "type": "string"
+            },
+            {
+              "id": "synced_at",
+              "name": "synced_at",
+              "value": "={{ new Date().toISOString() }}",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "extract-booking-fields",
+      "name": "Extract Booking Fields",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [1200, 180]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://wrsoacujxcskydlzgopa.supabase.co/rest/v1/fightflow_appointments",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "apikey",
+              "value": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Indyc29hY3VqeGNza3lkbHpnb3BhIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc0OTYwNTIxMSwiZXhwIjoyMDY1MTgxMjExfQ.DfHr_M1BFep1LVWpGSDfpMeb0vXqi17Y_VXoax96CvI"
+            },
+            {
+              "name": "Authorization",
+              "value": "Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Indyc29hY3VqeGNza3lkbHpnb3BhIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc0OTYwNTIxMSwiZXhwIjoyMDY1MTgxMjExfQ.DfHr_M1BFep1LVWpGSDfpMeb0vXqi17Y_VXoax96CvI"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            },
+            {
+              "name": "Prefer",
+              "value": "resolution=merge-duplicates,return=representation"
+            }
+          ]
+        },
+        "sendBody": true,
+        "contentType": "json",
+        "jsonBody": "={{ JSON.stringify({ wix_booking_id: $json.wix_booking_id, contact_name: $json.contact_name, contact_email: $json.contact_email, contact_phone: $json.contact_phone, service_name: $json.service_name, session_start: $json.session_start, session_end: $json.session_end, status: $json.status, location: $json.location, synced_at: $json.synced_at }) }}",
+        "options": {}
+      },
+      "id": "upsert-appointment",
+      "name": "Upsert fightflow_appointments",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [1440, 180]
+    },
+    {
+      "parameters": {
+        "method": "PATCH",
+        "url": "https://wrsoacujxcskydlzgopa.supabase.co/rest/v1/ff_n8n_state?key=eq.bookings_sync_last_poll",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "apikey",
+              "value": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Indyc29hY3VqeGNza3lkbHpnb3BhIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc0OTYwNTIxMSwiZXhwIjoyMDY1MTgxMjExfQ.DfHr_M1BFep1LVWpGSDfpMeb0vXqi17Y_VXoax96CvI"
+            },
+            {
+              "name": "Authorization",
+              "value": "Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Indyc29hY3VqeGNza3lkbHpnb3BhIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc0OTYwNTIxMSwiZXhwIjoyMDY1MTgxMjExfQ.DfHr_M1BFep1LVWpGSDfpMeb0vXqi17Y_VXoax96CvI"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "contentType": "json",
+        "jsonBody": "={{ JSON.stringify({ value: new Date().toISOString(), updated_at: new Date().toISOString() }) }}",
+        "options": {}
+      },
+      "id": "update-poll-timestamp",
+      "name": "Update Poll Timestamp",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [1440, 420]
+    },
+    {
+      "parameters": {
+        "method": "GET",
+        "url": "https://wrsoacujxcskydlzgopa.supabase.co/rest/v1/fightflow_appointments",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "apikey",
+              "value": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Indyc29hY3VqeGNza3lkbHpnb3BhIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc0OTYwNTIxMSwiZXhwIjoyMDY1MTgxMjExfQ.DfHr_M1BFep1LVWpGSDfpMeb0vXqi17Y_VXoax96CvI"
+            },
+            {
+              "name": "Authorization",
+              "value": "Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Indyc29hY3VqeGNza3lkbHpnb3BhIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc0OTYwNTIxMSwiZXhwIjoyMDY1MTgxMjExfQ.DfHr_M1BFep1LVWpGSDfpMeb0vXqi17Y_VXoax96CvI"
+            }
+          ]
+        },
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "status",
+              "value": "eq.confirmed"
+            },
+            {
+              "name": "sequence_enrolled",
+              "value": "eq.false"
+            },
+            {
+              "name": "select",
+              "value": "id,contact_name,contact_email,contact_phone,session_start,service_name"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "get-unenrolled-appointments",
+      "name": "Get Unenrolled Appointments",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [1680, 420]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict"
+          },
+          "conditions": [
+            {
+              "id": "has-appointments",
+              "leftValue": "={{ Array.isArray($json) ? $json.length : 0 }}",
+              "rightValue": 0,
+              "operator": {
+                "type": "number",
+                "operation": "gt"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "if-has-appointments",
+      "name": "Has Unenrolled Appointments?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [1920, 420]
+    },
+    {
+      "parameters": {
+        "fieldToSplitOut": "",
+        "include": "allOtherFields",
+        "options": {}
+      },
+      "id": "split-appointments",
+      "name": "Split Appointments",
+      "type": "n8n-nodes-base.splitOut",
+      "typeVersion": 1,
+      "position": [2160, 300]
+    },
+    {
+      "parameters": {
+        "jsCode": "const appt = $input.item.json;\nconst sessionStart = new Date(appt.session_start);\n\nconst addDays = (date, days) => {\n  const d = new Date(date);\n  d.setDate(d.getDate() + days);\n  return d.toISOString();\n};\n\nconst steps = [\n  {\n    appointment_id: appt.id,\n    step_name: 'pre_class_reminder',\n    step_order: 1,\n    channel: 'sms',\n    scheduled_for: addDays(sessionStart, -1),\n    status: 'pending',\n    message_content: `Hi ${appt.contact_name || 'there'}! Just a reminder about your ${appt.service_name || 'class'} tomorrow at Fight Flow Academy. We look forward to seeing you! Reply STOP to opt out.`\n  },\n  {\n    appointment_id: appt.id,\n    step_name: 'post_class_checkin',\n    step_order: 2,\n    channel: 'sms',\n    scheduled_for: addDays(sessionStart, 1),\n    status: 'pending',\n    message_content: `Hey ${appt.contact_name || 'there'}! Hope you enjoyed your ${appt.service_name || 'class'} at Fight Flow Academy! How did it go? We'd love to hear from you.`\n  },\n  {\n    appointment_id: appt.id,\n    step_name: 'day3_followup',\n    step_order: 3,\n    channel: 'sms',\n    scheduled_for: addDays(sessionStart, 3),\n    status: 'pending',\n    message_content: `Hi ${appt.contact_name || 'there'}, it's been a few days since your class at Fight Flow Academy. Are you interested in continuing your training? We have great membership options available!`\n  },\n  {\n    appointment_id: appt.id,\n    step_name: 'week1_checkin',\n    step_order: 4,\n    channel: 'sms',\n    scheduled_for: addDays(sessionStart, 7),\n    status: 'pending',\n    message_content: `Hey ${appt.contact_name || 'there'}! A week has passed since your class at Fight Flow Academy. Ready to take the next step in your martial arts journey? Reply YES to learn about our memberships!`\n  }\n];\n\nreturn steps.map(step => ({ json: step }));"
+      },
+      "id": "compute-sequence-steps",
+      "name": "Compute Sequence Dates",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [2400, 300]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://wrsoacujxcskydlzgopa.supabase.co/rest/v1/fightflow_sequence_steps",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "apikey",
+              "value": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Indyc29hY3VqeGNza3lkbHpnb3BhIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc0OTYwNTIxMSwiZXhwIjoyMDY1MTgxMjExfQ.DfHr_M1BFep1LVWpGSDfpMeb0vXqi17Y_VXoax96CvI"
+            },
+            {
+              "name": "Authorization",
+              "value": "Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Indyc29hY3VqeGNza3lkbHpnb3BhIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc0OTYwNTIxMSwiZXhwIjoyMDY1MTgxMjExfQ.DfHr_M1BFep1LVWpGSDfpMeb0vXqi17Y_VXoax96CvI"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            },
+            {
+              "name": "Prefer",
+              "value": "return=minimal"
+            }
+          ]
+        },
+        "sendBody": true,
+        "contentType": "json",
+        "jsonBody": "={{ JSON.stringify({ appointment_id: $json.appointment_id, step_name: $json.step_name, step_order: $json.step_order, channel: $json.channel, scheduled_for: $json.scheduled_for, status: $json.status, message_content: $json.message_content }) }}",
+        "options": {}
+      },
+      "id": "insert-sequence-step",
+      "name": "Insert Sequence Step",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [2640, 300]
+    },
+    {
+      "parameters": {
+        "method": "PATCH",
+        "url": "={{ 'https://wrsoacujxcskydlzgopa.supabase.co/rest/v1/fightflow_appointments?id=eq.' + $('Compute Sequence Dates').item.json.appointment_id }}",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "apikey",
+              "value": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Indyc29hY3VqeGNza3lkbHpnb3BhIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc0OTYwNTIxMSwiZXhwIjoyMDY1MTgxMjExfQ.DfHr_M1BFep1LVWpGSDfpMeb0vXqi17Y_VXoax96CvI"
+            },
+            {
+              "name": "Authorization",
+              "value": "Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Indyc29hY3VqeGNza3lkbHpnb3BhIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc0OTYwNTIxMSwiZXhwIjoyMDY1MTgxMjExfQ.DfHr_M1BFep1LVWpGSDfpMeb0vXqi17Y_VXoax96CvI"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            },
+            {
+              "name": "Prefer",
+              "value": "return=minimal"
+            }
+          ]
+        },
+        "sendBody": true,
+        "contentType": "json",
+        "jsonBody": "={{ JSON.stringify({ sequence_enrolled: true, sequence_enrolled_at: new Date().toISOString() }) }}",
+        "options": {}
+      },
+      "id": "mark-sequence-enrolled",
+      "name": "Mark Sequence Enrolled",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [2880, 300]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.telegram.org/bot8426038205:AAFS5_4HTJWmdU_4fwo2uwPAhO06L9riVkg/sendMessage",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "contentType": "json",
+        "jsonBody": "={\n  \"chat_id\": 1687128792,\n  \"text\": \"⚠️ <b>Task 1.7 FF Bookings Sync FAILED</b>\\n\\nNode: {{ $execution.lastNodeExecuted }}\\nError: {{ $execution.lastError?.message ?? 'Unknown error' }}\\nRun ID: {{ $execution.id }}\",\n  \"parse_mode\": \"HTML\"\n}",
+        "options": {}
+      },
+      "id": "telegram-error-alert",
+      "name": "Send Telegram Error Alert",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [960, 540]
+    }
+  ],
+  "connections": {
+    "Schedule Trigger": {
+      "main": [
+        [
+          {
+            "node": "Get Last Poll Time",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get Last Poll Time": {
+      "main": [
+        [
+          {
+            "node": "Query Wix Bookings",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Query Wix Bookings": {
+      "main": [
+        [
+          {
+            "node": "Has New Bookings?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Has New Bookings?": {
+      "main": [
+        [
+          {
+            "node": "Split Bookings",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Update Poll Timestamp",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Split Bookings": {
+      "main": [
+        [
+          {
+            "node": "Extract Booking Fields",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Extract Booking Fields": {
+      "main": [
+        [
+          {
+            "node": "Upsert fightflow_appointments",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Upsert fightflow_appointments": {
+      "main": [
+        [
+          {
+            "node": "Update Poll Timestamp",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Update Poll Timestamp": {
+      "main": [
+        [
+          {
+            "node": "Get Unenrolled Appointments",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get Unenrolled Appointments": {
+      "main": [
+        [
+          {
+            "node": "Has Unenrolled Appointments?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Has Unenrolled Appointments?": {
+      "main": [
+        [
+          {
+            "node": "Split Appointments",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        []
+      ]
+    },
+    "Split Appointments": {
+      "main": [
+        [
+          {
+            "node": "Compute Sequence Dates",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Compute Sequence Dates": {
+      "main": [
+        [
+          {
+            "node": "Insert Sequence Step",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Insert Sequence Step": {
+      "main": [
+        [
+          {
+            "node": "Mark Sequence Enrolled",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1",
+    "saveManualExecutions": true,
+    "callerPolicy": "workflowsFromSameOwner",
+    "errorWorkflow": ""
+  },
+  "staticData": null,
+  "meta": {
+    "instanceId": "task-1.7-ff-bookings-appointment"
+  },
+  "pinData": {}
+}

@@ -1,0 +1,667 @@
+{
+  "name": "FF Sequence Manager — Fight Flow (Task 1.8)",
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "minutes",
+              "minutesInterval": 30
+            }
+          ]
+        }
+      },
+      "id": "schedule-trigger",
+      "name": "Schedule Trigger",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [260, 300]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Check if current time is within business hours (8AM–6PM ET)\nconst now = new Date();\nconst etHour = parseInt(\n  new Intl.DateTimeFormat('en-US', {\n    timeZone: 'America/New_York',\n    hour: 'numeric',\n    hour12: false\n  }).format(now)\n);\n\nconst etTime = new Intl.DateTimeFormat('en-US', {\n  timeZone: 'America/New_York',\n  hour: '2-digit',\n  minute: '2-digit',\n  hour12: false\n}).format(now);\n\nif (etHour < 8 || etHour >= 18) {\n  // Outside business hours — stop workflow\n  return [];\n}\n\nreturn [{ json: { et_hour: etHour, et_time: etTime, timestamp: now.toISOString() } }];\n"
+      },
+      "id": "time-check",
+      "name": "Time Check (8AM-6PM ET)",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [480, 300]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict"
+          },
+          "conditions": [
+            {
+              "id": "time-passed",
+              "leftValue": "={{ $json.et_hour }}",
+              "rightValue": 7,
+              "operator": {
+                "type": "number",
+                "operation": "gt"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "if-business-hours",
+      "name": "Business Hours?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [700, 300]
+    },
+    {
+      "parameters": {
+        "method": "GET",
+        "url": "https://wrsoacujxcskydlzgopa.supabase.co/rest/v1/fightflow_sequence_steps",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "apikey",
+              "value": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Indyc29hY3VqeGNza3lkbHpnb3BhIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc0OTYwNTIxMSwiZXhwIjoyMDY1MTgxMjExfQ.DfHr_M1BFep1LVWpGSDfpMeb0vXqi17Y_VXoax96CvI"
+            },
+            {
+              "name": "Authorization",
+              "value": "Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Indyc29hY3VqeGNza3lkbHpnb3BhIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc0OTYwNTIxMSwiZXhwIjoyMDY1MTgxMjExfQ.DfHr_M1BFep1LVWpGSDfpMeb0vXqi17Y_VXoax96CvI"
+            }
+          ]
+        },
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "status",
+              "value": "eq.pending"
+            },
+            {
+              "name": "scheduled_for",
+              "value": "=lte.{{ new Date().toISOString() }}"
+            },
+            {
+              "name": "retry_count",
+              "value": "lt.3"
+            },
+            {
+              "name": "select",
+              "value": "id,submission_id,step_name,message_content,scheduled_for,retry_count,channel"
+            },
+            {
+              "name": "order",
+              "value": "scheduled_for.asc"
+            },
+            {
+              "name": "limit",
+              "value": "50"
+            }
+          ]
+        },
+        "options": {
+          "response": {
+            "response": {
+              "responseFormat": "json"
+            }
+          }
+        }
+      },
+      "id": "get-pending-steps",
+      "name": "Get Pending Sequence Steps",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [920, 220]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict"
+          },
+          "conditions": [
+            {
+              "id": "has-steps",
+              "leftValue": "={{ $json.length }}",
+              "rightValue": 0,
+              "operator": {
+                "type": "number",
+                "operation": "gt"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "if-steps-found",
+      "name": "Steps Found?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [1140, 220]
+    },
+    {
+      "parameters": {
+        "fieldToSplitOut": "=",
+        "options": {}
+      },
+      "id": "split-steps",
+      "name": "Loop Over Steps",
+      "type": "n8n-nodes-base.splitOut",
+      "typeVersion": 1,
+      "position": [1360, 140]
+    },
+    {
+      "parameters": {
+        "method": "GET",
+        "url": "=https://wrsoacujxcskydlzgopa.supabase.co/rest/v1/fightflow_form_submissions",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "apikey",
+              "value": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Indyc29hY3VqeGNza3lkbHpnb3BhIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc0OTYwNTIxMSwiZXhwIjoyMDY1MTgxMjExfQ.DfHr_M1BFep1LVWpGSDfpMeb0vXqi17Y_VXoax96CvI"
+            },
+            {
+              "name": "Authorization",
+              "value": "Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Indyc29hY3VqeGNza3lkbHpnb3BhIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc0OTYwNTIxMSwiZXhwIjoyMDY1MTgxMjExfQ.DfHr_M1BFep1LVWpGSDfpMeb0vXqi17Y_VXoax96CvI"
+            }
+          ]
+        },
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "id",
+              "value": "=eq.{{ $json.submission_id }}"
+            },
+            {
+              "name": "select",
+              "value": "id,first_name,last_name,phone,email"
+            }
+          ]
+        },
+        "options": {
+          "response": {
+            "response": {
+              "responseFormat": "json"
+            }
+          }
+        }
+      },
+      "id": "get-lead-details",
+      "name": "Get Lead Details",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [1580, 140]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Merge step data with lead data\nconst step = $('Loop Over Steps').item.json;\nconst leads = $input.all();\nconst lead = leads.length > 0 ? leads[0].json : null;\n\nif (!lead || !Array.isArray(lead) || lead.length === 0) {\n  // No lead found - treat as missing phone\n  return [{\n    json: {\n      step_id: step.id,\n      submission_id: step.submission_id,\n      step_name: step.step_name,\n      message_content: step.message_content,\n      retry_count: step.retry_count || 0,\n      has_phone: false,\n      phone: null,\n      first_name: null,\n      skip_reason: 'lead_not_found'\n    }\n  }];\n}\n\n// lead is an array from Supabase REST API\nconst leadData = Array.isArray(lead) ? lead[0] : lead;\nconst hasPhone = !!(leadData.phone && leadData.phone.trim());\n\nreturn [{\n  json: {\n    step_id: step.id,\n    submission_id: step.submission_id,\n    step_name: step.step_name,\n    message_content: step.message_content,\n    retry_count: step.retry_count || 0,\n    has_phone: hasPhone,\n    phone: hasPhone ? leadData.phone.trim() : null,\n    first_name: leadData.first_name || 'there',\n    last_name: leadData.last_name || '',\n    email: leadData.email || null,\n    skip_reason: hasPhone ? null : 'no_phone'\n  }\n}];\n"
+      },
+      "id": "merge-step-lead",
+      "name": "Merge Step + Lead Data",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1800, 140]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict"
+          },
+          "conditions": [
+            {
+              "id": "has-phone",
+              "leftValue": "={{ $json.has_phone }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "equal"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "if-has-phone",
+      "name": "Has Phone?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [2020, 140]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://wrsoacujxcskydlzgopa.supabase.co/functions/v1/send-sms",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Indyc29hY3VqeGNza3lkbHpnb3BhIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc0OTYwNTIxMSwiZXhwIjoyMDY1MTgxMjExfQ.DfHr_M1BFep1LVWpGSDfpMeb0vXqi17Y_VXoax96CvI"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "contentType": "json",
+        "jsonBody": "={\n  \"to\": \"{{ $json.phone }}\",\n  \"message\": \"{{ $json.message_content }}\",\n  \"step_id\": \"{{ $json.step_id }}\"\n}",
+        "options": {
+          "response": {
+            "response": {
+              "fullResponse": true,
+              "responseFormat": "json"
+            }
+          }
+        }
+      },
+      "id": "send-sms",
+      "name": "Send SMS via Edge Function",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [2240, 60]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict"
+          },
+          "conditions": [
+            {
+              "id": "sms-success",
+              "leftValue": "={{ $json.statusCode }}",
+              "rightValue": 300,
+              "operator": {
+                "type": "number",
+                "operation": "lt"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "if-sms-success",
+      "name": "SMS Sent OK?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [2460, 60]
+    },
+    {
+      "parameters": {
+        "method": "PATCH",
+        "url": "=https://wrsoacujxcskydlzgopa.supabase.co/rest/v1/fightflow_sequence_steps?id=eq.{{ $('Merge Step + Lead Data').item.json.step_id }}",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "apikey",
+              "value": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Indyc29hY3VqeGNza3lkbHpnb3BhIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc0OTYwNTIxMSwiZXhwIjoyMDY1MTgxMjExfQ.DfHr_M1BFep1LVWpGSDfpMeb0vXqi17Y_VXoax96CvI"
+            },
+            {
+              "name": "Authorization",
+              "value": "Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Indyc29hY3VqeGNza3lkbHpnb3BhIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc0OTYwNTIxMSwiZXhwIjoyMDY1MTgxMjExfQ.DfHr_M1BFep1LVWpGSDfpMeb0vXqi17Y_VXoax96CvI"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            },
+            {
+              "name": "Prefer",
+              "value": "return=minimal"
+            }
+          ]
+        },
+        "sendBody": true,
+        "contentType": "json",
+        "jsonBody": "={\n  \"status\": \"sent\",\n  \"sent_at\": \"{{ new Date().toISOString() }}\"\n}",
+        "options": {}
+      },
+      "id": "mark-sent",
+      "name": "Mark Step Sent",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [2680, -20]
+    },
+    {
+      "parameters": {
+        "method": "PATCH",
+        "url": "=https://wrsoacujxcskydlzgopa.supabase.co/rest/v1/fightflow_sequence_steps?id=eq.{{ $('Merge Step + Lead Data').item.json.step_id }}",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "apikey",
+              "value": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Indyc29hY3VqeGNza3lkbHpnb3BhIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc0OTYwNTIxMSwiZXhwIjoyMDY1MTgxMjExfQ.DfHr_M1BFep1LVWpGSDfpMeb0vXqi17Y_VXoax96CvI"
+            },
+            {
+              "name": "Authorization",
+              "value": "Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Indyc29hY3VqeGNza3lkbHpnb3BhIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc0OTYwNTIxMSwiZXhwIjoyMDY1MTgxMjExfQ.DfHr_M1BFep1LVWpGSDfpMeb0vXqi17Y_VXoax96CvI"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            },
+            {
+              "name": "Prefer",
+              "value": "return=minimal"
+            }
+          ]
+        },
+        "sendBody": true,
+        "contentType": "json",
+        "jsonBody": "={\n  \"retry_count\": {{ $('Merge Step + Lead Data').item.json.retry_count + 1 }},\n  \"last_error\": \"SMS send failed\"\n}",
+        "options": {}
+      },
+      "id": "increment-retry",
+      "name": "Increment Retry Count",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [2680, 140]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict"
+          },
+          "conditions": [
+            {
+              "id": "max-retries",
+              "leftValue": "={{ $('Merge Step + Lead Data').item.json.retry_count + 1 }}",
+              "rightValue": 3,
+              "operator": {
+                "type": "number",
+                "operation": "gte"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "if-max-retries",
+      "name": "Max Retries Reached?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [2900, 140]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.telegram.org/bot8426038205:AAFS5_4HTJWmdU_4fwo2uwPAhO06L9riVkg/sendMessage",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "contentType": "json",
+        "jsonBody": "={\n  \"chat_id\": 1687128792,\n  \"text\": \"⚠️ FF Sequence Step Failed 3x\\n\\nStep ID: {{ $('Merge Step + Lead Data').item.json.step_id }}\\nStep: {{ $('Merge Step + Lead Data').item.json.step_name }}\\nPhone: {{ $('Merge Step + Lead Data').item.json.phone }}\\nSubmission: {{ $('Merge Step + Lead Data').item.json.submission_id }}\",\n  \"parse_mode\": \"HTML\"\n}",
+        "options": {}
+      },
+      "id": "telegram-retry-alert",
+      "name": "Telegram: Max Retry Alert",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [3120, 80]
+    },
+    {
+      "parameters": {
+        "method": "PATCH",
+        "url": "=https://wrsoacujxcskydlzgopa.supabase.co/rest/v1/fightflow_sequence_steps?id=eq.{{ $json.step_id }}",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "apikey",
+              "value": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Indyc29hY3VqeGNza3lkbHpnb3BhIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc0OTYwNTIxMSwiZXhwIjoyMDY1MTgxMjExfQ.DfHr_M1BFep1LVWpGSDfpMeb0vXqi17Y_VXoax96CvI"
+            },
+            {
+              "name": "Authorization",
+              "value": "Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Indyc29hY3VqeGNza3lkbHpnb3BhIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc0OTYwNTIxMSwiZXhwIjoyMDY1MTgxMjExfQ.DfHr_M1BFep1LVWpGSDfpMeb0vXqi17Y_VXoax96CvI"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            },
+            {
+              "name": "Prefer",
+              "value": "return=minimal"
+            }
+          ]
+        },
+        "sendBody": true,
+        "contentType": "json",
+        "jsonBody": "={\n  \"status\": \"skipped\",\n  \"error_message\": \"{{ $json.skip_reason }}\"\n}",
+        "options": {}
+      },
+      "id": "mark-skipped",
+      "name": "Mark Step Skipped (No Phone)",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [2240, 240]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.telegram.org/bot8426038205:AAFS5_4HTJWmdU_4fwo2uwPAhO06L9riVkg/sendMessage",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "contentType": "json",
+        "jsonBody": "={\n  \"chat_id\": 1687128792,\n  \"text\": \"🚨 FF Sequence Manager ERROR\\n\\nNode: {{ $execution.lastNodeExecuted }}\\nError: {{ $execution.error?.message ?? 'Unknown error' }}\\nRun ID: {{ $execution.id }}\",\n  \"parse_mode\": \"HTML\"\n}",
+        "options": {}
+      },
+      "id": "error-alert",
+      "name": "Telegram Error Alert",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [920, 460]
+    }
+  ],
+  "connections": {
+    "Schedule Trigger": {
+      "main": [
+        [
+          {
+            "node": "Time Check (8AM-6PM ET)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Time Check (8AM-6PM ET)": {
+      "main": [
+        [
+          {
+            "node": "Business Hours?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Business Hours?": {
+      "main": [
+        [
+          {
+            "node": "Get Pending Sequence Steps",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        []
+      ]
+    },
+    "Get Pending Sequence Steps": {
+      "main": [
+        [
+          {
+            "node": "Steps Found?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Steps Found?": {
+      "main": [
+        [
+          {
+            "node": "Loop Over Steps",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        []
+      ]
+    },
+    "Loop Over Steps": {
+      "main": [
+        [
+          {
+            "node": "Get Lead Details",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get Lead Details": {
+      "main": [
+        [
+          {
+            "node": "Merge Step + Lead Data",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Merge Step + Lead Data": {
+      "main": [
+        [
+          {
+            "node": "Has Phone?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Has Phone?": {
+      "main": [
+        [
+          {
+            "node": "Send SMS via Edge Function",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Mark Step Skipped (No Phone)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Send SMS via Edge Function": {
+      "main": [
+        [
+          {
+            "node": "SMS Sent OK?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "SMS Sent OK?": {
+      "main": [
+        [
+          {
+            "node": "Mark Step Sent",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Increment Retry Count",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Increment Retry Count": {
+      "main": [
+        [
+          {
+            "node": "Max Retries Reached?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Max Retries Reached?": {
+      "main": [
+        [
+          {
+            "node": "Telegram: Max Retry Alert",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        []
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1",
+    "errorWorkflow": "",
+    "saveManualExecutions": true,
+    "callerPolicy": "workflowsFromSameOwner",
+    "timezone": "America/New_York"
+  },
+  "staticData": null,
+  "tags": [],
+  "triggerCount": 1,
+  "updatedAt": "2026-03-04T12:00:00.000Z",
+  "versionId": "1"
+}

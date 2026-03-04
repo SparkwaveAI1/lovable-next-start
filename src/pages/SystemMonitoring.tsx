@@ -5,6 +5,8 @@ import {
   Activity,
   AlertCircle,
   CheckCircle2,
+  ChevronDown,
+  ChevronRight,
   Clock,
   RefreshCw,
   Server,
@@ -12,8 +14,8 @@ import {
   WifiOff,
   Workflow,
   XCircle,
-  AlertTriangle,
   Timer,
+  Zap,
 } from "lucide-react"
 import { supabase } from "@/integrations/supabase/client"
 import { formatDistanceToNow, parseISO } from "date-fns"
@@ -31,79 +33,77 @@ interface AgentStatus {
   checkedAt: string
 }
 
-interface WorkflowStatus {
+interface N8nWorkflow {
   id: string
   name: string
   active: boolean
-  lastRunAt: string | null
-  lastStatus: string | null
-}
-
-interface RecentError {
-  id: string
-  automation_type: string
-  status: string
-  error_message: string | null
-  created_at: string
-  business_id: string | null
+  updatedAt: string | null
 }
 
 interface CronStatus {
   id: string
   name: string
+  category: string
+  group: string
   schedule: string | null
   status: string
   lastRun: string | null
+  nextRun: string | null
   errorMessage: string | null
+  consecutiveErrors: number
+}
+
+interface FightFlowHealth {
+  lastFormSubmission: string | null
+  lastSmsSent: string | null
+  formCaptureLastPoll: string | null
+  immediateResponseLastRun: string | null
 }
 
 interface MonitoringData {
   agents: AgentStatus[]
   n8n: {
-    workflows: WorkflowStatus[]
+    workflows: N8nWorkflow[]
     error: string | null
   }
-  recentErrors: RecentError[]
   cronStatus: CronStatus[]
+  fightflow: FightFlowHealth
   fetchedAt: string
 }
 
-// ─── Status helpers ───────────────────────────────────────────────────────────
+// ─── Helpers ──────────────────────────────────────────────────────────────────
 
-function StatusDot({ status }: { status: "green" | "yellow" | "red" | "gray" }) {
-  const colors = {
-    green: "bg-emerald-500",
-    yellow: "bg-amber-400",
-    red: "bg-red-500",
-    gray: "bg-slate-400",
-  }
-  return (
-    <span className={cn("inline-block h-2.5 w-2.5 rounded-full flex-shrink-0", colors[status])} />
-  )
-}
-
-function workflowStatusColor(status: string | null): "green" | "yellow" | "red" | "gray" {
-  if (!status) return "gray"
-  if (status === "success") return "green"
-  if (status === "error" || status === "crashed") return "red"
-  if (status === "running" || status === "waiting") return "yellow"
-  return "gray"
-}
-
-function cronStatusColor(status: string): "green" | "yellow" | "red" | "gray" {
-  if (status === "success") return "green"
-  if (status === "failed") return "red"
-  if (status === "stale") return "yellow"
-  return "gray"
-}
-
-function relativeTime(iso: string | null): string {
+function relativeTime(iso: string | null | undefined): string {
   if (!iso) return "Never"
   try {
     return formatDistanceToNow(parseISO(iso), { addSuffix: true })
   } catch {
     return "Unknown"
   }
+}
+
+type DotColor = "green" | "yellow" | "red" | "gray"
+
+function StatusDot({ status }: { status: DotColor }) {
+  const colors: Record<DotColor, string> = {
+    green: "bg-emerald-500",
+    yellow: "bg-amber-400",
+    red: "bg-red-500",
+    gray: "bg-slate-400",
+  }
+  return (
+    <span
+      className={cn("inline-block h-2.5 w-2.5 rounded-full flex-shrink-0", colors[status])}
+    />
+  )
+}
+
+function cronDotColor(status: string): DotColor {
+  if (status === "success") return "green"
+  if (status === "failed" || status === "error") return "red"
+  if (status === "stale") return "yellow"
+  if (status === "unknown") return "gray"
+  return "gray"
 }
 
 // ─── Sub-components ───────────────────────────────────────────────────────────
@@ -166,11 +166,128 @@ function AgentCard({ agent }: { agent: AgentStatus }) {
             {agent.online ? "Online" : "Offline"}
           </span>
         </div>
-        {agent.latencyMs && (
+        {agent.latencyMs !== undefined && (
           <p className="text-xs text-slate-400">{agent.latencyMs}ms</p>
         )}
         <p className="text-xs text-slate-400">{relativeTime(agent.checkedAt)}</p>
       </div>
+    </div>
+  )
+}
+
+function CronGroupSection({
+  group,
+  crons,
+  defaultOpen = true,
+}: {
+  group: string
+  crons: CronStatus[]
+  defaultOpen?: boolean
+}) {
+  const [open, setOpen] = useState(defaultOpen)
+  const errorCount = crons.filter(
+    (c) => c.status === "failed" || c.status === "error"
+  ).length
+
+  return (
+    <div className="border border-slate-100 rounded-lg overflow-hidden">
+      <button
+        onClick={() => setOpen((o) => !o)}
+        className="w-full flex items-center justify-between px-4 py-3 bg-slate-50 hover:bg-slate-100 transition-colors text-left"
+      >
+        <div className="flex items-center gap-2">
+          {open ? (
+            <ChevronDown className="h-4 w-4 text-slate-400" />
+          ) : (
+            <ChevronRight className="h-4 w-4 text-slate-400" />
+          )}
+          <span className="text-sm font-semibold text-slate-700">{group}</span>
+          <span className="text-xs text-slate-400">({crons.length})</span>
+        </div>
+        {errorCount > 0 && (
+          <span className="flex items-center gap-1 text-xs font-medium text-red-600 bg-red-50 px-2 py-0.5 rounded-full">
+            <XCircle className="h-3 w-3" />
+            {errorCount} error{errorCount !== 1 ? "s" : ""}
+          </span>
+        )}
+      </button>
+
+      {open && (
+        <div className="divide-y divide-slate-50">
+          {crons.map((cron) => {
+            const color = cronDotColor(cron.status)
+            return (
+              <div
+                key={cron.id}
+                className="flex items-center justify-between px-4 py-3 hover:bg-slate-50 transition-colors"
+              >
+                <div className="flex items-center gap-3 min-w-0 flex-1">
+                  <StatusDot status={color} />
+                  <div className="min-w-0">
+                    <p className="text-sm font-medium text-slate-800 truncate">{cron.name}</p>
+                    {cron.schedule && (
+                      <p className="text-xs text-slate-400 font-mono">{cron.schedule}</p>
+                    )}
+                    {cron.errorMessage && (
+                      <p className="text-xs text-red-500 truncate max-w-xs">
+                        {cron.errorMessage.length > 80
+                          ? cron.errorMessage.slice(0, 80) + "…"
+                          : cron.errorMessage}
+                      </p>
+                    )}
+                  </div>
+                </div>
+                <div className="ml-4 text-right flex-shrink-0 space-y-0.5">
+                  <p
+                    className={cn(
+                      "text-xs font-medium capitalize",
+                      color === "green"
+                        ? "text-emerald-600"
+                        : color === "red"
+                        ? "text-red-600"
+                        : color === "yellow"
+                        ? "text-amber-600"
+                        : "text-slate-400"
+                    )}
+                  >
+                    {cron.status}
+                  </p>
+                  <p className="text-xs text-slate-400">
+                    {cron.lastRun ? relativeTime(cron.lastRun) : "Never"}
+                  </p>
+                  {cron.nextRun && (
+                    <p className="text-xs text-slate-300">
+                      Next: {relativeTime(cron.nextRun)}
+                    </p>
+                  )}
+                </div>
+              </div>
+            )
+          })}
+        </div>
+      )}
+    </div>
+  )
+}
+
+function FightFlowStat({
+  label,
+  value,
+}: {
+  label: string
+  value: string | null | undefined
+}) {
+  return (
+    <div className="flex items-center justify-between py-3 border-b border-slate-50 last:border-0">
+      <span className="text-sm text-slate-600">{label}</span>
+      <span
+        className={cn(
+          "text-sm font-medium",
+          value ? "text-slate-900" : "text-slate-400"
+        )}
+      >
+        {value ? relativeTime(value) : "No data"}
+      </span>
     </div>
   )
 }
@@ -205,8 +322,32 @@ export default function SystemMonitoring() {
     return () => clearInterval(interval)
   }, [fetchData])
 
-  const onlineCount = data?.agents.filter((a) => a.online).length ?? 0
-  const totalAgents = data?.agents.length ?? 4
+  // ── Derived stats ──
+  const agents = data?.agents ?? []
+  const workflows = data?.n8n?.workflows ?? []
+  const cronStatus = data?.cronStatus ?? []
+
+  const onlineCount = agents.filter((a) => a.online).length
+  const totalAgents = agents.length || 4
+  const activeWorkflows = workflows.filter((w) => w.active).length
+  const cronErrors = cronStatus.filter(
+    (c) => c.status === "failed" || c.status === "error"
+  ).length
+
+  // ── Group crons ──
+  const cronGroups: Record<string, CronStatus[]> = {}
+  for (const cron of cronStatus) {
+    const grp = cron.group ?? "System"
+    if (!cronGroups[grp]) cronGroups[grp] = []
+    cronGroups[grp].push(cron)
+  }
+
+  // Order: Fight Flow → Twitter → System
+  const GROUP_ORDER = ["Fight Flow", "Twitter", "System"]
+  const orderedGroups = [
+    ...GROUP_ORDER.filter((g) => cronGroups[g]),
+    ...Object.keys(cronGroups).filter((g) => !GROUP_ORDER.includes(g)),
+  ]
 
   return (
     <DashboardLayout>
@@ -219,12 +360,12 @@ export default function SystemMonitoring() {
               System Monitoring
             </h1>
             <p className="text-slate-500 mt-1 text-sm">
-              Real-time health status — auto-refreshes every 60 seconds
+              Real-time health status — display-only, auto-refreshes every 60s
             </p>
           </div>
           <div className="flex items-center gap-3">
             <p className="text-xs text-slate-400">
-              Last refresh: {formatDistanceToNow(lastRefresh, { addSuffix: true })}
+              Last: {formatDistanceToNow(lastRefresh, { addSuffix: true })}
             </p>
             <button
               onClick={() => fetchData(true)}
@@ -257,6 +398,7 @@ export default function SystemMonitoring() {
         {/* ── Content ── */}
         {data && (
           <div className="space-y-6">
+
             {/* ── Summary bar ── */}
             <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
               <div className="bg-white rounded-xl border border-slate-200 p-4">
@@ -276,192 +418,149 @@ export default function SystemMonitoring() {
                     <Workflow className="h-5 w-5 text-violet-600" />
                   </div>
                   <div>
-                    <p className="text-2xl font-bold text-slate-900">
-                      {data.n8n.workflows.filter((w) => w.active).length}
-                    </p>
+                    <p className="text-2xl font-bold text-slate-900">{activeWorkflows}</p>
                     <p className="text-xs text-slate-500">Active Workflows</p>
                   </div>
                 </div>
               </div>
               <div className="bg-white rounded-xl border border-slate-200 p-4">
                 <div className="flex items-center gap-3">
-                  <div className="h-10 w-10 rounded-lg bg-red-100 flex items-center justify-center">
-                    <XCircle className="h-5 w-5 text-red-600" />
+                  <div className="h-10 w-10 rounded-lg bg-blue-100 flex items-center justify-center">
+                    <Clock className="h-5 w-5 text-blue-600" />
                   </div>
                   <div>
-                    <p className="text-2xl font-bold text-slate-900">{data.recentErrors.length}</p>
-                    <p className="text-xs text-slate-500">Recent Errors</p>
+                    <p className="text-2xl font-bold text-slate-900">{cronStatus.length}</p>
+                    <p className="text-xs text-slate-500">Total Crons</p>
                   </div>
                 </div>
               </div>
               <div className="bg-white rounded-xl border border-slate-200 p-4">
                 <div className="flex items-center gap-3">
-                  <div className="h-10 w-10 rounded-lg bg-amber-100 flex items-center justify-center">
-                    <Timer className="h-5 w-5 text-amber-600" />
+                  <div
+                    className={cn(
+                      "h-10 w-10 rounded-lg flex items-center justify-center",
+                      cronErrors > 0 ? "bg-red-100" : "bg-emerald-100"
+                    )}
+                  >
+                    {cronErrors > 0 ? (
+                      <XCircle className="h-5 w-5 text-red-600" />
+                    ) : (
+                      <CheckCircle2 className="h-5 w-5 text-emerald-600" />
+                    )}
                   </div>
                   <div>
-                    <p className="text-2xl font-bold text-slate-900">
-                      {data.cronStatus.filter((c) => c.status !== "success").length}
-                    </p>
-                    <p className="text-xs text-slate-500">Cron Issues</p>
+                    <p className="text-2xl font-bold text-slate-900">{cronErrors}</p>
+                    <p className="text-xs text-slate-500">Cron Errors</p>
                   </div>
                 </div>
               </div>
             </div>
 
-            {/* ── Two-column layout ── */}
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-              {/* Agent Status */}
-              <SectionCard title="Agent Status" icon={<Server className="h-4 w-4" />}>
+            {/* ── Section 1: Agent Servers ── */}
+            <SectionCard title="Agent Servers" icon={<Server className="h-4 w-4" />}>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                {agents.map((agent) => (
+                  <AgentCard key={agent.name} agent={agent} />
+                ))}
+              </div>
+            </SectionCard>
+
+            {/* ── Section 2: Cron Jobs (grouped + collapsible) ── */}
+            <SectionCard title="Cron Jobs" icon={<Timer className="h-4 w-4" />}>
+              {cronStatus.length === 0 ? (
+                <p className="text-sm text-slate-400 text-center py-6">
+                  No cron entries found in system registry.
+                </p>
+              ) : (
                 <div className="space-y-3">
-                  {data.agents.map((agent) => (
-                    <AgentCard key={agent.name} agent={agent} />
+                  {orderedGroups.map((group) => (
+                    <CronGroupSection
+                      key={group}
+                      group={group}
+                      crons={cronGroups[group]}
+                      defaultOpen={true}
+                    />
                   ))}
                 </div>
-              </SectionCard>
+              )}
+            </SectionCard>
 
-              {/* n8n Workflow Status */}
-              <SectionCard title="n8n Workflow Status" icon={<Workflow className="h-4 w-4" />}>
-                {data.n8n.error && (
-                  <div className="mb-3 p-2 bg-red-50 text-red-600 text-xs rounded-lg border border-red-100">
-                    n8n API error: {data.n8n.error}
-                  </div>
-                )}
-                {data.n8n.workflows.length === 0 ? (
-                  <p className="text-sm text-slate-400 text-center py-6">
-                    {data.n8n.error ? "Could not load workflows" : "No active workflows found"}
-                  </p>
-                ) : (
-                  <div className="space-y-2">
-                    {data.n8n.workflows.map((wf) => {
-                      const color = workflowStatusColor(wf.lastStatus)
-                      return (
-                        <div
-                          key={wf.id}
-                          className="flex items-center justify-between py-2.5 px-3 rounded-lg border border-slate-100 bg-slate-50"
-                        >
-                          <div className="flex items-center gap-2 min-w-0">
-                            <StatusDot status={color} />
-                            <span className="text-sm font-medium text-slate-800 truncate">
-                              {wf.name}
+            {/* ── Section 3: n8n Workflows ── */}
+            <SectionCard title="n8n Workflows" icon={<Workflow className="h-4 w-4" />}>
+              {data.n8n?.error && (
+                <div className="mb-3 p-2 bg-red-50 text-red-600 text-xs rounded-lg border border-red-100">
+                  n8n API error: {data.n8n.error}
+                </div>
+              )}
+              {workflows.length === 0 ? (
+                <p className="text-sm text-slate-400 text-center py-6">
+                  {data.n8n?.error ? "Could not load workflows" : "No workflows found"}
+                </p>
+              ) : (
+                <div className="overflow-x-auto">
+                  <table className="w-full text-sm">
+                    <thead>
+                      <tr className="border-b border-slate-100">
+                        <th className="text-left text-xs font-semibold text-slate-500 uppercase tracking-wide pb-2 pr-4">
+                          Name
+                        </th>
+                        <th className="text-left text-xs font-semibold text-slate-500 uppercase tracking-wide pb-2 pr-4">
+                          Active
+                        </th>
+                        <th className="text-left text-xs font-semibold text-slate-500 uppercase tracking-wide pb-2">
+                          Last Updated
+                        </th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-50">
+                      {workflows.map((wf) => (
+                        <tr key={wf.id} className="hover:bg-slate-50 transition-colors">
+                          <td className="py-2.5 pr-4 font-medium text-slate-800">{wf.name}</td>
+                          <td className="py-2.5 pr-4">
+                            <span
+                              className={cn(
+                                "inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium",
+                                wf.active
+                                  ? "bg-emerald-100 text-emerald-700"
+                                  : "bg-slate-100 text-slate-500"
+                              )}
+                            >
+                              {wf.active ? "Active" : "Inactive"}
                             </span>
-                          </div>
-                          <div className="text-right ml-3 flex-shrink-0">
-                            <p
-                              className={cn(
-                                "text-xs font-medium capitalize",
-                                color === "green"
-                                  ? "text-emerald-600"
-                                  : color === "red"
-                                  ? "text-red-600"
-                                  : color === "yellow"
-                                  ? "text-amber-600"
-                                  : "text-slate-400"
-                              )}
-                            >
-                              {wf.lastStatus || "no runs"}
-                            </p>
-                            <p className="text-xs text-slate-400">{relativeTime(wf.lastRunAt)}</p>
-                          </div>
-                        </div>
-                      )
-                    })}
-                  </div>
-                )}
-              </SectionCard>
-            </div>
+                          </td>
+                          <td className="py-2.5 text-slate-500 text-xs">
+                            {relativeTime(wf.updatedAt)}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </SectionCard>
 
-            {/* ── Two-column bottom row ── */}
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-              {/* Recent Errors */}
-              <SectionCard title="Recent Errors" icon={<AlertCircle className="h-4 w-4" />}>
-                {data.recentErrors.length === 0 ? (
-                  <div className="flex items-center gap-2 py-6 justify-center">
-                    <CheckCircle2 className="h-5 w-5 text-emerald-500" />
-                    <span className="text-sm text-slate-500">No recent errors</span>
-                  </div>
-                ) : (
-                  <div className="space-y-2">
-                    {data.recentErrors.map((err) => (
-                      <div
-                        key={err.id}
-                        className="p-3 rounded-lg border border-red-100 bg-red-50"
-                      >
-                        <div className="flex items-center justify-between mb-1">
-                          <span className="text-xs font-semibold text-red-700 capitalize">
-                            {err.automation_type.replace(/_/g, " ")}
-                          </span>
-                          <span className="text-xs text-slate-400">
-                            {relativeTime(err.created_at)}
-                          </span>
-                        </div>
-                        {err.error_message && (
-                          <p className="text-xs text-red-600 truncate font-mono">
-                            {err.error_message.length > 120
-                              ? err.error_message.slice(0, 120) + "…"
-                              : err.error_message}
-                          </p>
-                        )}
-                      </div>
-                    ))}
-                  </div>
-                )}
-              </SectionCard>
+            {/* ── Section 4: Fight Flow Pipeline ── */}
+            <SectionCard title="Fight Flow Pipeline" icon={<Zap className="h-4 w-4" />}>
+              <div className="divide-y divide-slate-50">
+                <FightFlowStat
+                  label="Last form submission received"
+                  value={data.fightflow?.lastFormSubmission}
+                />
+                <FightFlowStat
+                  label="Last SMS sent"
+                  value={data.fightflow?.lastSmsSent}
+                />
+                <FightFlowStat
+                  label="n8n form capture last poll"
+                  value={data.fightflow?.formCaptureLastPoll}
+                />
+                <FightFlowStat
+                  label="n8n immediate response last run"
+                  value={data.fightflow?.immediateResponseLastRun}
+                />
+              </div>
+            </SectionCard>
 
-              {/* Cron Status */}
-              <SectionCard title="Cron Status" icon={<Clock className="h-4 w-4" />}>
-                {data.cronStatus.length === 0 ? (
-                  <div className="text-center py-6">
-                    <AlertTriangle className="h-6 w-6 text-amber-400 mx-auto mb-2" />
-                    <p className="text-sm text-slate-500">Live cron data coming soon.</p>
-                    <p className="text-xs text-slate-400 mt-1">
-                      No cron entries found in system_status_log.
-                    </p>
-                  </div>
-                ) : (
-                  <div className="space-y-2">
-                    {data.cronStatus.map((cron) => {
-                      const color = cronStatusColor(cron.status)
-                      return (
-                        <div
-                          key={cron.id}
-                          className="flex items-center justify-between py-2.5 px-3 rounded-lg border border-slate-100 bg-slate-50"
-                        >
-                          <div className="flex items-center gap-2 min-w-0">
-                            <StatusDot status={color} />
-                            <div className="min-w-0">
-                              <p className="text-sm font-medium text-slate-800 truncate">
-                                {cron.name}
-                              </p>
-                              {cron.schedule && (
-                                <p className="text-xs text-slate-400 font-mono">{cron.schedule}</p>
-                              )}
-                            </div>
-                          </div>
-                          <div className="text-right ml-3 flex-shrink-0">
-                            <p
-                              className={cn(
-                                "text-xs font-medium capitalize",
-                                color === "green"
-                                  ? "text-emerald-600"
-                                  : color === "red"
-                                  ? "text-red-600"
-                                  : color === "yellow"
-                                  ? "text-amber-600"
-                                  : "text-slate-400"
-                              )}
-                            >
-                              {cron.status}
-                            </p>
-                            <p className="text-xs text-slate-400">{relativeTime(cron.lastRun)}</p>
-                          </div>
-                        </div>
-                      )
-                    })}
-                  </div>
-                )}
-              </SectionCard>
-            </div>
           </div>
         )}
       </PageContent>

@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback } from "react";
 import { DashboardLayout } from "@/components/layout/DashboardLayout";
 import { PageContent } from "@/components/layout/PageLayout";
-import { AgentCard, TaskBoard, ActivityFeed, StatsBar, RicoChat, ScottsActionItems, AgentActivityMonitor, HealthDashboard, AnalyticsMonitor, AddTaskDialog, EditTaskDialog, QualityDashboard } from "@/components/mission-control";
+import { AgentCard, KanbanBoard, ActivityFeed, StatsBar, RicoChat, ScottsActionItems, AgentActivityMonitor, HealthDashboard, AnalyticsMonitor, AddTaskDialog, EditTaskDialog, QualityDashboard, TaskBoardPanel } from "@/components/mission-control";
 import { useBusinessContext } from "@/contexts/BusinessContext";
 import { useBusinesses } from "@/hooks/useBusinesses";
 import { supabase } from "@/integrations/supabase/client";
@@ -356,12 +356,11 @@ export default function MissionControl() {
           />
         </div>
 
-        {/* 2. Mission Control Task Board — Kanban with filters (todo/in_progress/blocked/review/done) */}
+        {/* 2. Task Board (full width) — project/owner/priority kanban */}
         <div className="mb-6">
-          <TaskBoard
-            businessId={isAllBusinessesSelected ? null : (selectedBusiness?.id || null)}
-            isAllBusinesses={isAllBusinessesSelected}
-          />
+          <div className="bg-white rounded-xl border border-slate-200 p-3 sm:p-4">
+            <TaskBoardPanel />
+          </div>
         </div>
 
         {/* 3. Activity Feed */}

@@ -41,11 +41,14 @@ function getColumnCounts(tasks: Task[]): Record<TaskStatus, number> {
   }, {} as Record<TaskStatus, number>);
 }
 
-const columnStyles: Record<TaskStatus, { headerBg: string; countBg: string; dropBg: string }> = {
+const columnStyles: Partial<Record<TaskStatus, { headerBg: string; countBg: string; dropBg: string }>> & Record<string, { headerBg: string; countBg: string; dropBg: string }> = {
+  todo: { headerBg: 'bg-slate-50', countBg: 'bg-slate-200 text-slate-700', dropBg: 'bg-slate-100' },
   inbox: { headerBg: 'bg-slate-50', countBg: 'bg-slate-200 text-slate-700', dropBg: 'bg-slate-100' },
   assigned: { headerBg: 'bg-blue-50', countBg: 'bg-blue-100 text-blue-700', dropBg: 'bg-blue-50' },
   in_progress: { headerBg: 'bg-amber-50', countBg: 'bg-amber-100 text-amber-700', dropBg: 'bg-amber-50' },
   review: { headerBg: 'bg-violet-50', countBg: 'bg-violet-100 text-violet-700', dropBg: 'bg-violet-50' },
+  blocked: { headerBg: 'bg-red-50', countBg: 'bg-red-100 text-red-700', dropBg: 'bg-red-50' },
+  cancelled: { headerBg: 'bg-gray-50', countBg: 'bg-gray-200 text-gray-600', dropBg: 'bg-gray-50' },
   done: { headerBg: 'bg-emerald-50', countBg: 'bg-emerald-100 text-emerald-700', dropBg: 'bg-emerald-50' },
 };
 
