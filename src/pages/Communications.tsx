@@ -109,7 +109,7 @@ interface RecentMessage {
   created_at: string;
   ai_response: boolean;
   contact_id: string;
-  contact_name?: string;
+  contact_name?: string | null;
   agent_name: string | null;
 }
 
@@ -592,7 +592,7 @@ export default function Communications() {
     }
   };
 
-  // Fetch recent SMS messages
+  // Fetch recent SMS messages (with contact name for grouping)
   const { data: recentMessages = [], isLoading: messagesLoading } = useQuery({
     queryKey: ['recent-messages', selectedBusiness?.id],
     queryFn: async () => {
@@ -605,12 +605,23 @@ export default function Communications() {
           created_at,
           ai_response,
           contact_id,
-          agent_name
+          agent_name,
+          contacts:contact_id (
+            first_name,
+            last_name,
+            phone
+          )
         `)
         .order('created_at', { ascending: false })
-        .limit(20);
+        .limit(50);
       if (error) throw error;
-      return data as RecentMessage[];
+      // Attach contact_name from join
+      return ((data || []) as any[]).map(msg => ({
+        ...msg,
+        contact_name: msg.contacts
+          ? [msg.contacts.first_name, msg.contacts.last_name].filter(Boolean).join(' ') || msg.contacts.phone || null
+          : null,
+      })) as RecentMessage[];
     },
     enabled: !!selectedBusiness?.id,
     refetchInterval: 10000, // Refresh every 10 seconds
@@ -674,6 +685,51 @@ export default function Communications() {
       .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())
       .slice(0, 20);
   }, [recentMessages, recentEmails]);
+
+  // Group SMS messages by contact for the Overview panel
+  interface ContactGroup {
+    contact_id: string;
+    contact_name: string;
+    last_message: string;
+    last_activity: string;
+    message_count: number;
+    has_inbound: boolean;
+  }
+
+  const contactGroups = useMemo((): ContactGroup[] => {
+    // Only group SMS messages that have a contact_id
+    const smsWithContact = recentMessages.filter(m => m.contact_id);
+    const groupMap = new Map<string, ContactGroup>();
+
+    for (const msg of smsWithContact) {
+      const cid = msg.contact_id!;
+      if (!groupMap.has(cid)) {
+        const name = msg.contact_name
+          ? msg.contact_name
+          : cid.slice(0, 8) + '…';
+        groupMap.set(cid, {
+          contact_id: cid,
+          contact_name: name,
+          last_message: msg.message,
+          last_activity: msg.created_at,
+          message_count: 1,
+          has_inbound: msg.direction === 'inbound',
+        });
+      } else {
+        const group = groupMap.get(cid)!;
+        group.message_count += 1;
+        if (new Date(msg.created_at) > new Date(group.last_activity)) {
+          group.last_message = msg.message;
+          group.last_activity = msg.created_at;
+        }
+        if (msg.direction === 'inbound') group.has_inbound = true;
+      }
+    }
+
+    return Array.from(groupMap.values())
+      .sort((a, b) => new Date(b.last_activity).getTime() - new Date(a.last_activity).getTime())
+      .slice(0, 15);
+  }, [recentMessages]);
 
   // Fetch AI quality metrics
   // TODO: Replace sample data with real queries once ai_response_logs table is populated
@@ -1409,72 +1465,44 @@ export default function Communications() {
                 </CardContent>
               </Card>
 
-              {/* Recent Activity */}
+              {/* Recent Activity — grouped by contact */}
               <Card>
                 <CardHeader>
                   <CardTitle className="flex items-center gap-2">
-                    <MessageSquare className="h-5 w-5" />
-                    Recent Activity
+                    <Users className="h-5 w-5" />
+                    Recent Conversations
                   </CardTitle>
-                  <CardDescription>Latest SMS and email activity</CardDescription>
+                  <CardDescription>Contacts with recent SMS activity — click to view thread</CardDescription>
                 </CardHeader>
                 <CardContent>
-                  {messagesLoading && emailsLoading ? (
+                  {messagesLoading ? (
                     <p className="text-center py-4">Loading...</p>
-                  ) : mergedActivity.length === 0 ? (
-                    <p className="text-muted-foreground text-center py-4">No recent activity</p>
+                  ) : contactGroups.length === 0 ? (
+                    <p className="text-muted-foreground text-center py-4">No recent SMS activity</p>
                   ) : (
-                    <div className="space-y-3 max-h-80 overflow-y-auto">
-                      {mergedActivity.slice(0, 10).map(item => (
-                        <div 
-                          key={`${item.type}-${item.id}`} 
-                          className="flex items-start gap-3 text-sm p-2 rounded-lg hover:bg-slate-50 dark:hover:bg-slate-800 cursor-pointer transition-colors"
-                          onClick={() => item.type === 'sms' && item.contact_id && openThread(item.contact_id)}
+                    <div className="space-y-1 max-h-80 overflow-y-auto">
+                      {contactGroups.map(group => (
+                        <div
+                          key={group.contact_id}
+                          className="flex items-center gap-3 p-2.5 rounded-lg hover:bg-slate-50 cursor-pointer transition-colors border border-transparent hover:border-slate-100"
+                          onClick={() => openThread(group.contact_id)}
                         >
-                          {item.type === 'sms' ? (
-                            <div className={`p-1 rounded ${item.direction === 'inbound' ? 'bg-blue-100' : 'bg-green-100'}`}>
-                              {item.direction === 'inbound' ? (
-                                <Reply className="h-3 w-3 text-blue-600" />
-                              ) : (
-                                <Send className="h-3 w-3 text-green-600" />
-                              )}
-                            </div>
-                          ) : (
-                            <div className={`p-1 rounded ${item.status === 'opened' || item.opened_at ? 'bg-purple-100' : item.status === 'clicked' || item.clicked_at ? 'bg-emerald-100' : 'bg-orange-100'}`}>
-                              <Mail className={`h-3 w-3 ${item.status === 'opened' || item.opened_at ? 'text-purple-600' : item.status === 'clicked' || item.clicked_at ? 'text-emerald-600' : 'text-orange-600'}`} />
-                            </div>
-                          )}
+                          {/* Avatar */}
+                          <div className={`flex-shrink-0 h-9 w-9 rounded-full flex items-center justify-center text-sm font-bold ${group.has_inbound ? 'bg-blue-100 text-blue-700' : 'bg-slate-100 text-slate-600'}`}>
+                            {group.contact_name.charAt(0).toUpperCase()}
+                          </div>
                           <div className="flex-1 min-w-0">
-                            {item.type === 'sms' ? (
-                              <p className="truncate">{item.message}</p>
-                            ) : (
-                              <div>
-                                <p className="truncate font-medium">{item.subject}</p>
-                                <p className="truncate text-muted-foreground text-xs">To: {item.to}</p>
-                              </div>
-                            )}
-                            <div className="flex items-center gap-2 text-xs text-muted-foreground mt-1">
-                              <span>{formatDistanceToNow(new Date(item.created_at), { addSuffix: true })}</span>
-                              {item.type === 'sms' && item.ai_response && (
-                                <Badge variant="outline" className="text-xs py-0">AI</Badge>
-                              )}
-                              {item.type === 'email' && (
-                                <>
-                                  <Badge variant="outline" className="text-xs py-0">Email</Badge>
-                                  {item.opened_at && (
-                                    <Badge className="bg-purple-500 text-xs py-0">
-                                      <Eye className="h-2 w-2 mr-1" />
-                                      Opened
-                                    </Badge>
-                                  )}
-                                  {item.clicked_at && (
-                                    <Badge className="bg-emerald-500 text-xs py-0">
-                                      <Target className="h-2 w-2 mr-1" />
-                                      Clicked
-                                    </Badge>
-                                  )}
-                                </>
-                              )}
+                            <div className="flex items-center justify-between gap-2">
+                              <p className="text-sm font-medium text-slate-900 truncate">{group.contact_name}</p>
+                              <span className="text-xs text-slate-400 shrink-0">
+                                {formatDistanceToNow(new Date(group.last_activity), { addSuffix: true })}
+                              </span>
+                            </div>
+                            <div className="flex items-center justify-between gap-2 mt-0.5">
+                              <p className="text-xs text-slate-500 truncate">{group.last_message}</p>
+                              <span className="text-xs text-slate-400 shrink-0 bg-slate-100 px-1.5 py-0.5 rounded-full">
+                                {group.message_count}
+                              </span>
                             </div>
                           </div>
                         </div>

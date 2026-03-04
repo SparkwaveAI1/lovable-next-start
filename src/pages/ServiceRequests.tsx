@@ -35,10 +35,18 @@ export default function ServiceRequests() {
   const [expandedRequest, setExpandedRequest] = useState<string | null>(null);
   const { toast } = useToast();
 
+  // Auto-select Fight Flow Academy if no business selected
   useEffect(() => {
-    if (selectedBusiness) {
-      loadRequests();
+    if (!selectedBusiness && businesses.length > 0) {
+      const fightFlow = businesses.find(b => b.name?.toLowerCase().includes('fight flow'));
+      if (fightFlow) setSelectedBusiness(fightFlow);
+      else setSelectedBusiness(businesses[0]);
     }
+  }, [businesses, selectedBusiness, setSelectedBusiness]);
+
+  useEffect(() => {
+    // Load regardless of selectedBusiness — fall back to all records if needed
+    loadRequests();
   }, [selectedBusiness, statusFilter]);
 
   const loadRequests = async () => {
@@ -47,12 +55,16 @@ export default function ServiceRequests() {
       let query = supabase
         .from("contacts")
         .select("*")
-        .eq("business_id", selectedBusiness?.id)
         .in("lead_type", ["freeze_request", "cancellation_request"])
         .order("created_at", { ascending: false });
 
+      // Only apply business filter if a business is selected
+      if (selectedBusiness?.id) {
+        query = (query as any).eq("business_id", selectedBusiness.id);
+      }
+
       if (statusFilter !== "all") {
-        query = query.eq("pipeline_stage", statusFilter);
+        query = (query as any).eq("pipeline_stage", statusFilter);
       }
 
       const { data, error } = await query;
@@ -99,32 +111,47 @@ export default function ServiceRequests() {
   };
 
   const getStatusBadge = (stage: string) => {
-    const variants: Record<string, { className: string, icon: any }> = {
+    const variants: Record<string, { className: string, icon: any, label: string }> = {
+      // "new" is set by the webhook — treat it as pending review
+      new: {
+        className: "bg-orange-100 text-orange-800 border-orange-300",
+        icon: Clock,
+        label: "Pending Review",
+      },
       pending_review: { 
         className: "bg-orange-100 text-orange-800 border-orange-300", 
-        icon: Clock 
+        icon: Clock,
+        label: "Pending Review",
       },
       in_progress: { 
         className: "bg-blue-100 text-blue-800 border-blue-300", 
-        icon: AlertCircle 
+        icon: AlertCircle,
+        label: "In Progress",
       },
       completed: { 
         className: "bg-green-100 text-green-800 border-green-300", 
-        icon: CheckCircle2 
+        icon: CheckCircle2,
+        label: "Completed",
+      },
+      disqualified: {
+        className: "bg-gray-100 text-gray-700 border-gray-300",
+        icon: XCircle,
+        label: "Disqualified",
       },
       cancelled: { 
         className: "bg-red-100 text-red-800 border-red-300", 
-        icon: XCircle 
+        icon: XCircle,
+        label: "Cancelled",
       },
     };
 
-    const config = variants[stage] || { className: "bg-gray-100 text-gray-700 border-gray-300", icon: Clock };
+    const config = variants[stage] || { className: "bg-gray-100 text-gray-700 border-gray-300", icon: Clock, label: stage.replace("_", " ").replace(/\b\w/g, l => l.toUpperCase()) };
     const Icon = config.icon;
 
     return (
       <span className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-sm font-semibold border shadow-sm ${config.className}`}>
         <Icon className="h-3.5 w-3.5" />
-        {stage.replace("_", " ").replace(/\b\w/g, l => l.toUpperCase())}
+        {config.label}
       </span>
     );
   };
@@ -139,7 +166,8 @@ export default function ServiceRequests() {
 
   const stats = {
     total: requests.length,
-    pending: requests.filter(r => r.pipeline_stage === "pending_review").length,
+    // "new" and "pending_review" both count as pending
+    pending: requests.filter(r => r.pipeline_stage === "pending_review" || r.pipeline_stage === "new").length,
     inProgress: requests.filter(r => r.pipeline_stage === "in_progress").length,
     completed: requests.filter(r => r.pipeline_stage === "completed").length,
   };
@@ -208,9 +236,10 @@ export default function ServiceRequests() {
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="all">All Statuses</SelectItem>
-                  <SelectItem value="pending_review">Pending Review</SelectItem>
+                  <SelectItem value="new">Pending Review</SelectItem>
                   <SelectItem value="in_progress">In Progress</SelectItem>
                   <SelectItem value="completed">Completed</SelectItem>
+                  <SelectItem value="disqualified">Disqualified</SelectItem>
                   <SelectItem value="cancelled">Cancelled</SelectItem>
                 </SelectContent>
               </Select>
@@ -256,7 +285,7 @@ export default function ServiceRequests() {
                       </TableCell>
                       <TableCell>
                         <div className="flex items-center gap-2 opacity-0 group-hover:opacity-100 transition-opacity duration-150">
-                          {request.pipeline_stage === "pending_review" && (
+                          {(request.pipeline_stage === "pending_review" || request.pipeline_stage === "new") && (
                             <Button
                               size="sm"
                               onClick={() => updateRequestStatus(request.id, "in_progress")}
