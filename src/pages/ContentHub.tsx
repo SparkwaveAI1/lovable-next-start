@@ -4,16 +4,18 @@ import { ContentLibrary } from "@/components/content/ContentLibrary";
 import { ContentCalendar } from "@/components/content/ContentCalendar";
 import { RepurposePanel } from "@/components/content/RepurposePanel";
 import { ComposePanel } from "@/components/content/ComposePanel";
+import { LongFormEditor } from "@/components/content/LongFormEditor";
 import { Button } from "@/components/ui/button";
-import { Library, Calendar, RefreshCw, Plus, Building2 } from "lucide-react";
+import { Library, Calendar, RefreshCw, Plus, Building2, PenLine } from "lucide-react";
 import { useBusinessContext } from "@/contexts/BusinessContext";
 
-type Tab = "library" | "calendar" | "repurpose";
+type Tab = "library" | "calendar" | "repurpose" | "write";
 
 const TABS: { id: Tab; label: string; icon: React.ComponentType<{ className?: string }> }[] = [
   { id: "library",   label: "Library",   icon: Library },
   { id: "calendar",  label: "Calendar",  icon: Calendar },
   { id: "repurpose", label: "Repurpose", icon: RefreshCw },
+  { id: "write",     label: "Write",     icon: PenLine },
 ];
 
 /**
@@ -67,8 +69,8 @@ export default function ContentHub() {
           </Button>
         </div>
 
-        {!brand ? (
-          /* No business selected */
+        {!brand && activeTab !== "write" ? (
+          /* No business selected — only block non-Write tabs */
           <div className="flex-1 flex flex-col items-center justify-center gap-4 bg-slate-50">
             <Building2 className="h-16 w-16 text-slate-200" />
             <h2 className="text-lg font-semibold text-slate-600">
@@ -77,6 +79,14 @@ export default function ContentHub() {
             <p className="text-sm text-slate-400">
               Choose a business from the selector in the header to manage its content.
             </p>
+            <Button
+              variant="outline"
+              onClick={() => setActiveTab("write")}
+              className="mt-2"
+            >
+              <PenLine className="h-4 w-4 mr-2" />
+              Or start writing a long-form draft
+            </Button>
           </div>
         ) : (
           <>
@@ -115,6 +125,7 @@ export default function ContentHub() {
                 <ContentCalendar brand={brand} businessId={businessId} />
               )}
               {activeTab === "repurpose" && <RepurposePanel brand={brand} />}
+              {activeTab === "write" && <LongFormEditor />}
             </div>
           </>
         )}
