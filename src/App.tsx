@@ -43,8 +43,8 @@ import FAQ from "./pages/FAQ";
 // ContentVisibility and ContentReviewPage removed — redirected to /content-hub
 import AutomationAudit from "./pages/AutomationAudit";
 import ROICalculator from "./pages/ROICalculator";
-import AgentChat from "./pages/AgentChat";
 import Onboarding from "./pages/Onboarding";
+import SystemMonitoring from "./pages/SystemMonitoring";
 import SystemOperations from "./pages/SystemOperations";
 import ProtectedRoute from "./components/ProtectedRoute";
 import { ErrorBoundary } from "./components/ErrorBoundary";
@@ -107,7 +107,8 @@ const App = () => (
             <Route path="/faq" element={<ProtectedRoute><ErrorBoundary><FAQ /></ErrorBoundary></ProtectedRoute>} />
             <Route path="/content-visibility" element={<Navigate replace to="/content-hub" />} />
             <Route path="/content-review" element={<Navigate replace to="/content-hub" />} />
-            <Route path="/agent-chat" element={<ProtectedRoute><ErrorBoundary><AgentChat /></ErrorBoundary></ProtectedRoute>} />
+            <Route path="/agent-chat" element={<Navigate replace to="/" />} />
+            <Route path="/system-monitoring" element={<ProtectedRoute><ErrorBoundary><SystemMonitoring /></ErrorBoundary></ProtectedRoute>} />
             {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
             <Route path="*" element={<NotFound />} />
             </Routes>
