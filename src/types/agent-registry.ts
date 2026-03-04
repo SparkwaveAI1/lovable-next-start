@@ -59,9 +59,9 @@ export const AGENT_ACTIVITY_FILTERS = [
 export const RUNTIME_STATUS_CONFIG: Record<AgentRuntimeStatus, { label: string; color: string; bgColor: string; pulseColor: string }> = {
   idle: {
     label: 'Idle',
-    color: 'text-emerald-600',
-    bgColor: 'bg-emerald-500',
-    pulseColor: 'bg-emerald-400',
+    color: 'text-slate-500',
+    bgColor: 'bg-slate-400',
+    pulseColor: 'bg-slate-300',
   },
   working: {
     label: 'Working',
