@@ -62,11 +62,9 @@ export interface Message {
 
 export const KANBAN_COLUMNS: { id: TaskStatus; label: string }[] = [
   { id: 'todo', label: 'TODO' },
-  { id: 'inbox', label: 'INBOX' },
-  { id: 'assigned', label: 'ASSIGNED' },
   { id: 'in_progress', label: 'IN PROGRESS' },
-  { id: 'review', label: 'REVIEW' },
   { id: 'blocked', label: 'BLOCKED' },
+  { id: 'review', label: 'REVIEW' },
   { id: 'done', label: 'DONE' },
 ];
 
