@@ -80,6 +80,7 @@ serve(async (req) => {
       return {
         name: agent.name,
         ip: agent.ip,
+        port: agent.port,
         role: agent.role,
         online: ping.online,
         latencyMs: ping.latencyMs ?? null,
@@ -89,11 +90,30 @@ serve(async (req) => {
 
     // 2. n8n workflows
     const n8nData = await fetchN8nWorkflows(n8nApiKey, n8nUrl)
+
+    // Fetch last execution per workflow
+    const execRes = await fetch(`${n8nUrl}/api/v1/executions?limit=100`, {
+      headers: { "X-N8N-API-KEY": n8nApiKey, "Accept": "application/json" }
+    }).catch(() => null)
+
+    const lastExecMap: Record<string, { startedAt: string; status: string }> = {}
+    if (execRes?.ok) {
+      const execJson = await execRes.json()
+      for (const exec of execJson.data ?? []) {
+        if (!lastExecMap[exec.workflowId]) {
+          lastExecMap[exec.workflowId] = { startedAt: exec.startedAt, status: exec.status }
+        }
+      }
+    } else {
+      console.error("system-monitor: executions fetch failed", execRes?.status)
+    }
+
     const workflows = (n8nData.workflows as Array<{ id: string; name: string; active: boolean; updatedAt?: string }>).map(wf => ({
       id: wf.id,
       name: wf.name,
       active: wf.active,
-      updatedAt: wf.updatedAt ?? null,
+      lastRunAt: lastExecMap[wf.id]?.startedAt ?? null,
+      lastStatus: lastExecMap[wf.id]?.status ?? null,
     }))
 
     // 3. Cron status from mc_activities (latest system_ops entry)
