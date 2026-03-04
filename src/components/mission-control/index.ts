@@ -13,3 +13,4 @@ export { AnalyticsMonitor } from './AnalyticsMonitor';
 export { AddTaskDialog } from './AddTaskDialog';
 export { EditTaskDialog } from './EditTaskDialog';
 export { QualityDashboard } from './QualityDashboard';
+export { TaskBoardPanel } from './TaskBoardPanel';

@@ -2,7 +2,7 @@
 
 export type AgentStatus = 'working' | 'idle' | 'blocked' | 'active' | 'offline';
 export type AgentLevel = 'lead' | 'specialist' | 'intern';
-export type TaskStatus = 'inbox' | 'assigned' | 'in_progress' | 'review' | 'done';
+export type TaskStatus = 'todo' | 'inbox' | 'assigned' | 'in_progress' | 'review' | 'blocked' | 'cancelled' | 'done';
 export type TaskPriority = 'critical' | 'high' | 'medium' | 'low';
 export type ActivityType = 'task_created' | 'task_updated' | 'task_deleted' | 'status_changed' | 'message_sent' | 'decision_made' | 'document_created';
 
@@ -35,6 +35,7 @@ export interface Task {
   business_id: string | null;
   document_url: string | null;
   work_summary: string | null;
+  project: string | null;
   created_at: string;
   updated_at: string;
 }
@@ -60,10 +61,12 @@ export interface Message {
 }
 
 export const KANBAN_COLUMNS: { id: TaskStatus; label: string }[] = [
+  { id: 'todo', label: 'TODO' },
   { id: 'inbox', label: 'INBOX' },
   { id: 'assigned', label: 'ASSIGNED' },
   { id: 'in_progress', label: 'IN PROGRESS' },
   { id: 'review', label: 'REVIEW' },
+  { id: 'blocked', label: 'BLOCKED' },
   { id: 'done', label: 'DONE' },
 ];
 

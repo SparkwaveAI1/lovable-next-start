@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback } from "react";
 import { DashboardLayout } from "@/components/layout/DashboardLayout";
 import { PageContent } from "@/components/layout/PageLayout";
-import { AgentCard, KanbanBoard, ActivityFeed, StatsBar, RicoChat, ScottsActionItems, AgentActivityMonitor, HealthDashboard, AnalyticsMonitor, AddTaskDialog, EditTaskDialog, QualityDashboard } from "@/components/mission-control";
+import { AgentCard, KanbanBoard, ActivityFeed, StatsBar, RicoChat, ScottsActionItems, AgentActivityMonitor, HealthDashboard, AnalyticsMonitor, AddTaskDialog, EditTaskDialog, QualityDashboard, TaskBoardPanel } from "@/components/mission-control";
 import { useBusinessContext } from "@/contexts/BusinessContext";
 import { useBusinesses } from "@/hooks/useBusinesses";
 import { supabase } from "@/integrations/supabase/client";
@@ -356,40 +356,10 @@ export default function MissionControl() {
           />
         </div>
 
-        {/* 2. Kanban Board (full width) */}
+        {/* 2. Task Board (full width) — project/owner/priority kanban */}
         <div className="mb-6">
           <div className="bg-white rounded-xl border border-slate-200 p-3 sm:p-4">
-            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-4">
-              <div className="flex items-center gap-2 sm:gap-3 flex-wrap">
-                <h3 className="font-semibold text-sm text-slate-900">Task Board</h3>
-                {selectedAgent && (
-                  <span className="text-xs bg-violet-100 text-violet-700 px-2 py-1 rounded-full">
-                    Filtering: {selectedAgent.name}
-                  </span>
-                )}
-              </div>
-              <div className="flex items-center justify-between sm:justify-end gap-2 sm:gap-3">
-                <span className="text-xs text-slate-400">{kanbanTasks.length} tasks</span>
-                <button
-                  onClick={() => setAddTaskDialogOpen(true)}
-                  className="flex items-center gap-1.5 px-3 py-1.5 bg-violet-600 hover:bg-violet-700 text-white rounded-lg transition-colors text-sm font-medium"
-                >
-                  <Plus className="h-4 w-4" />
-                  <span className="hidden xs:inline">Add Task</span>
-                  <span className="xs:hidden">Add</span>
-                </button>
-              </div>
-            </div>
-            <KanbanBoard
-              tasks={kanbanTasks}
-              agents={agents}
-              onTaskClick={handleTaskClick}
-              onTaskStatusChange={handleTaskStatusChange}
-              onTaskEdit={handleTaskEdit}
-              onTaskDelete={handleTaskDelete}
-              onDeleteComplete={handleTaskDeleteComplete}
-              onTaskReorder={handleTaskReorder}
-            />
+            <TaskBoardPanel />
           </div>
         </div>
 
