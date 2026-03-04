@@ -243,9 +243,7 @@ serve(async (req) => {
   try {
     const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
     const supabaseKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
-    // SERVICE_ROLE_JWT is the actual JWT for calling edge functions
-    // SUPABASE_SERVICE_ROLE_KEY from Deno auto-inject may not be a valid JWT
-    const serviceRoleJwt = Deno.env.get("SERVICE_ROLE_JWT") || supabaseKey;
+    const serviceRoleJwt = supabaseKey;
     const webhookSecret = Deno.env.get("AUDIT_WEBHOOK_SECRET");
 
     // Validate webhook secret if configured

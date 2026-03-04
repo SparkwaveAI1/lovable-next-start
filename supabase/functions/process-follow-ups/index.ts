@@ -281,7 +281,7 @@ serve(async (req) => {
             const smsResponse = await fetch(`${Deno.env.get('SUPABASE_URL')}/functions/v1/send-sms`, {
               method: 'POST',
               headers: {
-                'Authorization': `Bearer ${Deno.env.get('SERVICE_ROLE_JWT') || Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')}`,
+                'Authorization': `Bearer ${Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')}`,
                 'Content-Type': 'application/json',
               },
               body: JSON.stringify({
@@ -326,7 +326,7 @@ serve(async (req) => {
           const emailResponse = await fetch(`${Deno.env.get('SUPABASE_URL')}/functions/v1/send-email`, {
             method: 'POST',
             headers: {
-              'Authorization': `Bearer ${Deno.env.get('SERVICE_ROLE_JWT') || Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')}`,
+              'Authorization': `Bearer ${Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')}`,
               'Content-Type': 'application/json',
             },
             body: JSON.stringify({
