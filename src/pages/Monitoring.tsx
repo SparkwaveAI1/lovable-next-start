@@ -47,9 +47,10 @@ interface HealthMetric {
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
 function relativeTime(iso: string | null | undefined): string {
-  if (!iso) return "Never"
+  if (!iso) return "—"
   try {
     const diff = Date.now() - new Date(iso).getTime()
+    if (diff < 0) return "—"
     const secs = Math.floor(diff / 1000)
     if (secs < 60) return `${secs}s ago`
     const mins = Math.floor(secs / 60)
@@ -58,7 +59,7 @@ function relativeTime(iso: string | null | undefined): string {
     if (hrs < 24) return `${hrs}h ago`
     return `${Math.floor(hrs / 24)}d ago`
   } catch {
-    return "Unknown"
+    return "—"
   }
 }
 
@@ -153,10 +154,11 @@ function AgentStatusSection({ agents }: { agents: AgentRow[] }) {
 // ─── Section 2: Cron Jobs ─────────────────────────────────────────────────────
 
 const FALLBACK_CRONS: CronRow[] = [
-  { name: "twitter-post-rico", status: "OK", last_run: new Date(Date.now() - 3600000).toISOString(), next_run: new Date(Date.now() + 3600000).toISOString() },
-  { name: "twitter-post-barnum", status: "OK", last_run: new Date(Date.now() - 7200000).toISOString(), next_run: new Date(Date.now() + 7200000).toISOString() },
-  { name: "fightflow-leads-check", status: "OK", last_run: new Date(Date.now() - 1800000).toISOString(), next_run: new Date(Date.now() + 1800000).toISOString() },
-  { name: "update-daily-context", status: "OK", last_run: new Date(Date.now() - 86400000).toISOString(), next_run: new Date(Date.now() + 3600000).toISOString() },
+  { name: "fightflow-form-capture", status: "OK", last_run: new Date(Date.now() - 300000).toISOString(), next_run: null },
+  { name: "fightflow-sequence-processor", status: "OK", last_run: new Date(Date.now() - 600000).toISOString(), next_run: null },
+  { name: "fightflow-appointment-trigger", status: "OK", last_run: new Date(Date.now() - 900000).toISOString(), next_run: null },
+  { name: "fightflow-instructor-post-class", status: "OK", last_run: new Date(Date.now() - 1800000).toISOString(), next_run: null },
+  { name: "cron1", status: "OK", last_run: new Date(Date.now() - 300000).toISOString(), next_run: null },
 ]
 
 function CronJobsSection({ crons }: { crons: CronRow[] }) {
