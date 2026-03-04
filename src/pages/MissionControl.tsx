@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback } from "react";
 import { DashboardLayout } from "@/components/layout/DashboardLayout";
 import { PageContent } from "@/components/layout/PageLayout";
-import { AgentCard, KanbanBoard, ActivityFeed, StatsBar, RicoChat, ScottsActionItems, AgentActivityMonitor, HealthDashboard, AnalyticsMonitor, AddTaskDialog, EditTaskDialog, QualityDashboard, TaskBoardPanel } from "@/components/mission-control";
+import { AgentCard, ActivityFeed, StatsBar, RicoChat, ScottsActionItems, AgentActivityMonitor, HealthDashboard, AnalyticsMonitor, AddTaskDialog, EditTaskDialog, QualityDashboard, TaskBoardPanel } from "@/components/mission-control";
 import { useBusinessContext } from "@/contexts/BusinessContext";
 import { useBusinesses } from "@/hooks/useBusinesses";
 import { supabase } from "@/integrations/supabase/client";

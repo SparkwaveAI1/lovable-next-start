@@ -69,6 +69,7 @@ const COLUMNS: { id: string; label: string; color: string; headerBg: string; cou
   { id: "todo", label: "Todo", color: "border-t-slate-400", headerBg: "bg-slate-50", countBg: "bg-slate-200 text-slate-700" },
   { id: "in_progress", label: "In Progress", color: "border-t-amber-400", headerBg: "bg-amber-50", countBg: "bg-amber-200 text-amber-800" },
   { id: "blocked", label: "Blocked", color: "border-t-red-400", headerBg: "bg-red-50", countBg: "bg-red-200 text-red-800" },
+  { id: "review", label: "Review", color: "border-t-violet-400", headerBg: "bg-violet-50", countBg: "bg-violet-200 text-violet-800" },
   { id: "done", label: "Done", color: "border-t-emerald-400", headerBg: "bg-emerald-50", countBg: "bg-emerald-200 text-emerald-800" },
 ];
 
@@ -388,14 +389,16 @@ export function TaskBoardPanel() {
   function mapToColumn(status: string): string {
     if (status === "in_progress") return "in_progress";
     if (status === "blocked") return "blocked";
+    if (status === "review") return "review";
     if (status === "done") return "done";
-    return "todo"; // inbox, assigned, todo, review, cancelled all go to todo
+    return "todo"; // inbox, assigned, todo, cancelled all go to todo
   }
 
   const columnTasks: Record<string, MCTask[]> = {
     todo: [],
     in_progress: [],
     blocked: [],
+    review: [],
     done: [],
   };
 
@@ -510,7 +513,7 @@ export function TaskBoardPanel() {
           <span className="ml-2 text-sm text-slate-500">Loading tasks…</span>
         </div>
       ) : (
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+        <div className="flex gap-3 overflow-x-auto pb-2 -mx-1 px-1">
           {COLUMNS.map((col) => {
             const colTasks = columnTasks[col.id];
             const isDone = col.id === "done";
@@ -520,7 +523,7 @@ export function TaskBoardPanel() {
               <div
                 key={col.id}
                 className={cn(
-                  "rounded-xl border border-slate-200 overflow-hidden",
+                  "flex-shrink-0 w-64 sm:w-72 rounded-xl border border-slate-200 overflow-hidden flex flex-col",
                   col.color,
                   "border-t-4"
                 )}

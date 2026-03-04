@@ -76,3 +76,14 @@ export const ACTIVITY_FILTERS = [
   { id: 'document_created', label: 'Docs' },
   { id: 'status_changed', label: 'Status' },
 ] as const;
+
+export const PROJECT_OPTIONS = [
+  'Sparkwave App',
+  'n8n Migration',
+  'Fight Flow',
+  'Twitter / Iris',
+  'Infrastructure',
+  'Website',
+] as const;
+
+export const ALL_KANBAN_STATUSES: TaskStatus[] = ['todo', 'in_progress', 'blocked', 'review', 'done'];

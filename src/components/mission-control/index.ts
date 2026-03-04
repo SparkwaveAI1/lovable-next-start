@@ -14,3 +14,4 @@ export { AddTaskDialog } from './AddTaskDialog';
 export { EditTaskDialog } from './EditTaskDialog';
 export { QualityDashboard } from './QualityDashboard';
 export { TaskBoardPanel } from './TaskBoardPanel';
+export { TaskBoard } from './TaskBoard';
