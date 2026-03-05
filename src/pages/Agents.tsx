@@ -303,7 +303,6 @@ function N8nWorkflowCard({ workflow }: { workflow: N8nWorkflow }) {
             </div>
             <div className="min-w-0">
               <h3 className="text-base font-bold text-slate-900 truncate">{workflow.name}</h3>
-              <p className="text-xs text-slate-400 font-mono mt-0.5">id: {workflow.id}</p>
             </div>
           </div>
 
