@@ -92,7 +92,7 @@ serve(async (req) => {
     const n8nData = await fetchN8nWorkflows(n8nApiKey, n8nUrl)
 
     // Fetch last execution per workflow
-    const execRes = await fetch(`${n8nUrl}/api/v1/executions?limit=100`, {
+    const execRes = await fetch(`${n8nUrl}/api/v1/executions?limit=250`, {
       headers: { "X-N8N-API-KEY": n8nApiKey, "Accept": "application/json" }
     }).catch(() => null)
 
@@ -104,8 +104,8 @@ serve(async (req) => {
           lastExecMap[exec.workflowId] = { startedAt: exec.startedAt, status: exec.status }
         }
       }
-    } else {
-      console.error("system-monitor: executions fetch failed", execRes?.status)
+    } else if (execRes) {
+      console.error(`[system-monitor] executions fetch failed: ${execRes.status} ${await execRes.text().catch(() => '')}`);
     }
 
     const workflows = (n8nData.workflows as Array<{ id: string; name: string; active: boolean; updatedAt?: string }>).map(wf => ({
