@@ -55,7 +55,36 @@ export default function MissionControl() {
       
       const { data: agentsData, error: agentsError } = await agentsQuery;
       if (agentsError) throw agentsError;
-      
+
+      // Fetch recent agent_logs to derive live status
+      const { data: agentLogsData } = await supabase
+        .from('agent_logs')
+        .select('agent, event_type, status, created_at')
+        .order('created_at', { ascending: false })
+        .limit(50);
+
+      // Derive agent status: "working" if log entry in last 30 min, "idle" otherwise
+      const now = new Date();
+      const activeThresholdMs = 30 * 60 * 1000; // 30 min
+
+      const agentLastSeen: Record<string, Date> = {};
+      for (const log of agentLogsData ?? []) {
+        const agentKey = (log.agent ?? '').toLowerCase();
+        if (agentKey && !agentLastSeen[agentKey]) {
+          agentLastSeen[agentKey] = new Date(log.created_at);
+        }
+      }
+
+      const agentsWithLiveStatus = (agentsData ?? []).map((agent: any) => {
+        const lastSeen = agentLastSeen[agent.name.toLowerCase()];
+        const isRecentlyActive = lastSeen && (now.getTime() - lastSeen.getTime()) < activeThresholdMs;
+        return {
+          ...agent,
+          status: isRecentlyActive ? 'working' : 'idle',
+          last_active: lastSeen?.toISOString() ?? agent.last_active ?? null,
+        };
+      });
+
       // Fetch ALL tasks (always global for Scott's To-Do)
       // Kanban will filter client-side by business
       const { data: tasksData, error: tasksError } = await supabase
@@ -77,7 +106,7 @@ export default function MissionControl() {
       const { data: activitiesData, error: activitiesError } = await activitiesQuery;
       if (activitiesError) throw activitiesError;
       
-      setAgents((agentsData as unknown as Agent[]) || []);
+      setAgents((agentsWithLiveStatus as unknown as Agent[]) || []);
       setTasks((tasksData as unknown as Task[]) || []);
       setActivities((activitiesData as unknown as Activity[]) || []);
     } catch (err) {
@@ -347,7 +376,7 @@ export default function MissionControl() {
         {/* 1. Agent Activity + Scott's To-Do (top, side by side) */}
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
           <AgentActivityMonitor
-            agents={agents.map(a => ({ id: a.id, name: a.name, status: a.status, role: a.role }))}
+            agents={agents.map(a => ({ id: a.id, name: a.name, status: a.status, role: a.role, last_active: (a as any).last_active ?? null }))}
           />
 
           <ScottsActionItems

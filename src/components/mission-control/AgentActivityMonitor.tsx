@@ -34,7 +34,7 @@ export interface ActiveAgentTask {
 
 interface AgentActivityMonitorProps {
   className?: string;
-  agents?: Array<{ id: string; name: string; status: string; role: string }>;
+  agents?: Array<{ id: string; name: string; status: string; role: string; last_active?: string | null }>;
 }
 
 function formatDuration(startTime: string): string {
@@ -53,6 +53,18 @@ function formatDuration(startTime: string): string {
   } else {
     return `${seconds}s`;
   }
+}
+
+function formatLastActive(lastActive: string | null | undefined): string {
+  if (!lastActive) return 'Never seen';
+  const diff = Date.now() - new Date(lastActive).getTime();
+  const mins = Math.floor(diff / 60000);
+  const hours = Math.floor(mins / 60);
+  const days = Math.floor(hours / 24);
+  if (days > 0) return `Last active ${days}d ago`;
+  if (hours > 0) return `Last active ${hours}h ago`;
+  if (mins > 0) return `Last active ${mins}m ago`;
+  return 'Active just now';
 }
 
 function isStale(task: ActiveAgentTask): boolean {
@@ -315,6 +327,9 @@ export function AgentActivityMonitor({ className, agents: externalAgents = [] }:
                           <span className="text-xs text-slate-500 capitalize">{agent.status}</span>
                         </div>
                       </div>
+                      <p className="text-[11px] text-slate-400 mt-1 ml-6">
+                        {formatLastActive(agent.last_active)}
+                      </p>
                     </div>
                   );
                 })}
