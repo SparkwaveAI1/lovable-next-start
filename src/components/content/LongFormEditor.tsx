@@ -35,6 +35,15 @@ const CONTENT_TYPES = [
 
 type ContentType = typeof CONTENT_TYPES[number]["value"];
 
+const CONTENT_LIMITS: Record<ContentType, { warnAt: number; hardLimit: number | null; unit: 'chars' | 'words' }> = {
+  blog:             { warnAt: 2400,  hardLimit: null, unit: 'words' },
+  linkedin_article: { warnAt: 2500,  hardLimit: 3000, unit: 'chars' },
+  twitter_thread:   { warnAt: 260,   hardLimit: 280,  unit: 'chars' }, // per tweet
+  substack:         { warnAt: 4000,  hardLimit: null, unit: 'words' },
+  medium:           { warnAt: 3000,  hardLimit: null, unit: 'words' },
+  newsletter:       { warnAt: 1600,  hardLimit: null, unit: 'words' },
+};
+
 interface Draft {
   id: string;
   title: string;
@@ -81,6 +90,9 @@ export function LongFormEditor() {
   const [contentType, setContentType] = useState<ContentType>("blog");
   const [saving, setSaving]           = useState(false);
 
+  // Twitter Thread state
+  const [tweets, setTweets] = useState<string[]>(['']);
+
   // Library state
   const [drafts, setDrafts]           = useState<Draft[]>([]);
   const [loadingDrafts, setLoadingDrafts] = useState(false);
@@ -124,9 +136,18 @@ export function LongFormEditor() {
 
   const loadDraftIntoEditor = (draft: Draft) => {
     if (!editor) return;
-    editor.commands.setContent(draft.body ?? "");
     setTitle(draft.title ?? "");
     setContentType(draft.content_type as ContentType);
+    if (draft.content_type === 'twitter_thread') {
+      try {
+        const parsed = JSON.parse(draft.body ?? '[""]');
+        setTweets(Array.isArray(parsed) ? parsed : ['']);
+      } catch {
+        setTweets([draft.body ?? '']);
+      }
+    } else {
+      editor.commands.setContent(draft.body ?? "");
+    }
     setActiveView("editor");
     toast({ title: "Draft loaded", description: `"${draft.title}" loaded into editor.` });
   };
@@ -135,11 +156,29 @@ export function LongFormEditor() {
 
   const saveDraft = async () => {
     if (!editor) return;
-    const body = editor.getHTML();
     if (!title.trim()) {
       toast({ title: "Title required", description: "Please add a title before saving.", variant: "destructive" });
       return;
     }
+
+    let body: string;
+
+    if (contentType === 'twitter_thread') {
+      const nonEmpty = tweets.filter(t => t.trim());
+      if (nonEmpty.length === 0) {
+        toast({ title: "Empty thread", description: "Add at least one tweet.", variant: "destructive" });
+        return;
+      }
+      const overLimit = tweets.findIndex(t => t.length > 280);
+      if (overLimit !== -1) {
+        toast({ title: "Tweet too long", description: `Tweet ${overLimit + 1} exceeds 280 characters.`, variant: "destructive" });
+        return;
+      }
+      body = JSON.stringify(nonEmpty);
+    } else {
+      body = editor.getHTML();
+    }
+
     setSaving(true);
     try {
       const { error } = await supabase.from("content_drafts").insert({
@@ -152,7 +191,11 @@ export function LongFormEditor() {
       toast({ title: "Draft saved", description: `"${title.trim()}" saved to your library.` });
       // Reset
       setTitle("");
-      editor.commands.clearContent();
+      if (contentType === 'twitter_thread') {
+        setTweets(['']);
+      } else {
+        editor.commands.clearContent();
+      }
     } catch (err: any) {
       toast({ title: "Save failed", description: err.message, variant: "destructive" });
     } finally {
@@ -182,6 +225,13 @@ export function LongFormEditor() {
   useEffect(() => {
     if (activeView === "library") loadDrafts();
   }, [activeView]);
+
+  // Reset tweets when switching to twitter_thread
+  useEffect(() => {
+    if (contentType === 'twitter_thread') {
+      setTweets(['']);
+    }
+  }, [contentType]);
 
   // ─── Helpers ─────────────────────────────────────────────────────────────────
 
@@ -269,155 +319,227 @@ export function LongFormEditor() {
             </Button>
           </div>
 
-          {/* Rich text editor */}
-          <div className="border border-slate-200 rounded-lg overflow-hidden bg-white shadow-sm">
-            {/* Toolbar */}
-            {editor && (
-              <div className="bg-slate-50 border-b border-slate-200 px-3 py-2">
-                <div className="flex flex-wrap items-center gap-1">
-                  {/* Undo / Redo */}
-                  <ToolbarButton
-                    onClick={() => editor.chain().focus().undo().run()}
-                    disabled={!editor.can().undo()}
-                    title="Undo"
-                  >
-                    <Undo className="h-4 w-4" />
-                  </ToolbarButton>
-                  <ToolbarButton
-                    onClick={() => editor.chain().focus().redo().run()}
-                    disabled={!editor.can().redo()}
-                    title="Redo"
-                  >
-                    <Redo className="h-4 w-4" />
-                  </ToolbarButton>
-
-                  <Separator orientation="vertical" className="h-6 mx-1" />
-
-                  {/* Bold / Italic / Underline */}
-                  <ToolbarButton
-                    onClick={() => editor.chain().focus().toggleBold().run()}
-                    isActive={editor.isActive("bold")}
-                    title="Bold"
-                  >
-                    <Bold className="h-4 w-4" />
-                  </ToolbarButton>
-                  <ToolbarButton
-                    onClick={() => editor.chain().focus().toggleItalic().run()}
-                    isActive={editor.isActive("italic")}
-                    title="Italic"
-                  >
-                    <Italic className="h-4 w-4" />
-                  </ToolbarButton>
-                  <ToolbarButton
-                    onClick={() => editor.chain().focus().toggleUnderline().run()}
-                    isActive={editor.isActive("underline")}
-                    title="Underline"
-                  >
-                    <UnderlineIcon className="h-4 w-4" />
-                  </ToolbarButton>
-
-                  <Separator orientation="vertical" className="h-6 mx-1" />
-
-                  {/* Headings dropdown */}
-                  <DropdownMenu>
-                    <DropdownMenuTrigger asChild>
-                      <Button variant="ghost" size="sm" className="h-8 px-2">
-                        <Type className="h-4 w-4 mr-1" />
-                        {editor.isActive("heading", { level: 1 })
-                          ? "H1"
-                          : editor.isActive("heading", { level: 2 })
-                          ? "H2"
-                          : editor.isActive("heading", { level: 3 })
-                          ? "H3"
-                          : "P"}
-                      </Button>
-                    </DropdownMenuTrigger>
-                    <DropdownMenuContent align="start">
-                      <DropdownMenuItem onClick={() => editor.chain().focus().setParagraph().run()}>
-                        Normal
-                      </DropdownMenuItem>
-                      <DropdownMenuItem onClick={() => editor.chain().focus().toggleHeading({ level: 1 }).run()}>
-                        Heading 1
-                      </DropdownMenuItem>
-                      <DropdownMenuItem onClick={() => editor.chain().focus().toggleHeading({ level: 2 }).run()}>
-                        Heading 2
-                      </DropdownMenuItem>
-                      <DropdownMenuItem onClick={() => editor.chain().focus().toggleHeading({ level: 3 }).run()}>
-                        Heading 3
-                      </DropdownMenuItem>
-                    </DropdownMenuContent>
-                  </DropdownMenu>
-
-                  <Separator orientation="vertical" className="h-6 mx-1" />
-
-                  {/* Lists */}
-                  <ToolbarButton
-                    onClick={() => editor.chain().focus().toggleBulletList().run()}
-                    isActive={editor.isActive("bulletList")}
-                    title="Bullet List"
-                  >
-                    <List className="h-4 w-4" />
-                  </ToolbarButton>
-                  <ToolbarButton
-                    onClick={() => editor.chain().focus().toggleOrderedList().run()}
-                    isActive={editor.isActive("orderedList")}
-                    title="Numbered List"
-                  >
-                    <ListOrdered className="h-4 w-4" />
-                  </ToolbarButton>
-
-                  <Separator orientation="vertical" className="h-6 mx-1" />
-
-                  {/* Alignment */}
-                  <ToolbarButton
-                    onClick={() => editor.chain().focus().setTextAlign("left").run()}
-                    isActive={editor.isActive({ textAlign: "left" })}
-                    title="Align Left"
-                  >
-                    <AlignLeft className="h-4 w-4" />
-                  </ToolbarButton>
-                  <ToolbarButton
-                    onClick={() => editor.chain().focus().setTextAlign("center").run()}
-                    isActive={editor.isActive({ textAlign: "center" })}
-                    title="Align Center"
-                  >
-                    <AlignCenter className="h-4 w-4" />
-                  </ToolbarButton>
-                  <ToolbarButton
-                    onClick={() => editor.chain().focus().setTextAlign("right").run()}
-                    isActive={editor.isActive({ textAlign: "right" })}
-                    title="Align Right"
-                  >
-                    <AlignRight className="h-4 w-4" />
-                  </ToolbarButton>
-
-                  <Separator orientation="vertical" className="h-6 mx-1" />
-
-                  {/* Link / Blockquote / Code */}
-                  <ToolbarButton onClick={setLink} isActive={editor.isActive("link")} title="Insert Link">
-                    <LinkIcon className="h-4 w-4" />
-                  </ToolbarButton>
-                  <ToolbarButton
-                    onClick={() => editor.chain().focus().toggleBlockquote().run()}
-                    isActive={editor.isActive("blockquote")}
-                    title="Blockquote"
-                  >
-                    <Quote className="h-4 w-4" />
-                  </ToolbarButton>
-                  <ToolbarButton
-                    onClick={() => editor.chain().focus().toggleCode().run()}
-                    isActive={editor.isActive("code")}
-                    title="Inline Code"
-                  >
-                    <Code2 className="h-4 w-4" />
-                  </ToolbarButton>
-                </div>
+          {/* Twitter Thread mode */}
+          {contentType === 'twitter_thread' ? (
+            <div className="border border-slate-200 rounded-lg bg-white shadow-sm p-4">
+              <div className="flex flex-col gap-3">
+                {tweets.map((tweet, i) => (
+                  <div key={i} className="flex flex-col gap-1">
+                    <div className="flex items-center justify-between">
+                      <span className="text-xs text-slate-500 font-medium">Tweet {i + 1}</span>
+                      {tweets.length > 1 && (
+                        <button
+                          type="button"
+                          onClick={() => setTweets(tweets.filter((_, idx) => idx !== i))}
+                          className="text-xs text-red-500 hover:text-red-700"
+                        >
+                          Remove
+                        </button>
+                      )}
+                    </div>
+                    <textarea
+                      className="w-full border border-slate-200 rounded-md p-2 text-sm resize-none focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
+                      rows={3}
+                      maxLength={280}
+                      value={tweet}
+                      onChange={(e) => {
+                        const updated = [...tweets];
+                        updated[i] = e.target.value;
+                        setTweets(updated);
+                      }}
+                      placeholder={i === 0 ? "Start your thread here..." : `Tweet ${i + 1}...`}
+                    />
+                    <div className={`text-xs text-right ${tweet.length >= 280 ? 'text-red-600 font-semibold' : tweet.length >= 260 ? 'text-amber-600' : 'text-slate-400'}`}>
+                      {tweet.length} / 280
+                    </div>
+                  </div>
+                ))}
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setTweets([...tweets, ''])}
+                  className="self-start"
+                >
+                  + Add Tweet
+                </Button>
               </div>
-            )}
+            </div>
+          ) : (
+            <>
+              {/* Rich text editor */}
+              <div className="border border-slate-200 rounded-lg overflow-hidden bg-white shadow-sm">
+                {/* Toolbar */}
+                {editor && (
+                  <div className="bg-slate-50 border-b border-slate-200 px-3 py-2">
+                    <div className="flex flex-wrap items-center gap-1">
+                      {/* Undo / Redo */}
+                      <ToolbarButton
+                        onClick={() => editor.chain().focus().undo().run()}
+                        disabled={!editor.can().undo()}
+                        title="Undo"
+                      >
+                        <Undo className="h-4 w-4" />
+                      </ToolbarButton>
+                      <ToolbarButton
+                        onClick={() => editor.chain().focus().redo().run()}
+                        disabled={!editor.can().redo()}
+                        title="Redo"
+                      >
+                        <Redo className="h-4 w-4" />
+                      </ToolbarButton>
 
-            {/* Editor area */}
-            <EditorContent editor={editor} />
-          </div>
+                      <Separator orientation="vertical" className="h-6 mx-1" />
+
+                      {/* Bold / Italic / Underline */}
+                      <ToolbarButton
+                        onClick={() => editor.chain().focus().toggleBold().run()}
+                        isActive={editor.isActive("bold")}
+                        title="Bold"
+                      >
+                        <Bold className="h-4 w-4" />
+                      </ToolbarButton>
+                      <ToolbarButton
+                        onClick={() => editor.chain().focus().toggleItalic().run()}
+                        isActive={editor.isActive("italic")}
+                        title="Italic"
+                      >
+                        <Italic className="h-4 w-4" />
+                      </ToolbarButton>
+                      <ToolbarButton
+                        onClick={() => editor.chain().focus().toggleUnderline().run()}
+                        isActive={editor.isActive("underline")}
+                        title="Underline"
+                      >
+                        <UnderlineIcon className="h-4 w-4" />
+                      </ToolbarButton>
+
+                      <Separator orientation="vertical" className="h-6 mx-1" />
+
+                      {/* Headings dropdown */}
+                      <DropdownMenu>
+                        <DropdownMenuTrigger asChild>
+                          <Button variant="ghost" size="sm" className="h-8 px-2">
+                            <Type className="h-4 w-4 mr-1" />
+                            {editor.isActive("heading", { level: 1 })
+                              ? "H1"
+                              : editor.isActive("heading", { level: 2 })
+                              ? "H2"
+                              : editor.isActive("heading", { level: 3 })
+                              ? "H3"
+                              : "P"}
+                          </Button>
+                        </DropdownMenuTrigger>
+                        <DropdownMenuContent align="start">
+                          <DropdownMenuItem onClick={() => editor.chain().focus().setParagraph().run()}>
+                            Normal
+                          </DropdownMenuItem>
+                          <DropdownMenuItem onClick={() => editor.chain().focus().toggleHeading({ level: 1 }).run()}>
+                            Heading 1
+                          </DropdownMenuItem>
+                          <DropdownMenuItem onClick={() => editor.chain().focus().toggleHeading({ level: 2 }).run()}>
+                            Heading 2
+                          </DropdownMenuItem>
+                          <DropdownMenuItem onClick={() => editor.chain().focus().toggleHeading({ level: 3 }).run()}>
+                            Heading 3
+                          </DropdownMenuItem>
+                        </DropdownMenuContent>
+                      </DropdownMenu>
+
+                      <Separator orientation="vertical" className="h-6 mx-1" />
+
+                      {/* Lists */}
+                      <ToolbarButton
+                        onClick={() => editor.chain().focus().toggleBulletList().run()}
+                        isActive={editor.isActive("bulletList")}
+                        title="Bullet List"
+                      >
+                        <List className="h-4 w-4" />
+                      </ToolbarButton>
+                      <ToolbarButton
+                        onClick={() => editor.chain().focus().toggleOrderedList().run()}
+                        isActive={editor.isActive("orderedList")}
+                        title="Numbered List"
+                      >
+                        <ListOrdered className="h-4 w-4" />
+                      </ToolbarButton>
+
+                      <Separator orientation="vertical" className="h-6 mx-1" />
+
+                      {/* Alignment */}
+                      <ToolbarButton
+                        onClick={() => editor.chain().focus().setTextAlign("left").run()}
+                        isActive={editor.isActive({ textAlign: "left" })}
+                        title="Align Left"
+                      >
+                        <AlignLeft className="h-4 w-4" />
+                      </ToolbarButton>
+                      <ToolbarButton
+                        onClick={() => editor.chain().focus().setTextAlign("center").run()}
+                        isActive={editor.isActive({ textAlign: "center" })}
+                        title="Align Center"
+                      >
+                        <AlignCenter className="h-4 w-4" />
+                      </ToolbarButton>
+                      <ToolbarButton
+                        onClick={() => editor.chain().focus().setTextAlign("right").run()}
+                        isActive={editor.isActive({ textAlign: "right" })}
+                        title="Align Right"
+                      >
+                        <AlignRight className="h-4 w-4" />
+                      </ToolbarButton>
+
+                      <Separator orientation="vertical" className="h-6 mx-1" />
+
+                      {/* Link / Blockquote / Code */}
+                      <ToolbarButton onClick={setLink} isActive={editor.isActive("link")} title="Insert Link">
+                        <LinkIcon className="h-4 w-4" />
+                      </ToolbarButton>
+                      <ToolbarButton
+                        onClick={() => editor.chain().focus().toggleBlockquote().run()}
+                        isActive={editor.isActive("blockquote")}
+                        title="Blockquote"
+                      >
+                        <Quote className="h-4 w-4" />
+                      </ToolbarButton>
+                      <ToolbarButton
+                        onClick={() => editor.chain().focus().toggleCode().run()}
+                        isActive={editor.isActive("code")}
+                        title="Inline Code"
+                      >
+                        <Code2 className="h-4 w-4" />
+                      </ToolbarButton>
+                    </div>
+                  </div>
+                )}
+
+                {/* Editor area */}
+                <EditorContent editor={editor} />
+              </div>
+
+              {/* Char / word counter */}
+              {editor && (() => {
+                const limits = CONTENT_LIMITS[contentType];
+                const text = editor.getText();
+                const count = limits.unit === 'chars'
+                  ? text.length
+                  : text.trim().split(/\s+/).filter(Boolean).length;
+                const limitLabel = limits.hardLimit
+                  ? `${count.toLocaleString()} / ${limits.hardLimit.toLocaleString()} ${limits.unit}`
+                  : `${count.toLocaleString()} / warn:${limits.warnAt.toLocaleString()} ${limits.unit}`;
+                const colorClass = limits.hardLimit && count >= limits.hardLimit
+                  ? 'text-red-600 font-semibold'
+                  : count >= limits.warnAt
+                  ? 'text-amber-600'
+                  : 'text-slate-400';
+                return (
+                  <div className={`text-xs text-right mt-1 ${colorClass}`}>
+                    {limitLabel}
+                  </div>
+                );
+              })()}
+            </>
+          )}
         </div>
       )}
 
