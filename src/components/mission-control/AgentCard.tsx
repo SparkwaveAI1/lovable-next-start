@@ -56,9 +56,12 @@ function getInitials(name: string): string {
     .slice(0, 2);
 }
 
+const defaultStatus = { label: 'IDLE', className: 'bg-slate-100 text-slate-600 border-slate-200' };
+const defaultLevel = { label: 'SPC', className: 'bg-blue-50 text-blue-700' };
+
 export function AgentCard({ agent, isActive, onClick }: AgentCardProps) {
-  const status = statusConfig[agent.status];
-  const level = levelConfig[agent.level as AgentLevel] ?? levelConfig["L3"];
+  const status = statusConfig[agent.status as AgentStatus] ?? defaultStatus;
+  const level = levelConfig[agent.level as AgentLevel] ?? defaultLevel;
 
   return (
     <div
