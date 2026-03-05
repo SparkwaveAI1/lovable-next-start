@@ -38,6 +38,7 @@ interface MCTask {
   due_date: string | null;
   created_at: string;
   updated_at: string;
+  assignee_ids: string[];
 }
 
 // ─── Constants ────────────────────────────────────────────────────────────────
@@ -101,6 +102,36 @@ function projectBadge(project: string | null) {
     <span className={cn("text-xs font-medium px-1.5 py-0.5 rounded", colors.bg, colors.text)}>
       {project}
     </span>
+  );
+}
+
+// ─── Assignee badge ───────────────────────────────────────────────────────────
+
+// Agent UUID → display config mapping
+const AGENT_BADGE_CONFIG: Record<string, { label: string; bg: string; text: string }> = {
+  "41a6f9f1-247c-4871-bd01-62a951a458da": { label: "Rico",  bg: "bg-blue-100",   text: "text-blue-700"   },
+  "7c7de13d-ab73-4413-92af-f422574be3b4": { label: "Dev",   bg: "bg-violet-100", text: "text-violet-700" },
+  "f04be918-a748-4518-b0e7-60186317768e": { label: "Iris",  bg: "bg-pink-100",   text: "text-pink-700"   },
+  "de04f4f3-3534-4df6-a7e3-a53958ee60b9": { label: "Jerry", bg: "bg-amber-100",  text: "text-amber-700"  },
+};
+
+function assigneeBadges(assigneeIds: string[]) {
+  if (!assigneeIds || assigneeIds.length === 0) return null;
+  const badges = assigneeIds
+    .map((id) => AGENT_BADGE_CONFIG[id])
+    .filter(Boolean);
+  if (badges.length === 0) return null;
+  return (
+    <>
+      {badges.map((badge) => (
+        <span
+          key={badge.label}
+          className={cn("text-xs font-medium px-1.5 py-0.5 rounded", badge.bg, badge.text)}
+        >
+          {badge.label}
+        </span>
+      ))}
+    </>
   );
 }
 
@@ -169,6 +200,7 @@ function TaskCardItem({ task, onClick }: { task: MCTask; onClick: (t: MCTask) =>
             ⏰ Stale
           </span>
         )}
+        {assigneeBadges(task.assignee_ids)}
         {owners.map((o) => (
           <span key={o} className="text-xs px-1.5 py-0.5 rounded bg-indigo-100 text-indigo-700 font-medium">
             {o}
@@ -196,6 +228,7 @@ function TaskDetailModal({ task, onClose }: { task: MCTask; onClose: () => void 
           <div className="flex flex-wrap gap-2">
             {projectBadge(task.project)}
             {priorityBadge(task.priority as TaskPriority)}
+            {assigneeBadges(task.assignee_ids)}
             {owners.map((o) => (
               <span key={o} className="text-xs px-1.5 py-0.5 rounded bg-indigo-100 text-indigo-700 font-medium">
                 {o}
@@ -395,7 +428,7 @@ export function TaskBoardPanel() {
     try {
       let query = supabase
         .from("mc_tasks")
-        .select("id,title,description,status,priority,tags,project,due_date,created_at,updated_at");
+        .select("id,title,description,status,priority,tags,project,due_date,created_at,updated_at,assignee_ids");
 
       if (!includeDone) {
         query = query.neq("status", "done");

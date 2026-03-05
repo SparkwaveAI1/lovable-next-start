@@ -1688,6 +1688,180 @@ export type Database = {
           },
         ]
       }
+      crm_accounts: {
+        Row: {
+          id: string
+          business_id: string
+          name: string
+          website: string | null
+          industry: string | null
+          company_size: string | null
+          location: string | null
+          linkedin_url: string | null
+          description: string | null
+          strategy_notes: string | null
+          status: string
+          owner_agent: string | null
+          created_at: string | null
+          updated_at: string | null
+        }
+        Insert: {
+          id?: string
+          business_id: string
+          name: string
+          website?: string | null
+          industry?: string | null
+          company_size?: string | null
+          location?: string | null
+          linkedin_url?: string | null
+          description?: string | null
+          strategy_notes?: string | null
+          status?: string
+          owner_agent?: string | null
+          created_at?: string | null
+          updated_at?: string | null
+        }
+        Update: {
+          id?: string
+          business_id?: string
+          name?: string
+          website?: string | null
+          industry?: string | null
+          company_size?: string | null
+          location?: string | null
+          linkedin_url?: string | null
+          description?: string | null
+          strategy_notes?: string | null
+          status?: string
+          owner_agent?: string | null
+          created_at?: string | null
+          updated_at?: string | null
+        }
+        Relationships: []
+      }
+      crm_deals: {
+        Row: {
+          id: string
+          business_id: string
+          account_id: string
+          title: string
+          stage: string
+          value: number | null
+          probability: number | null
+          expected_close_date: string | null
+          notes: string | null
+          lost_reason: string | null
+          created_at: string | null
+          updated_at: string | null
+        }
+        Insert: {
+          id?: string
+          business_id: string
+          account_id: string
+          title: string
+          stage?: string
+          value?: number | null
+          probability?: number | null
+          expected_close_date?: string | null
+          notes?: string | null
+          lost_reason?: string | null
+          created_at?: string | null
+          updated_at?: string | null
+        }
+        Update: {
+          id?: string
+          business_id?: string
+          account_id?: string
+          title?: string
+          stage?: string
+          value?: number | null
+          probability?: number | null
+          expected_close_date?: string | null
+          notes?: string | null
+          lost_reason?: string | null
+          created_at?: string | null
+          updated_at?: string | null
+        }
+        Relationships: []
+      }
+      crm_interactions: {
+        Row: {
+          id: string
+          business_id: string
+          account_id: string
+          deal_id: string | null
+          type: string
+          direction: string | null
+          summary: string
+          detail: string | null
+          agent: string | null
+          occurred_at: string | null
+          created_at: string | null
+        }
+        Insert: {
+          id?: string
+          business_id: string
+          account_id: string
+          deal_id?: string | null
+          type: string
+          direction?: string | null
+          summary: string
+          detail?: string | null
+          agent?: string | null
+          occurred_at?: string | null
+          created_at?: string | null
+        }
+        Update: {
+          id?: string
+          business_id?: string
+          account_id?: string
+          deal_id?: string | null
+          type?: string
+          direction?: string | null
+          summary?: string
+          detail?: string | null
+          agent?: string | null
+          occurred_at?: string | null
+          created_at?: string | null
+        }
+        Relationships: []
+      }
+      crm_documents: {
+        Row: {
+          id: string
+          business_id: string
+          account_id: string
+          deal_id: string | null
+          title: string
+          type: string | null
+          url: string
+          uploaded_by: string | null
+          created_at: string | null
+        }
+        Insert: {
+          id?: string
+          business_id: string
+          account_id: string
+          deal_id?: string | null
+          title: string
+          type?: string | null
+          url: string
+          uploaded_by?: string | null
+          created_at?: string | null
+        }
+        Update: {
+          id?: string
+          business_id?: string
+          account_id?: string
+          deal_id?: string | null
+          title?: string
+          type?: string | null
+          url?: string
+          uploaded_by?: string | null
+          created_at?: string | null
+        }
+        Relationships: []
+      }
       contact_tags: {
         Row: {
           business_id: string

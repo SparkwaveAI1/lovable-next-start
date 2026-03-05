@@ -1,0 +1,237 @@
+{
+  "name": "Twitter Daily Metrics (Task 4.1b)",
+  "nodes": [
+    {
+      "id": "node-schedule",
+      "name": "Schedule Trigger",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [240, 300],
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "cronExpression",
+              "expression": "0 4 * * *"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "node-get-date",
+      "name": "Get ET Date",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [460, 300],
+      "parameters": {
+        "jsCode": "// DST-safe ET date using Intl.DateTimeFormat (same pattern as Task 4.1)\nconst now = new Date();\nconst etDateStr = new Intl.DateTimeFormat('en-CA', {\n  timeZone: 'America/New_York',\n  year: 'numeric', month: '2-digit', day: '2-digit'\n}).format(now);\n\nfunction getETOffset(d) {\n  const s = d.toLocaleString('en-US', { timeZone: 'America/New_York', timeZoneName: 'shortOffset' });\n  const m = s.match(/GMT([+-]\\d+)/);\n  if (!m) return '-05:00';\n  const h = parseInt(m[1]);\n  return (h < 0 ? '-' : '+') + String(Math.abs(h)).padStart(2,'0') + ':00';\n}\n\nconst offset = getETOffset(now);\nconst startUtc = new Date(etDateStr + 'T00:00:00' + offset).toISOString();\nconst endUtc = new Date(new Date(startUtc).getTime() + 86399999).toISOString();\nconst date = etDateStr;\n\nreturn [{ json: { date, startUtc, endUtc } }];"
+      }
+    },
+    {
+      "id": "node-get-posts",
+      "name": "Get Twitter Posts",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [680, 300],
+      "parameters": {
+        "method": "GET",
+        "url": "https://wrsoacujxcskydlzgopa.supabase.co/rest/v1/twitter_posts",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "apikey",
+              "value": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Indyc29hY3VqeGNza3lkbHpnb3BhIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc0OTYwNTIxMSwiZXhwIjoyMDY1MTgxMjExfQ.DfHr_M1BFep1LVWpGSDfpMeb0vXqi17Y_VXoax96CvI"
+            },
+            {
+              "name": "Authorization",
+              "value": "Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Indyc29hY3VqeGNza3lkbHpnb3BhIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc0OTYwNTIxMSwiZXhwIjoyMDY1MTgxMjExfQ.DfHr_M1BFep1LVWpGSDfpMeb0vXqi17Y_VXoax96CvI"
+            }
+          ]
+        },
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "posted_at",
+              "value": "=gte.{{ $json.startUtc }}"
+            },
+            {
+              "name": "posted_at",
+              "value": "=lte.{{ $json.endUtc }}"
+            },
+            {
+              "name": "tweet_id",
+              "value": "not.is.null"
+            },
+            {
+              "name": "select",
+              "value": "account,posted_at,tweet_id"
+            }
+          ]
+        },
+        "options": {}
+      }
+    },
+    {
+      "id": "node-get-quality-gate",
+      "name": "Get Quality Gate",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [900, 300],
+      "parameters": {
+        "method": "GET",
+        "url": "https://wrsoacujxcskydlzgopa.supabase.co/rest/v1/twitter_quality_gate",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "apikey",
+              "value": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Indyc29hY3VqeGNza3lkbHpnb3BhIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc0OTYwNTIxMSwiZXhwIjoyMDY1MTgxMjExfQ.DfHr_M1BFep1LVWpGSDfpMeb0vXqi17Y_VXoax96CvI"
+            },
+            {
+              "name": "Authorization",
+              "value": "Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Indyc29hY3VqeGNza3lkbHpnb3BhIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc0OTYwNTIxMSwiZXhwIjoyMDY1MTgxMjExfQ.DfHr_M1BFep1LVWpGSDfpMeb0vXqi17Y_VXoax96CvI"
+            }
+          ]
+        },
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "date",
+              "value": "=eq.{{ $('Get ET Date').first().json.date }}"
+            },
+            {
+              "name": "select",
+              "value": "account,passed"
+            }
+          ]
+        },
+        "options": {}
+      }
+    },
+    {
+      "id": "node-calc-metrics",
+      "name": "Calculate Metrics",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1120, 300],
+      "parameters": {
+        "jsCode": "const posts = $('Get Twitter Posts').all().map(i => i.json);\nconst gates = $input.all().map(i => i.json);\nconst date = $('Get ET Date').first().json.date;\n\nconst accounts = ['rico', 'persona', 'charx', 'barnum'];\nconst postCounts = {};\nfor (const a of accounts) postCounts[a] = posts.filter(p => p.account === a).length;\n\nconst totalGates = gates.length;\nconst passedGates = gates.filter(g => g.passed === true).length;\nconst qualityRate = totalGates > 0 ? Math.round((passedGates / totalGates) * 10000) / 10000 : 0;\n\nreturn [{\n  json: {\n    date,\n    posts_rico: postCounts.rico || 0,\n    posts_persona: postCounts.persona || 0,\n    posts_charx: postCounts.charx || 0,\n    posts_barnum: postCounts.barnum || 0,\n    quality_gate_pass_rate: qualityRate,\n    quality_gates_total: totalGates\n  }\n}];"
+      }
+    },
+    {
+      "id": "node-build-metrics",
+      "name": "Build Metrics Array",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1340, 300],
+      "parameters": {
+        "jsCode": "const d = $input.first().json;\nreturn [{\n  json: [\n    { system: 'twitter', metric: 'posts_rico',             date: d.date, actual: d.posts_rico,             target: 5,    notes: null },\n    { system: 'twitter', metric: 'posts_persona',          date: d.date, actual: d.posts_persona,          target: 5,    notes: null },\n    { system: 'twitter', metric: 'posts_charx',            date: d.date, actual: d.posts_charx,            target: 5,    notes: null },\n    { system: 'twitter', metric: 'posts_barnum',           date: d.date, actual: d.posts_barnum,           target: 5,    notes: null },\n    { system: 'twitter', metric: 'comments_total',         date: d.date, actual: 0,                        target: 25,   notes: 'comment tracking not yet in DB' },\n    { system: 'twitter', metric: 'quality_gate_pass_rate', date: d.date, actual: d.quality_gate_pass_rate, target: 0.85, notes: d.quality_gates_total === 0 ? 'no gate data' : null },\n    { system: 'twitter', metric: 'manual_deletions',       date: d.date, actual: 0,                        target: 0,    notes: 'detection not yet implemented' }\n  ]\n}];"
+      }
+    },
+    {
+      "id": "node-upsert-metrics",
+      "name": "Upsert to daily_metrics",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [1560, 300],
+      "parameters": {
+        "method": "POST",
+        "url": "https://wrsoacujxcskydlzgopa.supabase.co/rest/v1/daily_metrics?on_conflict=system,metric,date",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "apikey",
+              "value": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Indyc29hY3VqeGNza3lkbHpnb3BhIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc0OTYwNTIxMSwiZXhwIjoyMDY1MTgxMjExfQ.DfHr_M1BFep1LVWpGSDfpMeb0vXqi17Y_VXoax96CvI"
+            },
+            {
+              "name": "Authorization",
+              "value": "Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Indyc29hY3VqeGNza3lkbHpnb3BhIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc0OTYwNTIxMSwiZXhwIjoyMDY1MTgxMjExfQ.DfHr_M1BFep1LVWpGSDfpMeb0vXqi17Y_VXoax96CvI"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            },
+            {
+              "name": "Prefer",
+              "value": "resolution=merge-duplicates,return=minimal"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify($json) }}",
+        "options": {}
+      }
+    },
+    {
+      "id": "node-error-trigger",
+      "name": "Error Trigger",
+      "type": "n8n-nodes-base.errorTrigger",
+      "typeVersion": 1,
+      "position": [240, 520],
+      "parameters": {}
+    },
+    {
+      "id": "node-telegram-alert",
+      "name": "Telegram Error Alert",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [460, 520],
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.telegram.org/bot8426038205:AAFS5_4HTJWmdU_4fwo2uwPAhO06L9riVkg/sendMessage",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={ \"chat_id\": 1687128792, \"text\": \"🚨 n8n twitter-daily error: {{ $json.execution.error.message || 'unknown error' }} (workflow: {{ $json.workflow.name }})\" }",
+        "options": {}
+      }
+    }
+  ],
+  "connections": {
+    "Schedule Trigger": {
+      "main": [[{"node": "Get ET Date", "type": "main", "index": 0}]]
+    },
+    "Get ET Date": {
+      "main": [[{"node": "Get Twitter Posts", "type": "main", "index": 0}]]
+    },
+    "Get Twitter Posts": {
+      "main": [[{"node": "Get Quality Gate", "type": "main", "index": 0}]]
+    },
+    "Get Quality Gate": {
+      "main": [[{"node": "Calculate Metrics", "type": "main", "index": 0}]]
+    },
+    "Calculate Metrics": {
+      "main": [[{"node": "Build Metrics Array", "type": "main", "index": 0}]]
+    },
+    "Build Metrics Array": {
+      "main": [[{"node": "Upsert to daily_metrics", "type": "main", "index": 0}]]
+    },
+    "Error Trigger": {
+      "main": [[{"node": "Telegram Error Alert", "type": "main", "index": 0}]]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1",
+    "saveManualExecutions": true,
+    "callerPolicy": "workflowsFromSameOwner",
+    "errorWorkflow": "",
+    "availableInMCP": false
+  },
+  "staticData": null,
+  "meta": null,
+  "pinData": null
+}

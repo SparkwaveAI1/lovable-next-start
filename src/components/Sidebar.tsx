@@ -23,6 +23,7 @@ import {
   LayoutPanelLeft,
   Settings,
   Activity,
+  Building2,
 } from "lucide-react"
 import { cn } from "@/lib/utils"
 import sparkwaveIcon from "@/assets/sparkwave-icon.png"
@@ -68,6 +69,7 @@ const navGroups: NavGroup[] = [
     label: "Operations",
     items: [
       { label: "Contacts", href: "/contacts", icon: Users },
+      { label: "CRM", href: "/crm", icon: Building2 },
       { label: "Communications", href: "/communications", icon: MessageSquare },
       { label: "Bookings", href: "/bookings", icon: CalendarDays },
       { label: "Service Requests", href: "/service-requests", icon: Headphones },
