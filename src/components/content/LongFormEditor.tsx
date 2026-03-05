@@ -33,6 +33,16 @@ const CONTENT_TYPES = [
   { value: "newsletter",        label: "Newsletter" },
 ] as const;
 
+
+const CONTENT_LIMITS: Record<ContentType, { warnAt: number; hardLimit: number | null; unit: 'chars' | 'words' }> = {
+  blog:             { warnAt: 2400,  hardLimit: null, unit: 'words' },
+  linkedin_article: { warnAt: 2500,  hardLimit: 3000, unit: 'chars' },
+  twitter_thread:   { warnAt: 260,   hardLimit: 280,  unit: 'chars' },
+  substack:         { warnAt: 4000,  hardLimit: null, unit: 'words' },
+  medium:           { warnAt: 3000,  hardLimit: null, unit: 'words' },
+  newsletter:       { warnAt: 1600,  hardLimit: null, unit: 'words' },
+};
+
 type ContentType = typeof CONTENT_TYPES[number]["value"];
 
 const CONTENT_LIMITS: Record<ContentType, { warnAt: number; hardLimit: number | null; unit: 'chars' | 'words' }> = {
@@ -84,6 +94,7 @@ function ToolbarButton({
 export function LongFormEditor() {
   const { toast } = useToast();
   const [activeView, setActiveView] = useState<"editor" | "library">("editor");
+  const [tweets, setTweets] = useState<string[]>(['']);
 
   // Editor state
   const [title, setTitle]             = useState("");
@@ -224,7 +235,14 @@ export function LongFormEditor() {
 
   useEffect(() => {
     if (activeView === "library") loadDrafts();
-  }, [activeView]);
+  }
+
+  useEffect(() => {
+    if (contentType === 'twitter_thread') {
+      setTweets(['']);
+    }
+  }, [contentType]);
+, [activeView]);
 
   // Reset tweets when switching to twitter_thread
   useEffect(() => {
