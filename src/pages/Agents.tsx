@@ -325,11 +325,6 @@ function N8nWorkflowCard({ workflow }: { workflow: N8nWorkflow }) {
           </div>
         </div>
 
-        {/* Description (workflow name as fallback) */}
-        <p className="text-sm text-slate-500 mb-4 leading-relaxed">
-          {workflow.name}
-        </p>
-
         {/* Last Execution */}
         <div className="bg-slate-50 rounded-lg p-3 border border-slate-100">
           <p className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-2">
