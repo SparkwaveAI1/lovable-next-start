@@ -215,15 +215,20 @@ export default function Reports() {
     };
   };
 
-  const getLogTypeBadge = (logType: LogType) => {
+  const getLogTypeBadge = (logType: LogType | null | undefined) => {
+    if (!logType) return (
+      <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-slate-100 text-slate-500">
+        event
+      </span>
+    );
     const colors: Record<LogType, string> = {
       hourly: 'bg-blue-100 text-blue-700',
       daily: 'bg-emerald-100 text-emerald-700',
       error: 'bg-red-100 text-red-700',
     };
     return (
-      <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium ${colors[logType]}`}>
-        {LOG_TYPE_ICONS[logType]} {LOG_TYPE_LABELS[logType]}
+      <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium ${colors[logType] ?? 'bg-slate-100 text-slate-500'}`}>
+        {LOG_TYPE_ICONS[logType] ?? '📌'} {LOG_TYPE_LABELS[logType] ?? logType}
       </span>
     );
   };
@@ -362,7 +367,7 @@ export default function Reports() {
             </div>
             <div className="p-6 max-h-96 overflow-y-auto">
               <div className="prose prose-sm prose-slate max-w-none">
-                <ReactMarkdown>{selectedLog.content}</ReactMarkdown>
+                <ReactMarkdown>{selectedLog.content ?? ''}</ReactMarkdown>
               </div>
             </div>
           </div>
@@ -395,8 +400,8 @@ export default function Reports() {
                 const dateInfo = formatLogDate(log.created_at);
                 const isExpanded = expandedIds.has(log.id);
                 const isSelected = selectedLog?.id === log.id;
-                const preview = log.content.slice(0, 120).replace(/\n/g, ' ');
-                const hasMore = log.content.length > 120;
+                const preview = (log.content ?? '').slice(0, 120).replace(/\n/g, ' ');
+                const hasMore = (log.content ?? '').length > 120;
 
                 return (
                   <div
@@ -421,7 +426,7 @@ export default function Reports() {
 
                         {/* Content preview */}
                         <p className="text-sm text-slate-700">
-                          {isExpanded ? log.content : preview}
+                          {isExpanded ? (log.content ?? '') : preview}
                           {!isExpanded && hasMore && '…'}
                         </p>
 
