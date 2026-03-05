@@ -22,6 +22,53 @@ interface AgentLog {
   created_at: string;
 }
 
+// mc_reports row shape (raw from Supabase)
+interface McReport {
+  id: string;
+  type: string;        // 'hourly_summary' | 'daily_summary'
+  title: string;
+  content: string;
+  metadata: Record<string, unknown> | null;
+  business_id: string | null;
+  created_at: string;
+}
+
+// ─── Helpers ─────────────────────────────────────────────────────────────────
+
+/** Parse an agent name out of an mc_reports title.
+ *  "Jerry Daily Summary — 2026-03-03"  → "Jerry"
+ *  "Hourly Summary — Feb 4 11:05 PM ET" → "Rico"  (Rico always writes hourlies)
+ *  Falls back to "Rico" when the pattern is unrecognised.
+ */
+function parseAgentFromTitle(title: string): string {
+  if (!title) return 'Rico';
+  const trimmed = title.trim();
+  // "Hourly Summary — …" has no leading agent name → Rico
+  if (/^hourly summary/i.test(trimmed)) return 'Rico';
+  // "{Agent} Daily Summary — …" → first word
+  const match = trimmed.match(/^(\w+)\s+(?:daily|hourly|weekly)/i);
+  if (match) return match[1];
+  return 'Rico';
+}
+
+/** Map mc_reports.type → LogType */
+function mapReportType(type: string): LogType {
+  if (type === 'hourly_summary') return 'hourly';
+  if (type === 'daily_summary') return 'daily';
+  return 'hourly'; // safe default
+}
+
+/** Convert an McReport row into the AgentLog shape the UI expects */
+function mcReportToAgentLog(r: McReport): AgentLog {
+  return {
+    id: r.id,
+    agent_name: parseAgentFromTitle(r.title),
+    log_type: mapReportType(r.type),
+    content: r.content ?? '',
+    created_at: r.created_at,
+  };
+}
+
 
 interface ActivityLogEntry {
   id: string;
@@ -127,38 +174,40 @@ export default function Reports() {
     fetchActivityLogs();
   }, [fetchActivityLogs]);
 
-  // Fetch logs from agent_logs table
+  // Fetch logs from mc_reports table
   const fetchLogs = useCallback(async () => {
     setIsLoading(true);
     setError(null);
     try {
-      // Use raw REST call to avoid type issues since agent_logs is new
-      const params = new URLSearchParams();
-      params.set('order', 'created_at.desc');
-      params.set('limit', '200');
-
-      const filters: string[] = [];
-      if (agentFilter !== 'All') filters.push(`agent_name=eq.${agentFilter}`);
-      if (logTypeFilter !== 'All') filters.push(`log_type=eq.${logTypeFilter}`);
-      const dateStart = getDateRangeStart(dateRange);
-      if (dateStart) filters.push(`created_at=gte.${dateStart}`);
-
-      const { data, error: fetchError } = await (supabase as any)
-        .from('agent_logs')
-        .select('*')
+      let query = (supabase as any)
+        .from('mc_reports')
+        .select('id, type, title, content, metadata, business_id, created_at')
         .order('created_at', { ascending: false })
         .limit(200);
 
+      // Server-side date filter
+      const dateStart = getDateRangeStart(dateRange);
+      if (dateStart) query = query.gte('created_at', dateStart);
+
+      // Server-side type filter — map UI value back to mc_reports.type
+      if (logTypeFilter !== 'All') {
+        const dbType = logTypeFilter === 'hourly' ? 'hourly_summary' : 'daily_summary';
+        query = query.eq('type', dbType);
+      }
+
+      const { data, error: fetchError } = await query;
       if (fetchError) throw fetchError;
 
-      let filtered = (data || []) as AgentLog[];
-      if (agentFilter !== 'All') filtered = filtered.filter(l => l.agent_name === agentFilter);
-      if (logTypeFilter !== 'All') filtered = filtered.filter(l => l.log_type === logTypeFilter);
-      if (dateStart) filtered = filtered.filter(l => new Date(l.created_at) >= new Date(dateStart));
+      let mapped = ((data || []) as McReport[]).map(mcReportToAgentLog);
 
-      setLogs(filtered);
+      // Client-side agent filter (derived from title parsing)
+      if (agentFilter !== 'All') {
+        mapped = mapped.filter(l => l.agent_name === agentFilter);
+      }
+
+      setLogs(mapped);
     } catch (err) {
-      console.error('Error fetching agent_logs:', err);
+      console.error('Error fetching mc_reports:', err);
       setError(err instanceof Error ? err.message : 'Failed to load logs');
     } finally {
       setIsLoading(false);
@@ -169,28 +218,29 @@ export default function Reports() {
     fetchLogs();
   }, [fetchLogs]);
 
-  // Real-time subscription
+  // Real-time subscription to mc_reports
   useEffect(() => {
     const channel = (supabase as any)
-      .channel('agent_logs_changes')
+      .channel('mc_reports_changes')
       .on('postgres_changes',
-        { event: 'INSERT', schema: 'public', table: 'agent_logs' },
+        { event: 'INSERT', schema: 'public', table: 'mc_reports' },
         (payload: any) => {
-          const newLog = payload.new as AgentLog;
-          // Apply filters before prepending
+          const raw = payload.new as McReport;
+          const newLog = mcReportToAgentLog(raw);
+          // Apply current filters before prepending
           const matchesAgent = agentFilter === 'All' || newLog.agent_name === agentFilter;
           const matchesType = logTypeFilter === 'All' || newLog.log_type === logTypeFilter;
           if (matchesAgent && matchesType) {
             setLogs(prev => [newLog, ...prev]);
             toast({
-              title: 'New Agent Log',
+              title: 'New Agent Report',
               description: `${newLog.agent_name} — ${LOG_TYPE_LABELS[newLog.log_type] || newLog.log_type}`,
             });
           }
         }
       )
       .subscribe((status: string, err: Error) => {
-        if (err) console.warn('Realtime subscription error (agent_logs):', err.message);
+        if (err) console.warn('Realtime subscription error (mc_reports):', err.message);
       });
 
     return () => {
@@ -389,9 +439,9 @@ export default function Reports() {
           ) : logs.length === 0 ? (
             <div className="p-12 text-center text-slate-400">
               <FileText className="h-12 w-12 mx-auto mb-3 opacity-40" />
-              <p className="font-medium text-slate-600">No logs yet — agents will begin logging here automatically</p>
+              <p className="font-medium text-slate-600">No reports match the current filters</p>
               <p className="text-sm mt-2 text-slate-400">
-                Hourly and daily logs from Rico, Iris, Dev, and Jerry will appear here once agents start writing to <code className="text-xs bg-slate-100 px-1 py-0.5 rounded">agent_logs</code>
+                Hourly and daily summaries from agents are stored in <code className="text-xs bg-slate-100 px-1 py-0.5 rounded">mc_reports</code>. Try adjusting the date range or filters.
               </p>
             </div>
           ) : (
@@ -548,4 +598,4 @@ export default function Reports() {
   );
 }
 
-// cache-bust: 2026-03-05
+// data-source: mc_reports | cache-bust: 2026-03-05
