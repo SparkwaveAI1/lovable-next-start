@@ -12,6 +12,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Separator } from "@/components/ui/separator";
 import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
+import { useBusinessContext } from "@/contexts/BusinessContext";
 import {
   Bold, Italic, Underline as UnderlineIcon, Link as LinkIcon,
   AlignLeft, AlignCenter, AlignRight,
@@ -33,6 +34,7 @@ const CONTENT_TYPES = [
   { value: "newsletter",        label: "Newsletter" },
 ] as const;
 
+type ContentType = typeof CONTENT_TYPES[number]["value"];
 
 const CONTENT_LIMITS: Record<ContentType, { warnAt: number; hardLimit: number | null; unit: 'chars' | 'words' }> = {
   blog:             { warnAt: 2400,  hardLimit: null, unit: 'words' },
@@ -43,24 +45,14 @@ const CONTENT_LIMITS: Record<ContentType, { warnAt: number; hardLimit: number | 
   newsletter:       { warnAt: 1600,  hardLimit: null, unit: 'words' },
 };
 
-type ContentType = typeof CONTENT_TYPES[number]["value"];
-
-const CONTENT_LIMITS: Record<ContentType, { warnAt: number; hardLimit: number | null; unit: 'chars' | 'words' }> = {
-  blog:             { warnAt: 2400,  hardLimit: null, unit: 'words' },
-  linkedin_article: { warnAt: 2500,  hardLimit: 3000, unit: 'chars' },
-  twitter_thread:   { warnAt: 260,   hardLimit: 280,  unit: 'chars' }, // per tweet
-  substack:         { warnAt: 4000,  hardLimit: null, unit: 'words' },
-  medium:           { warnAt: 3000,  hardLimit: null, unit: 'words' },
-  newsletter:       { warnAt: 1600,  hardLimit: null, unit: 'words' },
-};
-
 interface Draft {
   id: string;
-  title: string;
-  body: string | null;
-  content_type: ContentType;
-  created_at: string;
-  status: string;
+  topic: string | null;
+  content: string;
+  content_type: string;
+  platform: string | null;
+  created_at: string | null;
+  status: string | null;
 }
 
 // ─── Toolbar Button ───────────────────────────────────────────────────────────
@@ -93,8 +85,8 @@ function ToolbarButton({
 
 export function LongFormEditor() {
   const { toast } = useToast();
+  const { selectedBusiness } = useBusinessContext();
   const [activeView, setActiveView] = useState<"editor" | "library">("editor");
-  const [tweets, setTweets] = useState<string[]>(['']);
 
   // Editor state
   const [title, setTitle]             = useState("");
@@ -107,6 +99,28 @@ export function LongFormEditor() {
   // Library state
   const [drafts, setDrafts]           = useState<Draft[]>([]);
   const [loadingDrafts, setLoadingDrafts] = useState(false);
+
+  // Schema check state
+  const [schemaOk, setSchemaOk] = useState(true);
+
+  // ─── Runtime schema check ───────────────────────────────────────────────────
+
+  useEffect(() => {
+    supabase
+      .from("scheduled_content")
+      .select("id")
+      .limit(0)
+      .then(({ error }) => {
+        if (error) {
+          toast({
+            title: "Content storage unavailable",
+            description: "Cannot connect to content database. Save is disabled.",
+            variant: "destructive",
+          });
+          setSchemaOk(false);
+        }
+      });
+  }, []);
 
   // ─── TipTap editor ──────────────────────────────────────────────────────────
 
@@ -143,24 +157,34 @@ export function LongFormEditor() {
     editor.chain().focus().extendMarkRange("link").setLink({ href: url }).run();
   }, [editor]);
 
+  // ─── Helpers ─────────────────────────────────────────────────────────────────
+
+  const contentTypeLabel = (val: string) =>
+    CONTENT_TYPES.find((t) => t.value === val)?.label ?? val;
+
+  const formatDate = (iso: string | null) =>
+    iso ? new Date(iso).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" }) : "";
+
   // ─── Load draft into editor ──────────────────────────────────────────────────
 
   const loadDraftIntoEditor = (draft: Draft) => {
     if (!editor) return;
-    setTitle(draft.title ?? "");
-    setContentType(draft.content_type as ContentType);
+    setTitle(draft.topic ?? "");
+    // Try to match content_type to a known ContentType, fallback to "blog"
+    const ct = CONTENT_TYPES.find((t) => t.value === draft.content_type);
+    setContentType(ct ? ct.value : "blog");
     if (draft.content_type === 'twitter_thread') {
       try {
-        const parsed = JSON.parse(draft.body ?? '[""]');
+        const parsed = JSON.parse(draft.content ?? '[""]');
         setTweets(Array.isArray(parsed) ? parsed : ['']);
       } catch {
-        setTweets([draft.body ?? '']);
+        setTweets([draft.content ?? '']);
       }
     } else {
-      editor.commands.setContent(draft.body ?? "");
+      editor.commands.setContent(draft.content ?? "");
     }
     setActiveView("editor");
-    toast({ title: "Draft loaded", description: `"${draft.title}" loaded into editor.` });
+    toast({ title: "Draft loaded", description: `"${draft.topic}" loaded into editor.` });
   };
 
   // ─── Save draft ─────────────────────────────────────────────────────────────
@@ -192,10 +216,12 @@ export function LongFormEditor() {
 
     setSaving(true);
     try {
-      const { error } = await supabase.from("content_drafts").insert({
-        title: title.trim(),
-        body,
+      const { error } = await supabase.from("scheduled_content").insert({
+        topic: title.trim(),
+        content: body,
         content_type: contentType,
+        platform: contentTypeLabel(contentType),
+        business_id: selectedBusiness?.id ?? null,
         status: "draft",
       });
       if (error) throw error;
@@ -220,8 +246,9 @@ export function LongFormEditor() {
     setLoadingDrafts(true);
     try {
       const { data, error } = await supabase
-        .from("content_drafts")
-        .select("id, title, body, content_type, created_at, status")
+        .from("scheduled_content")
+        .select("id, topic, content, content_type, platform, created_at, status")
+        .eq("status", "draft")
         .order("created_at", { ascending: false })
         .limit(50);
       if (error) throw error;
@@ -235,14 +262,7 @@ export function LongFormEditor() {
 
   useEffect(() => {
     if (activeView === "library") loadDrafts();
-  }
-
-  useEffect(() => {
-    if (contentType === 'twitter_thread') {
-      setTweets(['']);
-    }
-  }, [contentType]);
-, [activeView]);
+  }, [activeView]);
 
   // Reset tweets when switching to twitter_thread
   useEffect(() => {
@@ -250,14 +270,6 @@ export function LongFormEditor() {
       setTweets(['']);
     }
   }, [contentType]);
-
-  // ─── Helpers ─────────────────────────────────────────────────────────────────
-
-  const contentTypeLabel = (val: string) =>
-    CONTENT_TYPES.find((t) => t.value === val)?.label ?? val;
-
-  const formatDate = (iso: string) =>
-    new Date(iso).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
 
   // ─── Render ──────────────────────────────────────────────────────────────────
 
@@ -325,7 +337,7 @@ export function LongFormEditor() {
             {/* Save */}
             <Button
               onClick={saveDraft}
-              disabled={saving || !editor}
+              disabled={saving || !editor || !schemaOk}
               className="bg-indigo-600 hover:bg-indigo-700 h-9 shrink-0"
             >
               {saving ? (
@@ -592,12 +604,12 @@ export function LongFormEditor() {
                   className="flex items-center justify-between gap-4 bg-white border border-slate-200 rounded-lg px-4 py-3 shadow-sm cursor-pointer hover:bg-indigo-50 hover:border-indigo-300 transition-colors"
                 >
                   <div className="flex flex-col gap-0.5 min-w-0">
-                    <span className="font-medium text-slate-800 truncate">{draft.title || "(Untitled)"}</span>
+                    <span className="font-medium text-slate-800 truncate">{draft.topic || "(Untitled)"}</span>
                     <span className="text-xs text-slate-400">{formatDate(draft.created_at)}</span>
                   </div>
                   <div className="flex items-center gap-2 shrink-0">
                     <Badge variant="outline" className="text-xs capitalize">
-                      {contentTypeLabel(draft.content_type)}
+                      {draft.platform ?? contentTypeLabel(draft.content_type)}
                     </Badge>
                     <Badge
                       variant="secondary"
