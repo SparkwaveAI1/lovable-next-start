@@ -50,6 +50,7 @@ import MonitoringPage from "./pages/Monitoring";
 import FightFlow from "./pages/FightFlow";
 import SystemOperations from "./pages/SystemOperations";
 import CRM from "./pages/CRM";
+import DealPipeline from "./pages/DealPipeline";
 import ProtectedRoute from "./components/ProtectedRoute";
 import { ErrorBoundary } from "./components/ErrorBoundary";
 import { BusinessProvider } from "@/contexts/BusinessContext";
@@ -117,6 +118,7 @@ const App = () => (
             <Route path="/monitoring" element={<MonitoringPage />} />
             <Route path="/fight-flow" element={<ProtectedRoute><ErrorBoundary><FightFlow /></ErrorBoundary></ProtectedRoute>} />
             <Route path="/crm" element={<ProtectedRoute><ErrorBoundary><CRM /></ErrorBoundary></ProtectedRoute>} />
+            <Route path="/crm/deals" element={<ProtectedRoute><ErrorBoundary><DealPipeline /></ErrorBoundary></ProtectedRoute>} />
             <Route path="/crm/:id" element={<ProtectedRoute><ErrorBoundary><CRM /></ErrorBoundary></ProtectedRoute>} />
             {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
             <Route path="*" element={<NotFound />} />
