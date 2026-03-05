@@ -67,6 +67,7 @@ export default function TwitterAnalytics() {
   const [accountStats, setAccountStats] = useState<AccountStats[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [refreshedAt, setRefreshedAt] = useState<Date | null>(null);
 
   const fetchData = useCallback(async () => {
     setIsLoading(true);
@@ -140,6 +141,7 @@ export default function TwitterAnalytics() {
       }));
 
       setAccountStats(stats);
+      setRefreshedAt(new Date());
     } catch (err) {
       console.error("Error fetching Twitter analytics:", err);
       setError(err instanceof Error ? err.message : "Failed to load analytics");
@@ -179,16 +181,23 @@ export default function TwitterAnalytics() {
           title="Twitter Analytics"
           description="Track posting quality, engagement, and account performance"
           actions={
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={fetchData}
-              disabled={isLoading}
-              className="gap-2"
-            >
-              <RefreshCw className={`h-4 w-4 ${isLoading ? "animate-spin" : ""}`} />
-              Refresh
-            </Button>
+            <div className="flex items-center gap-3">
+              {!isLoading && refreshedAt && (
+                <span className="text-xs text-slate-400">
+                  Last refreshed {format(refreshedAt, 'h:mm a')}
+                </span>
+              )}
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={fetchData}
+                disabled={isLoading}
+                className="gap-2"
+              >
+                <RefreshCw className={`h-4 w-4 ${isLoading ? "animate-spin" : ""}`} />
+                Refresh
+              </Button>
+            </div>
           }
         />
 
@@ -198,7 +207,20 @@ export default function TwitterAnalytics() {
           </div>
         )}
 
-        {/* Summary Cards */}
+        {/* Top-level empty state */}
+        {!isLoading && !error && posts.length === 0 && (
+          <div className="flex flex-col items-center justify-center py-24 text-center">
+            <Twitter className="h-12 w-12 text-slate-200 mb-4" />
+            <h3 className="text-lg font-semibold text-slate-700">No Twitter data yet</h3>
+            <p className="text-sm text-slate-400 mt-2 max-w-xs">
+              Posts will appear here once Twitter accounts start publishing.
+              Check back after the next scheduled post.
+            </p>
+          </div>
+        )}
+
+        {/* Summary Cards + Charts (hidden when empty and not loading) */}
+        {(isLoading || posts.length > 0) && (<>
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
           <Card>
             <CardContent className="p-4">
@@ -348,7 +370,9 @@ export default function TwitterAnalytics() {
                           </Badge>
                         </td>
                         <td className="text-right py-2 px-1 text-gray-600">
-                          {(stat.totalLikes + stat.totalRetweets).toLocaleString()}
+                          {stat.totalLikes + stat.totalRetweets > 0
+                            ? (stat.totalLikes + stat.totalRetweets).toLocaleString()
+                            : "—"}
                         </td>
                       </tr>
                     ))}
@@ -366,7 +390,10 @@ export default function TwitterAnalytics() {
           </Card>
         </div>
 
+        </>)}
+
         {/* Recent Posts */}
+        {(isLoading || posts.length > 0) && (
         <Card>
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
@@ -458,6 +485,7 @@ export default function TwitterAnalytics() {
             </div>
           </CardContent>
         </Card>
+        )}
       </PageContent>
     </DashboardLayout>
   );
