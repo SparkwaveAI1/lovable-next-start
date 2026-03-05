@@ -31,7 +31,7 @@ async function pingAgent(ip: string, port: number): Promise<PingResult> {
   for (const url of [`http://${ip}:${port}/health`, `http://${ip}:${port}/`]) {
     try {
       const controller = new AbortController()
-      const timer = setTimeout(() => controller.abort(), 5000)
+      const timer = setTimeout(() => controller.abort(), 1500)
       const res = await fetch(url, { signal: controller.signal })
       clearTimeout(timer)
       if (res.status < 500) return { online: true, latencyMs: Date.now() - start }
@@ -73,7 +73,11 @@ serve(async (req) => {
     const now = new Date().toISOString()
 
     // 1. Ping agents
-    const pingResults = await Promise.allSettled(AGENTS.map(a => pingAgent(a.ip, a.port)))
+    const pingResultsRaw = Promise.allSettled(AGENTS.map(a => pingAgent(a.ip, a.port)))
+    const timeoutFallback = new Promise<PromiseSettledResult<PingResult>[]>(resolve =>
+      setTimeout(() => resolve(AGENTS.map(() => ({ status: 'fulfilled' as const, value: { online: false, latencyMs: null } }))), 4000)
+    )
+    const pingResults = await Promise.race([pingResultsRaw, timeoutFallback])
     const agents = AGENTS.map((agent, i) => {
       const r = pingResults[i]
       const ping: PingResult = r.status === "fulfilled" ? r.value : { online: false }
