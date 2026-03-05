@@ -58,7 +58,7 @@ function getInitials(name: string): string {
 
 export function AgentCard({ agent, isActive, onClick }: AgentCardProps) {
   const status = statusConfig[agent.status];
-  const level = levelConfig[agent.level];
+  const level = levelConfig[agent.level as AgentLevel] ?? levelConfig["L3"];
 
   return (
     <div
