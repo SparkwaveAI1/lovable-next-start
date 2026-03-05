@@ -72,6 +72,17 @@ const COLUMNS: { id: string; label: string; color: string; headerBg: string; cou
   { id: "done", label: "Done", color: "border-t-emerald-400", headerBg: "bg-emerald-50", countBg: "bg-emerald-200 text-emerald-800" },
 ];
 
+// ─── Stale threshold ──────────────────────────────────────────────────────────
+
+const STALE_THRESHOLD_MS = 7 * 24 * 60 * 60 * 1000; // 7 days
+
+function isTaskStale(task: MCTask): boolean {
+  return (
+    task.status === "in_progress" &&
+    new Date(task.updated_at) < new Date(Date.now() - STALE_THRESHOLD_MS)
+  );
+}
+
 // ─── Project badge colors ────────────────────────────────────────────────────
 
 const PROJECT_COLORS: Record<string, { bg: string; text: string }> = {
@@ -141,6 +152,7 @@ function DueDateBadge({ due_date }: { due_date: string | null }) {
 function TaskCardItem({ task, onClick }: { task: MCTask; onClick: (t: MCTask) => void }) {
   const owners = extractOwners(task.tags);
   const desc = task.description ? task.description.slice(0, 80) + (task.description.length > 80 ? "…" : "") : "";
+  const stale = isTaskStale(task);
 
   return (
     <div
@@ -152,6 +164,11 @@ function TaskCardItem({ task, onClick }: { task: MCTask; onClick: (t: MCTask) =>
       <div className="flex flex-wrap gap-1 items-center">
         {projectBadge(task.project)}
         {priorityBadge(task.priority as TaskPriority)}
+        {stale && (
+          <span className="text-xs font-medium px-1.5 py-0.5 rounded bg-amber-100 text-amber-700 border border-amber-300">
+            ⏰ Stale
+          </span>
+        )}
         {owners.map((o) => (
           <span key={o} className="text-xs px-1.5 py-0.5 rounded bg-indigo-100 text-indigo-700 font-medium">
             {o}
@@ -194,6 +211,7 @@ function TaskDetailModal({ task, onClose }: { task: MCTask; onClose: () => void 
             <p>Status: <span className="font-medium text-slate-600">{task.status.replace("_", " ")}</span></p>
             <p>Tags: {task.tags.length ? task.tags.join(", ") : "none"}</p>
             <p>Created: {new Date(task.created_at).toLocaleString()}</p>
+            <p>Updated: {new Date(task.updated_at).toLocaleString()}</p>
           </div>
         </div>
         <DialogFooter>
@@ -357,6 +375,10 @@ export function TaskBoardPanel() {
   const [error, setError] = useState<string | null>(null);
   const [dbProjects, setDbProjects] = useState<string[]>([]);
 
+  // Show/hide done tasks (hidden by default)
+  const [showDone, setShowDone] = useState(false);
+  const [doneCount, setDoneCount] = useState(515);
+
   // Filters
   const [filterProject, setFilterProject] = useState<string>("all");
   const [filterOwner, setFilterOwner] = useState<string>("all");
@@ -367,18 +389,33 @@ export function TaskBoardPanel() {
   const [selectedTask, setSelectedTask] = useState<MCTask | null>(null);
   const [showNewTask, setShowNewTask] = useState(false);
 
-  const fetchTasks = useCallback(async () => {
+  const fetchTasks = useCallback(async (includeDone: boolean) => {
     setIsLoading(true);
     setError(null);
     try {
-      const { data, error: fetchError } = await supabase
+      let query = supabase
         .from("mc_tasks")
-        .select("id,title,description,status,priority,tags,project,due_date,created_at,updated_at")
-        .order("priority", { ascending: false })
-        .order("created_at", { ascending: false });
+        .select("id,title,description,status,priority,tags,project,due_date,created_at,updated_at");
+
+      if (!includeDone) {
+        query = query.neq("status", "done");
+      }
+
+      const { data, error: fetchError } = await query
+        .order("updated_at", { ascending: false })
+        .limit(100);
 
       if (fetchError) throw fetchError;
       setTasks((data as MCTask[]) || []);
+
+      // If we're not including done, fetch the done count separately for the toggle label
+      if (!includeDone) {
+        const { count } = await supabase
+          .from("mc_tasks")
+          .select("id", { count: "exact", head: true })
+          .eq("status", "done");
+        if (count !== null) setDoneCount(count);
+      }
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to load tasks");
     } finally {
@@ -401,9 +438,14 @@ export function TaskBoardPanel() {
   }, []);
 
   useEffect(() => {
-    fetchTasks();
+    fetchTasks(showDone);
     fetchProjects();
-  }, [fetchTasks, fetchProjects]);
+  }, [fetchTasks, fetchProjects, showDone]);
+
+  const handleToggleDone = () => {
+    const next = !showDone;
+    setShowDone(next);
+  };
 
   // Apply filters
   const filteredTasks = tasks.filter((t) => {
@@ -431,6 +473,9 @@ export function TaskBoardPanel() {
     columnTasks[col].push(t);
   }
 
+  // Visible columns: only show Done column when showDone is true
+  const visibleColumns = COLUMNS.filter((col) => col.id !== "done" || showDone);
+
   // Extract all unique owners from all tasks for filter dropdown
   const allOwners = Array.from(
     new Set(
@@ -445,17 +490,33 @@ export function TaskBoardPanel() {
   const taskProjects = Array.from(new Set(tasks.map((t) => t.project).filter(Boolean))) as string[];
   const allProjects = dbProjects.length > 0 ? dbProjects : taskProjects;
 
+  const activeCount = filteredTasks.filter((t) => t.status !== "done").length;
+
   return (
     <div className="space-y-4">
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
         <div>
           <h2 className="text-lg font-bold text-slate-900">Task Board</h2>
-          <p className="text-xs text-slate-500">{filteredTasks.length} tasks across all columns</p>
+          <p className="text-xs text-slate-500">
+            {showDone ? filteredTasks.length : activeCount} active tasks
+          </p>
         </div>
         <div className="flex items-center gap-2">
           <button
-            onClick={fetchTasks}
+            onClick={handleToggleDone}
+            className={cn(
+              "flex items-center gap-1.5 px-3 py-2 rounded-lg border transition-colors text-sm font-medium",
+              showDone
+                ? "bg-emerald-50 border-emerald-300 text-emerald-700 hover:bg-emerald-100"
+                : "bg-white border-slate-200 text-slate-600 hover:bg-slate-50"
+            )}
+            title={showDone ? "Hide completed tasks" : "Show completed tasks"}
+          >
+            {showDone ? "Hide completed" : `Show completed (${doneCount})`}
+          </button>
+          <button
+            onClick={() => fetchTasks(showDone)}
             disabled={isLoading}
             className="p-2 bg-white border border-slate-200 rounded-lg hover:bg-slate-50 transition-colors disabled:opacity-50"
             title="Refresh"
@@ -527,7 +588,7 @@ export function TaskBoardPanel() {
         <div className="flex items-center gap-2 p-3 bg-red-50 border border-red-200 rounded-lg text-red-700 text-sm">
           <AlertCircle className="h-4 w-4 shrink-0" />
           <span>{error}</span>
-          <button onClick={fetchTasks} className="ml-auto underline text-xs">Retry</button>
+          <button onClick={() => fetchTasks(showDone)} className="ml-auto underline text-xs">Retry</button>
         </div>
       )}
 
@@ -539,7 +600,7 @@ export function TaskBoardPanel() {
         </div>
       ) : (
         <div className="flex gap-3 overflow-x-auto pb-2 -mx-1 px-1">
-          {COLUMNS.map((col) => {
+          {visibleColumns.map((col) => {
             const colTasks = columnTasks[col.id];
             const isDone = col.id === "done";
             const isExpanded = isDone ? doneExpanded : true;
@@ -602,7 +663,7 @@ export function TaskBoardPanel() {
 
       {/* New task modal */}
       {showNewTask && (
-        <NewTaskModal onClose={() => setShowNewTask(false)} onCreated={fetchTasks} />
+        <NewTaskModal onClose={() => setShowNewTask(false)} onCreated={() => fetchTasks(showDone)} />
       )}
     </div>
   );
