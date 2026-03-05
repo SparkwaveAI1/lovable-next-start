@@ -40,6 +40,23 @@ const FORMAT_OPTIONS  = ["All", "Short Post", "Thread", "Article", "Slide Deck"]
 const PLATFORM_OPTIONS = ["All", "twitter", "linkedin", "instagram", "tiktok", "facebook"] as const;
 const STATUS_OPTIONS  = ["All", "draft", "scheduled", "posted"] as const;
 
+const CONTENT_TYPE_OPTIONS = [
+  { value: "All",             label: "All Types",         emoji: "" },
+  { value: "blog",            label: "Blog Post",         emoji: "📝" },
+  { value: "linkedin_article",label: "LinkedIn Article",  emoji: "💼" },
+  { value: "twitter_thread",  label: "Twitter Thread",    emoji: "🧵" },
+  { value: "substack",        label: "Substack",          emoji: "📮" },
+  { value: "newsletter",      label: "Newsletter",        emoji: "📰" },
+] as const;
+
+const CONTENT_TYPE_COLORS: Record<string, string> = {
+  blog:             "bg-purple-50 text-purple-700 border border-purple-200",
+  linkedin_article: "bg-blue-50 text-blue-700 border border-blue-200",
+  twitter_thread:   "bg-sky-50 text-sky-700 border border-sky-200",
+  substack:         "bg-orange-50 text-orange-700 border border-orange-200",
+  newsletter:       "bg-green-50 text-green-700 border border-green-200",
+};
+
 const PLATFORM_COLORS: Record<string, string> = {
   twitter:   "bg-sky-100 text-sky-700",
   linkedin:  "bg-blue-100 text-blue-700",
@@ -86,9 +103,10 @@ export function ContentLibrary({ brand, businessId }: ContentLibraryProps) {
   const [items, setItems]           = useState<ContentItem[]>([]);
   const [loading, setLoading]       = useState(true);
   const [search, setSearch]         = useState("");
-  const [filterFormat, setFilterFormat]     = useState<string>("All");
-  const [filterPlatform, setFilterPlatform] = useState<string>("All");
-  const [filterStatus, setFilterStatus]     = useState<string>("All");
+  const [filterFormat, setFilterFormat]       = useState<string>("All");
+  const [filterPlatform, setFilterPlatform]   = useState<string>("All");
+  const [filterStatus, setFilterStatus]       = useState<string>("All");
+  const [filterContentType, setFilterContentType] = useState<string>("All");
   const [viewMode, setViewMode]     = useState<"grid" | "list">("grid");
   const [composeOpen, setComposeOpen] = useState(false);
   const [editItem, setEditItem]     = useState<ComposableItem | null>(null);
@@ -195,6 +213,8 @@ export function ContentLibrary({ brand, businessId }: ContentLibraryProps) {
     if (filterFormat !== "All" && item.format !== filterFormat) return false;
     if (filterPlatform !== "All" && !item.platform.toLowerCase().includes(filterPlatform)) return false;
     if (filterStatus !== "All" && item.status !== filterStatus) return false;
+    if (filterContentType !== "All" && item.source === "scheduled" && item.format !== filterContentType) return false;
+    if (filterContentType !== "All" && item.source === "queue") return false; // queue items don't have content_type
     if (search.trim() && !item.content.toLowerCase().includes(search.trim().toLowerCase())) return false;
     return true;
   });
@@ -278,6 +298,17 @@ export function ContentLibrary({ brand, businessId }: ContentLibraryProps) {
             className="pl-9"
           />
         </div>
+
+        <Select value={filterContentType} onValueChange={setFilterContentType}>
+          <SelectTrigger className="w-48"><SelectValue placeholder="Content Type" /></SelectTrigger>
+          <SelectContent>
+            {CONTENT_TYPE_OPTIONS.map(t => (
+              <SelectItem key={t.value} value={t.value}>
+                {t.emoji ? `${t.emoji} ${t.label}` : t.label}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
 
         <Select value={filterFormat} onValueChange={setFilterFormat}>
           <SelectTrigger className="w-40"><SelectValue placeholder="Format" /></SelectTrigger>
@@ -463,7 +494,15 @@ function ContentCard({ item, onEdit, onDuplicate, onDelete, getPlatforms, format
           {item.source === "scheduled" ? "authored" : "queue"}
         </Badge>
 
-        {item.format && (
+        {/* Content type badge for scheduled_content items */}
+        {item.source === "scheduled" && item.format && (
+          <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${CONTENT_TYPE_COLORS[item.format] ?? "bg-slate-100 text-slate-600"}`}>
+            {CONTENT_TYPE_OPTIONS.find(t => t.value === item.format)?.emoji}{" "}
+            {CONTENT_TYPE_OPTIONS.find(t => t.value === item.format)?.label ?? item.format}
+          </span>
+        )}
+
+        {item.source === "queue" && item.format && (
           <Badge variant="outline" className="text-xs">{item.format}</Badge>
         )}
         {platforms.map(p => (
@@ -544,7 +583,16 @@ function ContentRow({ item, onEdit, onDuplicate, onDelete, getPlatforms, formatD
         >
           {item.source === "scheduled" ? "authored" : "queue"}
         </Badge>
-        {item.format && (
+
+        {/* Content type badge for scheduled items */}
+        {item.source === "scheduled" && item.format && (
+          <span className={`text-xs px-2 py-0.5 rounded-full font-medium hidden md:inline ${CONTENT_TYPE_COLORS[item.format] ?? "bg-slate-100 text-slate-600"}`}>
+            {CONTENT_TYPE_OPTIONS.find(t => t.value === item.format)?.emoji}{" "}
+            {CONTENT_TYPE_OPTIONS.find(t => t.value === item.format)?.label ?? item.format}
+          </span>
+        )}
+
+        {item.source === "queue" && item.format && (
           <Badge variant="outline" className="text-xs hidden md:flex">{item.format}</Badge>
         )}
         {platforms.slice(0, 2).map(p => (

@@ -125,7 +125,7 @@ export default function ContentHub() {
                 <ContentCalendar brand={brand} businessId={businessId} />
               )}
               {activeTab === "repurpose" && <RepurposePanel brand={brand} />}
-              {activeTab === "write" && <LongFormEditor />}
+              {activeTab === "write" && <LongFormEditor onSaved={handleSaved} />}
             </div>
           </>
         )}

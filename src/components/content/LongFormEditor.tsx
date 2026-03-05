@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { useEditor, EditorContent } from "@tiptap/react";
 import StarterKit from "@tiptap/starter-kit";
 import Link from "@tiptap/extension-link";
@@ -17,32 +17,46 @@ import {
   Bold, Italic, Underline as UnderlineIcon, Link as LinkIcon,
   AlignLeft, AlignCenter, AlignRight,
   List, ListOrdered, Quote, Code2, Undo, Redo, Type,
-  Loader2, Save, FileText, PenLine,
+  Loader2, Save, FileText, PenLine, Info, Trash2, AlertTriangle,
 } from "lucide-react";
 import {
   DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import {
+  AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
+  AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
 const CONTENT_TYPES = [
-  { value: "blog",              label: "Blog Post" },
-  { value: "linkedin_article",  label: "LinkedIn Article" },
-  { value: "twitter_thread",    label: "Twitter Thread" },
-  { value: "substack",          label: "Substack" },
-  { value: "medium",            label: "Medium" },
-  { value: "newsletter",        label: "Newsletter" },
+  { value: "blog",             label: "Blog Post",        emoji: "📝" },
+  { value: "linkedin_article", label: "LinkedIn Article", emoji: "💼" },
+  { value: "twitter_thread",   label: "Twitter Thread",   emoji: "🧵" },
+  { value: "substack",         label: "Substack",         emoji: "📮" },
+  { value: "newsletter",       label: "Newsletter",        emoji: "📰" },
 ] as const;
 
 type ContentType = typeof CONTENT_TYPES[number]["value"];
 
-const CONTENT_LIMITS: Record<ContentType, { warnAt: number; hardLimit: number | null; unit: 'chars' | 'words' }> = {
-  blog:             { warnAt: 2400,  hardLimit: null, unit: 'words' },
-  linkedin_article: { warnAt: 2500,  hardLimit: 3000, unit: 'chars' },
-  twitter_thread:   { warnAt: 260,   hardLimit: 280,  unit: 'chars' },
-  substack:         { warnAt: 4000,  hardLimit: null, unit: 'words' },
-  medium:           { warnAt: 3000,  hardLimit: null, unit: 'words' },
-  newsletter:       { warnAt: 1600,  hardLimit: null, unit: 'words' },
+// Hard limits (null = no hard limit). Warn thresholds below.
+const CONTENT_LIMITS: Record<
+  ContentType,
+  { warnAt: number; hardLimit: number | null; unit: "chars" | "words" }
+> = {
+  blog:             { warnAt: 3000,  hardLimit: null, unit: "chars" },
+  linkedin_article: { warnAt: 2500,  hardLimit: 3000, unit: "chars" },
+  twitter_thread:   { warnAt: 260,   hardLimit: 280,  unit: "chars" }, // per tweet
+  substack:         { warnAt: 5000,  hardLimit: null, unit: "chars" },
+  newsletter:       { warnAt: 2000,  hardLimit: null, unit: "chars" },
+};
+
+const FORMAT_PRESETS: Record<ContentType, { range: string; tip: string }> = {
+  blog:             { range: "800–2000 words",   tip: "Mix headers, bullet points, code blocks. Include intro + conclusion." },
+  linkedin_article: { range: "100–300 words",    tip: "Start with a hook. Keep professional but conversational. Max 3000 chars." },
+  twitter_thread:   { range: "5–10 tweets",      tip: "Each tweet stands alone AND contributes to the thread narrative. 280 chars max per tweet." },
+  substack:         { range: "1500–3000 words",  tip: "Personal perspective. Can be long-form narrative. Warn at 5000 chars." },
+  newsletter:       { range: "500–1500 words",   tip: "Curated updates + brief commentary. Keep scannable. Warn at 2000 chars." },
 };
 
 interface Draft {
@@ -54,6 +68,11 @@ interface Draft {
   created_at: string | null;
   status: string | null;
 }
+
+// ─── Schema check cache ────────────────────────────────────────────────────────
+
+let schemaCheckCache: { ok: boolean; ts: number } | null = null;
+const SCHEMA_CACHE_MS = 5 * 60 * 1000; // 5 minutes
 
 // ─── Toolbar Button ───────────────────────────────────────────────────────────
 
@@ -81,9 +100,70 @@ function ToolbarButton({
   );
 }
 
+// ─── Helpers ──────────────────────────────────────────────────────────────────
+
+function contentTypeLabel(val: string): string {
+  return CONTENT_TYPES.find((t) => t.value === val)?.label ?? val;
+}
+
+function contentTypeEmoji(val: string): string {
+  return CONTENT_TYPES.find((t) => t.value === val)?.emoji ?? "";
+}
+
+function formatDate(iso: string | null): string {
+  if (!iso) return "";
+  return new Date(iso).toLocaleDateString("en-US", {
+    month: "short", day: "numeric", year: "numeric",
+  });
+}
+
+function friendlyError(err: unknown): string {
+  if (!err) return "An unexpected error occurred. Please try again.";
+  if (typeof err === "string") {
+    if (err.includes("fetch") || err.includes("network") || err.toLowerCase().includes("failed to fetch")) {
+      return "Couldn't save. Please check your connection and try again.";
+    }
+    return "An unexpected error occurred. Please try again.";
+  }
+  const e = err as { message?: string; code?: string };
+  const msg = e.message ?? "";
+  if (msg.includes("fetch") || msg.includes("network") || msg.toLowerCase().includes("failed to fetch")) {
+    return "Couldn't save. Please check your connection and try again.";
+  }
+  if (msg.includes("violates") || msg.includes("constraint") || e.code === "23505") {
+    return "This content already exists or violates a database rule. Please try editing instead.";
+  }
+  return "An unexpected error occurred. Please try again.";
+}
+
+// ─── TypeBadge ───────────────────────────────────────────────────────────────
+
+function TypeBadge({ contentType }: { contentType: string }) {
+  const colors: Record<string, string> = {
+    blog:             "bg-purple-50 text-purple-700 border-purple-200",
+    linkedin_article: "bg-blue-50 text-blue-700 border-blue-200",
+    twitter_thread:   "bg-sky-50 text-sky-700 border-sky-200",
+    substack:         "bg-orange-50 text-orange-700 border-orange-200",
+    newsletter:       "bg-green-50 text-green-700 border-green-200",
+  };
+  const cls = colors[contentType] ?? "bg-slate-50 text-slate-600 border-slate-200";
+  return (
+    <span className={`inline-flex items-center gap-1 text-xs px-2 py-0.5 rounded-full border font-medium ${cls}`}>
+      {contentTypeEmoji(contentType)} {contentTypeLabel(contentType)}
+    </span>
+  );
+}
+
+// ─── Props ────────────────────────────────────────────────────────────────────
+
+interface LongFormEditorProps {
+  /** Called after a draft is saved, so the parent can refresh the library tab */
+  onSaved?: () => void;
+}
+
 // ─── Main Component ───────────────────────────────────────────────────────────
 
-export function LongFormEditor() {
+export function LongFormEditor({ onSaved }: LongFormEditorProps) {
   const { toast } = useToast();
   const { selectedBusiness } = useBusinessContext();
   const [activeView, setActiveView] = useState<"editor" | "library">("editor");
@@ -92,43 +172,60 @@ export function LongFormEditor() {
   const [title, setTitle]             = useState("");
   const [contentType, setContentType] = useState<ContentType>("blog");
   const [saving, setSaving]           = useState(false);
+  const [titleError, setTitleError]   = useState("");
 
   // Twitter Thread state
-  const [tweets, setTweets] = useState<string[]>(['']);
+  const [tweets, setTweets] = useState<string[]>([""]);
 
   // Library state
-  const [drafts, setDrafts]           = useState<Draft[]>([]);
-  const [loadingDrafts, setLoadingDrafts] = useState(false);
+  const [drafts, setDrafts]                 = useState<Draft[]>([]);
+  const [loadingDrafts, setLoadingDrafts]   = useState(false);
+  const [filterType, setFilterType]         = useState<string>("All");
+  const [deleteTargetId, setDeleteTargetId] = useState<string | null>(null);
+  const [deleting, setDeleting]             = useState(false);
 
-  // Schema check state
-  const [schemaOk, setSchemaOk] = useState(true);
+  // Schema check
+  const [schemaOk, setSchemaOk]     = useState(true);
+  const [schemaChecked, setSchemaChecked] = useState(false);
 
-  // ─── Runtime schema check ───────────────────────────────────────────────────
+  // Preset info panel
+  const [showPreset, setShowPreset] = useState(false);
+
+  // ─── Runtime schema check ─────────────────────────────────────────────────
 
   useEffect(() => {
+    const now = Date.now();
+    if (schemaCheckCache && now - schemaCheckCache.ts < SCHEMA_CACHE_MS) {
+      setSchemaOk(schemaCheckCache.ok);
+      setSchemaChecked(true);
+      return;
+    }
+
     supabase
       .from("scheduled_content")
       .select("id")
-      .limit(0)
+      .limit(1)
       .then(({ error }) => {
-        if (error) {
+        const ok = !error;
+        schemaCheckCache = { ok, ts: Date.now() };
+        setSchemaOk(ok);
+        setSchemaChecked(true);
+        if (!ok) {
           toast({
-            title: "Content storage unavailable",
-            description: "Cannot connect to content database. Save is disabled.",
+            title: "Content storage not configured",
+            description: "Contact support to enable the content library.",
             variant: "destructive",
           });
-          setSchemaOk(false);
         }
       });
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   // ─── TipTap editor ──────────────────────────────────────────────────────────
 
   const editor = useEditor({
     extensions: [
-      StarterKit.configure({
-        heading: { levels: [1, 2, 3] },
-      }),
+      StarterKit.configure({ heading: { levels: [1, 2, 3] } }),
       Link.configure({
         openOnClick: false,
         HTMLAttributes: { class: "text-blue-600 underline cursor-pointer" },
@@ -139,8 +236,7 @@ export function LongFormEditor() {
     content: "",
     editorProps: {
       attributes: {
-        class:
-          "prose prose-sm max-w-none min-h-[400px] p-4 focus:outline-none",
+        class: "prose prose-sm max-w-none min-h-[400px] p-4 focus:outline-none",
       },
     },
   });
@@ -157,121 +253,284 @@ export function LongFormEditor() {
     editor.chain().focus().extendMarkRange("link").setLink({ href: url }).run();
   }, [editor]);
 
-  // ─── Helpers ─────────────────────────────────────────────────────────────────
+  // Reset tweets when switching TO twitter_thread
+  useEffect(() => {
+    if (contentType === "twitter_thread") {
+      setTweets([""]);
+    }
+  }, [contentType]);
 
-  const contentTypeLabel = (val: string) =>
-    CONTENT_TYPES.find((t) => t.value === val)?.label ?? val;
+  // ─── Content metrics ──────────────────────────────────────────────────────
 
-  const formatDate = (iso: string | null) =>
-    iso ? new Date(iso).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" }) : "";
+  const getEditorText = useCallback(() => {
+    if (!editor) return "";
+    return editor.getText();
+  }, [editor]);
 
-  // ─── Load draft into editor ──────────────────────────────────────────────────
+  const getCharCount = useCallback(() => {
+    if (contentType === "twitter_thread") return 0; // per-tweet tracking
+    return getEditorText().length;
+  }, [contentType, getEditorText]);
+
+  const limits = CONTENT_LIMITS[contentType];
+
+  // Is the save button disabled due to hard limit?
+  const hardLimitExceeded = (() => {
+    if (contentType === "twitter_thread") {
+      return tweets.some((t) => t.length > 280);
+    }
+    if (limits.hardLimit === null) return false;
+    return getCharCount() > limits.hardLimit;
+  })();
+
+  // ─── Load draft into editor ───────────────────────────────────────────────
 
   const loadDraftIntoEditor = (draft: Draft) => {
     if (!editor) return;
     setTitle(draft.topic ?? "");
-    // Try to match content_type to a known ContentType, fallback to "blog"
+    setTitleError("");
     const ct = CONTENT_TYPES.find((t) => t.value === draft.content_type);
     setContentType(ct ? ct.value : "blog");
-    if (draft.content_type === 'twitter_thread') {
+    if (draft.content_type === "twitter_thread") {
       try {
         const parsed = JSON.parse(draft.content ?? '[""]');
-        setTweets(Array.isArray(parsed) ? parsed : ['']);
+        setTweets(Array.isArray(parsed) ? parsed : [""]);
       } catch {
-        setTweets([draft.content ?? '']);
+        setTweets([draft.content ?? ""]);
       }
     } else {
       editor.commands.setContent(draft.content ?? "");
     }
     setActiveView("editor");
-    toast({ title: "Draft loaded", description: `"${draft.topic}" loaded into editor.` });
+    toast({
+      title: "Draft loaded",
+      description: `"${draft.topic}" loaded into editor.`,
+    });
   };
 
-  // ─── Save draft ─────────────────────────────────────────────────────────────
+  // ─── Save draft ───────────────────────────────────────────────────────────
 
   const saveDraft = async () => {
     if (!editor) return;
-    if (!title.trim()) {
-      toast({ title: "Title required", description: "Please add a title before saving.", variant: "destructive" });
+
+    // Validate title
+    const trimmedTitle = title.trim();
+    if (!trimmedTitle) {
+      setTitleError("Title is required.");
+      return;
+    }
+    if (trimmedTitle.length > 200) {
+      setTitleError("Title exceeds 200 characters.");
+      return;
+    }
+    setTitleError("");
+
+    // BusinessContext validity check (at save time, not mount time)
+    const currentBusiness = selectedBusiness;
+    if (!currentBusiness?.id) {
+      toast({
+        title: "Unable to determine business context",
+        description: "Please select a business before saving.",
+        variant: "destructive",
+      });
       return;
     }
 
+    // Build body
     let body: string;
 
-    if (contentType === 'twitter_thread') {
-      const nonEmpty = tweets.filter(t => t.trim());
+    if (contentType === "twitter_thread") {
+      const nonEmpty = tweets.filter((t) => t.trim());
       if (nonEmpty.length === 0) {
-        toast({ title: "Empty thread", description: "Add at least one tweet.", variant: "destructive" });
+        toast({
+          title: "Content is required",
+          description: "Add at least one tweet before saving.",
+          variant: "destructive",
+        });
         return;
       }
-      const overLimit = tweets.findIndex(t => t.length > 280);
-      if (overLimit !== -1) {
-        toast({ title: "Tweet too long", description: `Tweet ${overLimit + 1} exceeds 280 characters.`, variant: "destructive" });
+      const overIdx = tweets.findIndex((t) => t.length > 280);
+      if (overIdx !== -1) {
+        toast({
+          title: `Tweet ${overIdx + 1} exceeds 280 characters`,
+          description: "Shorten it before saving.",
+          variant: "destructive",
+        });
         return;
       }
-      body = JSON.stringify(nonEmpty);
+      body = JSON.stringify(nonEmpty.map((t) => ({ text: t })));
     } else {
+      const text = getEditorText();
+      if (text.trim().length < 10) {
+        toast({
+          title: "Content is required",
+          description: "Write at least a few words before saving.",
+          variant: "destructive",
+        });
+        return;
+      }
+      if (limits.hardLimit !== null && text.length > limits.hardLimit) {
+        toast({
+          title: `Content exceeds ${limits.hardLimit.toLocaleString()} characters`,
+          description: "Trim your content before saving.",
+          variant: "destructive",
+        });
+        return;
+      }
       body = editor.getHTML();
     }
 
     setSaving(true);
+
+    // Optimistic: create a temp draft object before Supabase returns
+    const optimisticId = `optimistic-${Date.now()}`;
+    const optimisticDraft: Draft = {
+      id: optimisticId,
+      topic: trimmedTitle,
+      content: body,
+      content_type: contentType,
+      platform: contentTypeLabel(contentType),
+      created_at: new Date().toISOString(),
+      status: "draft",
+    };
+
+    // Switch to library so user sees optimistic entry (only if already in library)
+    const wasInLibrary = activeView === "library";
+    if (wasInLibrary) {
+      setDrafts((prev) => [optimisticDraft, ...prev]);
+    }
+
     try {
-      const { error } = await supabase.from("scheduled_content").insert({
-        topic: title.trim(),
-        content: body,
-        content_type: contentType,
-        platform: contentTypeLabel(contentType),
-        business_id: selectedBusiness?.id ?? null,
-        status: "draft",
-      });
+      const { data, error } = await supabase
+        .from("scheduled_content")
+        .insert({
+          topic:        trimmedTitle,
+          content:      body,
+          content_type: contentType,
+          platform:     contentTypeLabel(contentType),
+          business_id:  currentBusiness.id,
+          status:       "draft",
+        })
+        .select("id, topic, content, content_type, platform, created_at, status")
+        .single();
+
       if (error) throw error;
-      toast({ title: "Draft saved", description: `"${title.trim()}" saved to your library.` });
-      // Reset
+
+      toast({ title: "Draft saved!", description: `"${trimmedTitle}" saved to your library.` });
+
+      // Replace optimistic draft with real one (or just prepend if not in library view)
+      const realDraft: Draft = data as Draft;
+      if (wasInLibrary) {
+        setDrafts((prev) =>
+          prev.map((d) => (d.id === optimisticId ? realDraft : d))
+        );
+      } else {
+        setDrafts((prev) => [realDraft, ...prev]);
+      }
+
+      // Reset editor
       setTitle("");
-      if (contentType === 'twitter_thread') {
-        setTweets(['']);
+      setTitleError("");
+      if (contentType === "twitter_thread") {
+        setTweets([""]);
       } else {
         editor.commands.clearContent();
       }
-    } catch (err: any) {
-      toast({ title: "Save failed", description: err.message, variant: "destructive" });
+
+      // Notify parent to refresh its library tab
+      onSaved?.();
+    } catch (err) {
+      // Rollback optimistic update
+      if (wasInLibrary) {
+        setDrafts((prev) => prev.filter((d) => d.id !== optimisticId));
+      }
+      toast({
+        title: "Save failed",
+        description: friendlyError(err),
+        variant: "destructive",
+      });
     } finally {
       setSaving(false);
     }
   };
 
-  // ─── Load drafts ─────────────────────────────────────────────────────────────
+  // ─── Load drafts ──────────────────────────────────────────────────────────
 
-  const loadDrafts = async () => {
+  const loadDrafts = useCallback(async () => {
     setLoadingDrafts(true);
     try {
-      const { data, error } = await supabase
+      let query = supabase
         .from("scheduled_content")
         .select("id, topic, content, content_type, platform, created_at, status")
         .eq("status", "draft")
         .order("created_at", { ascending: false })
         .limit(50);
+
+      if (filterType !== "All") {
+        query = query.eq("content_type", filterType);
+      }
+
+      const { data, error } = await query;
       if (error) throw error;
       setDrafts((data as Draft[]) ?? []);
-    } catch (err: any) {
-      toast({ title: "Failed to load drafts", description: err.message, variant: "destructive" });
+    } catch (err) {
+      toast({
+        title: "Failed to load drafts",
+        description: friendlyError(err),
+        variant: "destructive",
+      });
     } finally {
       setLoadingDrafts(false);
     }
+  }, [filterType, toast]);
+
+  useEffect(() => {
+    if (activeView === "library") {
+      loadDrafts();
+    }
+  }, [activeView, loadDrafts]);
+
+  // ─── Delete draft ──────────────────────────────────────────────────────────
+
+  const confirmDelete = async () => {
+    if (!deleteTargetId) return;
+    setDeleting(true);
+
+    // Optimistic remove
+    setDrafts((prev) => prev.filter((d) => d.id !== deleteTargetId));
+
+    try {
+      const { error } = await supabase
+        .from("scheduled_content")
+        .delete()
+        .eq("id", deleteTargetId);
+      if (error) throw error;
+      toast({ title: "Draft deleted." });
+    } catch (err) {
+      // Rollback: reload
+      toast({
+        title: "Delete failed",
+        description: friendlyError(err),
+        variant: "destructive",
+      });
+      loadDrafts();
+    } finally {
+      setDeleting(false);
+      setDeleteTargetId(null);
+    }
   };
 
-  useEffect(() => {
-    if (activeView === "library") loadDrafts();
-  }, [activeView]);
+  // ─── Twitter thread helpers ────────────────────────────────────────────────
 
-  // Reset tweets when switching to twitter_thread
-  useEffect(() => {
-    if (contentType === 'twitter_thread') {
-      setTweets(['']);
-    }
-  }, [contentType]);
+  const twitterPreview = (content: string): string => {
+    try {
+      const arr = JSON.parse(content);
+      if (Array.isArray(arr)) return `${arr.length} tweet${arr.length !== 1 ? "s" : ""}`;
+    } catch { /* ignore */ }
+    return content.slice(0, 60);
+  };
 
-  // ─── Render ──────────────────────────────────────────────────────────────────
+  // ─── Render ───────────────────────────────────────────────────────────────
 
   return (
     <div className="flex flex-col gap-4">
@@ -301,22 +560,33 @@ export function LongFormEditor() {
         </button>
       </div>
 
-      {/* ── Editor View ─────────────────────────────────────────────────────── */}
+      {/* Schema error banner */}
+      {schemaChecked && !schemaOk && (
+        <div className="flex items-center gap-2 bg-red-50 border border-red-200 text-red-700 text-sm rounded-lg px-4 py-3">
+          <AlertTriangle className="h-4 w-4 shrink-0" />
+          Content storage not configured. Contact support.
+        </div>
+      )}
+
+      {/* ── Editor View ────────────────────────────────────────────────────── */}
       {activeView === "editor" && (
         <div className="flex flex-col gap-4">
           {/* Controls row */}
           <div className="flex flex-wrap items-end gap-4">
             {/* Content type */}
-            <div className="flex flex-col gap-1.5 min-w-[180px]">
+            <div className="flex flex-col gap-1.5 min-w-[200px]">
               <Label className="text-xs text-slate-500">Content Type</Label>
-              <Select value={contentType} onValueChange={(v) => setContentType(v as ContentType)}>
+              <Select
+                value={contentType}
+                onValueChange={(v) => setContentType(v as ContentType)}
+              >
                 <SelectTrigger className="h-9 bg-white">
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
                   {CONTENT_TYPES.map((t) => (
                     <SelectItem key={t.value} value={t.value}>
-                      {t.label}
+                      {t.emoji} {t.label}
                     </SelectItem>
                   ))}
                 </SelectContent>
@@ -328,16 +598,42 @@ export function LongFormEditor() {
               <Label className="text-xs text-slate-500">Title</Label>
               <Input
                 value={title}
-                onChange={(e) => setTitle(e.target.value)}
+                onChange={(e) => {
+                  setTitle(e.target.value);
+                  if (e.target.value.trim()) setTitleError("");
+                }}
                 placeholder="Enter a title for your draft…"
-                className="h-9 bg-white"
+                className={`h-9 bg-white ${titleError ? "border-red-400 focus-visible:ring-red-400" : ""}`}
+                maxLength={201}
               />
+              {titleError && (
+                <p className="text-xs text-red-600">{titleError}</p>
+              )}
             </div>
+
+            {/* Info toggle */}
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={() => setShowPreset((p) => !p)}
+              className="h-9 shrink-0"
+              title="Format guidelines"
+            >
+              <Info className="h-4 w-4" />
+            </Button>
+
+            {/* Business context display */}
+            {selectedBusiness && (
+              <div className="flex items-center gap-1.5 text-xs text-slate-500 bg-slate-50 border border-slate-200 rounded-md px-3 h-9">
+                <span className="font-medium">{selectedBusiness.name}</span>
+              </div>
+            )}
 
             {/* Save */}
             <Button
               onClick={saveDraft}
-              disabled={saving || !editor || !schemaOk}
+              disabled={saving || !editor || !schemaOk || hardLimitExceeded}
               className="bg-indigo-600 hover:bg-indigo-700 h-9 shrink-0"
             >
               {saving ? (
@@ -349,18 +645,35 @@ export function LongFormEditor() {
             </Button>
           </div>
 
+          {/* Format preset panel */}
+          {showPreset && (
+            <div className="flex items-start gap-3 bg-indigo-50 border border-indigo-100 text-indigo-800 text-sm rounded-lg px-4 py-3">
+              <Info className="h-4 w-4 shrink-0 mt-0.5 text-indigo-500" />
+              <div>
+                <span className="font-semibold">{contentTypeEmoji(contentType)} {contentTypeLabel(contentType)}:</span>{" "}
+                <span className="text-indigo-700 font-medium">{FORMAT_PRESETS[contentType].range}</span>
+                {" — "}
+                {FORMAT_PRESETS[contentType].tip}
+              </div>
+            </div>
+          )}
+
           {/* Twitter Thread mode */}
-          {contentType === 'twitter_thread' ? (
+          {contentType === "twitter_thread" ? (
             <div className="border border-slate-200 rounded-lg bg-white shadow-sm p-4">
               <div className="flex flex-col gap-3">
                 {tweets.map((tweet, i) => (
                   <div key={i} className="flex flex-col gap-1">
                     <div className="flex items-center justify-between">
-                      <span className="text-xs text-slate-500 font-medium">Tweet {i + 1}</span>
+                      <span className="text-xs text-slate-500 font-medium">
+                        Tweet {i + 1}
+                      </span>
                       {tweets.length > 1 && (
                         <button
                           type="button"
-                          onClick={() => setTweets(tweets.filter((_, idx) => idx !== i))}
+                          onClick={() =>
+                            setTweets(tweets.filter((_, idx) => idx !== i))
+                          }
                           className="text-xs text-red-500 hover:text-red-700"
                         >
                           Remove
@@ -368,19 +681,37 @@ export function LongFormEditor() {
                       )}
                     </div>
                     <textarea
-                      className="w-full border border-slate-200 rounded-md p-2 text-sm resize-none focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
+                      className={`w-full border rounded-md p-2 text-sm resize-none focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent ${
+                        tweet.length > 280
+                          ? "border-red-400"
+                          : tweet.length >= 260
+                          ? "border-amber-400"
+                          : "border-slate-200"
+                      }`}
                       rows={3}
-                      maxLength={280}
                       value={tweet}
                       onChange={(e) => {
                         const updated = [...tweets];
                         updated[i] = e.target.value;
                         setTweets(updated);
                       }}
-                      placeholder={i === 0 ? "Start your thread here..." : `Tweet ${i + 1}...`}
+                      placeholder={
+                        i === 0 ? "Start your thread here…" : `Tweet ${i + 1}…`
+                      }
                     />
-                    <div className={`text-xs text-right ${tweet.length >= 280 ? 'text-red-600 font-semibold' : tweet.length >= 260 ? 'text-amber-600' : 'text-slate-400'}`}>
+                    <div
+                      className={`text-xs text-right ${
+                        tweet.length > 280
+                          ? "text-red-600 font-semibold"
+                          : tweet.length >= 260
+                          ? "text-amber-600"
+                          : "text-slate-400"
+                      }`}
+                    >
                       {tweet.length} / 280
+                      {tweet.length > 280 && (
+                        <span className="ml-2">⚠ Exceeds limit</span>
+                      )}
                     </div>
                   </div>
                 ))}
@@ -388,7 +719,7 @@ export function LongFormEditor() {
                   type="button"
                   variant="outline"
                   size="sm"
-                  onClick={() => setTweets([...tweets, ''])}
+                  onClick={() => setTweets([...tweets, ""])}
                   className="self-start"
                 >
                   + Add Tweet
@@ -437,7 +768,9 @@ export function LongFormEditor() {
                         <Italic className="h-4 w-4" />
                       </ToolbarButton>
                       <ToolbarButton
-                        onClick={() => editor.chain().focus().toggleUnderline().run()}
+                        onClick={() =>
+                          editor.chain().focus().toggleUnderline().run()
+                        }
                         isActive={editor.isActive("underline")}
                         title="Underline"
                       >
@@ -461,16 +794,44 @@ export function LongFormEditor() {
                           </Button>
                         </DropdownMenuTrigger>
                         <DropdownMenuContent align="start">
-                          <DropdownMenuItem onClick={() => editor.chain().focus().setParagraph().run()}>
+                          <DropdownMenuItem
+                            onClick={() =>
+                              editor.chain().focus().setParagraph().run()
+                            }
+                          >
                             Normal
                           </DropdownMenuItem>
-                          <DropdownMenuItem onClick={() => editor.chain().focus().toggleHeading({ level: 1 }).run()}>
+                          <DropdownMenuItem
+                            onClick={() =>
+                              editor
+                                .chain()
+                                .focus()
+                                .toggleHeading({ level: 1 })
+                                .run()
+                            }
+                          >
                             Heading 1
                           </DropdownMenuItem>
-                          <DropdownMenuItem onClick={() => editor.chain().focus().toggleHeading({ level: 2 }).run()}>
+                          <DropdownMenuItem
+                            onClick={() =>
+                              editor
+                                .chain()
+                                .focus()
+                                .toggleHeading({ level: 2 })
+                                .run()
+                            }
+                          >
                             Heading 2
                           </DropdownMenuItem>
-                          <DropdownMenuItem onClick={() => editor.chain().focus().toggleHeading({ level: 3 }).run()}>
+                          <DropdownMenuItem
+                            onClick={() =>
+                              editor
+                                .chain()
+                                .focus()
+                                .toggleHeading({ level: 3 })
+                                .run()
+                            }
+                          >
                             Heading 3
                           </DropdownMenuItem>
                         </DropdownMenuContent>
@@ -480,14 +841,18 @@ export function LongFormEditor() {
 
                       {/* Lists */}
                       <ToolbarButton
-                        onClick={() => editor.chain().focus().toggleBulletList().run()}
+                        onClick={() =>
+                          editor.chain().focus().toggleBulletList().run()
+                        }
                         isActive={editor.isActive("bulletList")}
                         title="Bullet List"
                       >
                         <List className="h-4 w-4" />
                       </ToolbarButton>
                       <ToolbarButton
-                        onClick={() => editor.chain().focus().toggleOrderedList().run()}
+                        onClick={() =>
+                          editor.chain().focus().toggleOrderedList().run()
+                        }
                         isActive={editor.isActive("orderedList")}
                         title="Numbered List"
                       >
@@ -498,21 +863,27 @@ export function LongFormEditor() {
 
                       {/* Alignment */}
                       <ToolbarButton
-                        onClick={() => editor.chain().focus().setTextAlign("left").run()}
+                        onClick={() =>
+                          editor.chain().focus().setTextAlign("left").run()
+                        }
                         isActive={editor.isActive({ textAlign: "left" })}
                         title="Align Left"
                       >
                         <AlignLeft className="h-4 w-4" />
                       </ToolbarButton>
                       <ToolbarButton
-                        onClick={() => editor.chain().focus().setTextAlign("center").run()}
+                        onClick={() =>
+                          editor.chain().focus().setTextAlign("center").run()
+                        }
                         isActive={editor.isActive({ textAlign: "center" })}
                         title="Align Center"
                       >
                         <AlignCenter className="h-4 w-4" />
                       </ToolbarButton>
                       <ToolbarButton
-                        onClick={() => editor.chain().focus().setTextAlign("right").run()}
+                        onClick={() =>
+                          editor.chain().focus().setTextAlign("right").run()
+                        }
                         isActive={editor.isActive({ textAlign: "right" })}
                         title="Align Right"
                       >
@@ -522,18 +893,26 @@ export function LongFormEditor() {
                       <Separator orientation="vertical" className="h-6 mx-1" />
 
                       {/* Link / Blockquote / Code */}
-                      <ToolbarButton onClick={setLink} isActive={editor.isActive("link")} title="Insert Link">
+                      <ToolbarButton
+                        onClick={setLink}
+                        isActive={editor.isActive("link")}
+                        title="Insert Link"
+                      >
                         <LinkIcon className="h-4 w-4" />
                       </ToolbarButton>
                       <ToolbarButton
-                        onClick={() => editor.chain().focus().toggleBlockquote().run()}
+                        onClick={() =>
+                          editor.chain().focus().toggleBlockquote().run()
+                        }
                         isActive={editor.isActive("blockquote")}
                         title="Blockquote"
                       >
                         <Quote className="h-4 w-4" />
                       </ToolbarButton>
                       <ToolbarButton
-                        onClick={() => editor.chain().focus().toggleCode().run()}
+                        onClick={() =>
+                          editor.chain().focus().toggleCode().run()
+                        }
                         isActive={editor.isActive("code")}
                         title="Inline Code"
                       >
@@ -547,24 +926,28 @@ export function LongFormEditor() {
                 <EditorContent editor={editor} />
               </div>
 
-              {/* Char / word counter */}
+              {/* Char counter */}
               {editor && (() => {
-                const limits = CONTENT_LIMITS[contentType];
-                const text = editor.getText();
-                const count = limits.unit === 'chars'
-                  ? text.length
-                  : text.trim().split(/\s+/).filter(Boolean).length;
-                const limitLabel = limits.hardLimit
-                  ? `${count.toLocaleString()} / ${limits.hardLimit.toLocaleString()} ${limits.unit}`
-                  : `${count.toLocaleString()} / warn:${limits.warnAt.toLocaleString()} ${limits.unit}`;
-                const colorClass = limits.hardLimit && count >= limits.hardLimit
-                  ? 'text-red-600 font-semibold'
-                  : count >= limits.warnAt
-                  ? 'text-amber-600'
-                  : 'text-slate-400';
+                const text = getEditorText();
+                const count = text.length;
+                const isHardOver =
+                  limits.hardLimit !== null && count > limits.hardLimit;
+                const isWarning = count >= limits.warnAt;
+                const colorClass = isHardOver
+                  ? "text-red-600 font-semibold"
+                  : isWarning
+                  ? "text-amber-600"
+                  : "text-slate-400";
+                const limitStr = limits.hardLimit
+                  ? `${count.toLocaleString()} / ${limits.hardLimit.toLocaleString()} chars`
+                  : `${count.toLocaleString()} chars ${isWarning ? `(warn at ${limits.warnAt.toLocaleString()})` : ""}`;
                 return (
                   <div className={`text-xs text-right mt-1 ${colorClass}`}>
-                    {limitLabel}
+                    {limitStr}
+                    {isHardOver && <span className="ml-2">⚠ Hard limit exceeded — trim before saving</span>}
+                    {!isHardOver && isWarning && limits.hardLimit === null && (
+                      <span className="ml-2">⚠ Getting long</span>
+                    )}
                   </div>
                 );
               })()}
@@ -573,15 +956,40 @@ export function LongFormEditor() {
         </div>
       )}
 
-      {/* ── Library View ────────────────────────────────────────────────────── */}
+      {/* ── Library View ─────────────────────────────────────────────────── */}
       {activeView === "library" && (
         <div className="flex flex-col gap-3">
-          <div className="flex items-center justify-between">
-            <p className="text-sm text-slate-500">
-              {loadingDrafts ? "Loading…" : `${drafts.length} draft${drafts.length !== 1 ? "s" : ""}`}
+          {/* Toolbar */}
+          <div className="flex flex-wrap items-center gap-3">
+            <Select value={filterType} onValueChange={setFilterType}>
+              <SelectTrigger className="w-52 bg-white">
+                <SelectValue placeholder="Filter by type" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="All">All types</SelectItem>
+                {CONTENT_TYPES.map((t) => (
+                  <SelectItem key={t.value} value={t.value}>
+                    {t.emoji} {t.label}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+
+            <p className="text-sm text-slate-500 ml-auto">
+              {loadingDrafts
+                ? "Loading…"
+                : `${drafts.length} draft${drafts.length !== 1 ? "s" : ""}`}
             </p>
-            <Button variant="outline" size="sm" onClick={loadDrafts} disabled={loadingDrafts}>
-              {loadingDrafts && <Loader2 className="h-3.5 w-3.5 mr-1.5 animate-spin" />}
+
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={loadDrafts}
+              disabled={loadingDrafts}
+            >
+              {loadingDrafts && (
+                <Loader2 className="h-3.5 w-3.5 mr-1.5 animate-spin" />
+              )}
               Refresh
             </Button>
           </div>
@@ -600,23 +1008,52 @@ export function LongFormEditor() {
               {drafts.map((draft) => (
                 <div
                   key={draft.id}
-                  onClick={() => loadDraftIntoEditor(draft)}
-                  className="flex items-center justify-between gap-4 bg-white border border-slate-200 rounded-lg px-4 py-3 shadow-sm cursor-pointer hover:bg-indigo-50 hover:border-indigo-300 transition-colors"
+                  className={`flex items-center justify-between gap-4 bg-white border border-slate-200 rounded-lg px-4 py-3 shadow-sm transition-colors ${
+                    draft.id.startsWith("optimistic-")
+                      ? "opacity-60 cursor-default"
+                      : "cursor-pointer hover:bg-indigo-50 hover:border-indigo-300"
+                  }`}
+                  onClick={() => {
+                    if (!draft.id.startsWith("optimistic-")) loadDraftIntoEditor(draft);
+                  }}
                 >
-                  <div className="flex flex-col gap-0.5 min-w-0">
-                    <span className="font-medium text-slate-800 truncate">{draft.topic || "(Untitled)"}</span>
-                    <span className="text-xs text-slate-400">{formatDate(draft.created_at)}</span>
+                  <div className="flex flex-col gap-1 min-w-0">
+                    <span className="font-medium text-slate-800 truncate">
+                      {draft.topic || "(Untitled)"}
+                    </span>
+                    <div className="flex items-center gap-2">
+                      <TypeBadge contentType={draft.content_type} />
+                      {draft.content_type === "twitter_thread" && (
+                        <span className="text-xs text-slate-400">
+                          {twitterPreview(draft.content)}
+                        </span>
+                      )}
+                    </div>
+                    <span className="text-xs text-slate-400">
+                      {formatDate(draft.created_at)}
+                    </span>
                   </div>
+
                   <div className="flex items-center gap-2 shrink-0">
-                    <Badge variant="outline" className="text-xs capitalize">
-                      {draft.platform ?? contentTypeLabel(draft.content_type)}
-                    </Badge>
                     <Badge
                       variant="secondary"
                       className="text-xs capitalize bg-amber-50 text-amber-700 border-amber-200"
                     >
                       {draft.status}
                     </Badge>
+                    {!draft.id.startsWith("optimistic-") && (
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setDeleteTargetId(draft.id);
+                        }}
+                        className="p-1.5 rounded hover:bg-red-50 text-slate-400 hover:text-red-600 transition-colors"
+                        title="Delete draft"
+                      >
+                        <Trash2 className="h-4 w-4" />
+                      </button>
+                    )}
                   </div>
                 </div>
               ))}
@@ -624,6 +1061,33 @@ export function LongFormEditor() {
           )}
         </div>
       )}
+
+      {/* Delete confirmation modal */}
+      <AlertDialog
+        open={!!deleteTargetId}
+        onOpenChange={() => !deleting && setDeleteTargetId(null)}
+      >
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete this draft?</AlertDialogTitle>
+            <AlertDialogDescription>
+              This action cannot be undone. The draft will be permanently removed
+              from your library.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={deleting}>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              className="bg-red-600 hover:bg-red-700"
+              onClick={confirmDelete}
+              disabled={deleting}
+            >
+              {deleting && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
+              Delete
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }
