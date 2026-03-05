@@ -1,27 +1,13 @@
-import { serve } from "https://deno.land/std@0.168.0/http/server.ts"
-import { createClient } from "https://esm.sh/@supabase/supabase-js@2.45.0"
-
+// system-monitor edge function — no external imports, uses Deno.serve + fetch
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
-  "Access-Control-Allow-Methods": "GET, POST, PUT, DELETE, OPTIONS",
 }
 
-interface AgentConfig {
-  name: string
-  ip: string
-  port: number
-  role: string
-}
-
-interface PingResult {
-  online: boolean
-  latencyMs?: number
-}
-
-const AGENTS: AgentConfig[] = [
-  { name: "Rico", ip: "5.161.190.94", port: 18789, role: "Lead Orchestrator" },
-  { name: "Dev", ip: "5.161.186.106", port: 18789, role: "Development Agent" },
+interface PingResult { online: boolean; latencyMs?: number }
+const AGENTS = [
+  { name: "Rico", ip: "5.161.190.94",   port: 18789, role: "Lead Orchestrator" },
+  { name: "Dev",  ip: "5.161.186.106",  port: 18789, role: "Development Agent" },
   { name: "Iris", ip: "178.156.250.119", port: 18789, role: "Communications Specialist" },
   { name: "Jerry", ip: "5.161.184.240", port: 18789, role: "Operations Agent" },
 ]
@@ -40,25 +26,7 @@ async function pingAgent(ip: string, port: number): Promise<PingResult> {
   return { online: false }
 }
 
-async function fetchN8nWorkflows(apiKey: string, instanceUrl: string) {
-  if (!apiKey) return { workflows: [], error: "No API key" }
-  try {
-    const controller = new AbortController()
-    const timer = setTimeout(() => controller.abort(), 10000)
-    const res = await fetch(`${instanceUrl}/api/v1/workflows?limit=50`, {
-      headers: { "X-N8N-API-KEY": apiKey, "Accept": "application/json" },
-      signal: controller.signal,
-    })
-    clearTimeout(timer)
-    if (!res.ok) return { workflows: [], error: `HTTP ${res.status}` }
-    const json = await res.json()
-    return { workflows: json.data ?? [], error: null }
-  } catch (e) {
-    return { workflows: [], error: String(e) }
-  }
-}
-
-serve(async (req) => {
+Deno.serve(async (req) => {
   if (req.method === "OPTIONS") {
     return new Response(null, { headers: corsHeaders })
   }
@@ -68,103 +36,94 @@ serve(async (req) => {
     const supabaseKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? ""
     const n8nApiKey = Deno.env.get("N8N_API_KEY") ?? ""
     const n8nUrl = Deno.env.get("N8N_INSTANCE_URL") ?? "https://sparkwaveai.app.n8n.cloud"
-
-    const supabase = createClient(supabaseUrl, supabaseKey)
     const now = new Date().toISOString()
 
-    // 1. Ping agents
+    // 1. Ping agents (with global 4s fallback)
     const pingResultsRaw = Promise.allSettled(AGENTS.map(a => pingAgent(a.ip, a.port)))
     const timeoutFallback = new Promise<PromiseSettledResult<PingResult>[]>(resolve =>
-      setTimeout(() => resolve(AGENTS.map(() => ({ status: 'fulfilled' as const, value: { online: false, latencyMs: null } }))), 4000)
+      setTimeout(() => resolve(AGENTS.map(() => ({ status: "fulfilled" as const, value: { online: false } }))), 4000)
     )
     const pingResults = await Promise.race([pingResultsRaw, timeoutFallback])
     const agents = AGENTS.map((agent, i) => {
       const r = pingResults[i]
       const ping: PingResult = r.status === "fulfilled" ? r.value : { online: false }
-      return {
-        name: agent.name,
-        ip: agent.ip,
-        port: agent.port,
-        role: agent.role,
-        online: ping.online,
-        latencyMs: ping.latencyMs ?? null,
-        checkedAt: now,
-      }
+      return { name: agent.name, ip: agent.ip, port: agent.port, role: agent.role, online: ping.online, latencyMs: ping.latencyMs ?? null, checkedAt: now }
     })
 
     // 2. n8n workflows
-    const n8nData = await fetchN8nWorkflows(n8nApiKey, n8nUrl)
-
-    // Fetch last execution per workflow
-    const execRes = await fetch(`${n8nUrl}/api/v1/executions?limit=250`, {
-      headers: { "X-N8N-API-KEY": n8nApiKey, "Accept": "application/json" }
-    }).catch(() => null)
-
-    const lastExecMap: Record<string, { startedAt: string; status: string }> = {}
-    if (execRes?.ok) {
-      const execJson = await execRes.json()
-      for (const exec of execJson.data ?? []) {
-        if (!lastExecMap[exec.workflowId]) {
-          lastExecMap[exec.workflowId] = { startedAt: exec.startedAt, status: exec.status }
+    let workflows: unknown[] = []
+    let n8nError: string | null = null
+    try {
+      const wfController = new AbortController()
+      setTimeout(() => wfController.abort(), 3000)
+      const wfRes = await fetch(`${n8nUrl}/api/v1/workflows?limit=50`, {
+        headers: { "X-N8N-API-KEY": n8nApiKey, "Accept": "application/json" },
+        signal: wfController.signal,
+      })
+      if (wfRes.ok) {
+        const wfJson = await wfRes.json()
+        // Fetch executions
+        const execController = new AbortController()
+        setTimeout(() => execController.abort(), 3000)
+        const execRes = await fetch(`${n8nUrl}/api/v1/executions?limit=250`, {
+          headers: { "X-N8N-API-KEY": n8nApiKey, "Accept": "application/json" },
+          signal: execController.signal,
+        }).catch(() => null)
+        const lastExecMap: Record<string, { startedAt: string; status: string }> = {}
+        if (execRes?.ok) {
+          const execJson = await execRes.json()
+          for (const exec of execJson.data ?? []) {
+            if (!lastExecMap[exec.workflowId]) {
+              lastExecMap[exec.workflowId] = { startedAt: exec.startedAt, status: exec.status }
+            }
+          }
         }
+        workflows = (wfJson.data ?? []).map((wf: { id: string; name: string; active: boolean }) => ({
+          id: wf.id, name: wf.name, active: wf.active,
+          lastRunAt: lastExecMap[wf.id]?.startedAt ?? null,
+          lastStatus: lastExecMap[wf.id]?.status ?? null,
+        }))
+      } else {
+        n8nError = `HTTP ${wfRes.status}`
       }
-    } else if (execRes) {
-      console.error(`[system-monitor] executions fetch failed: ${execRes.status} ${await execRes.text().catch(() => '')}`);
+    } catch (e) {
+      n8nError = String(e)
     }
 
-    const workflows = (n8nData.workflows as Array<{ id: string; name: string; active: boolean; updatedAt?: string }>).map(wf => ({
-      id: wf.id,
-      name: wf.name,
-      active: wf.active,
-      lastRunAt: lastExecMap[wf.id]?.startedAt ?? null,
-      lastStatus: lastExecMap[wf.id]?.status ?? null,
-    }))
+    // 3. Supabase queries via REST (no supabase-js client needed)
+    const sbHeaders = { "apikey": supabaseKey, "Authorization": `Bearer ${supabaseKey}`, "Content-Type": "application/json" }
 
-    // 3. Cron status from mc_activities (latest system_ops entry)
-    const { data: cronData } = await supabase
-      .from("mc_activities")
-      .select("metadata, created_at")
-      .eq("type", "system_ops_status")
-      .order("created_at", { ascending: false })
-      .limit(1)
-
-    const cronStatus = cronData?.[0]?.metadata ?? null
-
-    // 4. Fight Flow pipeline health
-    const [ffFormRes, ffSmsRes, ffStateRes] = await Promise.allSettled([
-      supabase.from("fightflow_form_submissions").select("created_at").order("created_at", { ascending: false }).limit(1),
-      supabase.from("sms_messages").select("created_at").eq("direction", "outbound").order("created_at", { ascending: false }).limit(1),
-      supabase.from("ff_n8n_state").select("key, value, updated_at"),
+    const [cronRes, ffFormRes, ffSmsRes, ffStateRes] = await Promise.allSettled([
+      fetch(`${supabaseUrl}/rest/v1/mc_activities?type=eq.system_ops_status&order=created_at.desc&limit=1`, { headers: sbHeaders }),
+      fetch(`${supabaseUrl}/rest/v1/fightflow_form_submissions?select=created_at&order=created_at.desc&limit=1`, { headers: sbHeaders }),
+      fetch(`${supabaseUrl}/rest/v1/sms_messages?select=created_at&direction=eq.outbound&order=created_at.desc&limit=1`, { headers: sbHeaders }),
+      fetch(`${supabaseUrl}/rest/v1/ff_n8n_state?select=key,value,updated_at`, { headers: sbHeaders }),
     ])
 
-    const ffForm = ffFormRes.status === "fulfilled" ? ffFormRes.value.data?.[0]?.created_at ?? null : null
-    const ffSms = ffSmsRes.status === "fulfilled" ? ffSmsRes.value.data?.[0]?.created_at ?? null : null
-    const ffStateRows = ffStateRes.status === "fulfilled" ? (ffStateRes.value.data ?? []) : []
+    const cronData = cronRes.status === "fulfilled" && cronRes.value.ok ? await cronRes.value.json() : []
+    const ffForm = ffFormRes.status === "fulfilled" && ffFormRes.value.ok ? (await ffFormRes.value.json())?.[0]?.created_at ?? null : null
+    const ffSms = ffSmsRes.status === "fulfilled" && ffSmsRes.value.ok ? (await ffSmsRes.value.json())?.[0]?.created_at ?? null : null
+    const ffStateRows = ffStateRes.status === "fulfilled" && ffStateRes.value.ok ? await ffStateRes.value.json() : []
     const ffState: Record<string, string> = {}
     for (const row of ffStateRows as Array<{ key: string; value: string; updated_at: string }>) {
       ffState[row.key] = row.value ?? row.updated_at
     }
 
-    return new Response(
-      JSON.stringify({
-        agents,
-        n8n: { workflows, error: n8nData.error },
-        cronStatus,
-        fightflow: {
-          lastFormSubmission: ffForm,
-          lastSmsSent: ffSms,
-          formCaptureLastPoll: ffState["form_capture_last_poll"] ?? null,
-          immediateResponseLastRun: ffState["immediate_response_last_run"] ?? null,
-        },
-        fetchedAt: now,
-      }),
-      { headers: { ...corsHeaders, "Content-Type": "application/json" } }
-    )
+    return new Response(JSON.stringify({
+      agents,
+      n8nWorkflows: workflows,
+      n8n: { workflows, error: n8nError },
+      cronStatus: cronData?.[0]?.metadata ?? null,
+      fightflow: {
+        lastFormSubmission: ffForm,
+        lastSmsSent: ffSms,
+        formCaptureLastPoll: ffState["form_capture_last_poll"] ?? null,
+        immediateResponseLastRun: ffState["immediate_response_last_run"] ?? null,
+      },
+      fetchedAt: now,
+    }), { headers: { ...corsHeaders, "Content-Type": "application/json" } })
+
   } catch (err) {
-    console.error("system-monitor error:", err)
-    return new Response(
-      JSON.stringify({ error: String(err) }),
-      { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-    )
+    return new Response(JSON.stringify({ error: String(err) }), { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } })
   }
 })
