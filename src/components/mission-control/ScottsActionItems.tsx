@@ -62,7 +62,7 @@ const priorityOptions: { value: TaskPriority; label: string }[] = [
 function getOwnerType(tags: string[] | null | undefined): 'human' | 'cooperative' | null {
   if (!tags || !Array.isArray(tags)) return null;
   for (const tag of tags) {
-    if (tag === 'owner:human') return 'human';
+    if (tag === 'owner:human' || tag === 'owner:scott') return 'human';
     if (tag === 'owner:cooperative') return 'cooperative';
   }
   return null;
