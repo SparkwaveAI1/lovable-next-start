@@ -24,11 +24,15 @@ interface AgentRow {
   current_task: string | null
 }
 
-interface CronRow {
+interface CronJobRow {
+  id: string
   name: string
-  status: "OK" | "Error" | string
-  last_run: string | null
-  next_run: string | null
+  enabled: boolean
+  schedule: string
+  last_run_at: string | null
+  next_run_at: string | null
+  last_status: string | null
+  consecutive_errors: number
 }
 
 interface ErrorRow {
@@ -58,6 +62,23 @@ function relativeTime(iso: string | null | undefined): string {
     const hrs = Math.floor(mins / 60)
     if (hrs < 24) return `${hrs}h ago`
     return `${Math.floor(hrs / 24)}d ago`
+  } catch {
+    return "—"
+  }
+}
+
+function futureTime(iso: string | null | undefined): string {
+  if (!iso) return "—"
+  try {
+    const diff = new Date(iso).getTime() - Date.now()
+    if (diff <= 0) return "—"
+    const secs = Math.floor(diff / 1000)
+    if (secs < 60) return `in ${secs}s`
+    const mins = Math.floor(secs / 60)
+    if (mins < 60) return `in ${mins}m`
+    const hrs = Math.floor(mins / 60)
+    if (hrs < 24) return `in ${hrs}h`
+    return `in ${Math.floor(hrs / 24)}d`
   } catch {
     return "—"
   }
@@ -153,22 +174,24 @@ function AgentStatusSection({ agents }: { agents: AgentRow[] }) {
 
 // ─── Section 2: Cron Jobs ─────────────────────────────────────────────────────
 
-const FALLBACK_CRONS: CronRow[] = [
-  { name: "fightflow-form-capture", status: "OK", last_run: new Date(Date.now() - 300000).toISOString(), next_run: null },
-  { name: "fightflow-sequence-processor", status: "OK", last_run: new Date(Date.now() - 600000).toISOString(), next_run: null },
-  { name: "fightflow-appointment-trigger", status: "OK", last_run: new Date(Date.now() - 900000).toISOString(), next_run: null },
-  { name: "fightflow-instructor-post-class", status: "OK", last_run: new Date(Date.now() - 1800000).toISOString(), next_run: null },
-  { name: "cron1", status: "OK", last_run: new Date(Date.now() - 300000).toISOString(), next_run: null },
-]
-
-function CronJobsSection({ crons }: { crons: CronRow[] }) {
+function CronJobsSection({ cronJobs, unavailable }: { cronJobs: CronJobRow[]; unavailable?: boolean }) {
+  if (unavailable) {
+    return (
+      <SectionCard title="Cron Jobs" icon={<Clock className="h-4 w-4" />}>
+        <div className="flex items-center gap-2 text-amber-600 py-3">
+          <AlertTriangle className="h-5 w-5" />
+          <span className="text-sm font-medium">Cron data unavailable</span>
+        </div>
+      </SectionCard>
+    )
+  }
   return (
     <SectionCard title="Cron Jobs" icon={<Clock className="h-4 w-4" />}>
       <div className="overflow-x-auto">
         <table className="w-full text-sm">
           <thead>
             <tr className="border-b border-slate-100">
-              {["Cron Name", "Status", "Last Run", "Next Run"].map((h) => (
+              {["Cron Name", "Schedule", "Status", "Last Run", "Next Run"].map((h) => (
                 <th key={h} className="text-left text-xs font-semibold text-slate-500 uppercase tracking-wide pb-2 pr-4">
                   {h}
                 </th>
@@ -176,30 +199,35 @@ function CronJobsSection({ crons }: { crons: CronRow[] }) {
             </tr>
           </thead>
           <tbody className="divide-y divide-slate-50">
-            {crons.map((c) => (
-              <tr key={c.name} className="hover:bg-slate-50 transition-colors">
-                <td className="py-2.5 pr-4 font-medium text-slate-800 font-mono text-xs">{c.name}</td>
-                <td className="py-2.5 pr-4">
-                  <span
-                    className={cn(
-                      "inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-medium",
-                      c.status === "OK"
-                        ? "bg-emerald-100 text-emerald-700"
-                        : "bg-red-100 text-red-700"
-                    )}
-                  >
-                    {c.status === "OK" ? (
-                      <CheckCircle2 className="h-3 w-3" />
-                    ) : (
-                      <XCircle className="h-3 w-3" />
-                    )}
-                    {c.status}
-                  </span>
-                </td>
-                <td className="py-2.5 pr-4 text-slate-500 text-xs">{relativeTime(c.last_run)}</td>
-                <td className="py-2.5 text-slate-500 text-xs">{relativeTime(c.next_run)}</td>
-              </tr>
-            ))}
+            {cronJobs.map((c) => {
+              const status = c.last_status?.toUpperCase() ?? "OK"
+              const isOk = status === "OK" || c.consecutive_errors === 0
+              return (
+                <tr key={c.id} className="hover:bg-slate-50 transition-colors">
+                  <td className="py-2.5 pr-4 font-medium text-slate-800 font-mono text-xs">{c.name}</td>
+                  <td className="py-2.5 pr-4 text-slate-500 font-mono text-xs">{c.schedule}</td>
+                  <td className="py-2.5 pr-4">
+                    <span
+                      className={cn(
+                        "inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-medium",
+                        isOk
+                          ? "bg-emerald-100 text-emerald-700"
+                          : "bg-red-100 text-red-700"
+                      )}
+                    >
+                      {isOk ? (
+                        <CheckCircle2 className="h-3 w-3" />
+                      ) : (
+                        <XCircle className="h-3 w-3" />
+                      )}
+                      {isOk ? "OK" : "Error"}
+                    </span>
+                  </td>
+                  <td className="py-2.5 pr-4 text-slate-500 text-xs">{relativeTime(c.last_run_at)}</td>
+                  <td className="py-2.5 text-slate-500 text-xs">{futureTime(c.next_run_at)}</td>
+                </tr>
+              )
+            })}
           </tbody>
         </table>
       </div>
@@ -277,7 +305,8 @@ function SystemHealthSection({ metrics }: { metrics: HealthMetric[] }) {
 
 export default function MonitoringPage() {
   const [agents, setAgents] = useState<AgentRow[]>(FALLBACK_AGENTS)
-  const [crons, setCrons] = useState<CronRow[]>(FALLBACK_CRONS)
+  const [cronJobs, setCronJobs] = useState<CronJobRow[]>([])
+  const [cronUnavailable, setCronUnavailable] = useState(false)
   const [errors, setErrors] = useState<ErrorRow[]>([])
   const [lastRefresh, setLastRefresh] = useState<Date>(new Date())
   const [loading, setLoading] = useState(false)
@@ -298,17 +327,20 @@ export default function MonitoringPage() {
     }
 
     try {
-      // Cron status from mc_cron_status if table exists
-      const { data: cronData } = await supabase
-        .from("mc_cron_status" as never)
-        .select("name, status, last_run, next_run")
-        .order("name")
-        .limit(20)
-      if (cronData && Array.isArray(cronData) && cronData.length > 0) {
-        setCrons(cronData as CronRow[])
+      // Cron jobs from cron_jobs table
+      const { data: cronData, error: cronError } = await supabase
+        .from("cron_jobs" as never)
+        .select("id, name, enabled, schedule, last_run_at, next_run_at, last_status, consecutive_errors")
+        .eq("enabled" as never, true)
+        .order("name" as never)
+      if (cronError) {
+        setCronUnavailable(true)
+      } else if (cronData && Array.isArray(cronData)) {
+        setCronJobs(cronData as CronJobRow[])
+        setCronUnavailable(false)
       }
     } catch {
-      // Keep fallback
+      setCronUnavailable(true)
     }
 
     try {
@@ -371,7 +403,7 @@ export default function MonitoringPage() {
         {/* 4 Sections */}
         <div className="space-y-6">
           <AgentStatusSection agents={agents} />
-          <CronJobsSection crons={crons} />
+          <CronJobsSection cronJobs={cronJobs} unavailable={cronUnavailable} />
           <RecentErrorsSection errors={errors} />
           <SystemHealthSection metrics={HEALTH_METRICS} />
         </div>
