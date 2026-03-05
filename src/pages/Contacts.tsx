@@ -82,6 +82,32 @@ type SortDirection = 'asc' | 'desc';
 
 const PAGE_SIZE_OPTIONS = [25, 50, 100];
 
+function StatusBadge({ status }: { status: string | null }) {
+  const config: Record<string, { label: string; className: string }> = {
+    active:        { label: 'Active',        className: 'bg-emerald-100 text-emerald-700 border-emerald-200' },
+    new_lead:      { label: 'New Lead',      className: 'bg-blue-100 text-blue-700 border-blue-200' },
+    lead:          { label: 'Lead',          className: 'bg-blue-100 text-blue-700 border-blue-200' },
+    qualified:     { label: 'Qualified',     className: 'bg-green-100 text-green-700 border-green-200' },
+    trial:         { label: 'Trial',         className: 'bg-amber-100 text-amber-700 border-amber-200' },
+    member:        { label: 'Member',        className: 'bg-purple-100 text-purple-700 border-purple-200' },
+    active_member: { label: 'Active Member', className: 'bg-purple-100 text-purple-700 border-purple-200' },
+    inactive:      { label: 'Inactive',      className: 'bg-slate-100 text-slate-500 border-slate-200' },
+    cancelled:     { label: 'Cancelled',     className: 'bg-red-100 text-red-700 border-red-200' },
+  };
+  const key = status?.toLowerCase() ?? '';
+  const s = config[key] ?? {
+    label: status
+      ? status.split('_').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ')
+      : 'Unknown',
+    className: 'bg-slate-100 text-slate-400 border-slate-200',
+  };
+  return (
+    <span className={`inline-flex items-center px-2 py-0.5 rounded border text-xs font-medium whitespace-nowrap ${s.className}`}>
+      {s.label}
+    </span>
+  );
+}
+
 const TAG_COLORS: Record<string, string> = {
   blue: 'bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-300',
   green: 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-300',
@@ -352,28 +378,6 @@ export default function Contacts() {
     }
   };
 
-  // Format helpers
-  const formatStatusLabel = (status: string | null) => {
-    if (!status) return 'Unknown';
-    return status.split('_').map(word =>
-      word.charAt(0).toUpperCase() + word.slice(1)
-    ).join(' ');
-  };
-
-  const getStatusBadgeClass = (status: string | null): string => {
-    switch (status) {
-      case 'new_lead': return 'bg-blue-100 text-blue-800 border-blue-200';
-      case 'active':
-      case 'qualified': return 'bg-green-100 text-green-800 border-green-200';
-      case 'trial': return 'bg-yellow-100 text-yellow-800 border-yellow-200';
-      case 'member':
-      case 'active_member': return 'bg-purple-100 text-purple-800 border-purple-200';
-      case 'inactive': return 'bg-gray-100 text-gray-800 border-gray-200';
-      case 'cancelled': return 'bg-red-100 text-red-800 border-red-200';
-      default: return 'bg-gray-100 text-gray-600 border-gray-200';
-    }
-  };
-
   const getTagColor = (tagSlug: string) => {
     const tag = availableTags.find(t => t.slug === tagSlug);
     return TAG_COLORS[tag?.color || 'gray'] || TAG_COLORS.gray;
@@ -456,10 +460,10 @@ export default function Contacts() {
               }}
             >
               <SelectTrigger className="w-full sm:w-[160px]">
-                <SelectValue placeholder="All Status" />
+                <SelectValue placeholder="All Statuses" />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="all">All Status</SelectItem>
+                <SelectItem value="all">All Statuses</SelectItem>
                 <SelectItem value="new_lead">New Lead</SelectItem>
                 <SelectItem value="qualified">Qualified</SelectItem>
                 <SelectItem value="active_member">Active Member</SelectItem>
@@ -721,9 +725,7 @@ export default function Contacts() {
                         </div>
                       </TableCell>
                       <TableCell className="text-center">
-                        <Badge variant="outline" className={`whitespace-nowrap ${getStatusBadgeClass(contact.status)}`}>
-                          {formatStatusLabel(contact.status)}
-                        </Badge>
+                        <StatusBadge status={contact.status} />
                       </TableCell>
                       <TableCell className="text-muted-foreground">
                         {contact.pipeline_stage || '-'}
