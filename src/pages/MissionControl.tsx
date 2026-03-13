@@ -1,11 +1,11 @@
 import { useState, useEffect, useCallback } from "react";
 import { DashboardLayout } from "@/components/layout/DashboardLayout";
 import { PageContent } from "@/components/layout/PageLayout";
-import { AgentCard, ActivityFeed, StatsBar, RicoChat, ScottsActionItems, AgentActivityMonitor, HealthDashboard, AnalyticsMonitor, AddTaskDialog, EditTaskDialog, QualityDashboard } from "@/components/mission-control";
+import { AgentCard, StatsBar, RicoChat, ScottsActionItems, AgentActivityMonitor, HealthDashboard, AnalyticsMonitor, AddTaskDialog, EditTaskDialog, QualityDashboard } from "@/components/mission-control";
 import { useBusinessContext } from "@/contexts/BusinessContext";
 import { useBusinesses } from "@/hooks/useBusinesses";
 import { supabase } from "@/integrations/supabase/client";
-import type { Agent, Task, Activity, TaskStatus } from "@/types/mission-control";
+import type { Agent, Task, TaskStatus } from "@/types/mission-control";
 import { RefreshCw, Plus } from "lucide-react";
 import { useToast } from "@/components/ui/use-toast";
 import { ALL_BUSINESSES_ID } from "@/components/BusinessSwitcher";
@@ -17,7 +17,6 @@ export default function MissionControl() {
   
   const [agents, setAgents] = useState<Agent[]>([]);
   const [tasks, setTasks] = useState<Task[]>([]);
-  const [activities, setActivities] = useState<Activity[]>([]);
   const [selectedAgent, setSelectedAgent] = useState<Agent | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -94,21 +93,6 @@ export default function MissionControl() {
       
       if (tasksError) throw tasksError;
       
-      // Fetch activities - ALWAYS global (all businesses)
-      // Scott wants to see all activity regardless of business selection
-      const activitiesQuery = supabase
-        .from('mc_activities')
-        .select('*')
-        .order('created_at', { ascending: false })
-        .limit(50);
-      // No business filter - activities are always global
-      
-      const { data: activitiesData, error: activitiesError } = await activitiesQuery;
-      if (activitiesError) throw activitiesError;
-      
-      setAgents((agentsWithLiveStatus as unknown as Agent[]) || []);
-      setTasks((tasksData as unknown as Task[]) || []);
-      setActivities((activitiesData as unknown as Activity[]) || []);
     } catch (err) {
       console.error('Error fetching Mission Control data:', err);
       setError(err instanceof Error ? err.message : 'Failed to load data');
@@ -195,23 +179,6 @@ export default function MissionControl() {
       });
 
     // Subscribe to ALL activities (always global - Scott wants to see everything)
-    const activitiesChannel = supabase
-      .channel(`mc_activities_global`)
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'mc_activities' },
-        (payload) => {
-          if (payload.eventType === 'INSERT') setActivities(prev => [payload.new as Activity, ...prev].slice(0, 50));
-          else if (payload.eventType === 'UPDATE') setActivities(prev => prev.map(a => a.id === (payload.new as Activity).id ? payload.new as Activity : a));
-          else if (payload.eventType === 'DELETE') setActivities(prev => prev.filter(a => a.id !== (payload.old as Activity).id));
-        }
-      ).subscribe((status, err) => {
-        if (err) console.warn('Realtime subscription error (activities):', err.message);
-      });
-
-    return () => {
-      supabase.removeChannel(globalAgentsChannel);
-      if (businessAgentsChannel) supabase.removeChannel(businessAgentsChannel);
-      supabase.removeChannel(tasksChannel);
-      supabase.removeChannel(activitiesChannel);
     };
   }, [selectedBusiness?.id]);
 
@@ -376,9 +343,7 @@ export default function MissionControl() {
           </div>
         </div>
 
-        {/* 3. Activity Feed */}
         <div className="mb-6 bg-white rounded-xl border border-slate-200">
-          <ActivityFeed activities={activities} agents={agents} />
         </div>
 
         {/* 4. System Health Dashboard + Analytics Monitor (side by side) */}
