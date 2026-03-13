@@ -15,6 +15,7 @@ export interface Agent {
   current_task_id: string | null;
   session_key: string;
   avatar_url: string | null;
+  agent_name: string | null;
   business_id: string | null;
   created_at: string;
   updated_at: string;
@@ -32,6 +33,7 @@ export interface Task {
   priority: TaskPriority;
   external_id: string | null;
   external_source: string | null;
+  agent_name: string | null;
   business_id: string | null;
   document_url: string | null;
   work_summary: string | null;
@@ -47,6 +49,7 @@ export interface Activity {
   task_id: string | null;
   message: string;
   metadata: Record<string, any>;
+  agent_name: string | null;
   business_id: string | null;
   created_at: string;
 }

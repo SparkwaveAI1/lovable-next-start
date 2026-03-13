@@ -102,6 +102,7 @@ export function ActivityFeed({ activities, agents, className }: ActivityFeedProp
           <div className="divide-y divide-slate-100">
             {filteredActivities.map((activity) => {
               const agent = getAgent(activity.agent_id);
+              if (process.env.NODE_ENV !== 'production' && !agent && !activity.agent_name) { console.warn(`[ActivityFeed] Activity ${activity.id} missing both agent_id and agent_name`); }
               return (
                 <div
                   key={activity.id}
@@ -115,7 +116,7 @@ export function ActivityFeed({ activities, agents, className }: ActivityFeedProp
                         alt={agent?.name || "Agent"}
                       />
                       <AvatarFallback className="bg-gradient-to-br from-violet-500 to-indigo-600 text-white text-xs font-medium">
-                        {agent ? getInitials(agent.name) : "??"}
+                        {agent ? getInitials(agent.name) : activity.agent_name ? getInitials(activity.agent_name) : "??"}
                       </AvatarFallback>
                     </Avatar>
 
@@ -123,7 +124,7 @@ export function ActivityFeed({ activities, agents, className }: ActivityFeedProp
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center gap-2 mb-0.5">
                         <span className="font-medium text-sm text-slate-900 truncate">
-                          {agent?.name || "Unknown"}
+                          {agent?.name || activity.agent_name || "Unknown"}
                         </span>
                         <span
                           className={cn(

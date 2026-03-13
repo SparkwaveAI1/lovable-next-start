@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback } from "react";
 import { DashboardLayout } from "@/components/layout/DashboardLayout";
 import { PageContent } from "@/components/layout/PageLayout";
-import { AgentCard, ActivityFeed, StatsBar, RicoChat, ScottsActionItems, AgentActivityMonitor, HealthDashboard, AnalyticsMonitor, AddTaskDialog, EditTaskDialog, QualityDashboard, TaskBoardPanel } from "@/components/mission-control";
+import { AgentCard, ActivityFeed, StatsBar, RicoChat, ScottsActionItems, AgentActivityMonitor, HealthDashboard, AnalyticsMonitor, AddTaskDialog, EditTaskDialog, QualityDashboard } from "@/components/mission-control";
 import { useBusinessContext } from "@/contexts/BusinessContext";
 import { useBusinesses } from "@/hooks/useBusinesses";
 import { supabase } from "@/integrations/supabase/client";
@@ -312,21 +312,6 @@ export default function MissionControl() {
   // Check if "All Businesses" is selected
   const isAllBusinessesSelected = selectedBusiness?.id === ALL_BUSINESSES_ID;
 
-  // Compute Kanban tasks (business-specific) vs global tasks (for Scott's To-Do)
-  const kanbanTasks = (() => {
-    let filtered = tasks;
-    // Filter by business for Kanban (unless "All" is selected)
-    // STRICT: Only show tasks for THIS business, not null/global tasks
-    if (!isAllBusinessesSelected && selectedBusiness?.id) {
-      filtered = filtered.filter(t => t.business_id === selectedBusiness.id);
-    }
-    // Filter by selected agent if applicable
-    if (selectedAgent) {
-      filtered = filtered.filter(t => t.assignee_ids?.includes(selectedAgent.id));
-    }
-    return filtered;
-  })();
-
   return (
     <DashboardLayout
       selectedBusinessId={selectedBusiness?.id}
@@ -388,7 +373,6 @@ export default function MissionControl() {
         {/* 2. Task Board (full width) — project/owner/priority kanban */}
         <div className="mb-6">
           <div className="bg-white rounded-xl border border-slate-200 p-3 sm:p-4">
-            <TaskBoardPanel />
           </div>
         </div>
 

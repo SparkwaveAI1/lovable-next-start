@@ -1,6 +1,4 @@
 export { AgentCard } from './AgentCard';
-export { TaskCard, SortableTaskCard } from './TaskCard';
-export { KanbanBoard } from './KanbanBoard';
 export { ActivityFeed } from './ActivityFeed';
 export { StatsBar } from './StatsBar';
 export { RicoChat, RicoChatModal } from './RicoChat';
@@ -13,5 +11,3 @@ export { AnalyticsMonitor } from './AnalyticsMonitor';
 export { AddTaskDialog } from './AddTaskDialog';
 export { EditTaskDialog } from './EditTaskDialog';
 export { QualityDashboard } from './QualityDashboard';
-export { TaskBoardPanel } from './TaskBoardPanel';
-export { TaskBoard } from './TaskBoard';
