@@ -371,12 +371,21 @@ export default function Agents() {
     if (showLoading) setLoading(true)
     setError(null)
     try {
-      const { data, error: fnError } = await supabase.functions.invoke("system-monitor")
-      if (fnError) throw new Error(fnError.message)
-      const result = data as MonitoringData
-      setAgents(result.agents ?? [])
-      setN8nWorkflows(result.n8n?.workflows ?? [])
-      setN8nError(result.n8n?.error ?? null)
+      const { data, error: dbError } = await supabase
+        .from('mc_agents')
+        .select('id, name, role, status, updated_at')
+        .eq('scope', 'global')
+        .order('name')
+      if (dbError) throw new Error(dbError.message)
+      const mapped: AgentStatus[] = (data ?? []).map((a: any) => ({
+        name: a.name,
+        role: a.role,
+        online: a.status === 'idle' || a.status === 'active',
+        ip: '',
+        port: 18789,
+        checkedAt: a.updated_at ?? new Date().toISOString(),
+      }))
+      setAgents(mapped)
       setLastRefresh(new Date())
     } catch (e) {
       const staticAgents: AgentStatus[] = [

@@ -62,23 +62,12 @@ const SystemOperations = () => {
     try {
       console.log('Triggering manual status refresh...')
       
-      // Call the system-ops-status edge function
-      const { data, error } = await supabase.functions.invoke('system-ops-status', {
-        method: 'POST'
-      })
-
-      if (error) {
-        throw error
-      }
-
-      console.log('Status refresh result:', data)
-      
-      // Refresh the query to get new data
+      // Refresh data directly from system_latest_status (edge function deprecated)
       await queryClient.invalidateQueries({ queryKey: ['system-status'] })
       
       toast({
         title: "Status Updated",
-        description: data.message || "System status has been refreshed successfully",
+        description: "System status has been refreshed",
       })
     } catch (error) {
       console.error('Error refreshing status:', error)
