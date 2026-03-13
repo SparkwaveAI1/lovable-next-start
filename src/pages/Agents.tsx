@@ -371,10 +371,18 @@ export default function Agents() {
     if (showLoading) setLoading(true)
     setError(null)
     try {
+      const CANONICAL_AGENT_IDS = [
+        'c3e0158d-8b33-4250-b0aa-47e0f09bbbeb', // Rico
+        'b19d6380-3966-4c43-aa33-7f773ed7e57c', // Dev
+        '15562d82-85f5-4d52-bc72-b038ba21da35', // Iris
+        'f8535a76-65dc-43eb-a9d3-33f2d6dde1b5', // Jerry
+        'cfbd78d6-217d-49c1-818c-38cc64a26104', // Arlo
+        '11be4abf-a931-4ffa-be9e-499a9da28cb3', // Opal
+      ]
       const { data, error: dbError } = await supabase
         .from('mc_agents')
         .select('id, name, role, status, updated_at')
-        .eq('scope', 'global')
+        .in('id', CANONICAL_AGENT_IDS)
         .order('name')
       if (dbError) throw new Error(dbError.message)
       const mapped: AgentStatus[] = (data ?? []).map((a: any) => ({
