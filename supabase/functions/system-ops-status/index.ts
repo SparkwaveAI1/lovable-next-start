@@ -1,12 +1,10 @@
-import { serve } from "https://deno.land/std@0.168.0/http/server.ts"
-import { createClient } from "https://esm.sh/@supabase/supabase-js@2"
-
+// system-ops-status — no external imports, uses native Deno fetch
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 }
 
-serve(async (req) => {
+Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') {
     return new Response(null, { headers: corsHeaders })
   }
@@ -14,45 +12,60 @@ serve(async (req) => {
   try {
     const supabaseUrl = Deno.env.get('SUPABASE_URL') ?? ''
     const supabaseKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
-    const supabase = createClient(supabaseUrl, supabaseKey)
-
-    // Get all registered items
-    const { data: items, error: fetchError } = await supabase
-      .from('system_registry')
-      .select('id, name, type, category')
-
-    if (fetchError) {
-      throw new Error(fetchError.message)
+    const sbHeaders = {
+      'apikey': supabaseKey,
+      'Authorization': `Bearer ${supabaseKey}`,
+      'Content-Type': 'application/json',
     }
-
     const now = new Date().toISOString()
-    const results = []
 
-    // Create simple status for each item
-    for (const item of items || []) {
-      results.push({
-        registry_id: item.id,
-        status: 'success',
-        last_run: now,
-        metadata: { auto_check: true }
-      })
-    }
+    // Fetch registry items
+    const regRes = await fetch(`${supabaseUrl}/rest/v1/system_registry?select=id,name,type,category`, { headers: sbHeaders })
+    const items = regRes.ok ? await regRes.json() : []
 
-    // Insert status log
-    if (results.length > 0) {
-      const { error: insertError } = await supabase
-        .from('system_status_log')
-        .insert(results)
+    // Fetch recent status logs
+    const logRes = await fetch(`${supabaseUrl}/rest/v1/system_status_log?order=last_run.desc&limit=100`, { headers: sbHeaders })
+    const logs = logRes.ok ? await logRes.json() : []
 
-      if (insertError) {
-        throw new Error(insertError.message)
+    // Build a map of latest status per registry_id
+    const latestStatus: Record<string, { status: string; last_run: string }> = {}
+    for (const log of logs) {
+      if (!latestStatus[log.registry_id]) {
+        latestStatus[log.registry_id] = { status: log.status, last_run: log.last_run }
       }
     }
 
+    // Merge registry + status
+    const systemStatus = items.map((item: { id: string; name: string; type: string; category: string }) => {
+      const latest = latestStatus[item.id]
+      const lastRun = latest?.last_run ?? null
+      let status = latest?.status ?? 'unknown'
+
+      // Mark as stale if last run > 2 hours ago
+      if (lastRun) {
+        const ageMs = Date.now() - new Date(lastRun).getTime()
+        if (ageMs > 2 * 60 * 60 * 1000 && status === 'success') {
+          status = 'stale'
+        }
+      }
+
+      return {
+        id: item.id,
+        name: item.name,
+        type: item.type,
+        category: item.category,
+        status,
+        last_run: lastRun,
+      }
+    })
+
     return new Response(JSON.stringify({
       success: true,
-      checked: results.length,
-      timestamp: now
+      total: systemStatus.length,
+      stale: systemStatus.filter((s: { status: string }) => s.status === 'stale').length,
+      failed: systemStatus.filter((s: { status: string }) => s.status === 'failed').length,
+      systems: systemStatus,
+      timestamp: now,
     }), {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' }
     })
