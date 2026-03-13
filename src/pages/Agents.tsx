@@ -379,7 +379,14 @@ export default function Agents() {
       setN8nError(result.n8n?.error ?? null)
       setLastRefresh(new Date())
     } catch (e) {
-      setError(e instanceof Error ? e.message : String(e))
+      const staticAgents: AgentStatus[] = [
+        { name: "Rico", ip: "5.161.190.94", port: 18789, role: "Lead Orchestrator", online: false, checkedAt: new Date().toISOString() },
+        { name: "Dev", ip: "5.161.186.106", port: 18789, role: "Development Agent", online: false, checkedAt: new Date().toISOString() },
+        { name: "Iris", ip: "178.156.250.119", port: 18789, role: "Communications Specialist", online: false, checkedAt: new Date().toISOString() },
+        { name: "Jerry", ip: "5.161.184.240", port: 18789, role: "Operations Agent", online: false, checkedAt: new Date().toISOString() },
+      ]
+      setAgents(staticAgents)
+      setError("Live status unavailable - showing offline")
     } finally {
       setLoading(false)
     }
