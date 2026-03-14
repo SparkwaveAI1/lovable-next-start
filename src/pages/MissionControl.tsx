@@ -93,6 +93,8 @@ export default function MissionControl() {
       
       if (tasksError) throw tasksError;
       
+      setAgents((agentsWithLiveStatus as unknown as Agent[]) || []);
+      setTasks((tasksData as unknown as Task[]) || []);
     } catch (err) {
       console.error('Error fetching Mission Control data:', err);
       setError(err instanceof Error ? err.message : 'Failed to load data');
@@ -179,6 +181,10 @@ export default function MissionControl() {
       });
 
     // Subscribe to ALL activities (always global - Scott wants to see everything)
+    return () => {
+      supabase.removeChannel(globalAgentsChannel);
+      if (businessAgentsChannel) supabase.removeChannel(businessAgentsChannel);
+      supabase.removeChannel(tasksChannel);
     };
   }, [selectedBusiness?.id]);
 
@@ -341,9 +347,6 @@ export default function MissionControl() {
         <div className="mb-6">
           <div className="bg-white rounded-xl border border-slate-200 p-3 sm:p-4">
           </div>
-        </div>
-
-        <div className="mb-6 bg-white rounded-xl border border-slate-200">
         </div>
 
         {/* 4. System Health Dashboard + Analytics Monitor (side by side) */}
