@@ -1,3 +1,5 @@
+import { SEO } from '@/components/SEO';
+import { SEO_CONFIG } from '@/lib/seo-config';
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -470,6 +472,7 @@ export default function AutomationAudit() {
   if (stage === 'welcome') {
     return (
       <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-slate-900 via-slate-800 to-green-900 p-4">
+        <SEO {...SEO_CONFIG.audit} />
         <Card className="w-full max-w-lg text-center border-0 shadow-2xl">
           <CardContent className="pt-12 pb-12 px-8">
             <div className="flex justify-center mb-6">

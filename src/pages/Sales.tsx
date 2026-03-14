@@ -1,3 +1,5 @@
+import { SEO } from '@/components/SEO';
+import { SEO_CONFIG } from '@/lib/seo-config';
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
@@ -39,6 +41,7 @@ export default function Sales() {
 
   return (
     <div className="min-h-screen bg-[#0a0e1a] text-white overflow-x-hidden">
+      <SEO {...SEO_CONFIG.sales} />
       {/* Navigation */}
       <nav className="fixed top-0 left-0 right-0 z-50 bg-[#0a0e1a]/80 backdrop-blur-lg border-b border-white/10">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">

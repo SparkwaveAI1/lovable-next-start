@@ -1,3 +1,5 @@
+import { SEO } from '@/components/SEO';
+import { SEO_CONFIG } from '@/lib/seo-config';
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -52,6 +54,7 @@ export default function AutomationApp() {
 
   return (
     <div className="min-h-screen bg-gradient-to-b from-slate-950 via-slate-900 to-slate-950">
+      <SEO {...SEO_CONFIG.automation} />
       {/* Hero Section */}
       <section className="relative pt-20 pb-16 px-4">
         <div className="max-w-4xl mx-auto text-center">

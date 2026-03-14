@@ -1,3 +1,5 @@
+import { SEO } from '@/components/SEO';
+import { SEO_CONFIG } from '@/lib/seo-config';
 import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
@@ -59,6 +61,7 @@ export default function Auth() {
 
   return (
     <div className="min-h-screen flex items-center justify-center bg-background p-4">
+      <SEO {...SEO_CONFIG.auth} noIndex={true} />
       <Card className="w-full max-w-md">
         <CardHeader className="text-center">
           <div className="flex justify-center mb-4">

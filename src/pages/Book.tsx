@@ -1,3 +1,5 @@
+import { SEO } from '@/components/SEO';
+import { SEO_CONFIG } from '@/lib/seo-config';
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -140,6 +142,7 @@ export default function Book() {
 
   return (
     <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-slate-50 to-green-50 p-4">
+      <SEO {...SEO_CONFIG.book} />
       <Card className="w-full max-w-lg">
         <CardHeader className="text-center pb-2">
           <div className="flex justify-center mb-4">

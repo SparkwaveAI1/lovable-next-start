@@ -1,3 +1,5 @@
+import { SEO } from '@/components/SEO';
+import { SEO_CONFIG } from '@/lib/seo-config';
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -13,6 +15,9 @@ import {
   Twitter
 } from "lucide-react";
 
+import { SEO } from '@/components/SEO';
+import { SEO_CONFIG } from '@/lib/seo-config';
+
 export default function About() {
   const handleBookCall = () => {
     window.open('https://calendly.com/scott-sparkwave/30min', '_blank');
@@ -20,6 +25,7 @@ export default function About() {
 
   return (
     <div className="min-h-screen bg-gradient-to-b from-slate-950 via-slate-900 to-slate-950">
+      <SEO {...SEO_CONFIG.about} />
       {/* Hero Section */}
       <section className="relative pt-20 pb-16 px-4">
         <div className="max-w-4xl mx-auto text-center">

@@ -1,3 +1,5 @@
+import { SEO } from '@/components/SEO';
+import { SEO_CONFIG } from '@/lib/seo-config';
 import { getAllPosts, getAllTags } from '@/lib/blog';
 import { BlogCard } from '@/components/blog/BlogCard';
 import { Badge } from '@/components/ui/badge';
@@ -17,6 +19,7 @@ export default function Blog() {
 
   return (
     <div className="min-h-screen bg-background">
+      <SEO {...SEO_CONFIG.blog} />
       <div className="max-w-6xl mx-auto px-4 py-8">
         {/* Header */}
         <div className="mb-8">
