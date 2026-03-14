@@ -53,3 +53,13 @@ verify_jwt = false
 
 [functions.system-monitor]
 verify_jwt = false
+
+# LinkedIn Integration Phase 1
+[functions.linkedin-auth]
+verify_jwt = false
+
+[functions.linkedin-callback]
+verify_jwt = false
+
+[functions.linkedin-accounts]
+verify_jwt = false

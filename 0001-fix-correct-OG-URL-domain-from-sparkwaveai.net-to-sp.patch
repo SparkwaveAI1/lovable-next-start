@@ -1,0 +1,48 @@
+From 60d2ea9a8178446c05556cc56a9137cfab5afaa9 Mon Sep 17 00:00:00 2001
+From: Rico <cumbucotrader@gmail.com>
+Date: Sat, 14 Mar 2026 08:40:50 +0000
+Subject: [PATCH] fix: correct OG:URL domain from sparkwaveai.net to
+ sparkwave-ai.com
+
+---
+ index.html | 8 ++++----
+ 1 file changed, 4 insertions(+), 4 deletions(-)
+
+diff --git a/index.html b/index.html
+index a4a4e8f..0dfe6c4 100644
+--- a/index.html
++++ b/index.html
+@@ -15,7 +15,7 @@
+       "@context": "https://schema.org",
+       "@type": "Organization",
+       "name": "Sparkwave AI",
+-      "url": "https://sparkwaveai.app",
++      "url": "https://sparkwave-ai.com",
+       "description": "10x your output, zero extra hours. Custom AI automation that multiplies your productivity.",
+       "foundingDate": "2023",
+       "founder": {"@type": "Person", "name": "Scott Johnson"},
+@@ -31,10 +31,10 @@
+     
+     <!-- Open Graph -->
+     <meta property="og:type" content="website" />
+-    <meta property="og:url" content="https://sparkwaveai.app" />
++    <meta property="og:url" content="https://sparkwave-ai.com/" />
+     <meta property="og:title" content="Sparkwave AI - 10x Your Output, Zero Extra Hours" />
+     <meta property="og:description" content="Custom AI automation that multiplies your productivity. Do what took a team of 10, with just you." />
+-    <meta property="og:image" content="https://sparkwaveai.app/og-image.png" />
++    <meta property="og:image" content="https://sparkwave-ai.com/og-image.png" />
+     <meta property="og:site_name" content="Sparkwave AI" />
+ 
+     <!-- Twitter Cards -->
+@@ -43,7 +43,7 @@
+     <meta name="twitter:creator" content="@ScottSparkwave" />
+     <meta name="twitter:title" content="Sparkwave AI - 10x Your Output, Zero Extra Hours" />
+     <meta name="twitter:description" content="Custom AI automation that multiplies your productivity. Do what took a team of 10, with just you." />
+-    <meta name="twitter:image" content="https://sparkwaveai.app/og-image.png" />
++    <meta name="twitter:image" content="https://sparkwave-ai.com/og-image.png" />
+ </head>
+ 
+   <body>
+-- 
+2.43.0
+
