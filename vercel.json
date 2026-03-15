@@ -1,5 +1,13 @@
 {
   "rewrites": [
+    {
+      "source": "/tiktok",
+      "destination": "/tiktok/index.html"
+    },
+    {
+      "source": "/tiktok/(.*)",
+      "destination": "/tiktok/$1"
+    },
     { "source": "/((?!api/).*)", "destination": "/index.html" }
   ],
   "headers": [
