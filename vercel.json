@@ -1,13 +1,12 @@
 {
-  "rewrites": [
+  "redirects": [
     {
       "source": "/tiktok",
-      "destination": "/tiktok/index.html"
-    },
-    {
-      "source": "/tiktok/(.*)",
-      "destination": "/tiktok/$1"
-    },
+      "destination": "/seo-audit",
+      "permanent": false
+    }
+  ],
+  "rewrites": [
     { "source": "/((?!api/).*)", "destination": "/index.html" }
   ],
   "headers": [
