@@ -41,6 +41,7 @@ import Blog from "./pages/Blog";
 import BlogPost from "./pages/BlogPost";
 import TwitterAnalytics from "./pages/TwitterAnalytics";
 import LinkedInAccounts from "./pages/linkedin/index";
+import LinkedInComposer from "./pages/linkedin/compose";
 import FAQ from "./pages/FAQ";
 // ContentVisibility and ContentReviewPage removed — redirected to /content-hub
 import AutomationAudit from "./pages/AutomationAudit";
@@ -112,6 +113,7 @@ const App = () => (
             <Route path="/communications" element={<ProtectedRoute><ErrorBoundary><Communications /></ErrorBoundary></ProtectedRoute>} />
             <Route path="/twitter-analytics" element={<ProtectedRoute><ErrorBoundary><TwitterAnalytics /></ErrorBoundary></ProtectedRoute>} />
             <Route path="/linkedin" element={<ProtectedRoute><ErrorBoundary><LinkedInAccounts /></ErrorBoundary></ProtectedRoute>} />
+            <Route path="/linkedin/compose" element={<ProtectedRoute><ErrorBoundary><LinkedInComposer /></ErrorBoundary></ProtectedRoute>} />
             <Route path="/faq" element={<ProtectedRoute><ErrorBoundary><FAQ /></ErrorBoundary></ProtectedRoute>} />
             <Route path="/content-visibility" element={<Navigate replace to="/content-hub" />} />
             <Route path="/content-review" element={<Navigate replace to="/content-hub" />} />

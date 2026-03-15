@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from "react";
-import { useSearchParams } from "react-router-dom";
+import { useSearchParams, useNavigate } from "react-router-dom";
 import { DashboardLayout } from "@/components/layout/DashboardLayout";
 import { PageContent, PageHeader } from "@/components/layout/PageLayout";
 import {
@@ -21,6 +21,7 @@ import {
   XCircle,
   User,
   Building2,
+  PenSquare,
 } from "lucide-react";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
@@ -77,6 +78,7 @@ const TOKEN_HEALTH_CONFIG: Record<
 
 export default function LinkedInAccounts() {
   const { selectedBusiness } = useBusinessContext();
+  const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const [accounts, setAccounts] = useState<LinkedInAccount[]>([]);
   const [loading, setLoading] = useState(false);
@@ -255,6 +257,17 @@ export default function LinkedInAccounts() {
             Connect Company Page
           </Button>
 
+          {accounts.length > 0 && (
+            <Button
+              onClick={() => navigate("/linkedin/compose")}
+              variant="outline"
+              className="flex items-center gap-2 border-green-600 text-green-600 hover:bg-green-50"
+            >
+              <PenSquare className="w-4 h-4" />
+              Create Post
+            </Button>
+          )}
+
           <Button
             variant="ghost"
             onClick={fetchAccounts}
@@ -408,7 +421,7 @@ export default function LinkedInAccounts() {
                     <li>Tokens are encrypted at rest using pgcrypto</li>
                     <li>Personal accounts: can post to your profile feed</li>
                     <li>Company pages: full analytics (impressions, clicks) available</li>
-                    <li>Posting and scheduling available in Phase 2</li>
+                    <li>Text posts can be published immediately using "Create Post"</li>
                   </ul>
                 </div>
               </div>
