@@ -1,0 +1,644 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>TikTok for App Founders — Done For You | Sparkwave Digital</title>
+  <meta name="description" content="We run TikTok for app founders who have better things to do. 100 posts/month. Custom images. 3–5x daily. $500 to start.">
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      background: #0a0a0a;
+      color: #e8e8e8;
+      line-height: 1.6;
+    }
+
+    .container {
+      max-width: 760px;
+      margin: 0 auto;
+      padding: 0 24px;
+    }
+
+    /* HERO */
+    .hero {
+      padding: 80px 0 60px;
+      text-align: center;
+      border-bottom: 1px solid #1e1e1e;
+    }
+
+    .badge {
+      display: inline-block;
+      background: #1a1a1a;
+      border: 1px solid #333;
+      color: #888;
+      font-size: 12px;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      padding: 6px 14px;
+      border-radius: 100px;
+      margin-bottom: 28px;
+    }
+
+    h1 {
+      font-size: clamp(32px, 6vw, 52px);
+      font-weight: 700;
+      line-height: 1.15;
+      letter-spacing: -0.02em;
+      color: #fff;
+      margin-bottom: 20px;
+    }
+
+    h1 span {
+      color: #00c9ff;
+    }
+
+    .hero-sub {
+      font-size: 20px;
+      color: #888;
+      margin-bottom: 36px;
+      max-width: 520px;
+      margin-left: auto;
+      margin-right: auto;
+    }
+
+    .cta-group {
+      display: flex;
+      gap: 12px;
+      justify-content: center;
+      flex-wrap: wrap;
+    }
+
+    .btn-primary {
+      display: inline-block;
+      background: #00c9ff;
+      color: #000;
+      font-weight: 700;
+      font-size: 16px;
+      padding: 14px 28px;
+      border-radius: 8px;
+      text-decoration: none;
+      transition: opacity 0.15s;
+    }
+
+    .btn-primary:hover { opacity: 0.85; }
+
+    .btn-secondary {
+      display: inline-block;
+      background: transparent;
+      color: #e8e8e8;
+      font-weight: 600;
+      font-size: 16px;
+      padding: 14px 28px;
+      border-radius: 8px;
+      text-decoration: none;
+      border: 1px solid #333;
+      transition: border-color 0.15s;
+    }
+
+    .btn-secondary:hover { border-color: #555; }
+
+    .spots-note {
+      margin-top: 20px;
+      font-size: 13px;
+      color: #555;
+    }
+
+    .spots-note strong { color: #ff6b6b; }
+
+    /* SECTIONS */
+    section {
+      padding: 64px 0;
+      border-bottom: 1px solid #1a1a1a;
+    }
+
+    h2 {
+      font-size: 28px;
+      font-weight: 700;
+      color: #fff;
+      margin-bottom: 16px;
+      letter-spacing: -0.01em;
+    }
+
+    h3 {
+      font-size: 18px;
+      font-weight: 600;
+      color: #fff;
+      margin-bottom: 8px;
+    }
+
+    p {
+      color: #999;
+      margin-bottom: 16px;
+    }
+
+    /* PROBLEM */
+    .problem-text {
+      font-size: 18px;
+      line-height: 1.7;
+      color: #bbb;
+    }
+
+    .problem-text strong {
+      color: #fff;
+    }
+
+    /* WHAT YOU GET */
+    .feature-list {
+      list-style: none;
+      margin-top: 24px;
+    }
+
+    .feature-list li {
+      display: flex;
+      align-items: flex-start;
+      gap: 12px;
+      padding: 14px 0;
+      border-bottom: 1px solid #1a1a1a;
+      color: #bbb;
+      font-size: 16px;
+    }
+
+    .feature-list li:last-child { border-bottom: none; }
+
+    .check {
+      flex-shrink: 0;
+      width: 22px;
+      height: 22px;
+      background: rgba(0, 201, 255, 0.1);
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: #00c9ff;
+      font-size: 12px;
+      margin-top: 1px;
+    }
+
+    /* PROOF */
+    .proof-box {
+      background: #111;
+      border: 1px solid #222;
+      border-radius: 12px;
+      padding: 32px;
+      margin-top: 24px;
+    }
+
+    .proof-box p {
+      font-size: 16px;
+      line-height: 1.7;
+      margin-bottom: 0;
+    }
+
+    /* FOR WHO */
+    .fit-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 24px;
+      margin-top: 24px;
+    }
+
+    @media (max-width: 600px) {
+      .fit-grid { grid-template-columns: 1fr; }
+    }
+
+    .fit-card {
+      background: #111;
+      border: 1px solid #1e1e1e;
+      border-radius: 10px;
+      padding: 24px;
+    }
+
+    .fit-card.yes { border-color: rgba(0, 201, 255, 0.2); }
+    .fit-card.no { border-color: rgba(255, 107, 107, 0.15); }
+
+    .fit-card h3 {
+      font-size: 14px;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      margin-bottom: 16px;
+    }
+
+    .fit-card.yes h3 { color: #00c9ff; }
+    .fit-card.no h3 { color: #ff6b6b; }
+
+    .fit-card ul {
+      list-style: none;
+    }
+
+    .fit-card ul li {
+      color: #888;
+      font-size: 14px;
+      padding: 5px 0;
+      padding-left: 16px;
+      position: relative;
+    }
+
+    .fit-card ul li::before {
+      content: '—';
+      position: absolute;
+      left: 0;
+      color: #444;
+    }
+
+    /* OFFER */
+    .offer-box {
+      background: linear-gradient(135deg, #0d1a24, #0a1520);
+      border: 1px solid rgba(0, 201, 255, 0.2);
+      border-radius: 16px;
+      padding: 40px;
+      text-align: center;
+      margin-top: 24px;
+    }
+
+    .price {
+      font-size: 64px;
+      font-weight: 800;
+      color: #fff;
+      letter-spacing: -0.03em;
+      line-height: 1;
+    }
+
+    .price-sub {
+      color: #555;
+      font-size: 14px;
+      margin-top: 4px;
+      text-decoration: line-through;
+    }
+
+    .price-note {
+      color: #888;
+      margin-top: 8px;
+      margin-bottom: 28px;
+      font-size: 15px;
+    }
+
+    /* HOW IT WORKS */
+    .timeline {
+      margin-top: 24px;
+    }
+
+    .timeline-item {
+      display: flex;
+      gap: 20px;
+      padding: 20px 0;
+      border-bottom: 1px solid #1a1a1a;
+    }
+
+    .timeline-item:last-child { border-bottom: none; }
+
+    .timeline-num {
+      flex-shrink: 0;
+      width: 36px;
+      height: 36px;
+      background: #1a1a1a;
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 13px;
+      font-weight: 700;
+      color: #00c9ff;
+    }
+
+    .timeline-content h3 {
+      font-size: 16px;
+      margin-bottom: 4px;
+    }
+
+    .timeline-content p {
+      font-size: 14px;
+      margin-bottom: 0;
+    }
+
+    /* MATH */
+    .compare-table {
+      width: 100%;
+      border-collapse: collapse;
+      margin-top: 24px;
+      font-size: 14px;
+    }
+
+    .compare-table th {
+      text-align: left;
+      padding: 12px 16px;
+      color: #555;
+      font-weight: 600;
+      font-size: 12px;
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+      border-bottom: 1px solid #1e1e1e;
+    }
+
+    .compare-table td {
+      padding: 14px 16px;
+      border-bottom: 1px solid #151515;
+      color: #888;
+    }
+
+    .compare-table tr:last-child td {
+      background: rgba(0, 201, 255, 0.04);
+      color: #e8e8e8;
+      font-weight: 600;
+    }
+
+    .compare-table td:first-child { color: #ccc; }
+
+    /* FAQ */
+    .faq-item {
+      padding: 20px 0;
+      border-bottom: 1px solid #1a1a1a;
+    }
+
+    .faq-item:last-child { border-bottom: none; }
+
+    .faq-item h3 {
+      font-size: 16px;
+      margin-bottom: 8px;
+    }
+
+    .faq-item p {
+      font-size: 15px;
+      margin-bottom: 0;
+    }
+
+    /* FOOTER CTA */
+    .footer-cta {
+      padding: 80px 0;
+      text-align: center;
+    }
+
+    .footer-cta h2 {
+      font-size: 36px;
+      margin-bottom: 16px;
+    }
+
+    .footer-cta p {
+      font-size: 18px;
+      margin-bottom: 32px;
+    }
+
+    /* FOOTER */
+    footer {
+      padding: 32px 0;
+      text-align: center;
+      border-top: 1px solid #1a1a1a;
+    }
+
+    footer p {
+      font-size: 13px;
+      color: #444;
+      margin-bottom: 0;
+    }
+
+    footer a { color: #555; text-decoration: none; }
+    footer a:hover { color: #888; }
+  </style>
+</head>
+<body>
+
+  <!-- HERO -->
+  <div class="hero">
+    <div class="container">
+      <div class="badge">For App Founders</div>
+      <h1>We run <span>TikTok</span> for app<br>founders who have<br>better things to do.</h1>
+      <p class="hero-sub">100 posts/month. Custom images. 3–5x daily. You focus on the product.</p>
+      <div class="cta-group">
+        <a href="mailto:info@sparkwave-ai.com?subject=TikTok Agency — I'm interested" class="btn-primary">Claim a Spot — $500/mo to start</a>
+        <a href="#how-it-works" class="btn-secondary">See how it works</a>
+      </div>
+      <p class="spots-note"><strong>5 spots</strong> available at the introductory price.</p>
+    </div>
+  </div>
+
+  <!-- PROBLEM -->
+  <section>
+    <div class="container">
+      <h2>You know TikTok matters.<br>You haven't done anything about it.</h2>
+      <p class="problem-text" style="margin-top: 20px;">
+        You've watched other founders' apps go viral on TikTok. You know your users are spending 90 minutes a day there. You've thought "I should really do TikTok" at least ten times.<br><br>
+        <strong>But you're building a product. You don't have time to learn the platform, write captions, generate images, figure out the algorithm, and post five times a day.</strong><br><br>
+        So nothing happens.
+      </p>
+    </div>
+  </section>
+
+  <!-- SOLUTION -->
+  <section>
+    <div class="container">
+      <h2>We handle TikTok completely.</h2>
+      <p>Here's what you get every month:</p>
+      <ul class="feature-list">
+        <li>
+          <span class="check">✓</span>
+          <span><strong style="color: #e8e8e8;">100 custom images</strong> — AI-generated, themed to your brand and audience</span>
+        </li>
+        <li>
+          <span class="check">✓</span>
+          <span><strong style="color: #e8e8e8;">Captions and hooks written for every post</strong> — native TikTok copy that doesn't sound like LinkedIn</span>
+        </li>
+        <li>
+          <span class="check">✓</span>
+          <span><strong style="color: #e8e8e8;">3–5 posts scheduled and published daily</strong> — consistent presence without you lifting a finger</span>
+        </li>
+        <li>
+          <span class="check">✓</span>
+          <span><strong style="color: #e8e8e8;">Trending topic integration</strong> — your content stays relevant to what's happening in your niche</span>
+        </li>
+        <li>
+          <span class="check">✓</span>
+          <span><strong style="color: #e8e8e8;">Weekly performance check-in</strong> — what's working, what we're adjusting</span>
+        </li>
+        <li>
+          <span class="check">✓</span>
+          <span><strong style="color: #e8e8e8;">Monthly strategy report</strong> — full analytics, learnings, Month 2 plan</span>
+        </li>
+      </ul>
+    </div>
+  </section>
+
+  <!-- PROOF -->
+  <section>
+    <div class="container">
+      <h2>We already built this system.</h2>
+      <p>This isn't a pitch deck. It's a working pipeline.</p>
+      <div class="proof-box">
+        <p>
+          We built an automated content system for a character-based social media account. Same pipeline: AI-powered content ideation, custom image generation, automated daily publishing, consistent brand voice. It's been running for months with zero manual effort from the account owner.<br><br>
+          Now we're productizing it for app founders. You're not the guinea pig — you're getting a proven system applied to your product and audience.
+        </p>
+      </div>
+    </div>
+  </section>
+
+  <!-- FOR WHO -->
+  <section>
+    <div class="container">
+      <h2>Is this for you?</h2>
+      <div class="fit-grid">
+        <div class="fit-card yes">
+          <h3>✓ Good fit</h3>
+          <ul>
+            <li>Solo founder or small team (1–5)</li>
+            <li>Live product with real users</li>
+            <li>Zero to no TikTok presence</li>
+            <li>Willing to let us run it autonomously</li>
+            <li>Happy to share results as a case study</li>
+          </ul>
+        </div>
+        <div class="fit-card no">
+          <h3>✕ Not a fit</h3>
+          <ul>
+            <li>Pre-launch / no product yet</li>
+            <li>Need to approve every post</li>
+            <li>Enterprise or B2B sales-only product</li>
+            <li>Already posting 3–5x/day yourself</li>
+            <li>Looking for video production</li>
+          </ul>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- THE OFFER -->
+  <section>
+    <div class="container">
+      <h2>The offer.</h2>
+      <div class="offer-box">
+        <div class="price">$500</div>
+        <div class="price-sub">normally $2,000/month</div>
+        <p class="price-note">First month at cost-of-proof pricing. If we deliver results, you continue at $2K/month. If not, you're out $500 and learned a lot about TikTok.</p>
+        <a href="mailto:info@sparkwave-ai.com?subject=TikTok Agency — I want a spot" class="btn-primary">Email us to claim a spot</a>
+        <p style="color: #333; font-size: 13px; margin-top: 16px; margin-bottom: 0;">5 spots. Month-to-month after Month 1. No long-term contracts.</p>
+      </div>
+    </div>
+  </section>
+
+  <!-- HOW IT WORKS -->
+  <section id="how-it-works">
+    <div class="container">
+      <h2>How it works.</h2>
+      <div class="timeline">
+        <div class="timeline-item">
+          <div class="timeline-num">1</div>
+          <div class="timeline-content">
+            <h3>Days 1–3: Onboarding</h3>
+            <p>15-minute call, brand brief, visual style setup, voice document. First content batch prepared.</p>
+          </div>
+        </div>
+        <div class="timeline-item">
+          <div class="timeline-num">2</div>
+          <div class="timeline-content">
+            <h3>Day 4: First posts go live</h3>
+            <p>Publishing starts. 3–5 posts/day, every day. You don't have to do anything.</p>
+          </div>
+        </div>
+        <div class="timeline-item">
+          <div class="timeline-num">3</div>
+          <div class="timeline-content">
+            <h3>Day 7: First check-in</h3>
+            <p>Early performance data. What formats are getting views. Any adjustments to voice or topics.</p>
+          </div>
+        </div>
+        <div class="timeline-item">
+          <div class="timeline-num">4</div>
+          <div class="timeline-content">
+            <h3>Day 30: Full analytics report</h3>
+            <p>Follower growth, video views, completion rates, content performance breakdown, Month 2 strategy.</p>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- THE MATH -->
+  <section>
+    <div class="container">
+      <h2>The math.</h2>
+      <table class="compare-table">
+        <thead>
+          <tr>
+            <th>Option</th>
+            <th>Cost</th>
+            <th>Posts/day</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>Learn it yourself</td>
+            <td>40+ hours of your time</td>
+            <td>0–1 (when you remember)</td>
+          </tr>
+          <tr>
+            <td>Hire a freelancer</td>
+            <td>$1,500–3,000/month</td>
+            <td>1</td>
+          </tr>
+          <tr>
+            <td>Marketing agency</td>
+            <td>$5,000–10,000/month</td>
+            <td>1–3 (you're not their priority)</td>
+          </tr>
+          <tr>
+            <td>Sparkwave Digital (Month 1)</td>
+            <td>$500</td>
+            <td>3–5, done for you</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <!-- FAQ -->
+  <section>
+    <div class="container">
+      <h2>Questions.</h2>
+      <div class="faq-item">
+        <h3>Do I need to appear in videos?</h3>
+        <p>No. We use image-based content — no video recording required from you. If you want to add video content later, we can discuss it.</p>
+      </div>
+      <div class="faq-item">
+        <h3>What if my product niche is boring?</h3>
+        <p>Every niche has an angle. We've generated content for AI tools, market research platforms, and a 19th-century circus ringmaster. The key is finding what your audience actually responds to — which is what Week 1 is for.</p>
+      </div>
+      <div class="faq-item">
+        <h3>Do you post on my account or yours?</h3>
+        <p>Your account. You own everything. We request posting access to manage and schedule. You can revoke access at any time.</p>
+      </div>
+      <div class="faq-item">
+        <h3>What results can I expect in Month 1?</h3>
+        <p>New accounts with daily posting typically see 200–500 followers and 5,000–15,000 video views in the first 30 days. TikTok's algorithm rewards consistency — 3–5 posts/day is the fastest path to reach. We can't guarantee viral hits. We can guarantee daily publishing and strategy based on what works.</p>
+      </div>
+      <div class="faq-item">
+        <h3>What if I want to cancel after Month 1?</h3>
+        <p>Month-to-month after the first month. No long-term commitment required.</p>
+      </div>
+      <div class="faq-item">
+        <h3>What's not included?</h3>
+        <p>Video editing, paid advertising management, community management (responding to DMs/comments), platform verification. Image-based content + daily posting + strategy is the core offer.</p>
+      </div>
+    </div>
+  </section>
+
+  <!-- FOOTER CTA -->
+  <section class="footer-cta">
+    <div class="container">
+      <h2>Ready to claim a spot?</h2>
+      <p>5 founders at $500/month. We close these personally — no automated form.</p>
+      <div class="cta-group">
+        <a href="mailto:info@sparkwave-ai.com?subject=TikTok Agency — I want a spot" class="btn-primary">Email us to get started</a>
+      </div>
+      <p style="margin-top: 20px; font-size: 14px; color: #444;">Tell us: your product, your audience, your current TikTok status. We'll tell you if it's a fit.</p>
+    </div>
+  </section>
+
+  <!-- FOOTER -->
+  <footer>
+    <div class="container">
+      <p>Sparkwave Digital · <a href="mailto:info@sparkwave-ai.com">info@sparkwave-ai.com</a> · <a href="https://sparkwave-ai.com">sparkwave-ai.com</a></p>
+    </div>
+  </footer>
+
+</body>
+</html>

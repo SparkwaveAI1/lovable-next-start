@@ -48,7 +48,6 @@ import AutomationAudit from "./pages/AutomationAudit";
 import ROICalculator from "./pages/ROICalculator";
 import Onboarding from "./pages/Onboarding";
 import SystemMonitoring from "./pages/SystemMonitoring";
-import SEOAudit from "./pages/SEOAudit";
 import MonitoringPage from "./pages/Monitoring";
 import FightFlow from "./pages/FightFlow";
 import SystemOperations from "./pages/SystemOperations";
@@ -77,8 +76,6 @@ const App = () => (
             <Route path="/onboarding" element={<Onboarding />} />
             <Route path="/book" element={<Book />} />
             <Route path="/audit" element={<AutomationAudit />} />
-            <Route path="/seo-audit" element={<SEOAudit />} />
-            <Route path="/tiktok" element={<Navigate replace to="/seo-audit" />} />
             <Route path="/roi-calculator" element={<ROICalculator />} />
             <Route path="/sales" element={<Sales />} />
             <Route path="/about" element={<About />} />
