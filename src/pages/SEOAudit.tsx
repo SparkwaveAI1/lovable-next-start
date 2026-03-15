@@ -1,5 +1,3 @@
-'use client';
-
 import { useState } from 'react';
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -14,9 +12,9 @@ import {
 import { Card } from "@/components/ui/card";
 import { Check, Search, MapPin, Target, BarChart, Link, Zap } from 'lucide-react';
 import { toast } from 'sonner';
-import { supabase } from '@/utils/supabase/client';
+import { supabase } from '@/integrations/supabase/client';
 
-export default function SEOLandingPage() {
+export default function SEOAudit() {
   const [formData, setFormData] = useState({
     website: '',
     email: '',
