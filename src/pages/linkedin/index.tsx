@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { useSearchParams, useNavigate } from "react-router-dom";
 import { DashboardLayout } from "@/components/layout/DashboardLayout";
 import { PageContent, PageHeader } from "@/components/layout/PageLayout";
@@ -22,6 +22,9 @@ import {
   User,
   Building2,
   PenSquare,
+  CalendarClock,
+  Clock,
+  X,
 } from "lucide-react";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
@@ -37,6 +40,7 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { format, formatDistanceToNow } from "date-fns";
+import { getScheduledContent, cancelScheduledContent, ScheduledContentItem } from "@/lib/schedulingService";
 
 interface LinkedInAccount {
   id: string;
@@ -85,6 +89,13 @@ export default function LinkedInAccounts() {
   const [connectingType, setConnectingType] = useState<"personal" | "company" | null>(null);
   const [disconnectTarget, setDisconnectTarget] = useState<LinkedInAccount | null>(null);
   const [disconnecting, setDisconnecting] = useState(false);
+
+  // Scheduled posts queue
+  const [scheduledPosts, setScheduledPosts] = useState<ScheduledContentItem[]>([]);
+  const [queueLoading, setQueueLoading] = useState(false);
+  const [cancelTarget, setCancelTarget] = useState<ScheduledContentItem | null>(null);
+  const [cancelling, setCancelling] = useState(false);
+  const queueRefreshRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   // Handle OAuth callback result from URL params
   useEffect(() => {
@@ -153,6 +164,48 @@ export default function LinkedInAccounts() {
   useEffect(() => {
     fetchAccounts();
   }, [fetchAccounts]);
+
+  // Scheduled queue fetch
+  const fetchScheduledQueue = useCallback(async () => {
+    if (!selectedBusiness) return;
+    setQueueLoading(true);
+    try {
+      const result = await getScheduledContent(selectedBusiness.id, 'scheduled', 20);
+      if (result.success) {
+        // Only LinkedIn posts
+        setScheduledPosts(result.content.filter(c => c.platform === 'linkedin'));
+      }
+    } catch (err) {
+      console.error('Failed to fetch scheduled queue:', err);
+    } finally {
+      setQueueLoading(false);
+    }
+  }, [selectedBusiness]);
+
+  useEffect(() => {
+    fetchScheduledQueue();
+    // Auto-refresh every 30 seconds
+    queueRefreshRef.current = setInterval(fetchScheduledQueue, 30_000);
+    return () => {
+      if (queueRefreshRef.current) clearInterval(queueRefreshRef.current);
+    };
+  }, [fetchScheduledQueue]);
+
+  const handleCancelScheduled = async () => {
+    if (!cancelTarget) return;
+    setCancelling(true);
+    try {
+      const result = await cancelScheduledContent(cancelTarget.id);
+      if (!result.success) throw new Error(result.message);
+      toast.success('Scheduled post cancelled');
+      setCancelTarget(null);
+      await fetchScheduledQueue();
+    } catch (err: any) {
+      toast.error(err?.message || 'Failed to cancel post');
+    } finally {
+      setCancelling(false);
+    }
+  };
 
   const handleConnect = async (accountType: "personal" | "company") => {
     if (!selectedBusiness) {
@@ -430,6 +483,70 @@ export default function LinkedInAccounts() {
         )}
       </PageContent>
 
+      {/* Scheduled Posts Queue */}
+      {selectedBusiness && (scheduledPosts.length > 0 || queueLoading) && (
+        <div className="mt-8">
+          <div className="flex items-center justify-between mb-4">
+            <h2 className="text-base font-semibold flex items-center gap-2">
+              <CalendarClock className="w-4 h-4 text-blue-600" />
+              Scheduled Posts
+              {scheduledPosts.length > 0 && (
+                <Badge variant="secondary" className="ml-1">{scheduledPosts.length}</Badge>
+              )}
+            </h2>
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={fetchScheduledQueue}
+              disabled={queueLoading}
+              className="flex items-center gap-1.5 text-muted-foreground"
+            >
+              <RefreshCw className={`w-3.5 h-3.5 ${queueLoading ? 'animate-spin' : ''}`} />
+              Refresh
+            </Button>
+          </div>
+
+          {queueLoading && scheduledPosts.length === 0 ? (
+            <Card className="border-dashed">
+              <CardContent className="py-8 text-center text-muted-foreground text-sm">
+                <RefreshCw className="w-5 h-5 mx-auto mb-2 animate-spin opacity-40" />
+                Loading queue…
+              </CardContent>
+            </Card>
+          ) : (
+            <div className="space-y-2">
+              {scheduledPosts.map((post) => (
+                <Card key={post.id} className="border-blue-100 dark:border-blue-900">
+                  <CardContent className="py-3 px-4 flex items-start justify-between gap-3">
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm line-clamp-2 text-foreground">{post.content}</p>
+                      <p className="text-xs text-muted-foreground mt-1 flex items-center gap-1.5">
+                        <Clock className="w-3 h-3" />
+                        Scheduled for {format(new Date(post.scheduled_for), "MMM d, yyyy 'at' h:mm a")}
+                        {" · "}
+                        {formatDistanceToNow(new Date(post.scheduled_for), { addSuffix: true })}
+                      </p>
+                    </div>
+                    <div className="flex items-center gap-2 shrink-0">
+                      <Badge variant="secondary" className="text-xs">Scheduled</Badge>
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="w-7 h-7 text-muted-foreground hover:text-red-500 hover:bg-red-50"
+                        onClick={() => setCancelTarget(post)}
+                        title="Cancel scheduled post"
+                      >
+                        <X className="w-3.5 h-3.5" />
+                      </Button>
+                    </div>
+                  </CardContent>
+                </Card>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+
       {/* Disconnect confirmation dialog */}
       <AlertDialog
         open={!!disconnectTarget}
@@ -459,6 +576,38 @@ export default function LinkedInAccounts() {
                 </>
               ) : (
                 "Disconnect"
+              )}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      {/* Cancel scheduled post confirmation */}
+      <AlertDialog
+        open={!!cancelTarget}
+        onOpenChange={(open) => !open && setCancelTarget(null)}
+      >
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Cancel Scheduled Post?</AlertDialogTitle>
+            <AlertDialogDescription>
+              This will remove the post from the queue. The draft content will not be saved.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={cancelling}>Keep it</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={handleCancelScheduled}
+              disabled={cancelling}
+              className="bg-red-600 hover:bg-red-700 focus:ring-red-600"
+            >
+              {cancelling ? (
+                <>
+                  <RefreshCw className="w-3 h-3 mr-2 animate-spin" />
+                  Cancelling…
+                </>
+              ) : (
+                "Cancel Post"
               )}
             </AlertDialogAction>
           </AlertDialogFooter>

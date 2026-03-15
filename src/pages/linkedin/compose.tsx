@@ -8,9 +8,10 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { DashboardLayout } from '@/components/layout/DashboardLayout';
 import { PageContent, PageHeader } from '@/components/layout/PageLayout';
-import { ArrowLeft, Save, Send, Linkedin } from 'lucide-react';
+import { ArrowLeft, Save, Send, Linkedin, Clock, CalendarClock } from 'lucide-react';
 import { toast } from 'sonner';
 import { useBusinessContext } from '@/contexts/BusinessContext';
+import { scheduleContent } from '@/lib/schedulingService';
 
 interface LinkedInAccount {
   id: string;
@@ -22,6 +23,18 @@ interface LinkedInAccount {
 
 const DRAFT_KEY = 'linkedin_post_draft';
 const MAX_CHARS = 3000;
+// Minimum scheduling buffer: 5 minutes from now
+const MIN_SCHEDULE_OFFSET_MS = 5 * 60 * 1000;
+
+/** Return a datetime-local string (YYYY-MM-DDTHH:mm) rounded up to the next 15-minute slot,
+ *  at least MIN_SCHEDULE_OFFSET_MS from now. */
+function defaultScheduledAt(): string {
+  const now = Date.now() + MIN_SCHEDULE_OFFSET_MS;
+  const slot = Math.ceil(now / (15 * 60 * 1000)) * (15 * 60 * 1000);
+  const d = new Date(slot);
+  const pad = (n: number) => String(n).padStart(2, '0');
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+}
 
 export default function LinkedInComposer() {
   const navigate = useNavigate();
@@ -32,6 +45,11 @@ export default function LinkedInComposer() {
   const [loading, setLoading] = useState(true);
   const [publishing, setPublishing] = useState(false);
   const [error, setError] = useState('');
+
+  // Scheduling state
+  const [scheduleMode, setScheduleMode] = useState<'now' | 'later'>('now');
+  const [scheduledAt, setScheduledAt] = useState<string>(defaultScheduledAt);
+  const [scheduleError, setScheduleError] = useState('');
 
   // Load accounts and draft on mount
   useEffect(() => {
@@ -45,6 +63,30 @@ export default function LinkedInComposer() {
       localStorage.setItem(DRAFT_KEY, JSON.stringify({ content, selectedAccount }));
     }
   }, [content, selectedAccount]);
+
+  // Validate schedule time whenever it changes
+  useEffect(() => {
+    if (scheduleMode === 'later') {
+      validateScheduleTime(scheduledAt);
+    } else {
+      setScheduleError('');
+    }
+  }, [scheduleMode, scheduledAt]);
+
+  function validateScheduleTime(value: string): boolean {
+    if (!value) {
+      setScheduleError('Please select a date and time');
+      return false;
+    }
+    const selected = new Date(value).getTime();
+    const minTime = Date.now() + MIN_SCHEDULE_OFFSET_MS;
+    if (selected < minTime) {
+      setScheduleError('Scheduled time must be at least 5 minutes in the future');
+      return false;
+    }
+    setScheduleError('');
+    return true;
+  }
 
   async function loadAccounts() {
     if (!selectedBusiness) {
@@ -112,6 +154,43 @@ export default function LinkedInComposer() {
     toast.success('Draft cleared');
   }
 
+  async function schedulePost() {
+    if (!selectedBusiness) return;
+    if (!selectedAccount || !content.trim()) {
+      toast.error('Please select an account and enter some content');
+      return;
+    }
+    if (content.length > MAX_CHARS) {
+      toast.error(`Content exceeds ${MAX_CHARS} character limit`);
+      return;
+    }
+    if (!validateScheduleTime(scheduledAt)) return;
+
+    setPublishing(true);
+    setError('');
+    try {
+      const result = await scheduleContent({
+        businessId: selectedBusiness.id,
+        content: content.trim(),
+        contentType: 'linkedin_post',
+        scheduledFor: new Date(scheduledAt),
+        metadata: { account_id: selectedAccount },
+      });
+
+      if (!result.success) throw new Error(result.message);
+
+      toast.success(`Post scheduled for ${new Date(scheduledAt).toLocaleString()}`);
+      localStorage.removeItem(DRAFT_KEY);
+      navigate('/linkedin');
+    } catch (err: any) {
+      const msg = err?.message || 'Failed to schedule post';
+      setError(msg);
+      toast.error(msg);
+    } finally {
+      setPublishing(false);
+    }
+  }
+
   async function publishPost() {
     if (!selectedAccount || !content.trim()) {
       toast.error('Please select an account and enter some content');
@@ -149,8 +228,18 @@ export default function LinkedInComposer() {
     }
   }
 
+  function handleSubmit() {
+    if (scheduleMode === 'later') {
+      schedulePost();
+    } else {
+      publishPost();
+    }
+  }
+
   const charCount = content.length;
   const charLimitExceeded = charCount > MAX_CHARS;
+  const canSubmit = !publishing && content.trim().length > 0 && !charLimitExceeded && !!selectedAccount
+    && (scheduleMode === 'now' || (scheduleMode === 'later' && !scheduleError));
 
   if (loading) {
     return (
@@ -234,7 +323,9 @@ export default function LinkedInComposer() {
                 New Post
               </CardTitle>
               <CardDescription>
-                Post will publish immediately to LinkedIn
+                {scheduleMode === 'later'
+                  ? 'Post will be added to the schedule queue'
+                  : 'Post will publish immediately to LinkedIn'}
               </CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
@@ -295,6 +386,64 @@ export default function LinkedInComposer() {
                 </div>
               </div>
 
+              {/* Schedule / Publish toggle */}
+              <div className="rounded-lg border p-4 space-y-3 bg-muted/30">
+                <div className="flex items-center gap-3">
+                  <label className="text-sm font-medium">Timing</label>
+                  <div className="flex rounded-md border overflow-hidden text-sm">
+                    <button
+                      type="button"
+                      onClick={() => setScheduleMode('now')}
+                      className={`px-3 py-1.5 flex items-center gap-1.5 transition-colors ${
+                        scheduleMode === 'now'
+                          ? 'bg-blue-600 text-white'
+                          : 'bg-background hover:bg-muted text-muted-foreground'
+                      }`}
+                    >
+                      <Send className="w-3 h-3" />
+                      Publish Now
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setScheduleMode('later')}
+                      className={`px-3 py-1.5 flex items-center gap-1.5 transition-colors border-l ${
+                        scheduleMode === 'later'
+                          ? 'bg-blue-600 text-white'
+                          : 'bg-background hover:bg-muted text-muted-foreground'
+                      }`}
+                    >
+                      <CalendarClock className="w-3 h-3" />
+                      Schedule
+                    </button>
+                  </div>
+                </div>
+
+                {scheduleMode === 'later' && (
+                  <div className="space-y-1.5">
+                    <label className="text-sm text-muted-foreground flex items-center gap-1.5">
+                      <Clock className="w-3.5 h-3.5" />
+                      Scheduled date &amp; time
+                    </label>
+                    <input
+                      type="datetime-local"
+                      value={scheduledAt}
+                      onChange={(e) => setScheduledAt(e.target.value)}
+                      className={`w-full rounded-md border px-3 py-2 text-sm bg-background focus:outline-none focus:ring-2 focus:ring-blue-500 ${
+                        scheduleError ? 'border-red-500' : 'border-input'
+                      }`}
+                    />
+                    {scheduleError && (
+                      <p className="text-xs text-red-500">{scheduleError}</p>
+                    )}
+                    {!scheduleError && scheduledAt && (
+                      <p className="text-xs text-muted-foreground">
+                        Will post at {new Date(scheduledAt).toLocaleString()}
+                      </p>
+                    )}
+                  </div>
+                )}
+              </div>
+
               <div className="flex justify-end gap-3 pt-4 border-t">
                 <Button
                   variant="outline"
@@ -304,12 +453,17 @@ export default function LinkedInComposer() {
                   Cancel
                 </Button>
                 <Button
-                  onClick={publishPost}
-                  disabled={publishing || !content.trim() || charLimitExceeded || !selectedAccount}
+                  onClick={handleSubmit}
+                  disabled={!canSubmit}
                   className="bg-blue-600 hover:bg-blue-700 text-white"
                 >
                   {publishing ? (
-                    <>Publishing...</>
+                    <>Processing...</>
+                  ) : scheduleMode === 'later' ? (
+                    <>
+                      <CalendarClock className="mr-2 h-4 w-4" />
+                      Schedule Post
+                    </>
                   ) : (
                     <>
                       <Send className="mr-2 h-4 w-4" />
