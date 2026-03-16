@@ -25,6 +25,7 @@ import AgentRegistry from "./pages/AgentRegistry";
 import Agents from "./pages/Agents";
 import Bookings from "./pages/Bookings";
 import Book from "./pages/Book";
+import BookSEO from "./pages/BookSEO";
 import Reports from "./pages/Reports";
 import Docs from "./pages/Docs";
 import Investments from "./pages/Investments";
@@ -75,6 +76,7 @@ const App = () => (
             <Route path="/auth" element={<Auth />} />
             <Route path="/onboarding" element={<Onboarding />} />
             <Route path="/book" element={<Book />} />
+            <Route path="/book/seo" element={<BookSEO />} />
             <Route path="/audit" element={<AutomationAudit />} />
             <Route path="/roi-calculator" element={<ROICalculator />} />
             <Route path="/sales" element={<Sales />} />
