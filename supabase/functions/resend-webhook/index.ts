@@ -91,6 +91,39 @@ serve(async (req) => {
       console.error('⚠️ Error logging event:', logErr);
     }
 
+    // ============================================================
+    // Update outreach_log for CI/cold-outreach emails
+    // ============================================================
+    try {
+      if (event.type === 'email.opened' || event.type === 'email.bounced') {
+        const outreachNow = new Date().toISOString();
+        const { data: outreachRecord } = await supabase
+          .from('outreach_log')
+          .select('id, opened_at')
+          .eq('resend_message_id', event.data.email_id)
+          .maybeSingle();
+
+        if (outreachRecord) {
+          if (event.type === 'email.opened' && !outreachRecord.opened_at) {
+            await supabase
+              .from('outreach_log')
+              .update({ opened_at: outreachNow })
+              .eq('id', outreachRecord.id);
+            console.log('✅ outreach_log opened_at updated for:', event.data.email_id);
+          } else if (event.type === 'email.bounced') {
+            await supabase
+              .from('outreach_log')
+              .update({ bounced_at: outreachNow, status: 'bounced' })
+              .eq('id', outreachRecord.id);
+            console.log('✅ outreach_log bounced_at updated for:', event.data.email_id);
+          }
+        }
+        // No-op if no outreach_log record — this email was a campaign email, not a CI email
+      }
+    } catch (outreachErr) {
+      console.error('outreach_log update error (non-fatal):', outreachErr);
+    }
+
     // Find the send record by resend_id
     const { data: sendRecord, error: findError } = await supabase
       .from('email_sends')
