@@ -1,4 +1,5 @@
 export { AgentCard } from './AgentCard';
+export { AgentOutputsFeedPanel } from './AgentOutputsFeedPanel';
 export { ActivityFeed } from './ActivityFeed';
 export { StatsBar } from './StatsBar';
 export { RicoChat, RicoChatModal } from './RicoChat';

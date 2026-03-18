@@ -319,6 +319,57 @@ export type Database = {
         }
         Relationships: []
       }
+      agent_outputs: {
+        Row: {
+          id: string
+          agent_name: string
+          output_type: string
+          title: string
+          summary: string | null
+          body: string | null
+          entity_type: string | null
+          entity_id: string | null
+          external_id: string | null
+          is_recurring: boolean
+          is_actioned: boolean
+          actioned_at: string | null
+          metadata: Json | null
+          created_at: string
+        }
+        Insert: {
+          id?: string
+          agent_name: string
+          output_type: string
+          title: string
+          summary?: string | null
+          body?: string | null
+          entity_type?: string | null
+          entity_id?: string | null
+          external_id?: string | null
+          is_recurring?: boolean
+          is_actioned?: boolean
+          actioned_at?: string | null
+          metadata?: Json | null
+          created_at?: string
+        }
+        Update: {
+          id?: string
+          agent_name?: string
+          output_type?: string
+          title?: string
+          summary?: string | null
+          body?: string | null
+          entity_type?: string | null
+          entity_id?: string | null
+          external_id?: string | null
+          is_recurring?: boolean
+          is_actioned?: boolean
+          actioned_at?: string | null
+          metadata?: Json | null
+          created_at?: string
+        }
+        Relationships: []
+      }
       agent_performance_reviews: {
         Row: {
           agent_id: string | null

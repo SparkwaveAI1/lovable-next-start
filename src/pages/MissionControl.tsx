@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback } from "react";
 import { DashboardLayout } from "@/components/layout/DashboardLayout";
 import { PageContent } from "@/components/layout/PageLayout";
-import { AgentCard, StatsBar, RicoChat, ScottsActionItems, AgentActivityMonitor, HealthDashboard, AnalyticsMonitor, AddTaskDialog, EditTaskDialog, QualityDashboard } from "@/components/mission-control";
+import { AgentCard, StatsBar, RicoChat, ScottsActionItems, AgentActivityMonitor, HealthDashboard, AnalyticsMonitor, AddTaskDialog, EditTaskDialog, QualityDashboard, AgentOutputsFeedPanel } from "@/components/mission-control";
 import { useBusinessContext } from "@/contexts/BusinessContext";
 import { useBusinesses } from "@/hooks/useBusinesses";
 import { supabase } from "@/integrations/supabase/client";
@@ -360,6 +360,11 @@ export default function MissionControl() {
           <QualityDashboard
             businessId={isAllBusinessesSelected ? null : (selectedBusiness?.id || null)}
           />
+        </div>
+
+        {/* 6. Agent Outputs Feed (full width) */}
+        <div className="mb-6">
+          <AgentOutputsFeedPanel />
         </div>
 
         {/* Add Task Dialog */}
