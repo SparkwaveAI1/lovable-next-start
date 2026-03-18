@@ -1,282 +1,349 @@
-import { useEffect, useState, useCallback } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
-import { TrendingUp, Mail, Eye, MessageSquare, Phone, Flame, BarChart2 } from 'lucide-react';
+import { AlertCircle, ChevronDown, ChevronUp, Circle } from 'lucide-react';
+import { formatDistanceToNow } from 'date-fns';
+
+// ─── Campaign label mapping ───────────────────────────────────────────────────
+
+const CAMPAIGN_LABELS: Record<string, string> = {
+  'value':        'Value Pitch',
+  'intro':        'Cold Intro',
+  'CI-wave4':     'CI Wave 4',
+  'social_proof': 'Social Proof',
+};
+
+function getCampaignLabel(key: string | null): string {
+  if (!key) return 'Unknown';
+  return CAMPAIGN_LABELS[key] ??
+    key.split(/[-_]/).map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ');
+}
+
+// ─── Iris health ──────────────────────────────────────────────────────────────
+
+function getIrisStatus(lastSentAt: string | null): 'green' | 'yellow' | 'red' {
+  if (!lastSentAt) return 'red';
+  const hoursSince = (Date.now() - new Date(lastSentAt).getTime()) / 3_600_000;
+  if (hoursSince < 12) return 'green';
+  if (hoursSince < 24) return 'yellow';
+  return 'red';
+}
+
+const STATUS_COLORS: Record<string, string> = {
+  green:  'text-emerald-500',
+  yellow: 'text-amber-500',
+  red:    'text-red-500',
+};
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
+interface OutreachRow {
+  sent_at: string | null;
+  opened_at: string | null;
+  replied_at: string | null;
+  template_used: string | null;
+}
+
 interface PeriodStats {
   sent: number;
-  opens: number;
-  replies: number;
+  opened: number;
+  replied: number;
   calls: number;
 }
 
 interface CampaignRow {
-  template: string;
+  key: string;
+  label: string;
   sent: number;
-  opens: number;
-  replies: number;
+  openPct: number;
+  replyPct: number;
 }
 
-interface OutreachStats {
+interface MetricsState {
   today: PeriodStats;
   week: PeriodStats;
   month: PeriodStats;
-  hotLeads: number;
   campaigns: CampaignRow[];
+  lastSentAt: string | null;
+  hotReplies: number;
 }
 
-// ─── Helpers ──────────────────────────────────────────────────────────────────
+const EMPTY_PERIOD: PeriodStats = { sent: 0, opened: 0, replied: 0, calls: 0 };
+const EMPTY_METRICS: MetricsState = {
+  today: { ...EMPTY_PERIOD },
+  week: { ...EMPTY_PERIOD },
+  month: { ...EMPTY_PERIOD },
+  campaigns: [],
+  lastSentAt: null,
+  hotReplies: 0,
+};
+
+// ─── Helpers ─────────────────────────────────────────────────────────────────
 
 function pct(num: number, denom: number): string {
-  if (!denom) return '0%';
+  if (denom === 0) return '0%';
   return `${Math.round((num / denom) * 100)}%`;
 }
 
-function startOf(period: 'today' | 'week' | 'month'): string {
-  const d = new Date();
-  if (period === 'today') {
-    d.setHours(0, 0, 0, 0);
-  } else if (period === 'week') {
-    d.setDate(d.getDate() - 7);
-    d.setHours(0, 0, 0, 0);
-  } else {
-    d.setDate(1);
-    d.setHours(0, 0, 0, 0);
-  }
-  return d.toISOString();
-}
-
-// ─── Stat Column ──────────────────────────────────────────────────────────────
-
-function StatCol({ label, stats }: { label: string; stats: PeriodStats }) {
-  return (
-    <div className="flex-1 min-w-0 px-4 first:pl-0 last:pr-0">
-      <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide mb-3">{label}</p>
-      <div className="space-y-2">
-        <div className="flex items-center gap-2">
-          <Mail className="h-3.5 w-3.5 text-gray-400 shrink-0" />
-          <span className="text-sm text-gray-600">Sent</span>
-          <span className="ml-auto font-semibold text-gray-900">{stats.sent}</span>
-        </div>
-        <div className="flex items-center gap-2">
-          <Eye className="h-3.5 w-3.5 text-gray-400 shrink-0" />
-          <span className="text-sm text-gray-600">Opens</span>
-          <span className="ml-auto font-semibold text-gray-900">
-            {stats.opens}
-            {stats.sent > 0 && (
-              <span className="text-xs text-gray-400 ml-1">({pct(stats.opens, stats.sent)})</span>
-            )}
-          </span>
-        </div>
-        <div className="flex items-center gap-2">
-          <MessageSquare className="h-3.5 w-3.5 text-gray-400 shrink-0" />
-          <span className="text-sm text-gray-600">Replies</span>
-          <span className="ml-auto font-semibold text-gray-900">
-            {stats.replies}
-            {stats.sent > 0 && (
-              <span className="text-xs text-gray-400 ml-1">({pct(stats.replies, stats.sent)})</span>
-            )}
-          </span>
-        </div>
-        <div className="flex items-center gap-2">
-          <Phone className="h-3.5 w-3.5 text-gray-400 shrink-0" />
-          <span className="text-sm text-gray-600">Calls</span>
-          <span className="ml-auto font-semibold text-gray-900">{stats.calls}</span>
-        </div>
-      </div>
-    </div>
-  );
+function statCell(value: number, total: number, showPct: boolean, loading: boolean): React.ReactNode {
+  if (loading) return <span className="h-4 w-10 bg-gray-100 animate-pulse rounded inline-block" />;
+  if (!showPct) return <span>{value}</span>;
+  return <span>{value} <span className="text-gray-400 text-xs">({pct(value, total)})</span></span>;
 }
 
 // ─── Main Component ───────────────────────────────────────────────────────────
 
 export function SalesVisibilityPanel() {
-  const [stats, setStats] = useState<OutreachStats | null>(null);
+  const [metrics, setMetrics] = useState<MetricsState>(EMPTY_METRICS);
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+  const [isStale, setIsStale] = useState(false);
+  const [collapsed, setCollapsed] = useState(false);
 
-  const loadStats = useCallback(async () => {
+  const fetchMetrics = useCallback(async () => {
     try {
-      // Fetch outreach_log rows for the past month
-      const monthStart = startOf('month');
-      const { data: rows, error: rowsErr } = await supabase
+      // UTC-aligned boundaries
+      const now = new Date();
+      const todayStart = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()));
+      const weekStart  = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate() - 7));
+      const monthStart = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000); // rolling 30d
+
+      // ── Query A: single outreach_log fetch (stats + campaigns) ──
+      const { data: outreachData, error: outreachErr } = await supabase
         .from('outreach_log')
         .select('sent_at, opened_at, replied_at, template_used')
-        .gte('sent_at', monthStart);
+        .gte('sent_at', monthStart.toISOString());
+      if (outreachErr) throw outreachErr;
 
-      if (rowsErr) throw rowsErr;
-      const outreach = rows ?? [];
+      const rows = (outreachData ?? []) as OutreachRow[];
 
-      // Fetch calls from prospect_pipeline
-      const { data: pipelineRows } = await supabase
-        .from('prospect_pipeline')
-        .select('call_booked_at')
-        .gte('call_booked_at', monthStart);
-      const pipeline = pipelineRows ?? [];
+      // Compute period stats in JS
+      const computePeriod = (cutoff: Date): Omit<PeriodStats, 'calls'> => {
+        const cutoffStr = cutoff.toISOString();
+        const slice = rows.filter(r => r.sent_at && r.sent_at >= cutoffStr);
+        return {
+          sent:    slice.length,
+          opened:  slice.filter(r => r.opened_at).length,
+          replied: slice.filter(r => r.replied_at).length,
+        };
+      };
 
-      // Compute periods
-      const todayStart = startOf('today');
-      const weekStart = startOf('week');
-      const sevenDaysAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString();
-
-      function computePeriod(start: string): PeriodStats {
-        const rows = outreach.filter(r => r.sent_at && r.sent_at >= start);
-        const sent = rows.length;
-        const opens = rows.filter(r => r.opened_at).length;
-        const replies = rows.filter(r => r.replied_at).length;
-        const calls = pipeline.filter(r => r.call_booked_at && r.call_booked_at >= start).length;
-        return { sent, opens, replies, calls };
-      }
-
-      // Hot leads: replied in last 7 days (simple count — follow-up join is best-effort)
-      const hotLeads = outreach.filter(r => r.replied_at && r.replied_at >= sevenDaysAgo).length;
+      const todayStats = computePeriod(todayStart);
+      const weekStats  = computePeriod(weekStart);
+      const monthStats = computePeriod(monthStart);
 
       // Campaign breakdown
-      const byCampaign: Record<string, { sent: number; opens: number; replies: number }> = {};
-      for (const r of outreach) {
-        const key = r.template_used || '(no template)';
-        if (!byCampaign[key]) byCampaign[key] = { sent: 0, opens: 0, replies: 0 };
-        byCampaign[key].sent++;
-        if (r.opened_at) byCampaign[key].opens++;
-        if (r.replied_at) byCampaign[key].replies++;
+      const campaignMap = new Map<string, { sent: number; opened: number; replied: number }>();
+      for (const r of rows) {
+        const key = r.template_used ?? 'unknown';
+        const existing = campaignMap.get(key) ?? { sent: 0, opened: 0, replied: 0 };
+        existing.sent++;
+        if (r.opened_at)  existing.opened++;
+        if (r.replied_at) existing.replied++;
+        campaignMap.set(key, existing);
       }
-      const campaigns: CampaignRow[] = Object.entries(byCampaign)
-        .map(([template, v]) => ({ template, ...v }))
-        .sort((a, b) => b.sent - a.sent)
-        .slice(0, 5);
+      const campaigns: CampaignRow[] = Array.from(campaignMap.entries())
+        .sort((a, b) => b[1].sent - a[1].sent)
+        .map(([key, stats]) => ({
+          key,
+          label:    getCampaignLabel(key),
+          sent:     stats.sent,
+          openPct:  stats.sent > 0 ? Math.round((stats.opened  / stats.sent) * 100) : 0,
+          replyPct: stats.sent > 0 ? Math.round((stats.replied / stats.sent) * 100) : 0,
+        }));
 
-      setStats({
-        today: computePeriod(todayStart),
-        week: computePeriod(weekStart),
-        month: computePeriod(monthStart),
-        hotLeads,
+      // ── Query B: Iris last sent ──
+      const { data: lastSentData } = await supabase
+        .from('outreach_log')
+        .select('sent_at')
+        .order('sent_at', { ascending: false })
+        .limit(1);
+      const lastSentAt = lastSentData?.[0]?.sent_at ?? null;
+
+      // ── Query C: Hot replies (last 48h) ──
+      const fortyEightHoursAgo = new Date(Date.now() - 48 * 60 * 60 * 1000).toISOString();
+      const { count: hotReplies } = await supabase
+        .from('outreach_log')
+        .select('*', { count: 'exact', head: true })
+        .not('replied_at', 'is', null)
+        .gte('replied_at', fortyEightHoursAgo);
+
+      // ── Query D: Calls from prospect_pipeline ──
+      let callData: { call_booked_at: string | null }[] = [];
+      try {
+        const { data, error } = await supabase
+          .from('prospect_pipeline')
+          .select('call_booked_at')
+          .not('call_booked_at', 'is', null)
+          .gte('call_booked_at', monthStart.toISOString());
+        if (error) throw error;
+        callData = data ?? [];
+      } catch {
+        callData = []; // graceful: calls default to 0
+      }
+
+      const callsInPeriod = (cutoff: Date) =>
+        callData.filter(c => c.call_booked_at && c.call_booked_at >= cutoff.toISOString()).length;
+
+      setMetrics({
+        today:  { ...todayStats, calls: callsInPeriod(todayStart) },
+        week:   { ...weekStats,  calls: callsInPeriod(weekStart) },
+        month:  { ...monthStats, calls: callsInPeriod(monthStart) },
         campaigns,
+        lastSentAt,
+        hotReplies: hotReplies ?? 0,
       });
-      setError(null);
-    } catch (err: unknown) {
-      setError(err instanceof Error ? err.message : 'Failed to load outreach stats');
+      setIsStale(false);
+    } catch (err) {
+      console.error('[SalesVisibilityPanel] fetch error:', err);
+      setIsStale(true);
     } finally {
       setLoading(false);
     }
   }, []);
 
-  // Initial load
+  // Initial fetch
   useEffect(() => {
-    loadStats();
-  }, [loadStats]);
+    fetchMetrics();
+  }, [fetchMetrics]);
 
   // Real-time subscription on outreach_log
   useEffect(() => {
     const channel = supabase
-      .channel('sales-visibility-outreach')
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'outreach_log' }, () => {
-        loadStats();
-      })
-      .subscribe();
+      .channel('sales-visibility-panel-rt')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'outreach_log' },
+        () => { fetchMetrics(); }
+      )
+      .subscribe((status) => {
+        if (status === 'CHANNEL_ERROR') setIsStale(true);
+      });
+    return () => { supabase.removeChannel(channel); };
+  }, [fetchMetrics]);
 
-    return () => {
-      supabase.removeChannel(channel);
-    };
-  }, [loadStats]);
+  // ── Derived display values ──
+  const irisStatus = getIrisStatus(metrics.lastSentAt);
+  const irisLabel = metrics.lastSentAt
+    ? `Active ${formatDistanceToNow(new Date(metrics.lastSentAt), { addSuffix: true })}`
+    : 'No recent emails';
 
-  if (loading) {
-    return (
-      <Card>
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2 text-base">
-            <TrendingUp className="h-4 w-4 text-indigo-500" />
-            Sales Visibility
-          </CardTitle>
-        </CardHeader>
-        <CardContent>
-          <div className="h-24 animate-pulse bg-gray-100 rounded-lg" />
-        </CardContent>
-      </Card>
-    );
-  }
-
-  if (error) {
-    return (
-      <Card>
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2 text-base">
-            <TrendingUp className="h-4 w-4 text-indigo-500" />
-            Sales Visibility
-          </CardTitle>
-        </CardHeader>
-        <CardContent>
-          <p className="text-sm text-red-500">{error}</p>
-        </CardContent>
-      </Card>
-    );
-  }
-
+  // ── Render ──
   return (
-    <Card>
-      <CardHeader className="pb-3">
+    <Card className="w-full">
+      <CardHeader className="pb-2">
         <div className="flex items-center justify-between">
-          <CardTitle className="flex items-center gap-2 text-base">
-            <TrendingUp className="h-4 w-4 text-indigo-500" />
-            Sales Visibility
-          </CardTitle>
-          {stats && stats.hotLeads > 0 && (
-            <Badge variant="destructive" className="flex items-center gap-1">
-              <Flame className="h-3 w-3" />
-              {stats.hotLeads} hot {stats.hotLeads === 1 ? 'reply' : 'replies'}
-            </Badge>
-          )}
+          <div className="flex items-center gap-3 flex-wrap">
+            <CardTitle className="text-base font-semibold text-gray-800">
+              Sales Activity
+            </CardTitle>
+
+            {/* Iris health indicator */}
+            <div className="flex items-center gap-1.5 text-sm text-gray-500">
+              <Circle className={`h-3 w-3 fill-current ${STATUS_COLORS[irisStatus]}`} />
+              <span>Iris: {irisLabel}</span>
+            </div>
+
+            {isStale && (
+              <Badge variant="outline" className="text-amber-600 border-amber-300 bg-amber-50 text-xs gap-1">
+                <AlertCircle className="h-3 w-3" /> Stale
+              </Badge>
+            )}
+          </div>
+
+          {/* Mobile collapse toggle */}
+          <button
+            onClick={() => setCollapsed(c => !c)}
+            className="p-1 rounded hover:bg-gray-100 text-gray-400 transition-colors md:hidden"
+            aria-label={collapsed ? 'Expand' : 'Collapse'}
+          >
+            {collapsed ? <ChevronDown className="h-4 w-4" /> : <ChevronUp className="h-4 w-4" />}
+          </button>
         </div>
       </CardHeader>
 
-      {stats && (
-        <CardContent>
-          {/* Period Stats */}
-          <div className="flex divide-x divide-gray-100 mb-6">
-            <StatCol label="Today" stats={stats.today} />
-            <StatCol label="This Week" stats={stats.week} />
-            <StatCol label="This Month" stats={stats.month} />
-          </div>
+      <CardContent className={collapsed ? 'hidden md:block' : ''}>
+        {/* ── Stats grid ── */}
+        <div className="overflow-x-auto">
+          <table className="w-full text-sm min-w-[400px]">
+            <thead>
+              <tr className="text-xs text-gray-400 border-b border-gray-100">
+                <th className="text-left py-2 font-medium pr-4">Metric</th>
+                <th className="text-right py-2 font-medium px-4">Today</th>
+                <th className="text-right py-2 font-medium px-4">This Week</th>
+                <th className="text-right py-2 font-medium px-4">30 Days</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-gray-50">
+              <tr>
+                <td className="py-2 text-gray-500 pr-4">Sent</td>
+                <td className="py-2 text-right px-4 font-medium">{statCell(metrics.today.sent, 0, false, loading)}</td>
+                <td className="py-2 text-right px-4 font-medium">{statCell(metrics.week.sent, 0, false, loading)}</td>
+                <td className="py-2 text-right px-4 font-medium">{statCell(metrics.month.sent, 0, false, loading)}</td>
+              </tr>
+              <tr>
+                <td className="py-2 text-gray-500 pr-4">Opens</td>
+                <td className="py-2 text-right px-4">{statCell(metrics.today.opened, metrics.today.sent, true, loading)}</td>
+                <td className="py-2 text-right px-4">{statCell(metrics.week.opened, metrics.week.sent, true, loading)}</td>
+                <td className="py-2 text-right px-4">{statCell(metrics.month.opened, metrics.month.sent, true, loading)}</td>
+              </tr>
+              <tr>
+                <td className="py-2 text-gray-500 pr-4">Replies</td>
+                <td className="py-2 text-right px-4">{statCell(metrics.today.replied, metrics.today.sent, true, loading)}</td>
+                <td className="py-2 text-right px-4">{statCell(metrics.week.replied, metrics.week.sent, true, loading)}</td>
+                <td className="py-2 text-right px-4">{statCell(metrics.month.replied, metrics.month.sent, true, loading)}</td>
+              </tr>
+              <tr>
+                <td className="py-2 text-gray-500 pr-4">Calls</td>
+                <td className="py-2 text-right px-4">{statCell(metrics.today.calls, 0, false, loading)}</td>
+                <td className="py-2 text-right px-4">{statCell(metrics.week.calls, 0, false, loading)}</td>
+                <td className="py-2 text-right px-4">{statCell(metrics.month.calls, 0, false, loading)}</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
 
-          {/* Campaign Breakdown */}
-          {stats.campaigns.length > 0 && (
-            <div>
-              <div className="flex items-center gap-1.5 mb-2">
-                <BarChart2 className="h-3.5 w-3.5 text-gray-400" />
-                <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide">Campaign Breakdown</p>
-              </div>
-              <div className="rounded-md border border-gray-100 overflow-hidden">
-                <table className="w-full text-sm">
-                  <thead className="bg-gray-50">
-                    <tr>
-                      <th className="text-left px-3 py-2 text-xs text-gray-500 font-medium">Campaign</th>
-                      <th className="text-right px-3 py-2 text-xs text-gray-500 font-medium">Sent</th>
-                      <th className="text-right px-3 py-2 text-xs text-gray-500 font-medium">Opens</th>
-                      <th className="text-right px-3 py-2 text-xs text-gray-500 font-medium">Replies</th>
+        {/* ── Campaign breakdown ── */}
+        {!loading && metrics.campaigns.length > 0 && (
+          <div className="mt-4 pt-4 border-t border-gray-100">
+            <p className="text-xs font-medium text-gray-400 uppercase tracking-wide mb-2">
+              By Campaign (last 30d)
+            </p>
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm min-w-[360px]">
+                <thead>
+                  <tr className="text-xs text-gray-400">
+                    <th className="text-left py-1 font-medium pr-4">Campaign</th>
+                    <th className="text-right py-1 font-medium px-3">Sent</th>
+                    <th className="text-right py-1 font-medium px-3">Open %</th>
+                    <th className="text-right py-1 font-medium px-3">Reply %</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-gray-50">
+                  {metrics.campaigns.map(c => (
+                    <tr key={c.key}>
+                      <td className="py-1.5 text-gray-700 pr-4 truncate max-w-[160px]">{c.label}</td>
+                      <td className="py-1.5 text-right px-3 text-gray-600">{c.sent}</td>
+                      <td className="py-1.5 text-right px-3 text-gray-600">{c.openPct}%</td>
+                      <td className="py-1.5 text-right px-3 text-gray-600">{c.replyPct}%</td>
                     </tr>
-                  </thead>
-                  <tbody className="divide-y divide-gray-50">
-                    {stats.campaigns.map((c) => (
-                      <tr key={c.template} className="hover:bg-gray-50 transition-colors">
-                        <td className="px-3 py-2 text-gray-700 truncate max-w-[160px]">{c.template}</td>
-                        <td className="px-3 py-2 text-right text-gray-900 font-medium">{c.sent}</td>
-                        <td className="px-3 py-2 text-right text-gray-600">{c.opens} <span className="text-gray-400 text-xs">({pct(c.opens, c.sent)})</span></td>
-                        <td className="px-3 py-2 text-right text-gray-600">{c.replies} <span className="text-gray-400 text-xs">({pct(c.replies, c.sent)})</span></td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
+                  ))}
+                </tbody>
+              </table>
             </div>
-          )}
+          </div>
+        )}
 
-          {stats.campaigns.length === 0 && stats.month.sent === 0 && (
-            <p className="text-sm text-gray-400 text-center py-4">No outreach data yet. Stats will appear after emails are sent.</p>
-          )}
-        </CardContent>
-      )}
+        {/* ── Hot replies badge ── */}
+        {!loading && metrics.hotReplies > 0 && (
+          <div className="mt-3 pt-3 border-t border-gray-100">
+            <div className="flex items-center gap-2">
+              <Badge variant="destructive" className="text-xs">
+                {metrics.hotReplies} {metrics.hotReplies === 1 ? 'reply' : 'replies'} in last 48h
+              </Badge>
+              <span className="text-xs text-gray-400">— check Sales Queue in Contacts</span>
+            </div>
+          </div>
+        )}
+      </CardContent>
     </Card>
   );
 }

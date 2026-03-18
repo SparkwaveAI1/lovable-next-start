@@ -13,6 +13,7 @@ import { QuickActions } from "@/components/dashboard/QuickActions"
 import { FightFlowDashboard } from "@/components/dashboard/FightFlowDashboard"
 import { SalesSummaryPanel } from "@/components/dashboard/SalesSummaryPanel"
 import { SalesVisibilityPanel } from "@/components/dashboard/SalesVisibilityPanel"
+import { SalesVisibilityPanel } from "@/components/dashboard/SalesVisibilityPanel"
 
 const Index = () => {
   const { selectedBusiness, setSelectedBusiness } = useBusinessContext();
@@ -100,9 +101,13 @@ const Index = () => {
               />
             </div>
 
-            {/* Sales Overview — Rico/Iris visibility row */}
+            {/* Sales Overview — CRM pipeline (crm_deals) */}
             <div className="mb-8">
               <SalesSummaryPanel />
+            </div>
+
+            {/* Iris Outreach Activity — live from outreach_log (SPA-801) */}
+            <div className="mb-8">
               <SalesVisibilityPanel />
             </div>
           </>
