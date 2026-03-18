@@ -6869,7 +6869,7 @@ export type Database = {
         | "activity_log"
         | "daily_summary"
       mc_task_priority: "critical" | "high" | "medium" | "low"
-      mc_task_status: "inbox" | "assigned" | "in_progress" | "review" | "done"
+      mc_task_status: "inbox" | "assigned" | "in_progress" | "review" | "done" | "todo" | "blocked" | "cancelled"
     }
     CompositeTypes: {
       [_ in never]: never
@@ -7026,7 +7026,7 @@ export const Constants = {
         "daily_summary",
       ],
       mc_task_priority: ["critical", "high", "medium", "low"],
-      mc_task_status: ["inbox", "assigned", "in_progress", "review", "done"],
+      mc_task_status: ["inbox", "assigned", "in_progress", "review", "done", "todo", "blocked", "cancelled"],
     },
   },
 } as const
