@@ -13,7 +13,7 @@ import { QuickActions } from "@/components/dashboard/QuickActions"
 import { FightFlowDashboard } from "@/components/dashboard/FightFlowDashboard"
 import { SalesSummaryPanel } from "@/components/dashboard/SalesSummaryPanel"
 import { SalesVisibilityPanel } from "@/components/dashboard/SalesVisibilityPanel"
-import { SalesVisibilityPanel } from "@/components/dashboard/SalesVisibilityPanel"
+import { SalesActionQueue } from "@/components/dashboard/SalesActionQueue"
 
 const Index = () => {
   const { selectedBusiness, setSelectedBusiness } = useBusinessContext();
@@ -99,6 +99,11 @@ const Index = () => {
                 businessId={selectedBusiness.id}
                 onContactClick={(contactId) => setSelectedContactId(contactId)}
               />
+            </div>
+
+            {/* Sales Actions Required — mc_tasks tagged sales_action (SPA-803) */}
+            <div className="mb-6">
+              <SalesActionQueue />
             </div>
 
             {/* Sales Overview — CRM pipeline (crm_deals) */}
