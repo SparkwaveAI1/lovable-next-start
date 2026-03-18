@@ -38,6 +38,7 @@ import {
   Calendar,
   ChevronRight,
   Kanban,
+  Clock,
 } from 'lucide-react';
 import {
   DndContext,
@@ -80,6 +81,8 @@ interface CrmDeal {
   lost_reason: string | null;
   created_at: string | null;
   updated_at: string | null;
+  next_action: string | null;
+  next_action_date: string | null;
   // joined
   account_name?: string;
 }
@@ -144,6 +147,21 @@ function DealCard({ deal, onCardClick, isDragging = false }: { deal: CrmDeal; on
           <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
             <Calendar className="h-3 w-3 flex-shrink-0" />
             <span>{deal.expected_close_date}</span>
+          </div>
+        )}
+        {deal.next_action && (
+          <div
+            className="flex items-center gap-1.5 text-xs mt-1"
+            title={deal.next_action.length > 80 ? deal.next_action.slice(0, 80) + '...' : deal.next_action}
+          >
+            <Clock className="h-3 w-3 flex-shrink-0 text-muted-foreground" />
+            <span className={`truncate ${
+              deal.next_action_date && new Date(deal.next_action_date) < new Date()
+                ? 'text-amber-600 font-medium'
+                : 'text-muted-foreground'
+            }`}>
+              {deal.next_action.length > 60 ? deal.next_action.slice(0, 60) + '...' : deal.next_action}
+            </span>
           </div>
         )}
       </div>
@@ -305,6 +323,23 @@ function DealDetailPanel({
                 <p className="text-sm text-muted-foreground">{new Date(deal.created_at).toLocaleDateString()}</p>
               </div>
             )}
+            {deal.next_action && (
+              <div className="space-y-1 col-span-2">
+                <p className="text-xs text-muted-foreground uppercase tracking-wide font-medium">Next Action</p>
+                <p className={`text-sm ${
+                  deal.next_action_date && new Date(deal.next_action_date) < new Date()
+                    ? 'text-amber-600'
+                    : ''
+                }`}>
+                  {deal.next_action}
+                  {deal.next_action_date && (
+                    <span className="ml-2 text-xs text-muted-foreground">
+                      by {new Date(deal.next_action_date).toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' })}
+                    </span>
+                  )}
+                </p>
+              </div>
+            )}
           </div>
           {deal.notes && (
             <div className="space-y-1">
@@ -349,6 +384,8 @@ export default function DealPipeline() {
   const [newProbability, setNewProbability] = useState('');
   const [newCloseDate, setNewCloseDate] = useState('');
   const [newNotes, setNewNotes] = useState('');
+  const [newNextAction, setNewNextAction] = useState('');
+  const [newNextActionDate, setNewNextActionDate] = useState('');
   const [isAdding, setIsAdding] = useState(false);
 
   const sensors = useSensors(
@@ -494,6 +531,7 @@ export default function DealPipeline() {
     setNewAccountId(''); setNewAccountError('');
     setNewValue(''); setNewValueError('');
     setNewProbability(''); setNewCloseDate(''); setNewNotes('');
+    setNewNextAction(''); setNewNextActionDate('');
   }
 
   async function handleAddDeal() {
@@ -516,6 +554,8 @@ export default function DealPipeline() {
           probability: newProbability.trim() ? parseInt(newProbability) : null,
           expected_close_date: newCloseDate || null,
           notes: newNotes.trim() || null,
+          next_action: newNextAction.trim() || null,
+          next_action_date: newNextActionDate || null,
         });
 
       if (error) throw error;
@@ -711,6 +751,27 @@ export default function DealPipeline() {
                 value={newNotes}
                 onChange={e => setNewNotes(e.target.value)}
                 rows={2}
+              />
+            </div>
+
+            {/* Next Action */}
+            <div className="space-y-1">
+              <label className="text-sm font-medium">Next Action</label>
+              <Textarea
+                placeholder="What's the next step?"
+                value={newNextAction}
+                onChange={e => setNewNextAction(e.target.value)}
+                rows={2}
+              />
+            </div>
+
+            {/* Next Action Date */}
+            <div className="space-y-1">
+              <label className="text-sm font-medium">Next Action Date</label>
+              <Input
+                value={newNextActionDate}
+                onChange={e => setNewNextActionDate(e.target.value)}
+                type="date"
               />
             </div>
           </div>
