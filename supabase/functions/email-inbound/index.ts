@@ -317,6 +317,91 @@ serve(async (req) => {
       );
     }
 
+    // ── B2B Prospect Reply Detection ────────────────────────────────────────────
+    // Check if this is a reply to an outbound B2B sales email (prospects table).
+    // Match In-Reply-To header → outreach_log.resend_message_id → prospect.
+    // If matched: update prospect.pipeline_stage, create Scott mc_tasks, wake Iris.
+    // This runs BEFORE the Fight Flow contacts lookup so B2B replies don't create
+    // phantom Fight Flow contact records.
+    const inReplyTo = emailData.headers?.['In-Reply-To'] ||
+                      emailData.headers?.['in-reply-to'] ||
+                      (emailData as any).in_reply_to || '';
+
+    if (inReplyTo) {
+      console.log('📬 In-Reply-To detected:', inReplyTo);
+
+      // Strip angle brackets: <abc123@resend.dev> → abc123@resend.dev
+      const msgId = inReplyTo.trim().replace(/^<|>$/g, '');
+
+      const { data: outreachRow } = await supabase
+        .from('outreach_log')
+        .select('id, prospect_id, resend_message_id')
+        .eq('resend_message_id', msgId)
+        .maybeSingle();
+
+      if (outreachRow?.prospect_id) {
+        console.log('📬 B2B reply matched outreach_log row', outreachRow.id, '→ prospect_id', outreachRow.prospect_id);
+
+        // Fetch prospect details
+        const { data: prospect } = await supabase
+          .from('prospects')
+          .select('id, name, company, email, pipeline_stage')
+          .eq('id', outreachRow.prospect_id)
+          .maybeSingle();
+
+        if (prospect) {
+          // Only advance stage if not already replied/qualified/closed
+          const terminalStages = ['replied', 'qualified', 'closed', 'dead'];
+          if (!terminalStages.includes(prospect.pipeline_stage || '')) {
+            await supabase
+              .from('prospects')
+              .update({ pipeline_stage: 'replied', updated_at: new Date().toISOString() })
+              .eq('id', prospect.id);
+            console.log('📬 Updated prospect', prospect.id, 'pipeline_stage → replied');
+          }
+
+          // Update outreach_log replied_at
+          await supabase
+            .from('outreach_log')
+            .update({ replied_at: new Date().toISOString(), status: 'replied' })
+            .eq('id', outreachRow.id);
+
+          // Write Scott action item via mc_tasks
+          const prospectName = prospect.name || prospect.company || senderEmail;
+          const existingTaskId = `b2b-reply-${prospect.id}-${new Date().toISOString().split('T')[0]}`;
+          const { data: existingTask } = await supabase
+            .from('mc_tasks')
+            .select('id')
+            .eq('external_id', existingTaskId)
+            .maybeSingle();
+
+          if (!existingTask) {
+            await supabase.from('mc_tasks').insert({
+              title: `${prospectName} replied to your outreach — review and decide`,
+              description: `Reply from ${senderEmail}. Subject: ${emailData.subject || '(no subject)'}. Prospect: ${prospect.name || ''} (${prospect.company || ''}). Pipeline stage updated to replied.`,
+              status: 'todo',
+              priority: 'high',
+              assignee_ids: ['41a6f9f1-247c-4871-bd01-62a951a458da'], // Scott
+              tags: ['sales_action', 'b2b-reply', 'source:inbound'],
+              external_id: existingTaskId,
+              external_source: 'email-inbound',
+              document_url: `https://sparkwaveai.app/crm/prospects/${prospect.id}`,
+            });
+            console.log('📬 Created Scott mc_tasks action for B2B reply');
+          }
+
+          // Return early — do not process as Fight Flow contact
+          return new Response(
+            JSON.stringify({ matched: 'b2b_prospect', prospect_id: prospect.id, stage: 'replied' }),
+            { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+          );
+        }
+      } else {
+        console.log('📬 In-Reply-To present but no matching outreach_log.resend_message_id — falling through to contact lookup');
+      }
+    }
+    // ── End B2B Prospect Reply Detection ─────────────────────────────────────
+
     // Find the contact by email (case-insensitive)
     let { data: contact, error: contactError } = await supabase
       .from('contacts')
