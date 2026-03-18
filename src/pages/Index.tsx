@@ -15,6 +15,7 @@ import { SalesSummaryPanel } from "@/components/dashboard/SalesSummaryPanel"
 import { SalesVisibilityPanel } from "@/components/dashboard/SalesVisibilityPanel"
 import { SalesActionQueue } from "@/components/dashboard/SalesActionQueue"
 import { MissionControlTasksPanel } from "@/components/dashboard/MissionControlTasksPanel"
+import { AgentOutputsFeedPanel } from "@/components/dashboard/AgentOutputsFeedPanel"
 
 const Index = () => {
   const { selectedBusiness, setSelectedBusiness } = useBusinessContext();
@@ -110,6 +111,11 @@ const Index = () => {
             {/* Sales Actions Required — mc_tasks tagged sales_action (SPA-803) */}
             <div className="mb-6">
               <SalesActionQueue />
+            </div>
+
+            {/* Agent Outputs Feed — structured agent output log (SPA-821) */}
+            <div className="mb-6">
+              <AgentOutputsFeedPanel />
             </div>
 
             {/* Sales Overview — CRM pipeline (crm_deals) */}
