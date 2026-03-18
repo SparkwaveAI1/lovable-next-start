@@ -16,6 +16,7 @@ import { SalesVisibilityPanel } from "@/components/dashboard/SalesVisibilityPane
 import { SalesActionQueue } from "@/components/dashboard/SalesActionQueue"
 import { MissionControlTasksPanel } from "@/components/dashboard/MissionControlTasksPanel"
 import { AgentOutputsFeedPanel } from "@/components/dashboard/AgentOutputsFeedPanel"
+import { ContentCalendarPanel } from "@/components/dashboard/ContentCalendarPanel"
 
 const Index = () => {
   const { selectedBusiness, setSelectedBusiness } = useBusinessContext();
@@ -123,9 +124,16 @@ const Index = () => {
               <SalesSummaryPanel />
             </div>
 
+            {/* Content Calendar — Jerry content pipeline (SPA-803) */}
+            <div className="mb-8">
+              <ContentCalendarPanel />
+            </div>
+
             {/* Iris Outreach Activity — live from outreach_log (SPA-801) */}
             <div className="mb-8">
               <SalesVisibilityPanel />
+            </div>
+
             </div>
           </>
         ) : (
