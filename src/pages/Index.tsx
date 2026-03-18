@@ -12,6 +12,7 @@ import { RecentBookings } from "@/components/dashboard/RecentBookings"
 import { QuickActions } from "@/components/dashboard/QuickActions"
 import { FightFlowDashboard } from "@/components/dashboard/FightFlowDashboard"
 import { SalesSummaryPanel } from "@/components/dashboard/SalesSummaryPanel"
+import { SalesVisibilityPanel } from "@/components/dashboard/SalesVisibilityPanel"
 
 const Index = () => {
   const { selectedBusiness, setSelectedBusiness } = useBusinessContext();
@@ -102,6 +103,7 @@ const Index = () => {
             {/* Sales Overview — Rico/Iris visibility row */}
             <div className="mb-8">
               <SalesSummaryPanel />
+              <SalesVisibilityPanel />
             </div>
           </>
         ) : (
