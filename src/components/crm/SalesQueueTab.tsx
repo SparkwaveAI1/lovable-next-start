@@ -2,7 +2,6 @@ import { useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
-import { Contact } from './ContactDetailDrawer';
 import { Button } from '@/components/ui/button';
 import {
   Table,
@@ -14,9 +13,32 @@ import {
 } from '@/components/ui/table';
 import { Loader2, CheckCircle2 } from 'lucide-react';
 
-interface SalesQueueTabProps {
-  onContactClick: (contact: Contact) => void;
+// ─── Prospect type (B2B sales prospects — `prospects` table) ─────────────────
+
+export interface Prospect {
+  id: number;
+  name: string | null;
+  company: string | null;
+  email: string | null;
+  phone: string | null;
+  website: string | null;
+  pipeline_stage: string | null;
+  campaign: string | null;
+  seo_pain_summary: string | null;
+  tags: string[] | null;
+  lead_type: string | null;
+  updated_at: string | null;
+  created_at: string;
+  notes: string | null;
 }
+
+// ─── Props ────────────────────────────────────────────────────────────────────
+
+interface SalesQueueTabProps {
+  onProspectClick: (prospect: Prospect) => void;
+}
+
+// ─── Helpers ──────────────────────────────────────────────────────────────────
 
 function daysSince(dateStr: string | null): string {
   if (!dateStr) return 'Never';
@@ -24,16 +46,16 @@ function daysSince(dateStr: string | null): string {
   return `${days}d ago`;
 }
 
+const PIPELINE_COLORS: Record<string, string> = {
+  contacted: 'bg-blue-100 text-blue-700',
+  replied:   'bg-cyan-100 text-cyan-700',
+  qualified: 'bg-green-100 text-green-700',
+  proposal:  'bg-amber-100 text-amber-700',
+};
+
 function PipelineBadge({ stage }: { stage: string | null }) {
-  const colors: Record<string, string> = {
-    contacted: 'bg-blue-100 text-blue-700',
-    replied: 'bg-cyan-100 text-cyan-700',
-    proposal: 'bg-amber-100 text-amber-700',
-  };
-  const label = stage
-    ? stage.charAt(0).toUpperCase() + stage.slice(1)
-    : '—';
-  const color = colors[stage ?? ''] ?? 'bg-slate-100 text-slate-600';
+  const label = stage ? stage.charAt(0).toUpperCase() + stage.slice(1) : '—';
+  const color = PIPELINE_COLORS[stage ?? ''] ?? 'bg-slate-100 text-slate-600';
   return (
     <span className={`inline-flex items-center px-2 py-0.5 rounded text-xs font-medium ${color}`}>
       {label}
@@ -41,55 +63,53 @@ function PipelineBadge({ stage }: { stage: string | null }) {
   );
 }
 
-export function SalesQueueTab({ onContactClick }: SalesQueueTabProps) {
+// ─── Component ────────────────────────────────────────────────────────────────
+
+export function SalesQueueTab({ onProspectClick }: SalesQueueTabProps) {
   const queryClient = useQueryClient();
-  const [followUpLoading, setFollowUpLoading] = useState<string | null>(null);
+  const [followUpLoading, setFollowUpLoading] = useState<number | null>(null);
 
-  const sevenDaysAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString();
-
-  const { data: contacts, isLoading } = useQuery<Contact[]>({
+  const { data: prospects, isLoading } = useQuery<Prospect[]>({
     queryKey: ['sales-queue'],
     queryFn: async () => {
       const { data, error } = await supabase
-        .from('contacts')
-        .select('id, first_name, last_name, email, phone, source, status, pipeline_stage, tags, last_activity_date, created_at, comments')
-        .in('pipeline_stage', ['contacted', 'replied', 'proposal'])
-        .or(
-          'last_activity_date.lt.' + sevenDaysAgo +
-          ',and(last_activity_date.is.null,created_at.lt.' + sevenDaysAgo + ')'
+        .from('prospects')
+        .select(
+          'id, name, company, email, phone, website, pipeline_stage, campaign, seo_pain_summary, tags, lead_type, updated_at, created_at, notes'
         )
-        .order('last_activity_date', { ascending: true, nullsFirst: true })
+        .in('pipeline_stage', ['contacted', 'replied', 'qualified', 'proposal'])
+        .order('updated_at', { ascending: true, nullsFirst: true })
         .limit(50);
 
       if (error) throw error;
-      return (data || []) as Contact[];
+      return (data || []) as Prospect[];
     },
   });
 
-  const handleFollowUpDone = async (contact: Contact) => {
-    setFollowUpLoading(contact.id);
+  const handleFollowUpDone = async (prospect: Prospect) => {
+    setFollowUpLoading(prospect.id);
     try {
-      const fullName = [contact.first_name, contact.last_name].filter(Boolean).join(' ') || 'Unknown';
-
       const { error: actError } = await supabase.from('sales_activities').insert({
         activity_type: 'follow_up_sent',
-        prospect_name: fullName,
-        company_name: contact.source || '',
-        description: `Action: follow_up_sent from SWapp`,
-        metadata: { contact_id: contact.id },
+        prospect_name: prospect.name || 'Unknown',
+        company_name: prospect.company || '',
+        description: 'Action: follow_up_sent from SWapp',
+        prospect_id: prospect.id,
+        metadata: { prospect_id: prospect.id },
       });
       if (actError) throw actError;
 
-      const { error: contactError } = await supabase
-        .from('contacts')
-        .update({ last_activity_date: new Date().toISOString() })
-        .eq('id', contact.id);
-      if (contactError) throw contactError;
+      const { error: prospectError } = await supabase
+        .from('prospects')
+        .update({ updated_at: new Date().toISOString() })
+        .eq('id', prospect.id);
+      if (prospectError) throw prospectError;
 
-      toast.success(`Follow-up recorded for ${fullName}`);
+      toast.success(`Follow-up recorded for ${prospect.name || 'prospect'}`);
       queryClient.invalidateQueries({ queryKey: ['sales-queue'] });
-    } catch (err: any) {
-      toast.error(err.message || 'Failed to record follow-up');
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : 'Failed to record follow-up';
+      toast.error(msg);
     } finally {
       setFollowUpLoading(null);
     }
@@ -103,11 +123,11 @@ export function SalesQueueTab({ onContactClick }: SalesQueueTabProps) {
     );
   }
 
-  if (!contacts || contacts.length === 0) {
+  if (!prospects || prospects.length === 0) {
     return (
       <div className="flex flex-col items-center justify-center py-16 text-muted-foreground gap-2">
         <CheckCircle2 className="h-10 w-10 text-emerald-500" />
-        <p className="text-base font-medium">No contacts need follow-up right now. ✓</p>
+        <p className="text-base font-medium">No prospects need follow-up right now. ✓</p>
       </div>
     );
   }
@@ -118,57 +138,61 @@ export function SalesQueueTab({ onContactClick }: SalesQueueTabProps) {
         <TableHeader>
           <TableRow>
             <TableHead>Name</TableHead>
+            <TableHead>Company</TableHead>
             <TableHead>Email</TableHead>
             <TableHead>Pipeline Stage</TableHead>
+            <TableHead>Campaign</TableHead>
             <TableHead>Last Activity</TableHead>
             <TableHead>Days Since</TableHead>
             <TableHead>Actions</TableHead>
           </TableRow>
         </TableHeader>
         <TableBody>
-          {contacts.map((contact) => {
-            const fullName =
-              [contact.first_name, contact.last_name].filter(Boolean).join(' ') || 'Unknown';
-            return (
-              <TableRow key={contact.id}>
-                <TableCell>
-                  <button
-                    className="font-medium text-left hover:underline text-primary"
-                    onClick={() => onContactClick(contact)}
-                  >
-                    {fullName}
-                  </button>
-                </TableCell>
-                <TableCell className="text-muted-foreground text-sm">
-                  {contact.email || '—'}
-                </TableCell>
-                <TableCell>
-                  <PipelineBadge stage={contact.pipeline_stage} />
-                </TableCell>
-                <TableCell className="text-sm text-muted-foreground">
-                  {contact.last_activity_date
-                    ? new Date(contact.last_activity_date).toLocaleDateString()
-                    : '—'}
-                </TableCell>
-                <TableCell className="text-sm text-muted-foreground">
-                  {daysSince(contact.last_activity_date)}
-                </TableCell>
-                <TableCell>
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    disabled={followUpLoading === contact.id}
-                    onClick={() => handleFollowUpDone(contact)}
-                  >
-                    {followUpLoading === contact.id ? (
-                      <Loader2 className="h-3 w-3 animate-spin mr-1" />
-                    ) : null}
-                    Follow-up Done
-                  </Button>
-                </TableCell>
-              </TableRow>
-            );
-          })}
+          {prospects.map((prospect) => (
+            <TableRow key={prospect.id}>
+              <TableCell>
+                <button
+                  className="font-medium text-left hover:underline text-primary"
+                  onClick={() => onProspectClick(prospect)}
+                >
+                  {prospect.name || '—'}
+                </button>
+              </TableCell>
+              <TableCell className="text-sm text-muted-foreground">
+                {prospect.company || '—'}
+              </TableCell>
+              <TableCell className="text-muted-foreground text-sm">
+                {prospect.email || '—'}
+              </TableCell>
+              <TableCell>
+                <PipelineBadge stage={prospect.pipeline_stage} />
+              </TableCell>
+              <TableCell className="text-xs text-muted-foreground">
+                {prospect.campaign || '—'}
+              </TableCell>
+              <TableCell className="text-sm text-muted-foreground">
+                {prospect.updated_at
+                  ? new Date(prospect.updated_at).toLocaleDateString()
+                  : '—'}
+              </TableCell>
+              <TableCell className="text-sm text-muted-foreground">
+                {daysSince(prospect.updated_at)}
+              </TableCell>
+              <TableCell>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  disabled={followUpLoading === prospect.id}
+                  onClick={() => handleFollowUpDone(prospect)}
+                >
+                  {followUpLoading === prospect.id ? (
+                    <Loader2 className="h-3 w-3 animate-spin mr-1" />
+                  ) : null}
+                  Follow-up Done
+                </Button>
+              </TableCell>
+            </TableRow>
+          ))}
         </TableBody>
       </Table>
     </div>

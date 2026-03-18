@@ -821,7 +821,7 @@ export default function Contacts() {
             )}
           </TabsContent>
           <TabsContent value="sales-queue">
-            <SalesQueueTab onContactClick={(c) => { setDrawerContact(c); setDrawerOpen(true); }} />
+            <SalesQueueTab onProspectClick={(p) => { console.log('prospect clicked:', p.name); }} />
           </TabsContent>
         </Tabs>
       </main>
