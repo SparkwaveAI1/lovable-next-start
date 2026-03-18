@@ -14,6 +14,7 @@ import { FightFlowDashboard } from "@/components/dashboard/FightFlowDashboard"
 import { SalesSummaryPanel } from "@/components/dashboard/SalesSummaryPanel"
 import { SalesVisibilityPanel } from "@/components/dashboard/SalesVisibilityPanel"
 import { SalesActionQueue } from "@/components/dashboard/SalesActionQueue"
+import { MissionControlTasksPanel } from "@/components/dashboard/MissionControlTasksPanel"
 
 const Index = () => {
   const { selectedBusiness, setSelectedBusiness } = useBusinessContext();
@@ -59,6 +60,11 @@ const Index = () => {
             : "Select a business above to get started"
           }
         />
+
+        {/* Mission Control Tasks — Scott's pending action items (always visible) */}
+        <div className="mb-6">
+          <MissionControlTasksPanel />
+        </div>
 
         {selectedBusiness ? (
           <>
