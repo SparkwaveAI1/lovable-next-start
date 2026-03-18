@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback } from "react";
 import { DashboardLayout } from "@/components/layout/DashboardLayout";
 import { PageContent } from "@/components/layout/PageLayout";
-import { AgentCard, StatsBar, RicoChat, ScottsActionItems, AgentActivityMonitor, HealthDashboard, AnalyticsMonitor, AddTaskDialog, EditTaskDialog, QualityDashboard, AgentOutputsFeedPanel } from "@/components/mission-control";
+import { AgentCard, StatsBar, RicoChat, ScottsActionItems, AgentActivityMonitor, HealthDashboard, AnalyticsMonitor, AddTaskDialog, EditTaskDialog, QualityDashboard, AgentOutputsFeedPanel, PrioritiesPanel, AgentHealthPanel } from "@/components/mission-control";
 import { useBusinessContext } from "@/contexts/BusinessContext";
 import { useBusinesses } from "@/hooks/useBusinesses";
 import { supabase } from "@/integrations/supabase/client";
@@ -362,9 +362,21 @@ export default function MissionControl() {
           />
         </div>
 
-        {/* 6. Agent Outputs Feed (full width) */}
+        {/* 6. Paperclip: Active Priorities + Agent Health (side by side) */}
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
+          <PrioritiesPanel />
+          <AgentHealthPanel />
+        </div>
+
+        {/* 7. Agent Outputs Feed (full width) */}
         <div className="mb-6">
           <AgentOutputsFeedPanel />
+        </div>
+
+        {/* 8. Paperclip Live: Priorities + Agent Health (side by side) */}
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
+          <PrioritiesPanel />
+          <AgentHealthPanel />
         </div>
 
         {/* Add Task Dialog */}
