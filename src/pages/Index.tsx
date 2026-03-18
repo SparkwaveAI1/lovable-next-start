@@ -17,6 +17,7 @@ import { SalesActionQueue } from "@/components/dashboard/SalesActionQueue"
 import { MissionControlTasksPanel } from "@/components/dashboard/MissionControlTasksPanel"
 import { AgentOutputsFeedPanel } from "@/components/dashboard/AgentOutputsFeedPanel"
 import { ContentCalendarPanel } from "@/components/dashboard/ContentCalendarPanel"
+import { IrisPipelinePanel } from "@/components/dashboard/IrisPipelinePanel"
 
 const Index = () => {
   const { selectedBusiness, setSelectedBusiness } = useBusinessContext();
@@ -63,11 +64,29 @@ const Index = () => {
           }
         />
 
-        {/* Mission Control Tasks — Scott's pending action items (always visible) */}
+        {/* ── Always-visible global panels (no business selection required) ── */}
+
+        {/* Mission Control Tasks — Scott's pending action items */}
         <div className="mb-6">
           <MissionControlTasksPanel />
         </div>
 
+        {/* Iris Pipeline — prospect pipeline chart + recent activity */}
+        <div className="mb-6">
+          <IrisPipelinePanel />
+        </div>
+
+        {/* Sales Actions Required — mc_tasks tagged sales_action */}
+        <div className="mb-6">
+          <SalesActionQueue />
+        </div>
+
+        {/* Iris Outreach Activity — live from outreach_log */}
+        <div className="mb-6">
+          <SalesVisibilityPanel />
+        </div>
+
+        {/* ── Business-scoped panels (require business selection) ── */}
         {selectedBusiness ? (
           <>
             {/* Quick Actions Row */}
@@ -109,12 +128,7 @@ const Index = () => {
               />
             </div>
 
-            {/* Sales Actions Required — mc_tasks tagged sales_action (SPA-803) */}
-            <div className="mb-6">
-              <SalesActionQueue />
-            </div>
-
-            {/* Agent Outputs Feed — structured agent output log (SPA-821) */}
+            {/* Agent Outputs Feed — structured agent output log */}
             <div className="mb-6">
               <AgentOutputsFeedPanel />
             </div>
@@ -124,20 +138,13 @@ const Index = () => {
               <SalesSummaryPanel />
             </div>
 
-            {/* Content Calendar — Jerry content pipeline (SPA-803) */}
+            {/* Content Calendar — Jerry content pipeline */}
             <div className="mb-8">
               <ContentCalendarPanel />
             </div>
-
-            {/* Iris Outreach Activity — live from outreach_log (SPA-801) */}
-            <div className="mb-8">
-              <SalesVisibilityPanel />
-            </div>
-
-            </div>
           </>
         ) : (
-          <div className="text-center py-16 bg-white rounded-xl border border-gray-200">
+          <div className="text-center py-10 bg-white rounded-xl border border-gray-200">
             <div className="p-4 bg-indigo-50 rounded-xl w-fit mx-auto mb-4">
               <svg className="h-10 w-10 text-indigo-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" />
@@ -147,7 +154,7 @@ const Index = () => {
               Select a Business
             </h3>
             <p className="text-gray-500 max-w-md mx-auto">
-              Choose a business from the dropdown above to view your dashboard with conversations, bookings, and class schedules.
+              Choose a business from the dropdown above to view conversations, bookings, and class schedules.
             </p>
           </div>
         )}
