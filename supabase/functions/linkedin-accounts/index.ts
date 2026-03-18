@@ -81,7 +81,7 @@ serve(async (req) => {
       const { data: accounts, error: fetchErr } = await supabase
         .from("linkedin_accounts")
         .select(
-          "id, business_id, account_type, linkedin_urn, account_name, profile_url, " +
+          "id, business_id, account_type, linkedin_urn, account_name, profile_url, logo_url, " +
           "timezone, token_expires_at, is_active, created_at, updated_at, " +
           "last_refresh_at, refresh_error_count"
           // NOTE: access_token_encrypted intentionally excluded from response

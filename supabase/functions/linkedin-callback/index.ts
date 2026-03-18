@@ -143,10 +143,11 @@ serve(async (req) => {
     console.log("✅ Profile fetched:", profile.name ?? profile.sub);
 
     // Build LinkedIn URN: LinkedIn's userinfo returns 'sub' as the person ID
-    // For personal: urn:li:person:<sub>  (sub may already be the URN or just the ID)
-    const linkedinUrn = profile.sub.startsWith("urn:")
-      ? profile.sub
-      : `urn:li:person:${profile.sub}`;
+    // For personal: urn:li:person:<sub>
+    // For company: urn:li:organization:<orgId> (populated via organizationAcls if available)
+    const linkedinUrn =
+      (profile as any)._orgUrn ??
+      (profile.sub.startsWith("urn:") ? profile.sub : `urn:li:person:${profile.sub}`);
 
     const accountName =
       profile.name ??
@@ -154,6 +155,47 @@ serve(async (req) => {
       linkedinUrn;
 
     const profileUrl = `https://www.linkedin.com/in/${profile.sub}`;
+
+    // --- For company accounts: fetch organization logo via LinkedIn API ---
+    let logoUrl: string | null = null;
+    if (account_type === "company") {
+      try {
+        // The URN for a company will be set from the state; org ID comes from the URN
+        // At this point we have the person URN, but for company pages the org ID
+        // should have been passed in the state or will be set after account upsert.
+        // We attempt to look it up using /v2/organizationAcls to find which org this user admins.
+        const aclRes = await fetch(
+          "https://api.linkedin.com/v2/organizationAcls?q=roleAssignee&role=ADMINISTRATOR&projection=(elements*(organization~(id,logoV2(original~:playableStreams))))",
+          {
+            headers: {
+              Authorization: `Bearer ${tokens.access_token}`,
+              "X-Restli-Protocol-Version": "2.0.0",
+            },
+          }
+        );
+        if (aclRes.ok) {
+          const aclData = await aclRes.json();
+          const firstOrg = aclData?.elements?.[0];
+          // Extract logo URL from logoV2 playable streams
+          const logoArtifacts =
+            firstOrg?.["organization~"]?.logoV2?.["original~"]?.elements;
+          if (logoArtifacts && logoArtifacts.length > 0) {
+            logoUrl = logoArtifacts[0]?.identifiers?.[0]?.identifier ?? null;
+          }
+          // Also update the URN to be the org URN if we found one
+          if (firstOrg?.["organization~"]?.id) {
+            const orgId = firstOrg["organization~"].id;
+            // Override the person URN with the org URN for company accounts
+            Object.assign(profile, { _orgUrn: `urn:li:organization:${orgId}` });
+          }
+        } else {
+          console.warn("⚠️ Could not fetch organization ACLs:", aclRes.status);
+        }
+      } catch (logoErr) {
+        // Non-fatal: logo fetch failure doesn't block the OAuth flow
+        console.warn("⚠️ Failed to fetch company logo:", logoErr);
+      }
+    }
 
     const tokenExpiresAt = new Date(
       Date.now() + tokens.expires_in * 1000
@@ -199,6 +241,7 @@ serve(async (req) => {
               linkedin_urn: linkedinUrn,
               account_name: accountName,
               profile_url: profileUrl,
+              logo_url: logoUrl,
               // Tokens will be encrypted by a DB-level insert trigger or stored raw
               // for now with a clear prefix to indicate they need encryption
               access_token_encrypted: `raw:${tokens.access_token}`,
@@ -251,6 +294,7 @@ serve(async (req) => {
           linkedin_urn: linkedinUrn,
           account_name: accountName,
           profile_url: profileUrl,
+          logo_url: logoUrl,
           access_token_encrypted: accessTokenEncrypted,
           refresh_token_encrypted: refreshTokenEncrypted,
           token_expires_at: tokenExpiresAt,
