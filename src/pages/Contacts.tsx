@@ -4,7 +4,9 @@ import { supabase } from '@/integrations/supabase/client';
 import { useBusinessContext } from '@/contexts/BusinessContext';
 import { useBusinesses } from '@/hooks/useBusinesses';
 import { DashboardLayout } from '@/components/layout/DashboardLayout';
-import { ContactDetail } from '@/components/ContactDetail';
+import { ContactDetailDrawer, Contact as DrawerContact } from '@/components/crm/ContactDetailDrawer';
+import { SalesQueueTab } from '@/components/crm/SalesQueueTab';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -124,7 +126,8 @@ export default function Contacts() {
   const { toast } = useToast();
 
   // View state
-  const [selectedContactId, setSelectedContactId] = useState<string | null>(null);
+  const [drawerOpen, setDrawerOpen] = useState(false);
+  const [drawerContact, setDrawerContact] = useState<DrawerContact | null>(null);
 
   // Filter state
   const [searchTerm, setSearchTerm] = useState('');
@@ -396,27 +399,6 @@ export default function Contacts() {
       : <ArrowDown className="ml-2 h-4 w-4" />;
   };
 
-  // Show ContactDetail if a contact is selected
-  if (selectedContactId) {
-    return (
-      <DashboardLayout
-        selectedBusinessId={selectedBusiness?.id}
-        onBusinessChange={(id) => {
-          const business = businesses.find((b) => b.id === id);
-          if (business) setSelectedBusiness(business);
-        }}
-        businessName={selectedBusiness?.name}
-      >
-        <main className="container mx-auto px-4 py-6">
-          <ContactDetail
-            contactId={selectedContactId}
-            onBack={() => setSelectedContactId(null)}
-          />
-        </main>
-      </DashboardLayout>
-    );
-  }
-
   return (
     <DashboardLayout
       selectedBusinessId={selectedBusiness?.id}
@@ -615,222 +597,233 @@ export default function Contacts() {
           </div>
         )}
 
-        {/* No business selected */}
-        {!selectedBusiness?.id ? (
-          <div className="text-center py-12">
-            <Users className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
-            <h3 className="text-lg font-medium text-muted-foreground">Select a Business</h3>
-            <p className="text-sm text-muted-foreground">
-              Choose a business from the dropdown above to view contacts
-            </p>
-          </div>
-        ) : isLoading ? (
-          <div className="text-center py-12">
-            <Loader2 className="h-8 w-8 animate-spin mx-auto mb-4 text-primary" />
-            <p className="text-muted-foreground">Loading contacts...</p>
-          </div>
-        ) : contacts.length === 0 ? (
-          <div className="text-center py-12">
-            <Users className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
-            <h3 className="text-lg font-medium text-muted-foreground">No contacts found</h3>
-            <p className="text-sm text-muted-foreground">
-              {searchTerm || statusFilter !== 'all' || selectedTagFilters.length > 0 || blueCollarFilter
-                ? 'Try adjusting your search or filters'
-                : 'Contacts will appear here when leads come in'}
-            </p>
-          </div>
-        ) : (
-          <>
-            {/* Table - scrollable on mobile */}
-            <div className="border rounded-lg overflow-x-auto">
-              <Table className="min-w-[900px]">
-                <TableHeader>
-                  <TableRow>
-                    <TableHead className="w-[50px]">
-                      <Checkbox
-                        checked={isAllSelected}
-                        onCheckedChange={handleSelectAll}
-                        aria-label="Select all"
-                        {...(isSomeSelected ? { 'data-state': 'indeterminate' } : {})}
-                      />
-                    </TableHead>
-                    <TableHead
-                      className="cursor-pointer hover:bg-muted/50"
-                      onClick={() => handleSort('first_name')}
-                    >
-                      <div className="flex items-center">
-                        Name
-                        <SortIcon field="first_name" />
-                      </div>
-                    </TableHead>
-                    <TableHead
-                      className="cursor-pointer hover:bg-muted/50"
-                      onClick={() => handleSort('email')}
-                    >
-                      <div className="flex items-center">
-                        Email
-                        <SortIcon field="email" />
-                      </div>
-                    </TableHead>
-                    <TableHead>Phone</TableHead>
-                    <TableHead>Tags</TableHead>
-                    <TableHead
-                      className="cursor-pointer hover:bg-muted/50"
-                      onClick={() => handleSort('status')}
-                    >
-                      <div className="flex items-center">
-                        Status
-                        <SortIcon field="status" />
-                      </div>
-                    </TableHead>
-                    <TableHead>Pipeline</TableHead>
-                    <TableHead
-                      className="cursor-pointer hover:bg-muted/50"
-                      onClick={() => handleSort('last_activity_date')}
-                    >
-                      <div className="flex items-center">
-                        Last Activity
-                        <SortIcon field="last_activity_date" />
-                      </div>
-                    </TableHead>
-                    <TableHead
-                      className="cursor-pointer hover:bg-muted/50"
-                      onClick={() => handleSort('created_at')}
-                    >
-                      <div className="flex items-center">
-                        Created
-                        <SortIcon field="created_at" />
-                      </div>
-                    </TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {contacts.map((contact) => (
-                    <TableRow
-                      key={contact.id}
-                      className="cursor-pointer"
-                      onClick={() => setSelectedContactId(contact.id)}
-                    >
-                      <TableCell onClick={(e) => e.stopPropagation()}>
-                        <Checkbox
-                          checked={selectedIds.has(contact.id)}
-                          onCheckedChange={(checked) => handleSelectOne(contact.id, !!checked)}
-                          aria-label={`Select ${contact.first_name}`}
-                        />
-                      </TableCell>
-                      <TableCell className="font-medium">
-                        {contact.first_name} {contact.last_name}
-                      </TableCell>
-                      <TableCell className="text-muted-foreground">
-                        {contact.email || '-'}
-                      </TableCell>
-                      <TableCell className="text-muted-foreground">
-                        {contact.phone || '-'}
-                      </TableCell>
-                      <TableCell>
-                        <div className="flex flex-wrap gap-1 max-w-[200px]">
-                          {(contact.tags || []).slice(0, 3).map((tag) => (
-                            <span
-                              key={tag}
-                              className={`px-2 py-0.5 rounded text-xs ${getTagColor(tag)}`}
-                            >
-                              {availableTags.find(t => t.slug === tag)?.name || tag}
-                            </span>
-                          ))}
-                          {(contact.tags || []).length > 3 && (
-                            <span className="text-xs text-muted-foreground">
-                              +{(contact.tags || []).length - 3}
-                            </span>
-                          )}
-                        </div>
-                      </TableCell>
-                      <TableCell className="text-center">
-                        <StatusBadge status={contact.status} />
-                      </TableCell>
-                      <TableCell className="text-muted-foreground">
-                        {contact.pipeline_stage || '-'}
-                      </TableCell>
-                      <TableCell className="text-sm text-muted-foreground">
-                        {contact.last_activity_date
-                          ? formatToEasternCompact(contact.last_activity_date)
-                          : '-'}
-                      </TableCell>
-                      <TableCell className="text-sm text-muted-foreground">
-                        {formatToEasternCompact(contact.created_at)}
-                      </TableCell>
-                    </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
-            </div>
-
-            {/* Pagination */}
-            <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 mt-4">
-              <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                <span className="hidden sm:inline">Showing</span>
-                <Select
-                  value={pageSize.toString()}
-                  onValueChange={(value) => {
-                    setPageSize(Number(value));
-                    setPage(0);
-                  }}
-                >
-                  <SelectTrigger className="w-[70px] h-8">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {PAGE_SIZE_OPTIONS.map((size) => (
-                      <SelectItem key={size} value={size.toString()}>
-                        {size}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-                <span>
-                  of {totalCount} contacts
-                </span>
+        <Tabs defaultValue="all" className="w-full">
+          <TabsList className="mb-4">
+            <TabsTrigger value="all">All Contacts</TabsTrigger>
+            <TabsTrigger value="sales-queue">Sales Queue</TabsTrigger>
+          </TabsList>
+          <TabsContent value="all">
+            {/* No business selected */}
+            {!selectedBusiness?.id ? (
+              <div className="text-center py-12">
+                <Users className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
+                <h3 className="text-lg font-medium text-muted-foreground">Select a Business</h3>
+                <p className="text-sm text-muted-foreground">
+                  Choose a business from the dropdown above to view contacts
+                </p>
               </div>
-
-              <div className="flex items-center gap-1">
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => setPage(0)}
-                  disabled={page === 0}
-                >
-                  <ChevronsLeft className="h-4 w-4" />
-                </Button>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => setPage(page - 1)}
-                  disabled={page === 0}
-                >
-                  <ChevronLeft className="h-4 w-4" />
-                </Button>
-                <span className="px-3 text-sm">
-                  Page {page + 1} of {totalPages || 1}
-                </span>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => setPage(page + 1)}
-                  disabled={page >= totalPages - 1}
-                >
-                  <ChevronRight className="h-4 w-4" />
-                </Button>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => setPage(totalPages - 1)}
-                  disabled={page >= totalPages - 1}
-                >
-                  <ChevronsRight className="h-4 w-4" />
-                </Button>
+            ) : isLoading ? (
+              <div className="text-center py-12">
+                <Loader2 className="h-8 w-8 animate-spin mx-auto mb-4 text-primary" />
+                <p className="text-muted-foreground">Loading contacts...</p>
               </div>
-            </div>
-          </>
-        )}
+            ) : contacts.length === 0 ? (
+              <div className="text-center py-12">
+                <Users className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
+                <h3 className="text-lg font-medium text-muted-foreground">No contacts found</h3>
+                <p className="text-sm text-muted-foreground">
+                  {searchTerm || statusFilter !== 'all' || selectedTagFilters.length > 0 || blueCollarFilter
+                    ? 'Try adjusting your search or filters'
+                    : 'Contacts will appear here when leads come in'}
+                </p>
+              </div>
+            ) : (
+              <>
+                {/* Table - scrollable on mobile */}
+                <div className="border rounded-lg overflow-x-auto">
+                  <Table className="min-w-[900px]">
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead className="w-[50px]">
+                          <Checkbox
+                            checked={isAllSelected}
+                            onCheckedChange={handleSelectAll}
+                            aria-label="Select all"
+                            {...(isSomeSelected ? { 'data-state': 'indeterminate' } : {})}
+                          />
+                        </TableHead>
+                        <TableHead
+                          className="cursor-pointer hover:bg-muted/50"
+                          onClick={() => handleSort('first_name')}
+                        >
+                          <div className="flex items-center">
+                            Name
+                            <SortIcon field="first_name" />
+                          </div>
+                        </TableHead>
+                        <TableHead
+                          className="cursor-pointer hover:bg-muted/50"
+                          onClick={() => handleSort('email')}
+                        >
+                          <div className="flex items-center">
+                            Email
+                            <SortIcon field="email" />
+                          </div>
+                        </TableHead>
+                        <TableHead>Phone</TableHead>
+                        <TableHead>Tags</TableHead>
+                        <TableHead
+                          className="cursor-pointer hover:bg-muted/50"
+                          onClick={() => handleSort('status')}
+                        >
+                          <div className="flex items-center">
+                            Status
+                            <SortIcon field="status" />
+                          </div>
+                        </TableHead>
+                        <TableHead>Pipeline</TableHead>
+                        <TableHead
+                          className="cursor-pointer hover:bg-muted/50"
+                          onClick={() => handleSort('last_activity_date')}
+                        >
+                          <div className="flex items-center">
+                            Last Activity
+                            <SortIcon field="last_activity_date" />
+                          </div>
+                        </TableHead>
+                        <TableHead
+                          className="cursor-pointer hover:bg-muted/50"
+                          onClick={() => handleSort('created_at')}
+                        >
+                          <div className="flex items-center">
+                            Created
+                            <SortIcon field="created_at" />
+                          </div>
+                        </TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {contacts.map((contact) => (
+                        <TableRow
+                          key={contact.id}
+                          className="cursor-pointer"
+                          onClick={() => { setDrawerContact(contact as DrawerContact); setDrawerOpen(true); }}
+                        >
+                          <TableCell onClick={(e) => e.stopPropagation()}>
+                            <Checkbox
+                              checked={selectedIds.has(contact.id)}
+                              onCheckedChange={(checked) => handleSelectOne(contact.id, !!checked)}
+                              aria-label={`Select ${contact.first_name}`}
+                            />
+                          </TableCell>
+                          <TableCell className="font-medium">
+                            {contact.first_name} {contact.last_name}
+                          </TableCell>
+                          <TableCell className="text-muted-foreground">
+                            {contact.email || '-'}
+                          </TableCell>
+                          <TableCell className="text-muted-foreground">
+                            {contact.phone || '-'}
+                          </TableCell>
+                          <TableCell>
+                            <div className="flex flex-wrap gap-1 max-w-[200px]">
+                              {(contact.tags || []).slice(0, 3).map((tag) => (
+                                <span
+                                  key={tag}
+                                  className={`px-2 py-0.5 rounded text-xs ${getTagColor(tag)}`}
+                                >
+                                  {availableTags.find(t => t.slug === tag)?.name || tag}
+                                </span>
+                              ))}
+                              {(contact.tags || []).length > 3 && (
+                                <span className="text-xs text-muted-foreground">
+                                  +{(contact.tags || []).length - 3}
+                                </span>
+                              )}
+                            </div>
+                          </TableCell>
+                          <TableCell className="text-center">
+                            <StatusBadge status={contact.status} />
+                          </TableCell>
+                          <TableCell className="text-muted-foreground">
+                            {contact.pipeline_stage || '-'}
+                          </TableCell>
+                          <TableCell className="text-sm text-muted-foreground">
+                            {contact.last_activity_date
+                              ? formatToEasternCompact(contact.last_activity_date)
+                              : '-'}
+                          </TableCell>
+                          <TableCell className="text-sm text-muted-foreground">
+                            {formatToEasternCompact(contact.created_at)}
+                          </TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                </div>
+
+                {/* Pagination */}
+                <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 mt-4">
+                  <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                    <span className="hidden sm:inline">Showing</span>
+                    <Select
+                      value={pageSize.toString()}
+                      onValueChange={(value) => {
+                        setPageSize(Number(value));
+                        setPage(0);
+                      }}
+                    >
+                      <SelectTrigger className="w-[70px] h-8">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {PAGE_SIZE_OPTIONS.map((size) => (
+                          <SelectItem key={size} value={size.toString()}>
+                            {size}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                    <span>
+                      of {totalCount} contacts
+                    </span>
+                  </div>
+
+                  <div className="flex items-center gap-1">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => setPage(0)}
+                      disabled={page === 0}
+                    >
+                      <ChevronsLeft className="h-4 w-4" />
+                    </Button>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => setPage(page - 1)}
+                      disabled={page === 0}
+                    >
+                      <ChevronLeft className="h-4 w-4" />
+                    </Button>
+                    <span className="px-3 text-sm">
+                      Page {page + 1} of {totalPages || 1}
+                    </span>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => setPage(page + 1)}
+                      disabled={page >= totalPages - 1}
+                    >
+                      <ChevronRight className="h-4 w-4" />
+                    </Button>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => setPage(totalPages - 1)}
+                      disabled={page >= totalPages - 1}
+                    >
+                      <ChevronsRight className="h-4 w-4" />
+                    </Button>
+                  </div>
+                </div>
+              </>
+            )}
+          </TabsContent>
+          <TabsContent value="sales-queue">
+            <SalesQueueTab onContactClick={(c) => { setDrawerContact(c); setDrawerOpen(true); }} />
+          </TabsContent>
+        </Tabs>
       </main>
 
       {/* Bulk Tag Dialog */}
@@ -976,6 +969,12 @@ export default function Contacts() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+      <ContactDetailDrawer
+        open={drawerOpen}
+        onClose={() => setDrawerOpen(false)}
+        contact={drawerContact}
+        onActionComplete={() => refetch()}
+      />
     </DashboardLayout>
   );
 }

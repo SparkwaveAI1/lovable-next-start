@@ -1,0 +1,252 @@
+import { useState, useEffect } from 'react';
+import { supabase } from '@/integrations/supabase/client';
+import { toast } from 'sonner';
+import {
+  Sheet,
+  SheetContent,
+  SheetHeader,
+  SheetTitle,
+} from '@/components/ui/sheet';
+import { Button } from '@/components/ui/button';
+import { Badge } from '@/components/ui/badge';
+import { Textarea } from '@/components/ui/textarea';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Separator } from '@/components/ui/separator';
+import { Mail, Phone, Building2, GitBranch } from 'lucide-react';
+
+export interface Contact {
+  id: string;
+  first_name: string | null;
+  last_name: string | null;
+  email: string | null;
+  phone: string | null;
+  source: string | null;
+  status: string | null;
+  pipeline_stage: string | null;
+  tags: string[] | null;
+  last_activity_date: string | null;
+  created_at: string;
+  comments?: string | null;
+}
+
+interface ContactDetailDrawerProps {
+  open: boolean;
+  onClose: () => void;
+  contact: Contact | null;
+  onActionComplete?: () => void;
+}
+
+function StatusBadge({ status }: { status: string | null }) {
+  const config: Record<string, { label: string; className: string }> = {
+    active: { label: 'Active', className: 'bg-emerald-100 text-emerald-700 border-emerald-200' },
+    new_lead: { label: 'New Lead', className: 'bg-blue-100 text-blue-700 border-blue-200' },
+    lead: { label: 'Lead', className: 'bg-blue-100 text-blue-700 border-blue-200' },
+    qualified: { label: 'Qualified', className: 'bg-green-100 text-green-700 border-green-200' },
+    trial: { label: 'Trial', className: 'bg-amber-100 text-amber-700 border-amber-200' },
+    member: { label: 'Member', className: 'bg-purple-100 text-purple-700 border-purple-200' },
+    active_member: { label: 'Active Member', className: 'bg-purple-100 text-purple-700 border-purple-200' },
+    inactive: { label: 'Inactive', className: 'bg-slate-100 text-slate-500 border-slate-200' },
+    cancelled: { label: 'Cancelled', className: 'bg-red-100 text-red-700 border-red-200' },
+  };
+  const key = status?.toLowerCase() ?? '';
+  const s = config[key] ?? {
+    label: status
+      ? status.split('_').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ')
+      : 'Unknown',
+    className: 'bg-slate-100 text-slate-400 border-slate-200',
+  };
+  return (
+    <Badge variant="outline" className={`text-xs ${s.className}`}>
+      {s.label}
+    </Badge>
+  );
+}
+
+const QUICK_ACTIONS: Array<{
+  label: string;
+  activityType: string;
+  newStage: string | null;
+  variant?: 'default' | 'outline' | 'destructive';
+}> = [
+  { label: 'Mark Follow-up', activityType: 'follow_up_sent', newStage: null, variant: 'outline' },
+  { label: 'Book Call', activityType: 'call_booked', newStage: 'proposal', variant: 'outline' },
+  { label: 'Mark Won', activityType: 'won', newStage: 'closed_won', variant: 'default' },
+  { label: 'Mark Lost', activityType: 'lost', newStage: 'closed_lost', variant: 'destructive' },
+];
+
+export function ContactDetailDrawer({
+  open,
+  onClose,
+  contact,
+  onActionComplete,
+}: ContactDetailDrawerProps) {
+  const [notesValue, setNotesValue] = useState('');
+  const [isSavingNotes, setIsSavingNotes] = useState(false);
+  const [actionLoading, setActionLoading] = useState<string | null>(null);
+
+  // Sync notes when contact changes
+  useEffect(() => {
+    setNotesValue(contact?.comments ?? '');
+  }, [contact?.id, contact?.comments]);
+
+  if (!contact) return null;
+
+  const fullName = [contact.first_name, contact.last_name].filter(Boolean).join(' ') || 'Unknown';
+
+  const handleSaveNotes = async () => {
+    if (!contact) return;
+    setIsSavingNotes(true);
+    try {
+      const { error } = await supabase
+        .from('contacts')
+        .update({
+          comments: notesValue,
+          last_activity_date: new Date().toISOString(),
+        })
+        .eq('id', contact.id);
+
+      if (error) throw error;
+
+      toast.success('Notes saved');
+      onActionComplete?.();
+    } catch (err: any) {
+      toast.error(err.message || 'Failed to save notes');
+    } finally {
+      setIsSavingNotes(false);
+    }
+  };
+
+  const handleQuickAction = async (activityType: string, newStage: string | null) => {
+    setActionLoading(activityType);
+    try {
+      const { error: actError } = await supabase.from('sales_activities').insert({
+        activity_type: activityType,
+        prospect_name: fullName,
+        company_name: contact.source || '',
+        description: `Action: ${activityType} from SWapp`,
+        metadata: { contact_id: contact.id },
+      });
+      if (actError) throw actError;
+
+      const { error: contactError } = await supabase
+        .from('contacts')
+        .update({
+          pipeline_stage: newStage ?? contact.pipeline_stage,
+          last_activity_date: new Date().toISOString(),
+        })
+        .eq('id', contact.id);
+      if (contactError) throw contactError;
+
+      toast.success('Action recorded');
+      onActionComplete?.();
+    } catch (err: any) {
+      toast.error(err.message || 'Action failed');
+    } finally {
+      setActionLoading(null);
+    }
+  };
+
+  return (
+    <Sheet open={open} onOpenChange={(isOpen) => { if (!isOpen) onClose(); }}>
+      <SheetContent className="sm:max-w-[600px] overflow-y-auto">
+        {/* Header */}
+        <SheetHeader className="mb-4">
+          <div className="flex items-center gap-3 flex-wrap pr-6">
+            <SheetTitle className="text-xl">{fullName}</SheetTitle>
+            <StatusBadge status={contact.status} />
+          </div>
+        </SheetHeader>
+
+        <div className="space-y-6">
+          {/* Contact Info */}
+          <Card>
+            <CardHeader className="pb-3">
+              <CardTitle className="text-sm font-medium text-muted-foreground uppercase tracking-wide">
+                Contact Info
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-2">
+              <div className="flex items-center gap-2 text-sm">
+                <Mail className="h-4 w-4 text-muted-foreground shrink-0" />
+                <span className="text-muted-foreground">{contact.email || '—'}</span>
+              </div>
+              <div className="flex items-center gap-2 text-sm">
+                <Phone className="h-4 w-4 text-muted-foreground shrink-0" />
+                <span className="text-muted-foreground">{contact.phone || '—'}</span>
+              </div>
+              <div className="flex items-center gap-2 text-sm">
+                <Building2 className="h-4 w-4 text-muted-foreground shrink-0" />
+                <span className="text-muted-foreground">{contact.source || '—'}</span>
+              </div>
+              <div className="flex items-center gap-2 text-sm">
+                <GitBranch className="h-4 w-4 text-muted-foreground shrink-0" />
+                <span className="text-muted-foreground">{contact.pipeline_stage || '—'}</span>
+              </div>
+            </CardContent>
+          </Card>
+
+          <Separator />
+
+          {/* Outreach History */}
+          <Card>
+            <CardHeader className="pb-3">
+              <CardTitle className="text-sm font-medium text-muted-foreground uppercase tracking-wide">
+                Outreach History
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              <p className="text-sm text-muted-foreground italic">
+                Outreach history will appear here once email tracking is wired (SPA-487).
+              </p>
+            </CardContent>
+          </Card>
+
+          <Separator />
+
+          {/* Notes */}
+          <div className="space-y-2">
+            <h3 className="text-sm font-medium text-muted-foreground uppercase tracking-wide">
+              Notes
+            </h3>
+            <Textarea
+              placeholder="Add notes about this contact..."
+              value={notesValue}
+              onChange={(e) => setNotesValue(e.target.value)}
+              rows={4}
+              className="resize-none"
+            />
+            <Button
+              size="sm"
+              onClick={handleSaveNotes}
+              disabled={isSavingNotes}
+            >
+              {isSavingNotes ? 'Saving...' : 'Save Notes'}
+            </Button>
+          </div>
+
+          <Separator />
+
+          {/* Quick Actions */}
+          <div className="space-y-3">
+            <h3 className="text-sm font-medium text-muted-foreground uppercase tracking-wide">
+              Quick Actions
+            </h3>
+            <div className="grid grid-cols-2 gap-2">
+              {QUICK_ACTIONS.map(({ label, activityType, newStage, variant }) => (
+                <Button
+                  key={activityType}
+                  variant={variant ?? 'outline'}
+                  size="sm"
+                  disabled={actionLoading !== null}
+                  onClick={() => handleQuickAction(activityType, newStage)}
+                >
+                  {actionLoading === activityType ? 'Working...' : label}
+                </Button>
+              ))}
+            </div>
+          </div>
+        </div>
+      </SheetContent>
+    </Sheet>
+  );
+}
