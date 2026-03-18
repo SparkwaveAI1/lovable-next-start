@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useBusinessContext } from '@/contexts/BusinessContext';
@@ -597,7 +598,7 @@ export default function Contacts() {
           </div>
         )}
 
-        <Tabs defaultValue="all" className="w-full">
+        <Tabs defaultValue="sales-queue" className="w-full">
           <TabsList className="mb-4">
             <TabsTrigger value="all">All Contacts</TabsTrigger>
             <TabsTrigger value="sales-queue">Sales Queue</TabsTrigger>
