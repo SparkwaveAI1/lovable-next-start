@@ -130,6 +130,7 @@ export default function Contacts() {
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState<string>('all');
   const [selectedTagFilters, setSelectedTagFilters] = useState<string[]>([]);
+  const [blueCollarFilter, setBlueCollarFilter] = useState(false);
 
   // Pagination state
   const [page, setPage] = useState(0);
@@ -177,7 +178,7 @@ export default function Contacts() {
 
   // Fetch contacts with pagination
   const { data: contactsData, isLoading, refetch } = useQuery({
-    queryKey: ['contacts', selectedBusiness?.id, searchTerm, statusFilter, selectedTagFilters, page, pageSize, sortField, sortDirection],
+    queryKey: ['contacts', selectedBusiness?.id, searchTerm, statusFilter, selectedTagFilters, blueCollarFilter, page, pageSize, sortField, sortDirection],
     queryFn: async () => {
       if (!selectedBusiness?.id) return { contacts: [], totalCount: 0 };
 
@@ -199,6 +200,11 @@ export default function Contacts() {
       // Apply tag filter (contacts must have at least one of the selected tags)
       if (selectedTagFilters.length > 0) {
         query = query.overlaps('tags', selectedTagFilters);
+      }
+
+      // Apply blue collar filter (lead_type = 'blue_collar' OR tags contains 'blue_collar')
+      if (blueCollarFilter) {
+        query = query.or('lead_type.eq.blue_collar,tags.cs.{blue_collar}');
       }
 
       // Apply sorting
@@ -509,8 +515,21 @@ export default function Contacts() {
               </DropdownMenuContent>
             </DropdownMenu>
 
+            {/* Blue Collar Filter */}
+            <Button
+              variant={blueCollarFilter ? 'default' : 'outline'}
+              size="sm"
+              onClick={() => {
+                setBlueCollarFilter(v => !v);
+                setPage(0);
+              }}
+              className="w-full sm:w-auto whitespace-nowrap"
+            >
+              🔧 Blue Collar
+            </Button>
+
             {/* Clear Filters */}
-            {(searchTerm || statusFilter !== 'all' || selectedTagFilters.length > 0) && (
+            {(searchTerm || statusFilter !== 'all' || selectedTagFilters.length > 0 || blueCollarFilter) && (
               <Button
                 variant="ghost"
                 size="sm"
@@ -518,6 +537,7 @@ export default function Contacts() {
                   setSearchTerm('');
                   setStatusFilter('all');
                   setSelectedTagFilters([]);
+                  setBlueCollarFilter(false);
                   setPage(0);
                 }}
               >
@@ -614,7 +634,7 @@ export default function Contacts() {
             <Users className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
             <h3 className="text-lg font-medium text-muted-foreground">No contacts found</h3>
             <p className="text-sm text-muted-foreground">
-              {searchTerm || statusFilter !== 'all' || selectedTagFilters.length > 0
+              {searchTerm || statusFilter !== 'all' || selectedTagFilters.length > 0 || blueCollarFilter
                 ? 'Try adjusting your search or filters'
                 : 'Contacts will appear here when leads come in'}
             </p>

@@ -1,6 +1,8 @@
 import { useState, useEffect } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
+import { useBusinessContext } from '@/contexts/BusinessContext';
+import { useBusinesses } from '@/hooks/useBusinesses';
 import { DashboardLayout } from '@/components/layout/DashboardLayout';
 import { AccountDetail } from '@/components/crm/AccountDetail';
 import { Button } from '@/components/ui/button';
@@ -39,7 +41,7 @@ import {
 } from 'lucide-react';
 import { formatToEasternCompact } from '@/lib/dateUtils';
 
-const BUSINESS_ID = '5a9bbfcf-fae5-4063-9780-bcbe366bae88';
+const SPARKWAVE_BUSINESS_ID = '5a9bbfcf-fae5-4063-9780-bcbe366bae88';
 
 interface CrmAccount {
   id: string;
@@ -94,6 +96,8 @@ function OwnerBadge({ owner }: { owner: string | null }) {
 
 export default function CRM() {
   const { toast } = useToast();
+  const { selectedBusiness, setSelectedBusiness } = useBusinessContext();
+  const { data: businesses = [] } = useBusinesses();
 
   // View state
   const [selectedAccountId, setSelectedAccountId] = useState<string | null>(null);
@@ -118,6 +122,7 @@ export default function CRM() {
   const [newOwnerAgent, setNewOwnerAgent] = useState('iris');
   const [newDescription, setNewDescription] = useState('');
   const [newStrategyNotes, setNewStrategyNotes] = useState('');
+  const [newBusinessId, setNewBusinessId] = useState('');
   const [isAdding, setIsAdding] = useState(false);
 
   // Interaction/deal counts per account (loaded separately)
@@ -127,20 +132,32 @@ export default function CRM() {
   const loadAccounts = async () => {
     setIsLoading(true);
     try {
-      const { data, error } = await supabase
+      const bizId = selectedBusiness?.id || null;
+
+      let accountsQuery = supabase
         .from('crm_accounts')
         .select('*')
-        .eq('business_id', BUSINESS_ID)
         .order('created_at', { ascending: false });
+
+      if (bizId) {
+        accountsQuery = accountsQuery.eq('business_id', bizId);
+      }
+
+      const { data, error } = await accountsQuery;
       if (error) throw error;
       setAccounts((data ?? []) as CrmAccount[]);
 
       // Load interaction max dates
-      const { data: interactionData } = await supabase
+      let intQuery = supabase
         .from('crm_interactions')
         .select('account_id, occurred_at')
-        .eq('business_id', BUSINESS_ID)
         .order('occurred_at', { ascending: false });
+
+      if (bizId) {
+        intQuery = intQuery.eq('business_id', bizId);
+      }
+
+      const { data: interactionData } = await intQuery;
 
       const iMap: Record<string, string | null> = {};
       (interactionData ?? []).forEach(row => {
@@ -151,10 +168,15 @@ export default function CRM() {
       setInteractionMap(iMap);
 
       // Load open deal counts
-      const { data: dealData } = await supabase
+      let dealQuery = supabase
         .from('crm_deals')
-        .select('account_id, stage')
-        .eq('business_id', BUSINESS_ID);
+        .select('account_id, stage');
+
+      if (bizId) {
+        dealQuery = dealQuery.eq('business_id', bizId);
+      }
+
+      const { data: dealData } = await dealQuery;
 
       const dMap: Record<string, number> = {};
       (dealData ?? []).forEach(row => {
@@ -170,22 +192,28 @@ export default function CRM() {
     }
   };
 
-  // Initial load
+  // Reload when selected business changes
   useEffect(() => {
     loadAccounts();
-  }, []);
+  }, [selectedBusiness?.id]);
 
-  // Real-time subscription on crm_accounts
+  // Real-time subscription on crm_accounts — only when a specific business is selected
   useEffect(() => {
+    const bizId = selectedBusiness?.id || null;
+    if (!bizId) {
+      // No real-time for "All Businesses" — too much volume; data loaded on mount/business switch
+      return;
+    }
+
     const channel = supabase
-      .channel('crm-accounts-realtime')
+      .channel(`crm-accounts-realtime-${bizId}`)
       .on(
         'postgres_changes',
         {
           event: '*',
           schema: 'public',
           table: 'crm_accounts',
-          filter: `business_id=eq.${BUSINESS_ID}`,
+          filter: `business_id=eq.${bizId}`,
         },
         () => {
           loadAccounts();
@@ -196,7 +224,7 @@ export default function CRM() {
     return () => {
       supabase.removeChannel(channel);
     };
-  }, []);
+  }, [selectedBusiness?.id]);
 
   // Filtered accounts
   const filteredAccounts = accounts.filter(acc => {
@@ -215,12 +243,14 @@ export default function CRM() {
     if (!newName.trim()) { setNewNameError('Company name is required'); valid = false; }
     if (!valid) return;
 
+    const businessIdToUse = newBusinessId || SPARKWAVE_BUSINESS_ID;
+
     setIsAdding(true);
     try {
       const { error } = await supabase
         .from('crm_accounts')
         .insert({
-          business_id: BUSINESS_ID,
+          business_id: businessIdToUse,
           name: newName.trim(),
           website: newWebsite.trim() || null,
           industry: newIndustry.trim() || null,
@@ -249,6 +279,7 @@ export default function CRM() {
     setNewName(''); setNewNameError(''); setNewWebsite(''); setNewIndustry('');
     setNewLocation(''); setNewLinkedIn(''); setNewStatus('prospect');
     setNewOwnerAgent('iris'); setNewDescription(''); setNewStrategyNotes('');
+    setNewBusinessId('');
   };
 
   // Show AccountDetail if an account is selected
@@ -278,7 +309,7 @@ export default function CRM() {
               <Building2 className="h-6 w-6" />
               <div>
                 <h1 className="text-2xl font-bold">CRM</h1>
-                <p className="text-sm text-muted-foreground">Sparkwave AI Prospects</p>
+                <p className="text-sm text-muted-foreground">{selectedBusiness ? selectedBusiness.name : 'All Businesses'}</p>
               </div>
               <Badge variant="secondary" className="text-xs">{accounts.length}</Badge>
             </div>
@@ -290,6 +321,32 @@ export default function CRM() {
 
           {/* Filters */}
           <div className="flex flex-wrap gap-2 sm:gap-3 items-center">
+            {/* Business Selector */}
+            <Select
+              value={selectedBusiness?.id ?? 'all'}
+              onValueChange={(value) => {
+                if (value === 'all') {
+                  // Clear selection — show all businesses
+                  // We need to call setSelectedBusiness with undefined; use a hack: store null in context
+                  // Since BusinessContext only supports Business objects, we reload without filter
+                  setSelectedBusiness({ id: '', slug: '', name: '' } as any);
+                } else {
+                  const biz = businesses.find(b => b.id === value);
+                  if (biz) setSelectedBusiness(biz);
+                }
+              }}
+            >
+              <SelectTrigger className="w-full sm:w-[180px]">
+                <SelectValue placeholder="All Businesses" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All Businesses</SelectItem>
+                {businesses.map(biz => (
+                  <SelectItem key={biz.id} value={biz.id}>{biz.name}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+
             <div className="relative w-full sm:flex-1 sm:min-w-[200px] sm:max-w-sm">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
               <Input
@@ -411,8 +468,27 @@ export default function CRM() {
           <DialogHeader>
             <DialogTitle>Add Account</DialogTitle>
             <DialogDescription>Add a new prospect or client to your CRM.</DialogDescription>
+
           </DialogHeader>
           <div className="space-y-4 py-4">
+            {/* Business picker — always shown to allow correct assignment */}
+            <div className="space-y-1">
+              <label className="text-sm font-medium">Business</label>
+              <Select
+                value={newBusinessId || SPARKWAVE_BUSINESS_ID}
+                onValueChange={setNewBusinessId}
+              >
+                <SelectTrigger><SelectValue placeholder="Select business" /></SelectTrigger>
+                <SelectContent>
+                  {businesses.map(biz => (
+                    <SelectItem key={biz.id} value={biz.id}>{biz.name}</SelectItem>
+                  ))}
+                  {businesses.length === 0 && (
+                    <SelectItem value={SPARKWAVE_BUSINESS_ID}>Sparkwave AI</SelectItem>
+                  )}
+                </SelectContent>
+              </Select>
+            </div>
             <div className="space-y-1">
               <label className="text-sm font-medium">Company Name *</label>
               <Input
