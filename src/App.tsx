@@ -46,6 +46,7 @@ import LinkedInComposer from "./pages/linkedin/compose";
 import FAQ from "./pages/FAQ";
 // ContentVisibility and ContentReviewPage removed — redirected to /content-hub
 import AutomationAudit from "./pages/AutomationAudit";
+import AutoresearchDashboard from "./pages/AutoresearchDashboard";
 import ROICalculator from "./pages/ROICalculator";
 import Onboarding from "./pages/Onboarding";
 import SystemMonitoring from "./pages/SystemMonitoring";
@@ -122,6 +123,7 @@ const App = () => (
             <Route path="/agent-chat" element={<Navigate replace to="/" />} />
             <Route path="/system-monitoring" element={<ProtectedRoute><ErrorBoundary><SystemMonitoring /></ErrorBoundary></ProtectedRoute>} />
             <Route path="/monitoring" element={<MonitoringPage />} />
+            <Route path="/tools/autoresearch" element={<ProtectedRoute><ErrorBoundary><AutoresearchDashboard /></ErrorBoundary></ProtectedRoute>} />
             <Route path="/fight-flow" element={<ProtectedRoute><ErrorBoundary><FightFlow /></ErrorBoundary></ProtectedRoute>} />
             <Route path="/crm" element={<ProtectedRoute><ErrorBoundary><CRM /></ErrorBoundary></ProtectedRoute>} />
             <Route path="/crm/deals" element={<ProtectedRoute><ErrorBoundary><DealPipeline /></ErrorBoundary></ProtectedRoute>} />
