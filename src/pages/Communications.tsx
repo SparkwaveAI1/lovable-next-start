@@ -151,6 +151,7 @@ interface ActivityItem {
   message?: string;
   subject?: string;
   to?: string;
+  from?: string;  // Sender for inbound email replies
   status?: string;
   created_at: string;
   ai_response?: boolean;
@@ -654,6 +655,25 @@ export default function Communications() {
     refetchInterval: 10000,
   });
 
+  // Fetch inbound email replies (leads replying to outbound campaigns)
+  const INBOUND_EMAIL_REFETCH_MS = 30000; // 30s — replies are infrequent
+  const { data: inboundEmails = [], isLoading: inboundEmailsLoading } = useQuery({
+    queryKey: ['inbound-emails', selectedBusiness?.id],
+    queryFn: async () => {
+      if (!selectedBusiness?.id) return [];
+      const { data, error } = await supabase
+        .from('email_replies')
+        .select('id, from_email, from_name, subject, body_text, received_at, status, contact_id, business_id')
+        .eq('business_id', selectedBusiness.id)
+        .order('received_at', { ascending: false })
+        .limit(20);
+      if (error) throw error;
+      return data;
+    },
+    enabled: !!selectedBusiness?.id,
+    refetchInterval: INBOUND_EMAIL_REFETCH_MS,
+  });
+
   // Merge and sort SMS + Email activity
   const mergedActivity = useMemo((): ActivityItem[] => {
     const smsItems: ActivityItem[] = recentMessages.map(msg => ({
@@ -680,11 +700,23 @@ export default function Communications() {
       clicked_at: email.clicked_at,
     }));
 
+    // Inbound email replies from leads
+    const inboundEmailItems: ActivityItem[] = inboundEmails.map(reply => ({
+      id: reply.id,
+      type: 'email' as const,
+      direction: 'inbound',
+      subject: reply.subject || 'No subject',
+      from: reply.from_name || reply.from_email || 'Unknown sender',
+      status: reply.status,
+      created_at: reply.received_at,
+      contact_id: reply.contact_id,
+    }));
+
     // Merge and sort by created_at descending
-    return [...smsItems, ...emailItems]
+    return [...smsItems, ...emailItems, ...inboundEmailItems]
       .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())
-      .slice(0, 20);
-  }, [recentMessages, recentEmails]);
+      .slice(0, 50);
+  }, [recentMessages, recentEmails, inboundEmails]);
 
   // Group SMS messages by contact for the Overview panel
   interface ContactGroup {
@@ -1944,7 +1976,7 @@ export default function Communications() {
                 <CardDescription>All SMS and email communications</CardDescription>
               </CardHeader>
               <CardContent>
-                {messagesLoading && emailsLoading ? (
+                {messagesLoading && emailsLoading && inboundEmailsLoading ? (
                   <p className="text-center py-8">Loading communications...</p>
                 ) : mergedActivity.length === 0 ? (
                   <p className="text-muted-foreground text-center py-8">No communications yet</p>

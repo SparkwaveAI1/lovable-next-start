@@ -25,6 +25,16 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
 
+/**
+ * Generate plus-addressed reply_to for inbound email routing.
+ * Format: sparkwave+{businessId}@reply.sparkwave-ai.com
+ * This ensures replies route back through the inbound pipeline to email_replies table.
+ */
+function generateReplyTo(businessId?: string): string {
+  if (businessId) return `sparkwave+${businessId}@reply.sparkwave-ai.com`;
+  return 'sparkwave@reply.sparkwave-ai.com';
+}
+
 interface Recipient {
   email: string;
   first_name?: string;
@@ -106,6 +116,7 @@ serve(async (req) => {
             to: [recipient.email],
             subject: subject,
             html: html,
+            reply_to: generateReplyTo(business_id),
           }),
         });
 
