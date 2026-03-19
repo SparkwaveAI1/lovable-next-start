@@ -12,8 +12,8 @@
  * 7. Transfer — natural close; default next step = phone call
  *
  * Tiered Model Routing:
- * - T1: claude-haiku-3-5 — standard qualifying
- * - T2: claude-sonnet-4-5 — complex/transfers (urgency ≥8 or msg ≥4)
+ * - T1: claude-haiku-4-5-20251001 — standard qualifying
+ * - T2: claude-sonnet-4-6 — complex/transfers (urgency ≥8 or msg ≥4)
  *
  * Quality Gate (Sonnet reviews Haiku output ~26% catch rate):
  * - Fires when T1 produces a response for urgency <8 and msg count <4
@@ -41,9 +41,9 @@ const OPENROUTER_REFERER = "https://fightflowacademy.com";
 const OPENROUTER_TITLE = "Fight Flow Lead Responder";
 
 // Tiered models (Speed-to-Lead Blueprint / IDENTITY.md tiering)
-const MODEL_T1 = "anthropic/claude-haiku-3-5"; // standard qualifying
-const MODEL_T2 = "anthropic/claude-sonnet-4-5"; // complex / transfers
-const MODEL_EVAL = "openai/gpt-4o-mini";        // quality gate evaluator (fast)
+const MODEL_T1 = "anthropic/claude-haiku-4-5-20251001"; // standard qualifying
+const MODEL_T2 = "anthropic/claude-sonnet-4-6";         // complex / transfers
+const MODEL_EVAL = "openai/gpt-4o-mini";                // quality gate evaluator (fast)
 
 // Hard limits (7-Component, Component 2)
 const MAX_CHARS = 160;
@@ -404,21 +404,22 @@ Transcript: ${summary}`;
 
 // ─── Re-engagement Scheduler ──────────────────────────────────────────────────
 /**
- * Enroll thread in re-engagement if not already enrolled.
+ * Enroll thread in re-engagement using fightflow_sequence_steps.
  * Type: 'no_reply' (20min, 2hr) or 'mid_convo_drop' (15min).
- * Respects quiet hours — does not schedule if in quiet window.
+ * Uses step_name = 'reengage_no_reply' (indexed, cancelable when lead replies).
  */
 async function scheduleReEngagement(
   supabase: ReturnType<typeof createClient>,
   threadId: string,
-  businessId: string,
+  _businessId: string,
   type: "no_reply" | "mid_convo_drop"
 ): Promise<void> {
-  // Check if re-engagement already pending
+  // Check if re-engagement already pending for this thread
   const { data: existing } = await supabase
-    .from("fightflow_reengagement_queue")
+    .from("fightflow_sequence_steps")
     .select("id")
-    .eq("thread_id", threadId)
+    .eq("appointment_id", threadId)
+    .eq("step_name", "reengage_no_reply")
     .eq("status", "pending")
     .limit(1);
 
@@ -433,21 +434,21 @@ async function scheduleReEngagement(
 
   const now = Date.now();
   const rows = delays.map((d, i) => ({
-    thread_id: threadId,
-    business_id: businessId,
-    type,
-    attempt: i + 1,
-    max_attempts: delays.length,
-    fire_at: new Date(now + d).toISOString(),
+    appointment_id: threadId,
+    step_name: "reengage_no_reply",
+    step_order: i + 1,
+    channel: "sms",
     status: "pending",
+    scheduled_for: new Date(now + d).toISOString(),
+    message_content: "Hey, just checking in — still interested in trying a class at Fight Flow? 🥊",
     created_at: new Date().toISOString(),
   }));
 
-  const { error } = await supabase.from("fightflow_reengagement_queue").insert(rows);
+  const { error } = await supabase.from("fightflow_sequence_steps").insert(rows);
   if (error) {
     console.error("Re-engagement schedule error:", error.message);
   } else {
-    console.log(`Re-engagement (${type}) scheduled: ${delays.length} attempt(s)`);
+    console.log(`Re-engagement (${type}) scheduled: ${delays.length} attempt(s) for thread ${threadId}`);
   }
 }
 
