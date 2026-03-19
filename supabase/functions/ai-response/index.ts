@@ -1,22 +1,62 @@
+/**
+ * Fight Flow AI Response Edge Function — Speed-to-Lead Framework
+ * SPA-847: Upgraded 2026-03-19
+ *
+ * 7-Component Framework:
+ * 1. Persona — brief, competent rep (not a chatbot)
+ * 2. Hard limits — max 2 sentences, ≤160 chars, zero filler, never echo lead details
+ * 3. Urgency scale 0-10 routing
+ * 4. Intent detection (Buying / Info-seeking / Problem / Routine)
+ * 5. Qualifying logic — 4-message ceiling → human handoff
+ * 6. Tone — answer before asking; one purpose per message; match energy
+ * 7. Transfer — natural close; default next step = phone call
+ *
+ * Tiered Model Routing:
+ * - T1: claude-haiku-3-5 — standard qualifying
+ * - T2: claude-sonnet-4-5 — complex/transfers (urgency ≥8 or msg ≥4)
+ *
+ * Quality Gate (Sonnet reviews Haiku output ~26% catch rate):
+ * - Fires when T1 produces a response for urgency <8 and msg count <4
+ *
+ * Re-engagement:
+ * - No reply: follow up at 20 min, then 2 hours (max 2 attempts)
+ * - Mid-convo drop: 15 min (max 1 attempt)
+ * - Quiet hours: 8 PM–8 AM ET
+ *
+ * Human Handoff SMS:
+ * - After 4 messages OR transfer trigger: SMS Scott +1 919 532 4050
+ * - Payload: name, phone, service type, urgency score, transcript summary
+ */
+
 import { createClient } from "npm:@supabase/supabase-js@2";
 
 const corsHeaders = {
-  'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
+  "Access-Control-Allow-Origin": "*",
+  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
 };
 
-interface AgentConfig {
-  agent_name: string;
-  personality_prompt: string;
-  greeting_message: string;
-  fallback_message: string;
-  booking_enabled: boolean;
-  max_response_length: number;
-  model: string;
-  temperature: number;
-  evaluation_enabled?: boolean; // New: toggle self-improvement loop
-}
+// ─── Constants ───────────────────────────────────────────────────────────────
+const OPENROUTER_BASE = "https://openrouter.ai/api/v1/chat/completions";
+const OPENROUTER_REFERER = "https://fightflowacademy.com";
+const OPENROUTER_TITLE = "Fight Flow Lead Responder";
 
+// Tiered models (Speed-to-Lead Blueprint / IDENTITY.md tiering)
+const MODEL_T1 = "anthropic/claude-haiku-3-5"; // standard qualifying
+const MODEL_T2 = "anthropic/claude-sonnet-4-5"; // complex / transfers
+const MODEL_EVAL = "openai/gpt-4o-mini";        // quality gate evaluator (fast)
+
+// Hard limits (7-Component, Component 2)
+const MAX_CHARS = 160;
+const MAX_MESSAGES_BEFORE_HANDOFF = 4;
+
+// Twilio / Scott
+const SCOTT_PHONE = "+19195324050";
+
+// Quiet hours (ET) — 8 PM–8 AM
+const QUIET_START_HOUR = 20; // 8 PM ET
+const QUIET_END_HOUR = 8;    // 8 AM ET
+
+// ─── Types ───────────────────────────────────────────────────────────────────
 interface ClassSchedule {
   id: string;
   class_name: string;
@@ -26,1103 +66,607 @@ interface ClassSchedule {
   end_time: string;
 }
 
-interface EvaluationResult {
-  allPass: boolean;
-  failures: string[];
-  scores: {
-    relevance: { pass: boolean; reason: string };
-    questionAnswered: { pass: boolean; reason: string; questions: string[] };
-    detailEcho: { pass: boolean; reason: string; details: string[] };
-    contextAware: { pass: boolean; reason: string };
-    accuracy: { pass: boolean; reason: string };
-    ctaAppropriate: { pass: boolean; reason: string };
-  };
-  iteration: number;
+interface AgentConfig {
+  agent_name?: string;
+  personality_prompt?: string;
+  greeting_message?: string;
+  fallback_message?: string;
+  booking_enabled?: boolean;
+  max_response_length?: number;
+  model?: string;
+  temperature?: number;
+  evaluation_enabled?: boolean;
 }
 
-// Intent detection patterns
-const INTENT_PATTERNS = {
-  PRICING_INQUIRY: [
-    'price', 'cost', 'how much', 'rate', 'fee', 'membership', 'monthly',
-    'afford', 'payment', 'pay', 'expensive', 'cheap', 'deal'
-  ],
-  SCHEDULE_INQUIRY: [
-    'schedule', 'when', 'time', 'class times', 'hours', 'what days',
-    'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday', 'sunday'
-  ],
-  BOOK_TRIAL: [
-    'book', 'schedule', 'sign up', 'signup', 'try', 'trial', 'free class',
-    'start', 'begin', 'join', 'register', 'first class', 'want to come',
-    'come in', 'stop by', 'visit', 'check it out'
-  ],
-  BOOKING_CONFIRMATION: [
-    'yes', 'yeah', 'yep', 'sure', 'sounds good', 'perfect', 'that works',
-    'book it', 'sign me up', 'let\'s do it', 'i\'ll be there', 'see you then',
-    'confirm', 'ok', 'okay'
-  ],
-  GENERAL_QUESTION: [
-    'what', 'how', 'where', 'who', 'why', 'tell me', 'explain', 'info',
-    'information', 'about', 'learn'
-  ],
-  GREETING: [
-    'hi', 'hello', 'hey', 'good morning', 'good afternoon', 'good evening',
-    'whats up', "what's up", 'yo', 'sup'
-  ]
-};
+type Intent = "BUYING" | "INFO_SEEKING" | "PROBLEM" | "ROUTINE" | "REJECTION" | "ESCALATION";
+type Tier = "T1" | "T2";
 
-// Class type patterns for extraction
-const CLASS_TYPE_PATTERNS: Record<string, string[]> = {
-  'Submission Grappling': ['bjj', 'jiu jitsu', 'jiujitsu', 'grappling', 'submission', 'wrestling', 'ground'],
-  'Muay Thai': ['muay thai', 'thai boxing', 'kickboxing', 'striking', 'kicks'],
-  'MMA Skills and Sparring': ['mma', 'mixed martial arts', 'ufc', 'cage'],
-  'Boxing Skills': ['boxing', 'box', 'punch'],
-  'Boxing Bootcamp': ['bootcamp', 'fitness', 'cardio', 'workout'],
-  'Kickboxing Bootcamp': ['kickboxing bootcamp'],
-  'Self Defense': ['self defense', 'self-defense', 'protection'],
-  'Fight Flow Juniors': ['kids', 'youth', 'junior', 'child', 'children', 'son', 'daughter'],
-  'Youth Boxing': ['kids boxing', 'youth boxing']
-};
+// ─── Helpers ─────────────────────────────────────────────────────────────────
 
-// Day patterns
-const DAY_PATTERNS: Record<number, string[]> = {
-  0: ['sunday', 'sun'],
-  1: ['monday', 'mon'],
-  2: ['tuesday', 'tue', 'tues'],
-  3: ['wednesday', 'wed'],
-  4: ['thursday', 'thu', 'thur', 'thurs'],
-  5: ['friday', 'fri'],
-  6: ['saturday', 'sat']
-};
-
-// Time period patterns
-const TIME_PATTERNS = {
-  morning: ['morning', 'am', 'early', '6am', '7am', '8am', '9am', '10am', '11am'],
-  afternoon: ['afternoon', 'noon', 'lunch', '12pm', '1pm', '2pm', '3pm', '4pm'],
-  evening: ['evening', 'night', 'pm', 'after work', '5pm', '6pm', '7pm', '8pm', '9pm']
-};
-
-function detectIntent(message: string): string[] {
-  const lowerMessage = message.toLowerCase();
-  const detectedIntents: string[] = [];
-
-  for (const [intent, patterns] of Object.entries(INTENT_PATTERNS)) {
-    for (const pattern of patterns) {
-      if (lowerMessage.includes(pattern)) {
-        detectedIntents.push(intent);
-        break;
-      }
-    }
-  }
-
-  return detectedIntents.length > 0 ? detectedIntents : ['GENERAL_QUESTION'];
+function etHour(): number {
+  return new Date(
+    new Date().toLocaleString("en-US", { timeZone: "America/New_York" })
+  ).getHours();
 }
 
-// Extract class type preference from message
-function extractClassType(message: string): string | null {
-  const lowerMessage = message.toLowerCase();
-  for (const [className, patterns] of Object.entries(CLASS_TYPE_PATTERNS)) {
-    for (const pattern of patterns) {
-      if (lowerMessage.includes(pattern)) {
-        return className;
-      }
-    }
-  }
-  return null;
+function isQuietHours(): boolean {
+  const h = etHour();
+  return h >= QUIET_START_HOUR || h < QUIET_END_HOUR;
 }
 
-// Extract day preference from message
-function extractDay(message: string): number | null {
-  const lowerMessage = message.toLowerCase();
-  for (const [day, patterns] of Object.entries(DAY_PATTERNS)) {
-    for (const pattern of patterns) {
-      if (lowerMessage.includes(pattern)) {
-        return parseInt(day);
-      }
-    }
-  }
-  return null;
+function getDayName(d: number): string {
+  return ["Sunday","Monday","Tuesday","Wednesday","Thursday","Friday","Saturday"][d] ?? "Unknown";
 }
 
-// Extract time preference from message
-function extractTimePeriod(message: string): string | null {
-  const lowerMessage = message.toLowerCase();
-  for (const [period, patterns] of Object.entries(TIME_PATTERNS)) {
-    for (const pattern of patterns) {
-      if (lowerMessage.includes(pattern)) {
-        return period;
-      }
-    }
-  }
-  return null;
+function formatTime(t: string): string {
+  if (!t) return "";
+  const [h, m] = t.split(":");
+  const hr = parseInt(h, 10);
+  const suffix = hr >= 12 ? "PM" : "AM";
+  const disp = hr === 0 ? 12 : hr > 12 ? hr - 12 : hr;
+  return `${disp}:${m ?? "00"} ${suffix}`;
 }
 
-// Find matching classes based on preferences
-function findMatchingClasses(
-  classes: ClassSchedule[],
-  classType: string | null,
-  day: number | null,
-  timePeriod: string | null
-): ClassSchedule[] {
-  return classes.filter(cls => {
-    // Filter by class type if specified
-    if (classType && !cls.class_name.toLowerCase().includes(classType.toLowerCase())) {
-      const classTypeLower = classType.toLowerCase();
-      const classNameLower = cls.class_name.toLowerCase();
-      if (!classNameLower.includes(classTypeLower.split(' ')[0])) {
-        return false;
-      }
-    }
-
-    // Filter by day if specified
-    if (day !== null && cls.day_of_week !== day) {
-      return false;
-    }
-
-    // Filter by time period if specified
-    if (timePeriod) {
-      const hour = parseInt(cls.start_time.split(':')[0]);
-      if (timePeriod === 'morning' && hour >= 12) return false;
-      if (timePeriod === 'afternoon' && (hour < 12 || hour >= 17)) return false;
-      if (timePeriod === 'evening' && hour < 17) return false;
-    }
-
-    return true;
-  });
-}
-
-// Format class option for AI to present
-function formatClassOption(cls: ClassSchedule): string {
-  return `${cls.class_name} on ${getDayName(cls.day_of_week)} at ${formatTime(cls.start_time)} with ${cls.instructor}`;
-}
-
-interface BookingState {
-  classType: string | null;
-  preferredDay: number | null;
-  preferredTime: string | null;
-  suggestedClass: ClassSchedule | null;
-  awaitingConfirmation: boolean;
-}
-
-// Human escalation trigger patterns
-const ESCALATION_PATTERNS = {
-  WANTS_HUMAN: [
-    'talk to a person', 'speak to someone', 'real person', 'human',
-    'talk to manager', 'speak to owner', 'call me', 'can someone call',
-    'need to talk to', 'want to speak with', 'get someone'
-  ],
-  FRUSTRATED: [
-    'this is ridiculous', 'frustrated', 'angry', 'terrible', 'worst',
-    'waste of time', 'not helpful', 'doesn\'t work', 'broken', 'useless',
-    'stop', 'quit messaging', 'leave me alone', 'unsubscribe'
-  ],
-  MEDICAL_LEGAL: [
-    'injury', 'injured', 'hurt', 'pain', 'doctor', 'medical',
-    'lawyer', 'sue', 'legal', 'liability', 'waiver'
-  ],
-  COMPLAINT: [
-    'complaint', 'complain', 'refund', 'money back', 'charged',
-    'billing issue', 'overcharged', 'cancel membership', 'not happy'
-  ]
-};
-
-// Patterns that indicate AI should escalate to human (Scott)
-const NEEDS_HUMAN_PATTERNS = [
-  'let scott know', 'i\'ll let scott', 'scott know and he',
-  'he\'ll be in touch', 'will be in touch', 'get in touch',
-  'have scott', 'talk to scott', 'speak to scott',
-  'beyond what i can', 'can\'t answer that', 'not sure about that'
-];
-
-// Polite rejection patterns - customer is saying NO
-const REJECTION_PATTERNS = [
-  'i\'m good', 'im good', 'i am good',
-  'no thanks', 'no thank you', 'not interested',
-  'not right now', 'not at this time', 'maybe later',
-  'i\'ll pass', 'pass for now', 'gonna pass',
-  'already found', 'went with', 'chose another', 'signed up elsewhere',
-  'too expensive', 'can\'t afford', 'out of my budget',
-  'too far', 'not convenient', 'location doesn\'t work',
-  'don\'t have time', 'too busy', 'schedule doesn\'t work',
-  'not for me', 'changed my mind', 'decided against',
-  'thank you for the offer', 'thanks for the offer', 'thanks anyway'
-];
-
-// Detect if customer is politely declining
-function detectRejection(message: string): boolean {
-  const lowerMessage = message.toLowerCase();
-  return REJECTION_PATTERNS.some(pattern => lowerMessage.includes(pattern));
-}
-
-// Detect if message should trigger human escalation
-function detectEscalation(message: string): { shouldEscalate: boolean; reason: string | null } {
-  const lowerMessage = message.toLowerCase();
-
-  for (const [category, patterns] of Object.entries(ESCALATION_PATTERNS)) {
-    for (const pattern of patterns) {
-      if (lowerMessage.includes(pattern)) {
-        return { shouldEscalate: true, reason: category };
-      }
-    }
-  }
-
-  return { shouldEscalate: false, reason: null };
-}
-
-function getDayName(dayNum: number): string {
-  const days = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
-  return days[dayNum] || 'Unknown';
-}
-
-// Convert 24-hour time to 12-hour AM/PM format
-function formatTime(time24: string): string {
-  if (!time24) return '';
-  
-  const parts = time24.split(':');
-  let hours = parseInt(parts[0], 10);
-  const minutes = parts[1] || '00';
-  
-  const period = hours >= 12 ? 'PM' : 'AM';
-  
-  if (hours === 0) {
-    hours = 12;
-  } else if (hours > 12) {
-    hours = hours - 12;
-  }
-  
-  return `${hours}:${minutes} ${period}`;
-}
-
-function formatClassSchedule(classes: ClassSchedule[]): string {
-  if (!classes || classes.length === 0) {
-    return 'No classes currently scheduled.';
-  }
-
+function formatSchedule(classes: ClassSchedule[]): string {
+  if (!classes?.length) return "No classes currently scheduled.";
   const byDay: Record<number, ClassSchedule[]> = {};
-  classes.forEach(cls => {
-    if (!byDay[cls.day_of_week]) byDay[cls.day_of_week] = [];
-    byDay[cls.day_of_week].push(cls);
-  });
-
-  let schedule = '';
-  for (let day = 0; day < 7; day++) {
-    if (byDay[day] && byDay[day].length > 0) {
-      schedule += `${getDayName(day)}:\n`;
-      byDay[day].forEach(cls => {
-        schedule += `  - ${cls.class_name} at ${formatTime(cls.start_time)} (${cls.instructor})\n`;
-      });
-    }
-  }
-
-  return schedule || 'No classes currently scheduled.';
+  classes.forEach(c => { (byDay[c.day_of_week] ??= []).push(c); });
+  return Object.entries(byDay)
+    .sort(([a],[b]) => +a - +b)
+    .map(([day, list]) =>
+      `${getDayName(+day)}: ${list.map(c => `${c.class_name} at ${formatTime(c.start_time)}`).join(", ")}`
+    ).join("\n");
 }
 
-// ============================================
-// SELF-IMPROVEMENT EVALUATION SYSTEM
-// ============================================
+function truncate(s: string, max: number): string {
+  return s.length <= max ? s : s.slice(0, max - 1) + "…";
+}
 
+// ─── Intent Detection (Component 4) ──────────────────────────────────────────
+const BUYING_SIGNALS = [
+  "sign up","signup","join","how do i start","want to try","trial","free class",
+  "book","schedule","register","when can i come","first class","how to join",
+  "i want","ready to","lets do","let's do"
+];
+const INFO_SIGNALS = [
+  "how much","price","cost","rates","fees","membership","monthly","what do you offer",
+  "tell me about","what classes","what times","schedule","hours","location","where are you",
+  "do you have","what is","what's","can i","do you"
+];
+const PROBLEM_SIGNALS = [
+  "issue","problem","complaint","hurt","injury","injured","refund","cancel","not happy",
+  "frustrated","terrible","worst","broken","sue","lawyer","medical"
+];
+const REJECTION_SIGNALS = [
+  "not interested","no thanks","no thank you","i'm good","im good","maybe later",
+  "not right now","already found","too expensive","can't afford","too far","too busy",
+  "not for me","changed my mind","gonna pass","i'll pass","decided against"
+];
+const ESCALATION_SIGNALS = [
+  "talk to a person","speak to someone","real person","talk to manager","speak to owner",
+  "call me","can someone call","leave me alone","unsubscribe","stop texting",
+  "lawyer","sue","legal","liability"
+];
+
+function detectIntent(message: string): Intent {
+  const m = message.toLowerCase();
+  if (REJECTION_SIGNALS.some(s => m.includes(s))) return "REJECTION";
+  if (ESCALATION_SIGNALS.some(s => m.includes(s))) return "ESCALATION";
+  if (BUYING_SIGNALS.some(s => m.includes(s))) return "BUYING";
+  if (PROBLEM_SIGNALS.some(s => m.includes(s))) return "PROBLEM";
+  if (INFO_SIGNALS.some(s => m.includes(s))) return "INFO_SEEKING";
+  return "ROUTINE";
+}
+
+// ─── Urgency Score (Component 3) ─────────────────────────────────────────────
 /**
- * Extract questions from a message using multiple detection methods
+ * Returns 0–10:
+ * 9–10 = emergency (1 question → transfer)
+ * 6–8  = fast-track
+ * 3–5  = standard (2–3 qualifying questions)
+ * 0–2  = patient
  */
-function extractQuestions(message: string): string[] {
-  const questions: string[] = [];
-  const lowerMessage = message.toLowerCase();
-  
-  // Method 1: Direct question marks
-  const questionMarkSentences = message.split(/[.!]/).filter(s => s.includes('?'));
-  questions.push(...questionMarkSentences.map(q => q.trim()).filter(q => q.length > 0));
-  
-  // Method 2: Question words without question marks (common in texts)
-  const questionPatterns = [
-    /what (?:time|day|days|are|is|do|about|if)/gi,
-    /when (?:are|is|do|can|does)/gi,
-    /how much (?:is|are|does|do)/gi,
-    /how (?:long|many|often|do|can)/gi,
-    /where (?:is|are|do|can)/gi,
-    /do you (?:have|offer|provide)/gi,
-    /can (?:i|you|we)/gi,
-    /is there/gi,
-    /are there/gi
-  ];
-  
-  for (const pattern of questionPatterns) {
-    const matches = message.match(pattern);
-    if (matches) {
-      questions.push(...matches.map(m => m.trim()));
-    }
-  }
-  
-  return [...new Set(questions)]; // Deduplicate
+function scoreUrgency(message: string, intent: Intent, msgCount: number): number {
+  if (intent === "ESCALATION") return 10;
+  if (intent === "REJECTION") return 0;
+
+  let score = 3; // baseline
+  const m = message.toLowerCase();
+
+  // Buying intent boosts
+  if (intent === "BUYING") score += 4;
+  if (m.includes("today") || m.includes("now") || m.includes("asap")) score += 2;
+  if (m.includes("tonight") || m.includes("this week")) score += 1;
+
+  // Info-seeking with specifics → likely warm
+  if (intent === "INFO_SEEKING") score += 1;
+  if (m.includes("price") || m.includes("cost") || m.includes("how much")) score += 1;
+
+  // Problem → high urgency
+  if (intent === "PROBLEM") score = Math.max(score, 7);
+
+  // Deep in conversation → escalate
+  if (msgCount >= MAX_MESSAGES_BEFORE_HANDOFF) score = Math.max(score, 9);
+
+  return Math.min(10, score);
 }
 
-/**
- * Extract specific details mentioned by the lead (times, days, names, constraints)
- */
-function extractLeadDetails(message: string): string[] {
-  const details: string[] = [];
-  const lowerMessage = message.toLowerCase();
-  
-  // Time patterns
-  const timePatterns = [
-    /(\d{1,2})\s*(am|pm)/gi,
-    /(\d{1,2}):(\d{2})/g,
-    /(morning|afternoon|evening|night)/gi,
-    /after (\d{1,2}|work|school)/gi,
-    /before (\d{1,2}|work|school)/gi,
-    /until (\d{1,2}|work|school)/gi
-  ];
-  
-  for (const pattern of timePatterns) {
-    const matches = message.match(pattern);
-    if (matches) {
-      details.push(...matches.map(m => m.trim()));
-    }
+// ─── Tier Selection (Component 2 + tiering) ──────────────────────────────────
+function selectTier(urgency: number, msgCount: number, intent: Intent): Tier {
+  if (urgency >= 8 || msgCount >= MAX_MESSAGES_BEFORE_HANDOFF || intent === "PROBLEM" || intent === "ESCALATION") {
+    return "T2";
   }
-  
-  // Day patterns
-  const dayMatches = message.match(/(monday|tuesday|wednesday|thursday|friday|saturday|sunday|weekday|weekend)/gi);
-  if (dayMatches) {
-    details.push(...dayMatches.map(m => m.trim()));
-  }
-  
-  // Constraint patterns (work until X, kids, etc.)
-  const constraintPatterns = [
-    /i work (?:until|til|till|from|at) [^.!?]+/gi,
-    /my (?:son|daughter|kid|child|wife|husband) [^.!?]+/gi,
-    /i(?:'m| am) (?:busy|available|free) [^.!?]+/gi,
-    /only (?:available|free) [^.!?]+/gi
-  ];
-  
-  for (const pattern of constraintPatterns) {
-    const matches = message.match(pattern);
-    if (matches) {
-      details.push(...matches.map(m => m.trim()));
-    }
-  }
-  
-  return [...new Set(details)];
+  return "T1";
 }
 
-/**
- * Evaluate response quality against the lead message
- * Uses LLM for nuanced evaluation with structured output
- */
-async function evaluateResponse(
-  draft: string,
-  leadMessage: string,
-  conversationHistory: any[],
-  knowledgeBase: string,
-  classSchedule: ClassSchedule[],
-  apiKey: string,
-  iteration: number
-): Promise<EvaluationResult> {
-  const extractedQuestions = extractQuestions(leadMessage);
-  const extractedDetails = extractLeadDetails(leadMessage);
-  
-  // Build context for evaluation
-  const historyContext = conversationHistory.slice(-6).map(m => 
-    `${m.role.toUpperCase()}: ${m.content}`
-  ).join('\n');
-  
-  const scheduleContext = formatClassSchedule(classSchedule);
-  
-  const evaluationPrompt = `You are a quality evaluator for customer service responses. Analyze this response critically.
+// ─── System Prompt (Component 1, 5, 6, 7) ────────────────────────────────────
+function buildSystemPrompt(params: {
+  contactName: string | null;
+  urgency: number;
+  intent: Intent;
+  tier: Tier;
+  msgCount: number;
+  schedule: string;
+  knowledgeBase: string;
+  dbPersonality: string;
+  businessContext: string;
+}): string {
+  const { contactName, urgency, intent, tier, msgCount, schedule, knowledgeBase, dbPersonality, businessContext } = params;
+  const remaining = MAX_MESSAGES_BEFORE_HANDOFF - msgCount;
 
-LEAD MESSAGE: "${leadMessage}"
+  const urgencyInstruction = urgency >= 9
+    ? `URGENCY 9-10 (EMERGENCY): Ask ONE clarifying question, then immediately offer a call. Do not qualify further.`
+    : urgency >= 6
+    ? `URGENCY ${urgency} (FAST-TRACK): Skip small talk. Get to the point. Move toward booking in 1-2 messages.`
+    : `URGENCY ${urgency} (STANDARD): Qualify naturally. Max ${remaining} more message(s) before handing off to Scott.`;
 
-DRAFT RESPONSE: "${draft}"
+  const intentInstruction = {
+    BUYING:       "INTENT: BUYING — They want to start. Remove friction. Give them one clear next step.",
+    INFO_SEEKING: "INTENT: INFO-SEEKING — Answer their question directly first, then advance toward trial.",
+    PROBLEM:      "INTENT: PROBLEM — Empathize first. Do not pitch. Offer to connect with Scott immediately.",
+    ROUTINE:      "INTENT: ROUTINE — Keep it natural. Qualify without pressure.",
+    REJECTION:    "INTENT: REJECTION — Accept gracefully. One sentence. Do not pitch or follow up.",
+    ESCALATION:   "INTENT: ESCALATION — They want a human. Acknowledge. Say Scott will reach out. Stop.",
+  }[intent];
 
-CONVERSATION HISTORY:
-${historyContext || 'None'}
+  const handoffInstruction = msgCount >= MAX_MESSAGES_BEFORE_HANDOFF
+    ? `\nMANDATORY HANDOFF: This is message ${msgCount + 1} / ${MAX_MESSAGES_BEFORE_HANDOFF + 1}. Transfer NOW. Say something like: "Let me have Scott call you directly — he can answer everything in 2 minutes. What's the best time?"`
+    : "";
 
-EXTRACTED QUESTIONS FROM LEAD: ${JSON.stringify(extractedQuestions)}
-EXTRACTED DETAILS FROM LEAD: ${JSON.stringify(extractedDetails)}
+  return `${dbPersonality}You are a lead responder for Fight Flow Academy — ${businessContext || "Fight Flow Academy"}, an MMA & fitness gym in Raleigh-Durham, NC.
+${contactName ? `Lead name: ${contactName}` : ""}
 
-KNOWLEDGE BASE (for accuracy check):
-${knowledgeBase.substring(0, 2000)}
+PERSONA: You are a brief, competent human rep — NOT a chatbot. Sound like a real person texting.
 
-CLASS SCHEDULE (for accuracy check):
-${scheduleContext.substring(0, 1500)}
+HARD RULES (non-negotiable):
+- Max 2 sentences per reply
+- Max 160 characters per reply
+- Zero filler words ("Great!", "Awesome!", "Sure thing!")
+- NEVER echo/repeat what the lead just said back to them
+- Answer first, then (optionally) ask ONE question
+- One purpose per message — not two asks
 
-Evaluate the draft response against these 6 criteria. Be STRICT - if there's any doubt, mark as FAIL.
+${urgencyInstruction}
+${intentInstruction}
+${handoffInstruction}
 
-1. RELEVANCE: Does this response address what they ACTUALLY said? Would this same response work for any random message? If generic = FAIL.
+QUALIFYING LOGIC (Components 5):
+- Message 1: Discovery question (what brings them in, what they're looking for)
+- Messages 2-3: Narrow to class type + schedule
+- Message 4: Offer trial / confirm booking OR hand off to Scott
 
-2. QUESTION_ANSWERED: If the lead asked ANY question (even implied), did we answer it? Check the extracted questions list.
+TONE (Component 6):
+- Match their energy. Short replies → short back.
+- Long, enthusiastic replies → warm and specific back.
+- Never robotic. Never repeat their words back at them.
+- Sound like you've been here before. You know the gym. You want them to succeed.
 
-3. DETAIL_ECHO: If the lead mentioned specific times, days, constraints (e.g., "I work until 6pm"), does the response acknowledge this?
+TRANSFER RULE (Component 7):
+- Natural close: "Want to pop in for a free trial?" or "I can grab you a time with Scott."
+- Default next step = book a trial class or a quick call with Scott
+- When transferring, end with: "I'll let Scott know to reach out shortly."
 
-4. CONTEXT_AWARE: Looking at conversation history, does this response make sense? Are we asking something they already answered? Contradicting ourselves?
-
-5. ACCURACY: Any times, prices, or facts mentioned - do they match the knowledge base and schedule? If we say "classes at 7pm" there better be a 7pm class.
-
-6. CTA_APPROPRIATE: Is the call-to-action right for this stage? 
-   - If they just asked a question, CTA should be answering it, not jumping to booking
-   - If they confirmed "yes that works", CTA should confirm booking, not ask more questions
-   - If they're new, invite trial; if scheduling, suggest specific time
-
-Return JSON ONLY (no markdown):
-{
-  "relevance": {"pass": boolean, "reason": "brief explanation"},
-  "questionAnswered": {"pass": boolean, "reason": "brief explanation", "questions": ["list of detected questions"]},
-  "detailEcho": {"pass": boolean, "reason": "brief explanation", "details": ["list of details that should be acknowledged"]},
-  "contextAware": {"pass": boolean, "reason": "brief explanation"},
-  "accuracy": {"pass": boolean, "reason": "brief explanation"},
-  "ctaAppropriate": {"pass": boolean, "reason": "brief explanation"}
-}`;
-
-  try {
-    const response = await fetch('https://openrouter.ai/api/v1/chat/completions', {
-      method: 'POST',
-      headers: {
-        'Authorization': `Bearer ${apiKey}`,
-        'Content-Type': 'application/json',
-        'HTTP-Referer': 'https://fightflowacademy.com',
-        'X-Title': 'Fight Flow AI Evaluator'
-      },
-      body: JSON.stringify({
-        model: 'openai/gpt-4o-mini', // Fast model for evaluation
-        messages: [
-          { role: 'user', content: evaluationPrompt }
-        ],
-        max_tokens: 500,
-        temperature: 0.1 // Low temp for consistent evaluation
-      })
-    });
-
-    if (!response.ok) {
-      console.error('Evaluation API error:', await response.text());
-      // On error, pass through (fail-open)
-      return createPassingEvaluation(iteration);
-    }
-
-    const data = await response.json();
-    const content = data.choices[0]?.message?.content || '';
-    
-    // Parse JSON response
-    let scores;
-    try {
-      // Clean potential markdown formatting
-      const jsonStr = content.replace(/```json\n?|\n?```/g, '').trim();
-      scores = JSON.parse(jsonStr);
-    } catch (parseError) {
-      console.error('Failed to parse evaluation response:', content);
-      return createPassingEvaluation(iteration);
-    }
-
-    // Compile failures
-    const failures: string[] = [];
-    if (!scores.relevance?.pass) failures.push(`RELEVANCE: ${scores.relevance?.reason || 'Generic response'}`);
-    if (!scores.questionAnswered?.pass) failures.push(`QUESTION_ANSWERED: ${scores.questionAnswered?.reason || 'Missed question'}`);
-    if (!scores.detailEcho?.pass) failures.push(`DETAIL_ECHO: ${scores.detailEcho?.reason || 'Missed details'}`);
-    if (!scores.contextAware?.pass) failures.push(`CONTEXT_AWARE: ${scores.contextAware?.reason || 'Context issue'}`);
-    if (!scores.accuracy?.pass) failures.push(`ACCURACY: ${scores.accuracy?.reason || 'Inaccurate info'}`);
-    if (!scores.ctaAppropriate?.pass) failures.push(`CTA_APPROPRIATE: ${scores.ctaAppropriate?.reason || 'Wrong CTA'}`);
-
-    return {
-      allPass: failures.length === 0,
-      failures,
-      scores: {
-        relevance: scores.relevance || { pass: true, reason: 'No evaluation' },
-        questionAnswered: { 
-          ...scores.questionAnswered || { pass: true, reason: 'No evaluation' },
-          questions: extractedQuestions
-        },
-        detailEcho: {
-          ...scores.detailEcho || { pass: true, reason: 'No evaluation' },
-          details: extractedDetails
-        },
-        contextAware: scores.contextAware || { pass: true, reason: 'No evaluation' },
-        accuracy: scores.accuracy || { pass: true, reason: 'No evaluation' },
-        ctaAppropriate: scores.ctaAppropriate || { pass: true, reason: 'No evaluation' }
-      },
-      iteration
-    };
-  } catch (error) {
-    console.error('Evaluation error:', error);
-    return createPassingEvaluation(iteration);
-  }
-}
-
-function createPassingEvaluation(iteration: number): EvaluationResult {
-  return {
-    allPass: true,
-    failures: [],
-    scores: {
-      relevance: { pass: true, reason: 'Evaluation skipped' },
-      questionAnswered: { pass: true, reason: 'Evaluation skipped', questions: [] },
-      detailEcho: { pass: true, reason: 'Evaluation skipped', details: [] },
-      contextAware: { pass: true, reason: 'Evaluation skipped' },
-      accuracy: { pass: true, reason: 'Evaluation skipped' },
-      ctaAppropriate: { pass: true, reason: 'Evaluation skipped' }
-    },
-    iteration
-  };
-}
-
-/**
- * Rewrite the response based on specific failures
- */
-async function rewriteWithDiagnosis(
-  draft: string,
-  failures: string[],
-  leadMessage: string,
-  conversationHistory: any[],
-  knowledgeBase: string,
-  classSchedule: ClassSchedule[],
-  systemPrompt: string,
-  apiKey: string,
-  model: string
-): Promise<string> {
-  const historyContext = conversationHistory.slice(-6).map(m => 
-    `${m.role.toUpperCase()}: ${m.content}`
-  ).join('\n');
-  
-  const scheduleContext = formatClassSchedule(classSchedule);
-
-  const rewritePrompt = `Your previous response FAILED quality checks. Fix these specific issues:
-
-FAILURES:
-${failures.map(f => `❌ ${f}`).join('\n')}
-
-ORIGINAL LEAD MESSAGE: "${leadMessage}"
-
-YOUR FAILED RESPONSE: "${draft}"
-
-CONVERSATION HISTORY:
-${historyContext}
+SCHEDULE:
+${schedule || "No schedule loaded."}
 
 KNOWLEDGE BASE:
-${knowledgeBase.substring(0, 2000)}
+${knowledgeBase ? knowledgeBase.slice(0, 1500) : "No additional context."}
 
-CLASS SCHEDULE:
-${scheduleContext.substring(0, 1500)}
+RESPOND ONLY with the SMS text. No quotes. No labels. No prefix.`;
+}
 
-Write a NEW response that:
-1. Fixes each failure listed above
-2. Directly addresses what the lead said
-3. Acknowledges any specific details they mentioned
-4. Answers any questions they asked
-5. Uses accurate information from the knowledge base/schedule
-6. Has an appropriate next step for this conversation stage
+// ─── OpenRouter Call ──────────────────────────────────────────────────────────
+async function callLLM(
+  model: string,
+  messages: Array<{role: string; content: string}>,
+  apiKey: string,
+  maxTokens = 100,
+  temperature = 0.7
+): Promise<string> {
+  const res = await fetch(OPENROUTER_BASE, {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${apiKey}`,
+      "Content-Type": "application/json",
+      "HTTP-Referer": OPENROUTER_REFERER,
+      "X-Title": OPENROUTER_TITLE,
+    },
+    body: JSON.stringify({ model, messages, max_tokens: maxTokens, temperature }),
+  });
 
-Respond ONLY with the new message. No explanations.`;
+  if (!res.ok) {
+    const err = await res.text();
+    throw new Error(`OpenRouter ${model} error (${res.status}): ${err}`);
+  }
+
+  const data = await res.json();
+  return (data.choices?.[0]?.message?.content ?? "").trim();
+}
+
+// ─── Quality Gate (T2 reviews T1 output) ─────────────────────────────────────
+/**
+ * Sonnet reviews Haiku's draft. Returns the corrected message or the original.
+ * Only fires for T1 responses (not emergency, not transfer).
+ */
+async function qualityGate(
+  draft: string,
+  leadMessage: string,
+  systemPrompt: string,
+  apiKey: string
+): Promise<string> {
+  const evalPrompt = `You are a quality reviewer for SMS lead responses. Evaluate this draft reply.
+
+LEAD MESSAGE: "${leadMessage}"
+DRAFT REPLY: "${draft}"
+
+Rules the draft must follow:
+1. Max 2 sentences
+2. Max 160 characters
+3. No filler words (Great!, Awesome!, Sure thing!)
+4. Answers the lead's question/intent first
+5. Does NOT echo/repeat their words back to them
+6. Has one clear purpose
+
+If all rules pass, reply ONLY: PASS
+If any rule fails, reply ONLY with a corrected version of the SMS (no explanation, no prefix, ≤160 chars).`;
 
   try {
-    const response = await fetch('https://openrouter.ai/api/v1/chat/completions', {
-      method: 'POST',
-      headers: {
-        'Authorization': `Bearer ${apiKey}`,
-        'Content-Type': 'application/json',
-        'HTTP-Referer': 'https://fightflowacademy.com',
-        'X-Title': 'Fight Flow AI Rewriter'
-      },
-      body: JSON.stringify({
-        model: model, // Use main model for quality rewrite
-        messages: [
-          { role: 'system', content: systemPrompt },
-          { role: 'user', content: rewritePrompt }
-        ],
-        max_tokens: 300,
-        temperature: 0.7
-      })
-    });
+    const result = await callLLM(
+      MODEL_T2,
+      [{ role: "user", content: evalPrompt }],
+      apiKey,
+      120,
+      0.2
+    );
 
-    if (!response.ok) {
-      console.error('Rewrite API error:', await response.text());
-      return draft; // Return original on error
+    if (result.startsWith("PASS")) {
+      console.log("Quality gate: PASS");
+      return draft;
     }
 
-    const data = await response.json();
-    return data.choices[0]?.message?.content?.trim() || draft;
-  } catch (error) {
-    console.error('Rewrite error:', error);
+    // Returned a corrected version
+    const corrected = truncate(result, MAX_CHARS);
+    console.log("Quality gate: CORRECTED →", corrected);
+    return corrected;
+  } catch (err) {
+    console.error("Quality gate error (using draft):", err);
     return draft;
   }
 }
 
+// ─── Human Handoff SMS (Component → Handoff) ─────────────────────────────────
+async function sendHandoffSMS(params: {
+  accountSid: string;
+  authToken: string;
+  fromNumber: string;
+  contactName: string | null;
+  contactPhone: string | null;
+  serviceType: string;
+  urgency: number;
+  transcriptSummary: string;
+}): Promise<void> {
+  const { accountSid, authToken, fromNumber, contactName, contactPhone, serviceType, urgency, transcriptSummary } = params;
+
+  const name = contactName || "Unknown";
+  const phone = contactPhone || "N/A";
+  const summary = truncate(transcriptSummary, 300);
+
+  const body = `🚨 Fight Flow Lead Handoff
+Name: ${name}
+Phone: ${phone}
+Interest: ${serviceType}
+Urgency: ${urgency}/10
+Transcript: ${summary}`;
+
+  try {
+    const res = await fetch(
+      `https://api.twilio.com/2010-04-01/Accounts/${accountSid}/Messages.json`,
+      {
+        method: "POST",
+        headers: {
+          Authorization: `Basic ${btoa(`${accountSid}:${authToken}`)}`,
+          "Content-Type": "application/x-www-form-urlencoded",
+        },
+        body: new URLSearchParams({ From: fromNumber, To: SCOTT_PHONE, Body: body }),
+      }
+    );
+
+    if (!res.ok) {
+      const text = await res.text();
+      console.error("Handoff SMS failed:", text);
+    } else {
+      console.log("Handoff SMS sent to Scott");
+    }
+  } catch (err) {
+    console.error("Handoff SMS error:", err);
+  }
+}
+
+// ─── Re-engagement Scheduler ──────────────────────────────────────────────────
+/**
+ * Enroll thread in re-engagement if not already enrolled.
+ * Type: 'no_reply' (20min, 2hr) or 'mid_convo_drop' (15min).
+ * Respects quiet hours — does not schedule if in quiet window.
+ */
+async function scheduleReEngagement(
+  supabase: ReturnType<typeof createClient>,
+  threadId: string,
+  businessId: string,
+  type: "no_reply" | "mid_convo_drop"
+): Promise<void> {
+  // Check if re-engagement already pending
+  const { data: existing } = await supabase
+    .from("fightflow_reengagement_queue")
+    .select("id")
+    .eq("thread_id", threadId)
+    .eq("status", "pending")
+    .limit(1);
+
+  if (existing && existing.length > 0) {
+    console.log("Re-engagement already scheduled for thread", threadId);
+    return;
+  }
+
+  const delays = type === "no_reply"
+    ? [20 * 60 * 1000, 2 * 60 * 60 * 1000]     // 20 min, 2 hr
+    : [15 * 60 * 1000];                           // 15 min
+
+  const now = Date.now();
+  const rows = delays.map((d, i) => ({
+    thread_id: threadId,
+    business_id: businessId,
+    type,
+    attempt: i + 1,
+    max_attempts: delays.length,
+    fire_at: new Date(now + d).toISOString(),
+    status: "pending",
+    created_at: new Date().toISOString(),
+  }));
+
+  const { error } = await supabase.from("fightflow_reengagement_queue").insert(rows);
+  if (error) {
+    console.error("Re-engagement schedule error:", error.message);
+  } else {
+    console.log(`Re-engagement (${type}) scheduled: ${delays.length} attempt(s)`);
+  }
+}
+
+// ─── Main Handler ─────────────────────────────────────────────────────────────
 Deno.serve(async (req) => {
-  if (req.method === 'OPTIONS') {
-    return new Response('ok', { headers: corsHeaders });
+  if (req.method === "OPTIONS") {
+    return new Response("ok", { headers: corsHeaders });
   }
 
   try {
     const supabase = createClient(
-      Deno.env.get('SUPABASE_URL') ?? '',
-      Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
+      Deno.env.get("SUPABASE_URL") ?? "",
+      Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? ""
     );
 
-    const { messages, businessId, businessContext, classSchedule, contactName, threadId, knowledgeBase } = await req.json();
+    const apiKey = Deno.env.get("OPENROUTER_API_KEY");
+    if (!apiKey) throw new Error("OPENROUTER_API_KEY not configured");
 
-    // Get the latest user message for context
-    const latestMessage = messages[messages.length - 1]?.content || '';
-    const detectedIntents = detectIntent(latestMessage);
+    const twilioSid = Deno.env.get("TWILIO_ACCOUNT_SID") || Deno.env.get("TWILIO_SID");
+    const twilioToken = Deno.env.get("TWILIO_AUTH_TOKEN");
+    const twilioFrom = Deno.env.get("TWILIO_PHONE_NUMBER") || "+19197372900";
 
-    console.log('Processing message:', latestMessage);
-    console.log('Detected intents:', detectedIntents);
+    const {
+      messages,
+      businessId,
+      businessContext,
+      classSchedule,
+      contactName,
+      contactPhone,
+      threadId,
+      knowledgeBase,
+    } = await req.json();
 
-    // Check for escalation triggers
-    const escalation = detectEscalation(latestMessage);
-    if (escalation.shouldEscalate) {
-      console.log('Escalation triggered:', escalation.reason);
-    }
+    // ── Build context ────────────────────────────────────────────────────────
+    const latestMessage: string = messages?.[messages.length - 1]?.content ?? "";
+    const msgCount: number = messages?.filter((m: any) => m.role === "user").length ?? 0;
+    const schedule = formatSchedule(classSchedule ?? []);
+    const knowledgeText = typeof knowledgeBase === "string"
+      ? knowledgeBase
+      : Array.isArray(knowledgeBase)
+        ? knowledgeBase.map((k: any) => `${k.title}: ${k.content}`).join("\n")
+        : "";
 
-    // Check for polite rejection
-    const isRejection = detectRejection(latestMessage);
-    if (isRejection) {
-      console.log('Rejection detected - customer declined');
-    }
+    // ── Intent & urgency ─────────────────────────────────────────────────────
+    const intent = detectIntent(latestMessage);
+    const urgency = scoreUrgency(latestMessage, intent, msgCount);
+    const tier = selectTier(urgency, msgCount, intent);
+    const shouldHandoff = msgCount >= MAX_MESSAGES_BEFORE_HANDOFF || intent === "ESCALATION";
 
-    // Get agent configuration
+    console.log(`[ai-response] intent=${intent} urgency=${urgency} tier=${tier} msgCount=${msgCount} handoff=${shouldHandoff}`);
+
+    // ── Agent config (personality override from DB) ───────────────────────────
     let agentConfig: AgentConfig | null = null;
     if (businessId) {
-      const { data: configData } = await supabase
-        .from('agent_config')
-        .select('*')
-        .eq('business_id', businessId)
+      const { data } = await supabase
+        .from("agent_config")
+        .select("*")
+        .eq("business_id", businessId)
         .single();
-
-      if (configData) {
-        agentConfig = configData as AgentConfig;
-      }
+      agentConfig = data ?? null;
     }
 
-    // Use pre-loaded knowledge base
-    let knowledgeContext = '';
-    if (knowledgeBase && knowledgeBase.length > 0) {
-      knowledgeContext = '\n\nBUSINESS KNOWLEDGE BASE:\n' + knowledgeBase;
-      console.log('Using pre-loaded knowledge base:', knowledgeBase.length, 'chars');
-    }
-
-    // Extract booking preferences from ENTIRE conversation history
-    const fullConversation = messages.map((m: any) => m.content).join(' ');
-    const bookingState: BookingState = {
-      classType: extractClassType(fullConversation),
-      preferredDay: extractDay(fullConversation),
-      preferredTime: extractTimePeriod(fullConversation),
-      suggestedClass: null,
-      awaitingConfirmation: false
-    };
-
-    console.log('Booking state extracted:', bookingState);
-
-    // Find matching classes based on preferences
-    let suggestedClasses: ClassSchedule[] = [];
-    let bookingContext = '';
-
-    if (classSchedule && classSchedule.length > 0) {
-      if (bookingState.classType || bookingState.preferredDay !== null || bookingState.preferredTime) {
-        suggestedClasses = findMatchingClasses(
-          classSchedule,
-          bookingState.classType,
-          bookingState.preferredDay,
-          bookingState.preferredTime
-        );
-
-        if (suggestedClasses.length > 0) {
-          bookingContext = '\n\nMATCHING CLASSES FOR THIS CUSTOMER:\n';
-          suggestedClasses.slice(0, 5).forEach((cls, idx) => {
-            bookingContext += `${idx + 1}. ${formatClassOption(cls)}\n`;
-          });
-          bookingContext += '\nSuggest one of these specific classes to the customer!';
-        }
-      }
-    }
-
-    // Format full class schedule for reference
-    const scheduleContext = classSchedule && classSchedule.length > 0
-      ? `\n\nFULL CLASS SCHEDULE:\n${formatClassSchedule(classSchedule)}`
-      : '';
-
-    // Check if the customer is confirming a suggested class
-    const isConfirmation = detectedIntents.includes('BOOKING_CONFIRMATION');
-    const lastAssistantMessage = messages.filter((m: any) => m.role === 'assistant').pop()?.content || '';
-
-    // Check if the last assistant message suggested a specific class
-    const suggestedClassInLastMessage = classSchedule?.find((cls: ClassSchedule) =>
-      lastAssistantMessage.toLowerCase().includes(cls.class_name.toLowerCase()) &&
-      lastAssistantMessage.toLowerCase().includes(getDayName(cls.day_of_week).toLowerCase())
-    );
-
-    if (isConfirmation && suggestedClassInLastMessage) {
-      bookingState.suggestedClass = suggestedClassInLastMessage;
-      bookingState.awaitingConfirmation = true;
-    }
-
-    // Build the system prompt
-    const hasFullPreferences = bookingState.classType && (bookingState.preferredDay !== null || bookingState.preferredTime);
-    const recommendationContext = hasFullPreferences && suggestedClasses.length > 0
-      ? `\n\nRECOMMENDED CLASSES (based on customer preferences):\n${suggestedClasses.slice(0, 3).map(cls =>
-          `- ${cls.class_name} on ${getDayName(cls.day_of_week)} at ${formatTime(cls.start_time)}`
-        ).join('\n')}\nONLY suggest from this list.`
-      : '';
-
-    // Inject DB personality_prompt at top if present — controls pricing, billing, and persona-specific rules
     const dbPersonality = agentConfig?.personality_prompt
       ? `${agentConfig.personality_prompt}\n\n---\n\n`
-      : '';
+      : "";
 
-    const systemPrompt = `${dbPersonality}You are texting on behalf of Fight Flow Academy, a martial arts gym. You're having a real conversation with a real person — talk like a human, not a bot.
-
-BUSINESS: ${businessContext || 'Fight Flow Academy'}
-${contactName ? `CUSTOMER NAME: ${contactName}` : ''}
-${knowledgeContext}
-${scheduleContext}
-${recommendationContext}
-
-=== THE #1 RULE: ACTUALLY LISTEN ===
-Read what they said. Respond to THAT. Not to what you wish they said.
-
-If they tell you something about their situation, acknowledge it genuinely BEFORE moving on.
-If they ask a question, answer it directly. Don't deflect into a sales pitch.
-If they share a concern, address it — don't ignore it.
-
-=== BE A HUMAN, NOT A BOT ===
-❌ DON'T: Immediately pivot every response back to booking a class
-❌ DON'T: Use phrases like "That's great!" or "Awesome!" robotically
-❌ DON'T: Ask rapid-fire questions without acknowledging their answers
-❌ DON'T: Sound like a telemarketer reading a script
-
-✅ DO: Respond naturally to what they actually said
-✅ DO: Let the conversation breathe — not every message needs a call-to-action
-✅ DO: Be helpful first, sales second
-✅ DO: Match their energy and tone
-
-=== WHEN YOU CAN'T HELP ===
-If they have a question you can't answer, a concern you can't address, or a request that's beyond what you can do:
-Say: "I'll let Scott know and he'll be in touch!"
-Then STOP. Don't keep pushing. Flag the conversation for human follow-up.
-
-=== WHEN THEY SAY NO ===
-${isRejection ? '⚠️ THEY JUST DECLINED. Respect it. One short, graceful response. No follow-up questions. No "what\'s keeping you busy?" Just: "No problem! Feel free to reach out if anything changes. Take care!"' : ''}
-
-If someone says "I'm good", "not interested", "already signed up elsewhere", or any variation of NO:
-- Accept it gracefully in ONE sentence
-- Do NOT try to change their mind
-- Do NOT ask follow-up questions
-- Do NOT make small talk
-
-=== PRICING RESPONSES ===
-When you state any pricing information (membership cost, monthly fee, trial cost, etc.):
-ALWAYS follow up IMMEDIATELY with: "Would that work for you?"
-This is non-negotiable — every pricing statement must end with "Would that work for you?" to surface objections and keep the conversation alive.
-Example: "Our unlimited membership is $149/month. Would that work for you?"
-Do NOT skip this follow-up question after pricing, even if you think they'll say yes.
-
-=== IF THEY WANT TO BOOK ===
-Only if they express genuine interest in trying a class:
-1. Ask what type of training interests them (if not clear)
-2. Ask what days/times work (if not clear)
-3. Suggest a SPECIFIC class from the schedule below
-4. Confirm the booking
-
-SCHEDULE ACCURACY: Only mention times from this schedule:
-${scheduleContext || 'No schedule loaded'}
-
-=== RESPONSE FORMAT ===
-- Keep it short for SMS (under ${agentConfig?.max_response_length || 280} chars)
-- Sound like a friendly human texting, not a corporate bot
-- Use their name naturally (not robotically at the start of every message)
-- One thought at a time — don't overwhelm them
-
-RESPOND ONLY with the message to send. No prefixes or explanations.`;
-
-    // Determine model to use
-    const model = agentConfig?.model || 'openai/gpt-4o-mini';
-    const temperature = agentConfig?.temperature || 0.7;
-
-    console.log('Using model:', model, 'temperature:', temperature);
-
-    const apiKey = Deno.env.get('OPENROUTER_API_KEY');
-    if (!apiKey) {
-      console.error('OPENROUTER_API_KEY not configured');
-      throw new Error('AI service not configured');
+    // ── Rejection / Escalation fast-path ─────────────────────────────────────
+    if (intent === "REJECTION") {
+      const rejectMsg = "No problem — feel free to reach out if anything changes. Take care!";
+      // Cancel any pending re-engagement
+      if (threadId) {
+        await supabase
+          .from("fightflow_reengagement_queue")
+          .update({ status: "cancelled" })
+          .eq("thread_id", threadId)
+          .eq("status", "pending");
+      }
+      return new Response(JSON.stringify({
+        message: rejectMsg,
+        intent,
+        urgency,
+        tier,
+        shouldHandoff: false,
+        reengagementScheduled: false,
+      }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
     }
 
-    // ============================================
-    // SELF-IMPROVEMENT LOOP (NEW)
-    // ============================================
-    
-    const evaluationEnabled = agentConfig?.evaluation_enabled ?? true; // Default ON
-    const maxIterations = 3;
-    let aiMessage = '';
-    let evaluationResults: EvaluationResult[] = [];
-    let finalIteration = 0;
-
-    // Generate initial response
-    const initialResponse = await fetch('https://openrouter.ai/api/v1/chat/completions', {
-      method: 'POST',
-      headers: {
-        'Authorization': `Bearer ${apiKey}`,
-        'Content-Type': 'application/json',
-        'HTTP-Referer': 'https://fightflowacademy.com',
-        'X-Title': 'Fight Flow AI Assistant'
-      },
-      body: JSON.stringify({
-        model: model,
-        messages: [
-          { role: 'system', content: systemPrompt },
-          ...messages
-        ],
-        max_tokens: 300,
-        temperature: temperature
-      })
+    // ── Build system prompt ───────────────────────────────────────────────────
+    const systemPrompt = buildSystemPrompt({
+      contactName,
+      urgency,
+      intent,
+      tier,
+      msgCount,
+      schedule,
+      knowledgeBase: knowledgeText,
+      dbPersonality,
+      businessContext,
     });
 
-    if (!initialResponse.ok) {
-      const errorText = await initialResponse.text();
-      console.error('OpenRouter API error:', errorText);
-      throw new Error(`OpenRouter API error: ${initialResponse.status}`);
-    }
-
-    const initialData = await initialResponse.json();
-    aiMessage = initialData.choices[0]?.message?.content ||
-      (agentConfig?.fallback_message || 'Sorry, I had trouble understanding. Can you please rephrase?');
-
-    console.log('Initial AI Response:', aiMessage);
-
-    // Run evaluation loop if enabled
-    if (evaluationEnabled && !isRejection && !escalation.shouldEscalate) {
-      for (let iteration = 1; iteration <= maxIterations; iteration++) {
-        console.log(`Evaluation iteration ${iteration}...`);
-        
-        const evaluation = await evaluateResponse(
-          aiMessage,
-          latestMessage,
-          messages,
-          knowledgeBase || '',
-          classSchedule || [],
-          apiKey,
-          iteration
-        );
-        
-        evaluationResults.push(evaluation);
-        finalIteration = iteration;
-
-        if (evaluation.allPass) {
-          console.log(`Evaluation PASSED on iteration ${iteration}`);
-          break;
-        }
-
-        console.log(`Evaluation FAILED on iteration ${iteration}:`, evaluation.failures);
-
-        if (iteration < maxIterations) {
-          // Rewrite with diagnosis
-          aiMessage = await rewriteWithDiagnosis(
-            aiMessage,
-            evaluation.failures,
-            latestMessage,
-            messages,
-            knowledgeBase || '',
-            classSchedule || [],
-            systemPrompt,
-            apiKey,
-            model
-          );
-          console.log(`Rewritten response (iteration ${iteration}):`, aiMessage);
-        } else {
-          console.log('Max iterations reached, using last response');
-        }
-      }
-    }
-
-    console.log('Final AI Response:', aiMessage);
-
-    // Detect if AI is escalating to human
-    const aiMessageLower = aiMessage.toLowerCase();
-    const needsHumanFollowup = NEEDS_HUMAN_PATTERNS.some(pattern => 
-      aiMessageLower.includes(pattern)
-    );
-    if (needsHumanFollowup) {
-      console.log('AI flagged for human follow-up - Scott needs to reach out');
-    }
-
-    // Detect booking confirmation
-    const bookingIndicators = [
-      'booked', 'confirmed', 'scheduled', 'see you', 'you\'re all set',
-      'got you down', 'reserved', 'looking forward', 'you\'re set'
-    ];
-    const aiConfirmedBooking = bookingIndicators.some(indicator =>
-      aiMessage.toLowerCase().includes(indicator)
+    // ── Generate response (tiered) ────────────────────────────────────────────
+    const primaryModel = tier === "T2" ? MODEL_T2 : MODEL_T1;
+    let aiMessage = await callLLM(
+      primaryModel,
+      [
+        { role: "system", content: systemPrompt },
+        ...(messages ?? []),
+      ],
+      apiKey,
+      120,
+      0.7
     );
 
-    // Extract class details if booking
-    let classDetails = undefined;
-    let shouldBook = false;
+    // Enforce hard char limit (Component 2)
+    aiMessage = truncate(aiMessage, MAX_CHARS);
 
-    if (bookingState.awaitingConfirmation && bookingState.suggestedClass) {
-      shouldBook = true;
-      classDetails = {
-        className: bookingState.suggestedClass.class_name,
-        day: getDayName(bookingState.suggestedClass.day_of_week),
-        dayOfWeek: bookingState.suggestedClass.day_of_week,
-        time: formatTime(bookingState.suggestedClass.start_time),
-        instructor: bookingState.suggestedClass.instructor,
-        classScheduleId: bookingState.suggestedClass.id
-      };
-      console.log('Booking confirmed via customer confirmation:', classDetails);
-    } else if (aiConfirmedBooking && classSchedule && classSchedule.length > 0) {
-      const aiMsgLower = aiMessage.toLowerCase();
-
-      for (const cls of classSchedule) {
-        const classNameLower = cls.class_name.toLowerCase();
-        const dayName = getDayName(cls.day_of_week).toLowerCase();
-
-        if (aiMsgLower.includes(classNameLower) ||
-            (aiMsgLower.includes(classNameLower.split(' ')[0]) && aiMsgLower.includes(dayName))) {
-          shouldBook = true;
-          classDetails = {
-            className: cls.class_name,
-            day: getDayName(cls.day_of_week),
-            dayOfWeek: cls.day_of_week,
-            time: formatTime(cls.start_time),
-            instructor: cls.instructor,
-            classScheduleId: cls.id
-          };
-          console.log('Booking detected from AI confirmation:', classDetails);
-          break;
-        }
-      }
-
-      if (!classDetails && suggestedClasses.length > 0) {
-        const firstMatch = suggestedClasses[0];
-        shouldBook = true;
-        classDetails = {
-          className: firstMatch.class_name,
-          day: getDayName(firstMatch.day_of_week),
-          dayOfWeek: firstMatch.day_of_week,
-          time: formatTime(firstMatch.start_time),
-          instructor: firstMatch.instructor,
-          classScheduleId: firstMatch.id
-        };
-        console.log('Booking using first matching class:', classDetails);
-      }
+    // ── Quality gate (T1 only, non-emergency) ─────────────────────────────────
+    if (tier === "T1" && urgency < 8 && !shouldHandoff) {
+      aiMessage = await qualityGate(aiMessage, latestMessage, systemPrompt, apiKey);
     }
 
-    // Update conversation state
-    if (threadId && businessId) {
-      const newState = isRejection ? 'closed_not_interested' :
-        (shouldBook ? 'class_scheduled' :
-        (detectedIntents.includes('BOOK_TRIAL') ? 'collecting_booking_info' : 'answering_questions'));
+    console.log("[ai-response] final message:", aiMessage);
 
-      try {
-        const updateData: any = {
-          conversation_state: newState,
-          last_bot_message_at: new Date().toISOString()
-        };
+    // ── Human handoff ─────────────────────────────────────────────────────────
+    let handoffSent = false;
+    if (shouldHandoff && twilioSid && twilioToken) {
+      // Build transcript summary from last N messages
+      const lastMsgs = (messages ?? []).slice(-8).map((m: any) =>
+        `${m.role === "user" ? "Lead" : "AI"}: ${m.content}`
+      ).join(" | ");
 
-        if (escalation.shouldEscalate || needsHumanFollowup) {
-          updateData.needs_human_review = true;
-          updateData.conversation_state = 'needs_human_review';
-          updateData.state_data = {
-            escalation_reason: needsHumanFollowup ? 'AI_ESCALATED' : escalation.reason,
-            escalation_time: new Date().toISOString(),
-            escalation_message: needsHumanFollowup 
-              ? `AI response: ${aiMessage.substring(0, 200)}`
-              : latestMessage.substring(0, 200)
-          };
-        }
+      // Detect service type from conversation
+      const serviceType = classSchedule?.find((c: ClassSchedule) => {
+        const txt = (messages ?? []).map((m: any) => m.content).join(" ").toLowerCase();
+        return txt.includes(c.class_name.toLowerCase().split(" ")[0]);
+      })?.class_name ?? "General Inquiry";
 
-        await supabase
-          .from('conversation_threads')
-          .update(updateData)
-          .eq('id', threadId);
-
-        if (escalation.shouldEscalate) {
-          await supabase
-            .from('automation_logs')
-            .insert({
-              business_id: businessId,
-              automation_type: 'human_escalation',
-              status: 'triggered',
-              processed_data: {
-                thread_id: threadId,
-                reason: escalation.reason,
-                message_preview: latestMessage.substring(0, 100)
-              }
-            });
-        }
-      } catch (updateError) {
-        console.error('Error updating conversation state:', updateError);
-      }
+      await sendHandoffSMS({
+        accountSid: twilioSid,
+        authToken: twilioToken,
+        fromNumber: twilioFrom,
+        contactName: contactName ?? null,
+        contactPhone: contactPhone ?? null,
+        serviceType,
+        urgency,
+        transcriptSummary: lastMsgs,
+      });
+      handoffSent = true;
     }
 
-    // Log evaluation results to automation_logs (for monitoring)
-    if (evaluationEnabled && evaluationResults.length > 0 && businessId) {
-      try {
-        await supabase
-          .from('automation_logs')
-          .insert({
-            business_id: businessId,
-            automation_type: 'response_evaluation',
-            status: evaluationResults[evaluationResults.length - 1].allPass ? 'passed' : 'failed',
-            processed_data: {
-              thread_id: threadId,
-              lead_message: latestMessage.substring(0, 200),
-              final_response: aiMessage.substring(0, 200),
-              iterations: finalIteration,
-              evaluation_history: evaluationResults.map(e => ({
-                iteration: e.iteration,
-                allPass: e.allPass,
-                failures: e.failures
-              }))
-            }
-          });
-      } catch (logError) {
-        console.error('Error logging evaluation results:', logError);
-      }
+    // ── Re-engagement scheduling ──────────────────────────────────────────────
+    // Schedule re-engagement for new outbound responses (not handoffs / rejections)
+    let reengagementScheduled = false;
+    if (threadId && businessId && !shouldHandoff && !isQuietHours()) {
+      const reType = msgCount > 1 ? "mid_convo_drop" : "no_reply";
+      await scheduleReEngagement(supabase, threadId, businessId, reType);
+      reengagementScheduled = true;
+    }
+
+    // ── Update conversation state ─────────────────────────────────────────────
+    if (threadId) {
+      const convState = shouldHandoff
+        ? "needs_human_review"
+        : intent === "BUYING"
+          ? "collecting_booking_info"
+          : "answering_questions";
+
+      await supabase.from("conversation_threads").update({
+        conversation_state: convState,
+        last_bot_message_at: new Date().toISOString(),
+        ...(shouldHandoff ? { needs_human_review: true } : {}),
+      }).eq("id", threadId);
+    }
+
+    // ── Log to automation_logs ────────────────────────────────────────────────
+    if (businessId) {
+      await supabase.from("automation_logs").insert({
+        business_id: businessId,
+        automation_type: "speed_to_lead_response",
+        status: "success",
+        processed_data: {
+          thread_id: threadId,
+          intent,
+          urgency,
+          tier,
+          msg_count: msgCount,
+          handoff_sent: handoffSent,
+          reengagement_scheduled: reengagementScheduled,
+          response_preview: aiMessage.slice(0, 100),
+        },
+      }).catch((e: Error) => console.error("Log insert error:", e.message));
     }
 
     return new Response(JSON.stringify({
       message: aiMessage,
-      shouldBook,
-      classDetails,
-      detectedIntents,
-      knowledgeUsed: knowledgeBase ? 'full knowledge base' : 'none',
-      bookingState: {
-        classType: bookingState.classType,
-        preferredDay: bookingState.preferredDay !== null ? getDayName(bookingState.preferredDay) : null,
-        preferredTime: bookingState.preferredTime,
-        suggestedClassesCount: suggestedClasses.length
-      },
-      escalation: escalation.shouldEscalate ? {
-        triggered: true,
-        reason: escalation.reason
-      } : null,
-      rejection: isRejection ? {
-        detected: true,
-        shouldStopSequence: true
-      } : null,
-      needsHumanFollowup: needsHumanFollowup ? {
-        flagged: true,
-        reason: 'AI escalated to Scott'
-      } : null,
-      // New: evaluation metadata
-      evaluation: evaluationEnabled ? {
-        enabled: true,
-        iterations: finalIteration,
-        finalPass: evaluationResults.length > 0 ? evaluationResults[evaluationResults.length - 1].allPass : true,
-        history: evaluationResults.map(e => ({
-          iteration: e.iteration,
-          pass: e.allPass,
-          failures: e.failures
-        }))
-      } : { enabled: false }
+      intent,
+      urgency,
+      tier,
+      shouldHandoff,
+      handoffSent,
+      reengagementScheduled,
+      // Legacy fields for sms-webhook compatibility
+      shouldBook: false,
+      classDetails: null,
+      detectedIntents: [intent],
+      evaluation: { enabled: true, tier },
     }), {
-      headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+      headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
 
   } catch (error: any) {
-    console.error('AI response error:', error);
-    // CRITICAL: Never expose internal errors to customers
-    // Always return a friendly, human-readable fallback message
-    const safeMessage = 'Thanks for reaching out! We\'ll get back to you shortly.';
+    console.error("ai-response fatal:", error);
     return new Response(JSON.stringify({
-      message: safeMessage,
+      message: "Thanks for reaching out! We'll get back to you shortly.",
       error: error.message,
-      errorFiltered: true  // Flag so we know this was an error path
+      errorFiltered: true,
     }), {
       status: 500,
-      headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+      headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
   }
 });
