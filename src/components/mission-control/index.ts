@@ -14,3 +14,8 @@ export { EditTaskDialog } from './EditTaskDialog';
 export { QualityDashboard } from './QualityDashboard';
 export { PrioritiesPanel } from './PrioritiesPanel';
 export { AgentHealthPanel } from './AgentHealthPanel';
+export { MarketingPerformanceBar } from './MarketingPerformanceBar';
+export { OutreachApprovalPanel } from './OutreachApprovalPanel';
+export { ReplyDetectionAlertPanel } from './ReplyDetectionAlertPanel';
+export { LinkedInActivityPanel } from './LinkedInActivityPanel';
+export { PostizSocialCalendarPanel } from './PostizSocialCalendarPanel';

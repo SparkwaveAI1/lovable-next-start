@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback } from "react";
 import { DashboardLayout } from "@/components/layout/DashboardLayout";
 import { PageContent } from "@/components/layout/PageLayout";
-import { AgentCard, StatsBar, RicoChat, ScottsActionItems, AgentActivityMonitor, HealthDashboard, AnalyticsMonitor, AddTaskDialog, EditTaskDialog, QualityDashboard, AgentOutputsFeedPanel, PrioritiesPanel, AgentHealthPanel } from "@/components/mission-control";
+import { AgentCard, StatsBar, RicoChat, ScottsActionItems, AgentActivityMonitor, HealthDashboard, AnalyticsMonitor, AddTaskDialog, EditTaskDialog, QualityDashboard, AgentOutputsFeedPanel, PrioritiesPanel, AgentHealthPanel, MarketingPerformanceBar, OutreachApprovalPanel, ReplyDetectionAlertPanel, LinkedInActivityPanel, PostizSocialCalendarPanel } from "@/components/mission-control";
 import { useBusinessContext } from "@/contexts/BusinessContext";
 import { useBusinesses } from "@/hooks/useBusinesses";
 import { supabase } from "@/integrations/supabase/client";
@@ -23,6 +23,7 @@ export default function MissionControl() {
   const [addTaskDialogOpen, setAddTaskDialogOpen] = useState(false);
   const [editTaskDialogOpen, setEditTaskDialogOpen] = useState(false);
   const [editingTask, setEditingTask] = useState<Task | null>(null);
+  const [activeTab, setActiveTab] = useState<'dashboard' | 'marketing'>('dashboard');
 
   // Fetch data from Supabase mc_ tables, filtered by selected business
   // Global agents (scope='global') are always included regardless of business selection
@@ -307,7 +308,7 @@ export default function MissionControl() {
       showAllOption={true}
     >
       <PageContent>
-        {/* Page Header */}
+        {/* Page Header + Tabs */}
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-4">
           <div>
             <h1 className="text-xl sm:text-2xl font-bold text-slate-900">Mission Control</h1>
@@ -331,17 +332,44 @@ export default function MissionControl() {
           </div>
         )}
 
-        {/* 1. Agent Activity + Scott's To-Do (top, side by side) */}
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
-          <AgentActivityMonitor
-            agents={agents.map(a => ({ id: a.id, name: a.name, status: a.status, role: a.role, last_active: (a as any).last_active ?? null }))}
-          />
-
-          <ScottsActionItems
-            tasks={tasks}
-            onTaskClick={handleTaskClick}
-          />
+        {/* Tab Navigation */}
+        <div className="mb-6 flex border-b border-slate-200 gap-0.5">
+          <button
+            onClick={() => setActiveTab('dashboard')}
+            className={`px-4 py-2 text-sm font-medium border-b-2 transition-colors ${
+              activeTab === 'dashboard'
+                ? 'border-blue-600 text-blue-600'
+                : 'border-transparent text-slate-600 hover:text-slate-900'
+            }`}
+          >
+            Dashboard
+          </button>
+          <button
+            onClick={() => setActiveTab('marketing')}
+            className={`px-4 py-2 text-sm font-medium border-b-2 transition-colors ${
+              activeTab === 'marketing'
+                ? 'border-blue-600 text-blue-600'
+                : 'border-transparent text-slate-600 hover:text-slate-900'
+            }`}
+          >
+            Marketing
+          </button>
         </div>
+
+        {/* Dashboard Tab */}
+        {activeTab === 'dashboard' && (
+          <>
+            {/* 1. Agent Activity + Scott's To-Do (top, side by side) */}
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
+              <AgentActivityMonitor
+                agents={agents.map(a => ({ id: a.id, name: a.name, status: a.status, role: a.role, last_active: (a as any).last_active ?? null }))}
+              />
+
+              <ScottsActionItems
+                tasks={tasks}
+                onTaskClick={handleTaskClick}
+              />
+            </div>
 
         {/* 2. Task Board (full width) — project/owner/priority kanban */}
         <div className="mb-6">
@@ -378,6 +406,19 @@ export default function MissionControl() {
           <PrioritiesPanel />
           <AgentHealthPanel />
         </div>
+          </>
+        )}
+
+        {/* Marketing Tab */}
+        {activeTab === 'marketing' && (
+          <div className="space-y-6">
+            <MarketingPerformanceBar />
+            <OutreachApprovalPanel />
+            <ReplyDetectionAlertPanel />
+            <LinkedInActivityPanel />
+            <PostizSocialCalendarPanel />
+          </div>
+        )}
 
         {/* Add Task Dialog */}
         <AddTaskDialog
