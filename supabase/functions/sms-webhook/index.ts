@@ -757,6 +757,14 @@ serve(async (req) => {
       throw new Error(`Failed to store message: ${messageError.message}`);
     }
 
+    // Cancel any pending re-engagement steps — lead replied, so no need to follow up
+    await supabase
+      .from('fightflow_sequence_steps')
+      .update({ status: 'cancelled' })
+      .eq('appointment_id', thread.id)
+      .eq('step_name', 'reengage_no_reply')
+      .eq('status', 'pending');
+
     await supabase
       .from('contacts')
       .update({
@@ -931,7 +939,8 @@ INSTRUCTIONS FOR RETURNING CONTACT:
           knowledgeBase: (knowledgeText || '') + (returningContactContext ? '\n\n' + returningContactContext : ''),
           scheduleText: scheduleText,
           todaysSchedule: todaysScheduleText,
-          currentDay: currentDayName
+          currentDay: currentDayName,
+          contactPhone: from
         })
       });
 
