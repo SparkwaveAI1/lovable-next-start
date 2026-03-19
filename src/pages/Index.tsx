@@ -18,6 +18,7 @@ import { MissionControlTasksPanel } from "@/components/dashboard/MissionControlT
 import { AgentOutputsFeedPanel } from "@/components/dashboard/AgentOutputsFeedPanel"
 import { ContentCalendarPanel } from "@/components/dashboard/ContentCalendarPanel"
 import { IrisPipelinePanel } from "@/components/dashboard/IrisPipelinePanel"
+import { SparkwaveAnalyticsPanel } from "@/components/dashboard/SparkwaveAnalyticsPanel"
 
 const Index = () => {
   const { selectedBusiness, setSelectedBusiness } = useBusinessContext();
@@ -74,6 +75,11 @@ const Index = () => {
         {/* Iris Pipeline — prospect pipeline chart + recent activity */}
         <div className="mb-6">
           <IrisPipelinePanel />
+        </div>
+
+        {/* Sparkwave Analytics — business metrics overview */}
+        <div className="mb-6">
+          <SparkwaveAnalyticsPanel />
         </div>
 
         {/* Sales Actions Required — mc_tasks tagged sales_action */}
