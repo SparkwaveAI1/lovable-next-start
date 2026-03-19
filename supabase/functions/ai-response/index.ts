@@ -12,8 +12,8 @@
  * 7. Transfer — natural close; default next step = phone call
  *
  * Tiered Model Routing:
- * - T1: claude-haiku-4-5-20251001 — standard qualifying
- * - T2: claude-sonnet-4-6 — complex/transfers (urgency ≥8 or msg ≥4)
+ * - T1: claude-haiku-4.5 — standard qualifying
+ * - T2: claude-sonnet-4.6 — complex/transfers (urgency ≥8 or msg ≥4)
  *
  * Quality Gate (Sonnet reviews Haiku output ~26% catch rate):
  * - Fires when T1 produces a response for urgency <8 and msg count <4
@@ -41,8 +41,8 @@ const OPENROUTER_REFERER = "https://fightflowacademy.com";
 const OPENROUTER_TITLE = "Fight Flow Lead Responder";
 
 // Tiered models (Speed-to-Lead Blueprint / IDENTITY.md tiering)
-const MODEL_T1 = "anthropic/claude-haiku-4-5-20251001"; // standard qualifying
-const MODEL_T2 = "anthropic/claude-sonnet-4-6";         // complex / transfers
+const MODEL_T1 = "anthropic/claude-haiku-4.5"; // standard qualifying (OpenRouter ID)
+const MODEL_T2 = "anthropic/claude-sonnet-4.6"; // complex / transfers (OpenRouter ID)
 const MODEL_EVAL = "openai/gpt-4o-mini";                // quality gate evaluator (fast)
 
 // Hard limits (7-Component, Component 2)
