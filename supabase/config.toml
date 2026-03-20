@@ -48,6 +48,13 @@ verify_jwt = true
 [functions.resend-webhook]
 verify_jwt = false
 
+# SPA-881: Iris Sales Automation Phase 1
+[functions.prospect-lead-intake]
+verify_jwt = false
+
+[functions.prospect-sequence-processor]
+verify_jwt = false
+
 [functions.market-data-service]
 verify_jwt = false
 
