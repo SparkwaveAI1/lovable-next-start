@@ -40,6 +40,9 @@ const TERMINAL_STAGES = new Set([
 // Batch limit per run (rate limit safety)
 const BATCH_LIMIT = 50;
 
+// Lead type for Iris B2B Sparkwave prospects — must match prospect-lead-intake
+const IRIS_LEAD_TYPE = 'b2b_sparkwave';
+
 // Sparkwave AI B2B sender info
 const FROM_EMAIL = 'scott@sparkwave-ai.com';
 const FROM_NAME = 'Scott Johnson';
@@ -123,12 +126,13 @@ serve(async (req) => {
   try {
     console.log('🚀 prospect-sequence-processor started');
 
-    // Find active prospects not in any terminal stage
+    // Find active Iris B2B prospects not in any terminal stage
+    // Filter by lead_type='b2b_sparkwave' to exclude Fight Flow / blue_collar prospects
     const { data: prospects, error: fetchError } = await supabase
       .from('prospects')
       .select('id, name, email, company, pipeline_stage, status')
-      .eq('status', 'active')
-      .not('pipeline_stage', 'in', `(${[...TERMINAL_STAGES].map(s => `"${s}"`).join(',')})`)
+      .eq('lead_type', IRIS_LEAD_TYPE)
+      .not('pipeline_stage', 'in', `(${[...TERMINAL_STAGES].join(',')})`)
       .limit(BATCH_LIMIT);
 
     if (fetchError) {
@@ -343,9 +347,10 @@ serve(async (req) => {
             .eq('id', prospect.id)
             .single();
 
+          const currentStage = currentProspect?.pipeline_stage || '';
           if (
             currentProspect &&
-            !TERMINAL_STAGES.has(currentProspect.pipeline_stage || '')
+            !TERMINAL_STAGES.has(currentStage)
           ) {
             await supabase
               .from('prospects')

@@ -1,7 +1,13 @@
 # Iris Sales Automation Phase 1 — Deploy Runbook (SPA-881)
 
 **Who:** Scott (needs SUPABASE_ACCESS_TOKEN) or Dev once token is provided  
-**Status:** Code complete, pushed to origin/main — blocked on deployment
+**Status:** Code complete + schema-corrected (2026-03-20), pushed to origin/main — blocked on deployment
+
+**Schema corrections (2026-03-20 18:xx UTC):**
+- Fixed: `status` uses `'prospect'` not `'active'` (matches real DB values)
+- Fixed: New prospects created with `lead_type = 'b2b_sparkwave'` to distinguish from Fight Flow / blue_collar leads
+- Fixed: `prospect-sequence-processor` now filters by `lead_type = 'b2b_sparkwave'` (not `status = 'active'`) — prevents Fight Flow prospects from receiving Sparkwave B2B sequences
+- Fixed: `.not('pipeline_stage', 'in', ...)` format corrected (no inner quotes around values — PostgREST format)
 
 ---
 

@@ -33,7 +33,10 @@ const FROM_NAME = 'Scott Johnson';
 const SPARKWAVE_BUSINESS_ID = '5a9bbfcf-fae5-4063-9780-bcbe366bae88';
 
 // Terminal stages — prospects in these stages CANNOT be re-enrolled
-const HARD_TERMINAL_STAGES = new Set(['replied', 'qualified', 'closed', 'dead', 'unsubscribed']);
+const HARD_TERMINAL_STAGES = new Set(['replied', 'qualified', 'closed', 'dead', 'unsubscribed', 'sequence_complete']);
+
+// Lead type for Iris B2B Sparkwave prospects — used to filter in sequence processor
+const IRIS_LEAD_TYPE = 'b2b_sparkwave';
 
 // Day 0 initial outreach email template (placeholder — Scott to replace with final copy)
 function buildInitialEmailHtml(prospect: { name?: string | null; company?: string | null; email: string }): string {
@@ -148,8 +151,9 @@ serve(async (req) => {
             name: body.name || 'Unknown',
             company: body.company || null,
             pipeline_stage: 'contacted',
-            status: 'active',
+            status: 'prospect',           // matches existing DB values ('prospect' | 'contacted')
             source: 'bereach_intake',
+            lead_type: IRIS_LEAD_TYPE,    // 'b2b_sparkwave' — identifies as Iris B2B lead (not Fight Flow)
           })
           .select('id, name, email, company, pipeline_stage')
           .single();
@@ -248,11 +252,12 @@ serve(async (req) => {
     }
 
     // ── Update pipeline_stage AFTER log is claimed ───────────────────────────
+    // Only update if not in a hard terminal stage — use .not with 'in' filter
     await supabase
       .from('prospects')
-      .update({ pipeline_stage: 'contacted', status: 'active', updated_at: new Date().toISOString() })
+      .update({ pipeline_stage: 'contacted', updated_at: new Date().toISOString() })
       .eq('id', prospectId)
-      .not('pipeline_stage', 'in', `(${[...HARD_TERMINAL_STAGES].map(s => `"${s}"`).join(',')})`);
+      .not('pipeline_stage', 'in', `(${[...HARD_TERMINAL_STAGES].join(',')})`);
 
     // ── Send initial email via send-email function ───────────────────────────
     try {
