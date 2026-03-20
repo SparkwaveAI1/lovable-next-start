@@ -126,7 +126,9 @@ function truncate(s: string, max: number): string {
 const BUYING_SIGNALS = [
   "sign up","signup","join","how do i start","want to try","trial","free class",
   "book","schedule","register","when can i come","first class","how to join",
-  "i want","ready to","lets do","let's do"
+  "i want","ready to","lets do","let's do",
+  // MMA competition signals — high-intent fighters looking for a competitive gym
+  "compete","competitive gym","fight team","competitive team","amateur fighter","pro fighter",
 ];
 const INFO_SIGNALS = [
   "how much","price","cost","rates","fees","membership","monthly","what do you offer",
@@ -496,7 +498,10 @@ Deno.serve(async (req) => {
     const intent = detectIntent(latestMessage);
     const urgency = scoreUrgency(latestMessage, intent, msgCount);
     const tier = selectTier(urgency, msgCount, intent);
-    const shouldHandoff = msgCount >= MAX_MESSAGES_BEFORE_HANDOFF || intent === "ESCALATION";
+    // SPA-881 fix: urgency >=8 should also trigger handoff (was missing — hot leads slipped through)
+    const shouldHandoff = msgCount >= MAX_MESSAGES_BEFORE_HANDOFF 
+      || intent === "ESCALATION"
+      || urgency >= 8;
 
     console.log(`[ai-response] intent=${intent} urgency=${urgency} tier=${tier} msgCount=${msgCount} handoff=${shouldHandoff}`);
 
@@ -597,6 +602,56 @@ Deno.serve(async (req) => {
         transcriptSummary: lastMsgs,
       });
       handoffSent = true;
+
+      // ── SPA-881: Create mc_task in Mission Control for hot lead visibility ──
+      // Idempotency: one mc_task per thread handoff (keyed by threadId via external_id)
+      if (threadId) {
+        try {
+          const mcTaskExternalId = `fightflow-handoff-${threadId}`;
+
+          // Check for existing open task for this thread
+          const { data: existingTasks, error: lookupErr } = await supabase
+            .from("mc_tasks")
+            .select("id")
+            .eq("external_id", mcTaskExternalId)
+            .in("status", ["inbox", "todo", "in_progress"])
+            .limit(1);
+
+          if (lookupErr) {
+            console.error("[ai-response] mc_task lookup error:", lookupErr.message);
+          } else if (!existingTasks?.length) {
+            // Build transcript for mc_task description
+            const transcriptLines = (Array.isArray(messages) ? messages : [])
+              .slice(-6)
+              .map((m: { role: string; content: string }) =>
+                `${m.role === "user" ? "Lead" : "AI"}: ${m.content}`
+              )
+              .join("\n");
+
+            const { error: insertErr } = await supabase.from("mc_tasks").insert({
+              title: `🔥 Hot lead: ${contactName ?? contactPhone ?? "Unknown"} — urgency ${urgency}/10`,
+              description: `Phone: ${contactPhone ?? "unknown"}\nUrgency: ${urgency}/10\nIntent: ${intent}\nMessages exchanged: ${msgCount}\nService: ${serviceType}\n\nTranscript (last 6 msgs):\n${transcriptLines}`,
+              priority: urgency >= 9 ? "critical" : "high",
+              status: "inbox",
+              tags: ["owner:scott", "fightflow", "hot-lead"],
+              business_id: businessId ?? null,
+              external_id: mcTaskExternalId,
+              external_source: "fightflow-chatbot",
+            });
+
+            if (insertErr) {
+              console.error("[ai-response] mc_task insert error:", insertErr.message);
+            } else {
+              console.log(`[ai-response] ✅ mc_task created for hot lead: ${contactName ?? contactPhone} (urgency ${urgency})`);
+            }
+          } else {
+            console.log(`[ai-response] mc_task already open for thread ${threadId}, skipping`);
+          }
+        } catch (mcTaskErr: any) {
+          // Non-blocking: never let mc_task failures affect the SMS response
+          console.error("[ai-response] mc_task creation failed (non-blocking):", mcTaskErr.message);
+        }
+      }
     }
 
     // ── Re-engagement scheduling ──────────────────────────────────────────────
