@@ -8,12 +8,12 @@ const CrisisMonitor = () => {
   const { loading, lastUpdated, refreshData, getIndicatorValue, getIndicatorReadingDate, indicators: hookIndicators } = useCrisisIndicators();
 
   // Get live values from DB, with fallbacks to hardcoded defaults
-  const sofrIorbSpread = getIndicatorValue('sofr_iorb_spread') ?? 22;
+  const sofrIorbSpread = getIndicatorValue('sofr_iorb_spread') ?? -3;
   const reverseRepo = getIndicatorValue('reverse_repo') ?? 0;
   
   // Manual entry indicators - fetched from DB with fallbacks
   const creDelinquency = getIndicatorValue('cre_delinquency') ?? 11.7;
-  const moveIndex = getIndicatorValue('move_index') ?? 71;
+  const moveIndex = getIndicatorValue('move_index') ?? 84.88;
   
   // Get reading dates directly from hook indicators
   const moveIndicator = hookIndicators.find(i => i.indicator_key === 'move_index');
@@ -62,7 +62,7 @@ const CrisisMonitor = () => {
       redMax: 10,
       whatIsIt: 'This measures what percentage of commercial office building loans are 30+ days past due. When businesses cannot pay their office building mortgages, the banks holding those loans take losses.',
       whyItMatters: 'Regional banks hold most of these loans. High delinquency rates mean guaranteed losses for these banks, potentially triggering failures.',
-      currentAnalysis: 'At 11.7%, we are well past the 10% threshold where extend and pretend (banks quietly renewing bad loans) breaks down. Regional bank losses are now unavoidable.',
+      currentAnalysis: `At ${creDelinquency}%, we are well past the 10% threshold where extend and pretend (banks quietly renewing bad loans) breaks down. Regional bank losses are now unavoidable.`,
       dataSource: 'Trepp CMBS Research (Manual)',
       isLive: false,
       readingDate: creReadingDate
@@ -77,7 +77,7 @@ const CrisisMonitor = () => {
       yellowMax: 130,
       whatIsIt: 'The MOVE Index is like the VIX, but for bonds. It measures expected volatility in US Treasury yields. Higher equals more fear and uncertainty in the bond market.',
       whyItMatters: 'When bond traders are scared, lending freezes up. A spike in MOVE often precedes broader market crashes.',
-      currentAnalysis: 'At 71, the bond market appears calm. BUT this is misleading - the Fed $125B injection is artificially suppressing fear. Watch for this to spike if injections stop.',
+      currentAnalysis: `At ${moveIndex.toFixed(1)}, the bond market is showing elevated stress — above the calm zone but not yet at warning levels (100+). Bond traders are pricing in uncertainty. Monitor closely; a move above 100 would signal serious fear in Treasury markets.`,
       dataSource: 'ICE BofA (Manual)',
       isLive: false,
       readingDate: moveReadingDate
@@ -335,11 +335,12 @@ const CrisisMonitor = () => {
                     </span>
                   </div>
                   
-                  <h3 className="font-semibold text-zinc-300 mb-2">Current Situation (December 2025):</h3>
+                  <h3 className="font-semibold text-zinc-300 mb-2">Current Situation (March 2026):</h3>
                   <p className="text-zinc-400 leading-relaxed">
-                    The Federal Reserve halted Quantitative Tightening on December 1, 2025 and has injected ~$125 billion through emergency repo operations. 
-                    This signals the banking system cannot function without Fed life support. The bond market appears calm (MOVE Index ~71), 
-                    but this is artificial - maintained only by continuous Fed intervention. Two of four indicators are in critical territory.
+                    Overnight lending markets have normalized — the SOFR-IORB spread is slightly negative (-3 bps), meaning banks are not paying a premium 
+                    for overnight cash. However, the Reverse Repo buffer remains essentially empty (~$637M vs. a $2.5T peak), leaving the system 
+                    with no shock absorber. The MOVE Index has risen to 84.88, reflecting growing unease in Treasury markets. 
+                    Commercial real estate stress continues with office delinquencies above 11%. One of four indicators remains critical.
                   </p>
                   
                   <div className="mt-4 pt-4 border-t border-zinc-700/50">
