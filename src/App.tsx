@@ -120,7 +120,6 @@ const App = () => (
             <Route path="/faq" element={<ProtectedRoute><ErrorBoundary><FAQ /></ErrorBoundary></ProtectedRoute>} />
             <Route path="/content-visibility" element={<Navigate replace to="/content-hub" />} />
             <Route path="/content-review" element={<Navigate replace to="/content-hub" />} />
-            <Route path="/agent-chat" element={<Navigate replace to="/" />} />
             <Route path="/system-monitoring" element={<ProtectedRoute><ErrorBoundary><SystemMonitoring /></ErrorBoundary></ProtectedRoute>} />
             <Route path="/monitoring" element={<MonitoringPage />} />
             <Route path="/tools/autoresearch" element={<ProtectedRoute><ErrorBoundary><AutoresearchDashboard /></ErrorBoundary></ProtectedRoute>} />
