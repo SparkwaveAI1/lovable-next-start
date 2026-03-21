@@ -1,0 +1,20 @@
+{
+  "b2b_sparkwave": {
+    "intro": "iris-b2b-intro",
+    "day3": "iris-b2b-followup-day3",
+    "day7": "iris-b2b-followup-day7",
+    "day14": "iris-b2b-followup-day14"
+  },
+  "blue_collar": {
+    "intro": "iris-seo-outreach",
+    "day3": "iris-seo-followup-day3",
+    "day7": "iris-seo-followup-day7",
+    "day14": "iris-seo-followup-day14"
+  },
+  "fight_flow_b2b": {
+    "intro": "fight-flow-seo-intro",
+    "day3": "fight-flow-seo-day3",
+    "day7": "fight-flow-seo-day7",
+    "day14": "fight-flow-seo-day14"
+  }
+}
