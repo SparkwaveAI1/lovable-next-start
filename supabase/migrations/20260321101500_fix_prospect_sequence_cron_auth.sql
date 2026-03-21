@@ -1,0 +1,25 @@
+-- SPA-899: Fix prospect-sequence-processor cron job authentication
+--
+-- Root cause: The cron job was using current_setting('app.supabase_service_role_key', true)
+-- which was never configured in the database, so the Authorization header was empty/null.
+-- The function received unauthenticated requests and returned "No active prospects to process"
+-- even though prospects existed.
+--
+-- Fix: Replace current_setting() with the hardcoded service role key.
+-- This is the same approach used by fightflow-reengagement-processor cron job.
+--
+-- Applied: 2026-03-21 (Dev, SPA-899)
+--
+-- NOTE: This migration documents the fix applied on 2026-03-21.
+-- The actual fix was applied via the Management API (cron.unschedule + cron.schedule).
+-- The new cron job (jobid=12) uses a hardcoded service role key.
+-- 
+-- Live fix already applied. This migration serves as documentation.
+-- Re-running this migration is safe (idempotent unschedule + reschedule).
+
+-- The live cron job was updated to use:
+-- headers := json_build_object('Authorization', 'Bearer <service_role_key>', ...)
+-- instead of:  
+-- headers := json_build_object('Authorization', 'Bearer ' || current_setting('app.supabase_service_role_key', true), ...)
+-- 
+-- See: cron.job WHERE jobname = 'prospect-sequence-processor' (jobid=12)

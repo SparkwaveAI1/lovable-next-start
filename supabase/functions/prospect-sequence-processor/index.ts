@@ -1,9 +1,6 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
-// Import template sets (single source of truth)
-import TEMPLATE_SETS from "../lib/template-sets.json" assert { type: "json" };
-
 /**
  * Prospect Sequence Processor (SPA-881 Phase 1 / SPA-899 Fix)
  *
@@ -15,11 +12,15 @@ import TEMPLATE_SETS from "../lib/template-sets.json" assert { type: "json" };
  * Timing is anchored to outreach_log.sent_at of the Day 0 entry.
  *
  * Table: `prospects` (CRM — id: integer)
- * Lead types handled: b2b_sparkwave, blue_collar, fight_flow_b2b
  *
  * SPA-899 fix (2026-03-21):
  * - Extended from b2b_sparkwave-only to all active lead types
  * - Added blue_collar (SEO outreach) and fight_flow_b2b (MMA gym) template sets
+ * - Template selection is now dynamic: TEMPLATE_SETS[lead_type][day]
+ * - Error handling changed from fail-fast to granular: skip prospect on missing
+ *   template, log WARNING, continue processing remaining prospects
+ * - Prospects query now filters by .in('lead_type', Object.keys(TEMPLATE_SETS))
+ *   and fetches the lead_type field so we can select the correct template set
  */
 
 const corsHeaders = {
@@ -47,9 +48,6 @@ const TERMINAL_STAGES = new Set([
 // Batch limit per run (rate limit safety)
 const BATCH_LIMIT = 50;
 
-// Active lead types to process (SPA-899: extended from b2b_sparkwave-only)
-const ACTIVE_LEAD_TYPES = ['b2b_sparkwave', 'blue_collar', 'fight_flow_b2b'];
-
 // Sparkwave AI B2B sender info
 const FROM_EMAIL = 'scott@sparkwave-ai.com';
 const FROM_NAME = 'Scott Johnson';
@@ -61,14 +59,18 @@ interface EmailTemplate {
   templateUsed: string;
 }
 
-// Template sets keyed by lead_type, then by sequence day
-// b2b_sparkwave: Sparkwave AI B2B SaaS pitch
-// blue_collar: SEO services follow-up (local businesses)
-// fight_flow_b2b: Fight Flow MMA gym management platform
-
 type ProspectData = { name?: string | null; company?: string | null; email: string };
 
-const TEMPLATES_BY_LEAD_TYPE: Record<string, Record<number, EmailTemplate>> = {
+/**
+ * TEMPLATE_SETS — keyed by lead_type, then by sequence day.
+ *
+ * SPA-899: This replaces the old single-type TEMPLATES lookup.
+ * Active lead types: b2b_sparkwave, blue_collar, fight_flow_b2b
+ *
+ * To add a new lead type: add a new key here with day 3/7/14 templates.
+ * The prospects query auto-discovers active lead types via Object.keys(TEMPLATE_SETS).
+ */
+const TEMPLATE_SETS: Record<string, Record<number, EmailTemplate>> = {
   // B2B Sparkwave — AI/automation pitch
   b2b_sparkwave: {
     3: {
@@ -137,7 +139,7 @@ const TEMPLATES_BY_LEAD_TYPE: Record<string, Record<number, EmailTemplate>> = {
       `,
     },
     7: {
-      subject: 'One quick question — ${p.company ?? "your business"}',
+      subject: 'One quick question for your business',
       templateUsed: 'blue_collar_day7_followup',
       html: (p: ProspectData) => `
         <div style="font-family: Arial, sans-serif; max-width: 600px; color: #333;">
@@ -190,7 +192,7 @@ const TEMPLATES_BY_LEAD_TYPE: Record<string, Record<number, EmailTemplate>> = {
       `,
     },
     7: {
-      subject: 'How many leads did ${p.company ?? "your gym"} lose this week?',
+      subject: 'How many leads did your gym lose this week?',
       templateUsed: 'fightflow_day7_followup',
       html: (p: ProspectData) => `
         <div style="font-family: Arial, sans-serif; max-width: 600px; color: #333;">
@@ -221,6 +223,10 @@ const TEMPLATES_BY_LEAD_TYPE: Record<string, Record<number, EmailTemplate>> = {
   },
 };
 
+// Active lead types derived from TEMPLATE_SETS — no separate constant needed.
+// Add a new key to TEMPLATE_SETS above to automatically include a new lead type.
+const ACTIVE_LEAD_TYPES = Object.keys(TEMPLATE_SETS);
+
 serve(async (req) => {
   if (req.method === 'OPTIONS') {
     return new Response(null, { headers: corsHeaders });
@@ -242,8 +248,8 @@ serve(async (req) => {
   try {
     console.log('🚀 prospect-sequence-processor started');
 
-    // Find all active prospects not in any terminal stage
-    // Filter by all ACTIVE_LEAD_TYPES (b2b_sparkwave, blue_collar, fight_flow_b2b)
+    // SPA-899: Filter by all active lead types (derived from TEMPLATE_SETS keys).
+    // Also fetches lead_type so we can select the correct template set per prospect.
     const { data: prospects, error: fetchError } = await supabase
       .from('prospects')
       .select('id, name, email, company, pipeline_stage, status, lead_type')
@@ -323,28 +329,20 @@ serve(async (req) => {
           if (sentDays.has(step.day)) continue;
           if (hoursElapsed < step.hours) continue;
 
-          // SPA-899: Dynamic template lookup from TEMPLATE_SETS by lead_type and day
-          const leadTypeTemplates = TEMPLATE_SETS[prospect.lead_type as keyof typeof TEMPLATE_SETS];
-          if (!leadTypeTemplates) {
-            console.warn(`⚠️  WARN: Unknown lead_type '${prospect.lead_type}' for prospect ${prospect.id}. Skipping.`);
-            results.skipped++;
-            break; // Skip this prospect entirely
-          }
-
-          const templateName = leadTypeTemplates[step.day as keyof typeof leadTypeTemplates];
-          if (!templateName) {
-            console.warn(`⚠️  WARN: No template for lead_type='${prospect.lead_type}' day ${step.day}. Skipping this step.`);
-            continue; // Skip this step, try next one
-          }
-
-          // Get the template from TEMPLATES_BY_LEAD_TYPE (defined below)
-          const template = TEMPLATES_BY_LEAD_TYPE[prospect.lead_type]?.[step.day];
+          // SPA-899: Dynamic template lookup — TEMPLATE_SETS[lead_type][day]
+          // On missing template: log WARNING and skip prospect (granular error handling,
+          // do not crash the batch).
+          const template = TEMPLATE_SETS[prospect.lead_type]?.[step.day];
           if (!template) {
-            console.warn(`⚠️  WARN: Template not found for ${prospect.lead_type} day ${step.day}. Skipping step.`);
-            continue; // Skip this step
+            console.warn(
+              `⚠️  WARN: No template for lead_type='${prospect.lead_type}' day=${step.day} ` +
+              `(prospect ${prospect.id}). Skipping prospect.`
+            );
+            results.skipped++;
+            break; // Skip remaining steps for this prospect; continue outer loop
           }
 
-          console.log(`📧 Sending Day ${step.day} follow-up to ${prospect.email}`);
+          console.log(`📧 Sending Day ${step.day} follow-up to ${prospect.email} (lead_type: ${prospect.lead_type})`);
 
           // Claim the log slot with 'pending' to prevent duplicate sends
           const { data: logEntry, error: logInsertError } = await supabase
