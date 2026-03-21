@@ -694,7 +694,7 @@ Deno.serve(async (req) => {
           reengagement_scheduled: reengagementScheduled,
           response_preview: aiMessage.slice(0, 100),
         },
-      }).catch((e: Error) => console.error("Log insert error:", e.message));
+      }).then(({ error: logErr }) => { if (logErr) console.error("Log insert error:", logErr.message); });
     }
 
     return new Response(JSON.stringify({
