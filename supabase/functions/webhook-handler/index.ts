@@ -311,6 +311,10 @@ async function sendInitialOutreach(
     console.log('Knowledge base loaded:', knowledgeBase.length, 'items');
     console.log('Class schedule loaded:', classSchedule.length, 'items');
 
+    const personalizedFallback = contactName
+      ? `Hey ${contactName}! Thanks for reaching out to Fight Flow Academy! Can I answer any questions for you or set you up with a free trial class?`
+      : `Hey! Thanks for reaching out to Fight Flow Academy! Can I answer any questions for you or set you up with a free trial class?`;
+
     try {
       const aiResponse = await fetch(`${Deno.env.get('SUPABASE_URL')}/functions/v1/ai-response`, {
         method: 'POST',
@@ -327,10 +331,6 @@ async function sendInitialOutreach(
           knowledgeBase: knowledgeText
         })
       });
-
-      const personalizedFallback = contactName
-        ? `Hey ${contactName}! Thanks for reaching out to Fight Flow Academy! Can I answer any questions for you or set you up with a free trial class?`
-        : `Hey! Thanks for reaching out to Fight Flow Academy! Can I answer any questions for you or set you up with a free trial class?`;
 
       if (aiResponse.ok) {
         const aiResult = await aiResponse.json();
