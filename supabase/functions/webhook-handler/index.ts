@@ -296,7 +296,13 @@ async function sendInitialOutreach(
   }
 
   // Determine the response message
-  let responseMessage: string;
+  // FIX (SPA-930): Define personalizedFallback BEFORE the try block so it is always
+  // in scope if the catch runs. Also initialize responseMessage with the fallback
+  // so it is never undefined if an unexpected code path is taken.
+  const personalizedFallback = contactName
+    ? `Hey ${contactName}! Thanks for reaching out to Fight Flow Academy! Can I answer any questions for you or set you up with a free trial class?`
+    : `Hey! Thanks for reaching out to Fight Flow Academy! Can I answer any questions for you or set you up with a free trial class?`;
+  let responseMessage: string = personalizedFallback;
 
   // Build the AI prompt context — either the real inquiry, or a personalized greeting prompt
   const hasRealInquiry = inquiry && inquiry.trim().length > 0 && !isJunkMessage;
@@ -310,10 +316,6 @@ async function sendInitialOutreach(
 
     console.log('Knowledge base loaded:', knowledgeBase.length, 'items');
     console.log('Class schedule loaded:', classSchedule.length, 'items');
-
-    const personalizedFallback = contactName
-      ? `Hey ${contactName}! Thanks for reaching out to Fight Flow Academy! Can I answer any questions for you or set you up with a free trial class?`
-      : `Hey! Thanks for reaching out to Fight Flow Academy! Can I answer any questions for you or set you up with a free trial class?`;
 
     try {
       const aiResponse = await fetch(`${Deno.env.get('SUPABASE_URL')}/functions/v1/ai-response`, {
