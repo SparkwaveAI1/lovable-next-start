@@ -131,12 +131,19 @@ const SystemOperations = () => {
           </div>
           
           <div className="flex items-center gap-3">
-            {summary.lastSync && (
-              <div className="flex items-center text-sm text-gray-500">
-                <Clock className="h-4 w-4 mr-1" />
-                Last sync: {new Date(summary.lastSync).toLocaleString()}
-              </div>
-            )}
+            {summary.lastSync && (() => {
+              const hoursAgo = (Date.now() - new Date(summary.lastSync).getTime()) / 3_600_000;
+              const daysAgo = Math.floor(hoursAgo / 24);
+              const stale = hoursAgo > 24;
+              return (
+                <div className={`flex items-center text-sm ${stale ? 'text-red-600 font-medium' : 'text-gray-500'}`}>
+                  <Clock className="h-4 w-4 mr-1" />
+                  {stale
+                    ? `⚠️ Data stale — ${daysAgo}d ago (cron not updating)`
+                    : `Last sync: ${new Date(summary.lastSync).toLocaleString()}`}
+                </div>
+              );
+            })()}
             
             <Button
               onClick={handleManualRefresh}
