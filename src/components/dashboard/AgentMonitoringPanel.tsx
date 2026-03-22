@@ -219,10 +219,23 @@ export function AgentMonitoringPanel() {
       const sevenDaysAgo = subDays(new Date(), 7).toISOString()
       const oneDayAgo = subDays(new Date(), 1).toISOString()
 
-      // 1. Fetch agent health via system-monitor edge function
-      const [monitorResult, healthReportResult, fightFlowResult, contentResult, emailResult] =
+      // 1. Fetch agent + service health from mc_health_reports (written by check-agent-health.mjs + check-service-health.mjs)
+      const [agentHealthResult, serviceHealthResult, healthReportResult, fightFlowResult, contentResult, emailResult] =
         await Promise.allSettled([
-          supabase.functions.invoke("system-monitor"),
+          supabase
+            .from("mc_health_reports")
+            .select("report, created_at")
+            .filter("report->>type", "eq", "agent_health")
+            .order("created_at", { ascending: false })
+            .limit(1)
+            .maybeSingle(),
+          supabase
+            .from("mc_health_reports")
+            .select("report, created_at")
+            .filter("report->>type", "eq", "service_health")
+            .order("created_at", { ascending: false })
+            .limit(1)
+            .maybeSingle(),
           supabase
             .from("mc_health_reports")
             .select("summary, green_count, yellow_count, red_count, created_at")
@@ -246,38 +259,57 @@ export function AgentMonitoringPanel() {
             .gte("sent_at", oneDayAgo),
         ])
 
-      // Parse agents from system-monitor edge function
+      // Parse agents from check-agent-health.mjs output
       let agents: AgentHealth[] = []
       let services: ServiceCheck[] = []
 
-      if (monitorResult.status === "fulfilled" && !monitorResult.value.error) {
-        const monData = monitorResult.value.data as {
-          agents?: Array<{ name: string; online: boolean; latencyMs?: number; checkedAt: string }>
+      if (agentHealthResult.status === "fulfilled" && agentHealthResult.value.data?.report) {
+        const agentReport = agentHealthResult.value.data.report as {
+          agents?: Array<{
+            name: string
+            paperclipStatus: string
+            status: string
+            reason: string
+            hoursAgo: number | null
+            lastHeartbeatAt: string | null
+          }>
         }
-        if (monData?.agents) {
-          agents = monData.agents.map(a => ({
+        if (agentReport?.agents) {
+          agents = agentReport.agents.map(a => ({
             name: a.name,
-            status: a.online ? "idle" : "error",
-            lastHeartbeat: a.checkedAt,
-            hoursAgo: 0,
-            health: a.online ? "ok" : "error",
-            issues: a.online ? [] : ["Gateway unreachable — no ping response"],
+            status: a.paperclipStatus as AgentHealth["status"] || "unknown",
+            lastHeartbeat: a.lastHeartbeatAt,
+            hoursAgo: a.hoursAgo ?? 0,
+            health: (a.status === "ok" ? "ok" : a.status === "warn" ? "warn" : "error") as AgentHealth["health"],
+            issues: a.status !== "ok" ? [a.reason] : [],
           }))
-          services = [
-            {
-              name: "Fight Flow Webhook",
-              status: "ok",
-              note: "Checking automation logs...",
-              lastActivity: null,
-            },
-          ]
         }
       }
 
-      // Fallback: if no agent data from edge fn, show placeholder
+      // Parse services from check-service-health.mjs output
+      if (serviceHealthResult.status === "fulfilled" && serviceHealthResult.value.data?.report) {
+        const serviceReport = serviceHealthResult.value.data.report as {
+          services?: Array<{
+            name: string
+            status: string
+            reason: string
+            lastSuccessAt?: string | null
+          }>
+        }
+        if (serviceReport?.services) {
+          services = serviceReport.services.map(s => ({
+            name: s.name,
+            status: (s.status === "ok" ? "ok" : s.status === "warn" ? "warn" : "error") as ServiceCheck["status"],
+            note: s.reason,
+            lastActivity: s.lastSuccessAt || null,
+          }))
+        }
+      }
+
+      // Fallback: if no agent data from scripts, show placeholder
       if (agents.length === 0) {
         agents = [
-          { name: "Rico", status: "unknown", lastHeartbeat: null, hoursAgo: 0, health: "unknown", issues: ["Data unavailable"] },
+          { name: "Rico", status: "unknown", lastHeartbeat: null, hoursAgo: 0, health: "unknown", issues: ["Run check-agent-health.mjs to populate"] },
           { name: "Iris", status: "unknown", lastHeartbeat: null, hoursAgo: 0, health: "unknown", issues: [] },
           { name: "Jerry", status: "unknown", lastHeartbeat: null, hoursAgo: 0, health: "unknown", issues: [] },
           { name: "Dev", status: "unknown", lastHeartbeat: null, hoursAgo: 0, health: "unknown", issues: [] },
@@ -285,13 +317,13 @@ export function AgentMonitoringPanel() {
         ]
       }
 
-      // Service health from health reports
+      // Service health fallback
       if (services.length === 0) {
         services = [
           { name: "Supabase", status: "ok", note: "API reachable", lastActivity: new Date().toISOString() },
-          { name: "Paperclip", status: "ok", note: "Issuing tasks", lastActivity: new Date().toISOString() },
-          { name: "Resend (Email)", status: "ok", note: "Email pipeline active", lastActivity: null },
-          { name: "Fight Flow", status: "ok", note: "Automation running", lastActivity: null },
+          { name: "Paperclip", status: "ok", note: "Run check-service-health.mjs for live data", lastActivity: new Date().toISOString() },
+          { name: "Resend (Email)", status: "unknown", note: "No data yet", lastActivity: null },
+          { name: "Fight Flow", status: "unknown", note: "No data yet", lastActivity: null },
         ]
       }
 
