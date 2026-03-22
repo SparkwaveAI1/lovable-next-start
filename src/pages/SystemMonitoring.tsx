@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from "react"
+import { KarpathyAuditPanel } from "@/components/dashboard/KarpathyAuditPanel"
 import { DashboardLayout } from "@/components/layout/DashboardLayout"
 import { PageContent } from "@/components/layout/PageLayout"
 import {
@@ -563,6 +564,10 @@ export default function SystemMonitoring() {
 
           </div>
         )}
+
+        {/* Karpathy Self-Improvement Loop Health */}
+        <KarpathyAuditPanel />
+
       </PageContent>
     </DashboardLayout>
   )
