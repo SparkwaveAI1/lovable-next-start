@@ -1,500 +1,256 @@
-import { useState } from "react";
-import { useQuery } from "@tanstack/react-query";
-import { DashboardLayout } from "@/components/layout/DashboardLayout";
-import { PageContent } from "@/components/layout/PageLayout";
-import { useBusinessContext } from "@/contexts/BusinessContext";
-import { useBusinesses } from "@/hooks/useBusinesses";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import {
-  CalendarDays,
-  ChevronLeft,
-  ChevronRight,
-  Clock,
-  Phone,
-  Mail,
-  MapPin,
-  Users,
-  RefreshCw,
-  Calendar,
-  LayoutGrid,
-} from "lucide-react";
+import { useState } from 'react';
+import { supabase } from '@/integrations/supabase/client';
+import { DashboardLayout } from '@/components/layout/DashboardLayout';
+import { PageHeader, PageContent } from '@/components/layout/PageLayout';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Badge } from '@/components/ui/badge';
+import { Input } from '@/components/ui/input';
+import { Button } from '@/components/ui/button';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Calendar, Clock, Users, Search, Loader2, ChevronLeft, ChevronRight } from 'lucide-react';
+import { useQuery } from '@tanstack/react-query';
+import { format, addDays, startOfWeek, isSameDay, parseISO } from 'date-fns';
 
-const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL;
-const ANON_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY;
+const DAYS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+const DAY_NAMES = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
 
-// ─── Types ───────────────────────────────────────────────────────────────────
+const STATUS_COLORS: Record<string, string> = {
+  confirmed:   'bg-green-100 text-green-800 border-green-200',
+  pending:     'bg-yellow-100 text-yellow-800 border-yellow-200',
+  cancelled:   'bg-red-100 text-red-800 border-red-200',
+  completed:   'bg-blue-100 text-blue-800 border-blue-200',
+  waitlisted:  'bg-purple-100 text-purple-800 border-purple-200',
+};
 
-interface Appointment {
+interface ClassSchedule {
   id: string;
-  wix_booking_id: string;
-  contact_name: string;
-  contact_email: string | null;
-  contact_phone: string | null;
-  service_name: string;
-  session_start: string;
-  session_end: string;
-  time_et: string;
-  end_time_et: string;
-  date_et: string;
+  class_name: string;
+  instructor: string;
+  day_of_week: number;
+  start_time: string;
+  end_time: string;
+  max_capacity: number;
+  is_active: boolean;
+}
+
+interface Booking {
+  id: string;
+  booking_date: string;
   status: string;
-  location: string | null;
   notes: string | null;
-  synced_at: string;
+  class_schedule: ClassSchedule;
+  contacts: { first_name: string; last_name: string; email: string } | null;
 }
 
-interface CalendarDayResponse {
-  mode: "day";
-  date: string;
-  range: { start: string; end: string };
-  total: number;
-  appointments: Appointment[];
-}
+const Bookings = () => {
+  const [weekOffset, setWeekOffset] = useState(0);
+  const [search, setSearch] = useState('');
+  const [statusFilter, setStatusFilter] = useState('all');
 
-interface CalendarWeekResponse {
-  mode: "week";
-  week_start: string;
-  week_end: string;
-  total: number;
-  days: {
-    date: string;
-    day_name: string;
-    total: number;
-    appointments: Appointment[];
-  }[];
-}
+  const weekStart = startOfWeek(addDays(new Date(), weekOffset * 7), { weekStartsOn: 0 });
+  const weekDates = Array.from({ length: 7 }, (_, i) => addDays(weekStart, i));
 
-type CalendarResponse = CalendarDayResponse | CalendarWeekResponse;
-
-// ─── Helpers ─────────────────────────────────────────────────────────────────
-
-function toDateString(date: Date): string {
-  return date.toISOString().split("T")[0];
-}
-
-function todayET(): string {
-  // Use Intl to get today's date in Eastern time
-  const now = new Date();
-  const etStr = now.toLocaleDateString("en-CA", { timeZone: "America/New_York" });
-  return etStr; // returns YYYY-MM-DD
-}
-
-function addDays(dateStr: string, days: number): string {
-  const d = new Date(dateStr + "T12:00:00Z");
-  d.setUTCDate(d.getUTCDate() + days);
-  return toDateString(d);
-}
-
-function formatDisplayDate(dateStr: string): string {
-  const [year, month, day] = dateStr.split("-").map(Number);
-  const d = new Date(Date.UTC(year, month - 1, day));
-  return d.toLocaleDateString("en-US", {
-    weekday: "long",
-    year: "numeric",
-    month: "long",
-    day: "numeric",
-    timeZone: "UTC",
-  });
-}
-
-function formatShortDate(dateStr: string): string {
-  const [year, month, day] = dateStr.split("-").map(Number);
-  const d = new Date(Date.UTC(year, month - 1, day));
-  return d.toLocaleDateString("en-US", {
-    weekday: "short",
-    month: "short",
-    day: "numeric",
-    timeZone: "UTC",
-  });
-}
-
-async function fetchCalendar(
-  viewMode: "day" | "week",
-  date: string
-): Promise<CalendarResponse> {
-  const param = viewMode === "week" ? `week=${date}` : `date=${date}`;
-  const url = `${SUPABASE_URL}/functions/v1/fightflow-calendar?${param}`;
-  const res = await fetch(url, {
-    headers: {
-      Authorization: `Bearer ${ANON_KEY}`,
-      "Content-Type": "application/json",
+  // Fetch class schedule (recurring)
+  const { data: schedule = [], isLoading: schedLoading } = useQuery({
+    queryKey: ['class_schedule'],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('class_schedule')
+        .select('*')
+        .eq('is_active', true)
+        .order('day_of_week')
+        .order('start_time');
+      if (error) throw error;
+      return data as ClassSchedule[];
     },
   });
-  if (!res.ok) {
-    const err = await res.json().catch(() => ({ error: "Unknown error" }));
-    throw new Error(err.error || `Failed to fetch calendar data`);
-  }
-  return res.json();
-}
 
-// ─── Status Badge ─────────────────────────────────────────────────────────────
+  // Fetch actual bookings for this week
+  const weekStartStr = format(weekStart, 'yyyy-MM-dd');
+  const weekEndStr = format(addDays(weekStart, 6), 'yyyy-MM-dd');
 
-function StatusBadge({ status }: { status: string }) {
-  const s = status.toLowerCase();
-  const variants: Record<string, string> = {
-    confirmed: "bg-green-100 text-green-800 border-green-200",
-    pending: "bg-yellow-100 text-yellow-800 border-yellow-200",
-    cancelled: "bg-red-100 text-red-800 border-red-200",
-    completed: "bg-blue-100 text-blue-800 border-blue-200",
-    waitlisted: "bg-purple-100 text-purple-800 border-purple-200",
-  };
-  const cls = variants[s] || "bg-slate-100 text-slate-700 border-slate-200";
-  return (
-    <span
-      className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium border ${cls}`}
-    >
-      {status.charAt(0).toUpperCase() + status.slice(1)}
-    </span>
-  );
-}
-
-// ─── Booking Card ─────────────────────────────────────────────────────────────
-
-function BookingCard({ appt }: { appt: Appointment }) {
-  return (
-    <Card className="hover:shadow-md transition-shadow border-l-4 border-l-green-500">
-      <CardContent className="p-4">
-        <div className="flex items-start justify-between gap-3">
-          {/* Left: time + name */}
-          <div className="flex-1 min-w-0">
-            <div className="flex items-center gap-2 mb-1">
-              <Clock className="h-3.5 w-3.5 text-slate-400 shrink-0" />
-              <span className="text-sm font-semibold text-slate-700">
-                {appt.time_et} – {appt.end_time_et}
-              </span>
-            </div>
-            <p className="font-semibold text-slate-900 truncate">
-              {appt.contact_name}
-            </p>
-            <p className="text-sm text-green-700 font-medium mt-0.5">
-              {appt.service_name}
-            </p>
-
-            {/* Contact details */}
-            <div className="mt-2 flex flex-wrap gap-x-4 gap-y-1">
-              {appt.contact_phone && (
-                <a
-                  href={`tel:${appt.contact_phone}`}
-                  className="flex items-center gap-1 text-xs text-slate-500 hover:text-green-600 transition-colors"
-                >
-                  <Phone className="h-3 w-3" />
-                  {appt.contact_phone}
-                </a>
-              )}
-              {appt.contact_email && (
-                <a
-                  href={`mailto:${appt.contact_email}`}
-                  className="flex items-center gap-1 text-xs text-slate-500 hover:text-green-600 transition-colors"
-                >
-                  <Mail className="h-3 w-3" />
-                  <span className="truncate max-w-[200px]">
-                    {appt.contact_email}
-                  </span>
-                </a>
-              )}
-            </div>
-
-            {appt.notes && (
-              <p className="mt-2 text-xs text-slate-500 italic">{appt.notes}</p>
-            )}
-          </div>
-
-          {/* Right: status */}
-          <div className="flex flex-col items-end gap-2 shrink-0">
-            <StatusBadge status={appt.status} />
-            {appt.location && (
-              <span className="flex items-center gap-1 text-xs text-slate-400">
-                <MapPin className="h-3 w-3" />
-                <span className="max-w-[120px] truncate">{appt.location.split(",")[0]}</span>
-              </span>
-            )}
-          </div>
-        </div>
-      </CardContent>
-    </Card>
-  );
-}
-
-// ─── Day View ─────────────────────────────────────────────────────────────────
-
-function DayView({ appointments, date }: { appointments: Appointment[]; date: string }) {
-  if (appointments.length === 0) {
-    return (
-      <div className="flex flex-col items-center justify-center py-16 text-center">
-        <div className="p-4 bg-slate-50 rounded-2xl mb-4">
-          <CalendarDays className="h-12 w-12 text-slate-300" />
-        </div>
-        <p className="text-slate-500 font-medium">No classes scheduled for this day</p>
-        <p className="text-slate-400 text-sm mt-1">{formatDisplayDate(date)}</p>
-      </div>
-    );
-  }
-
-  return (
-    <div className="space-y-3">
-      {appointments.map((appt) => (
-        <BookingCard key={appt.id} appt={appt} />
-      ))}
-    </div>
-  );
-}
-
-// ─── Week View ────────────────────────────────────────────────────────────────
-
-function WeekView({
-  days,
-}: {
-  days: CalendarWeekResponse["days"];
-}) {
-  return (
-    <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
-      {days.map((day) => (
-        <div key={day.date}>
-          <div className="flex items-center justify-between mb-2">
-            <h3 className="font-semibold text-slate-700 text-sm">
-              {formatShortDate(day.date)}
-            </h3>
-            {day.total > 0 && (
-              <Badge variant="secondary" className="text-xs">
-                {day.total}
-              </Badge>
-            )}
-          </div>
-          {day.appointments.length === 0 ? (
-            <Card className="border-dashed">
-              <CardContent className="py-6 text-center text-xs text-slate-400">
-                No classes
-              </CardContent>
-            </Card>
-          ) : (
-            <div className="space-y-2">
-              {day.appointments.map((appt) => (
-                <Card
-                  key={appt.id}
-                  className="border-l-4 border-l-green-500 hover:shadow-sm transition-shadow"
-                >
-                  <CardContent className="p-3">
-                    <div className="flex items-start justify-between gap-1">
-                      <div className="min-w-0">
-                        <p className="text-xs font-semibold text-slate-500">
-                          {appt.time_et}
-                        </p>
-                        <p className="text-sm font-medium text-slate-900 truncate">
-                          {appt.contact_name}
-                        </p>
-                        <p className="text-xs text-green-700 truncate">
-                          {appt.service_name}
-                        </p>
-                      </div>
-                      <StatusBadge status={appt.status} />
-                    </div>
-                  </CardContent>
-                </Card>
-              ))}
-            </div>
-          )}
-        </div>
-      ))}
-    </div>
-  );
-}
-
-// ─── Main Page ────────────────────────────────────────────────────────────────
-
-export default function Bookings() {
-  const { selectedBusiness, setSelectedBusiness } = useBusinessContext();
-  const { data: businesses = [] } = useBusinesses();
-
-  const [selectedDate, setSelectedDate] = useState<string>(todayET());
-  const [viewMode, setViewMode] = useState<"day" | "week">("day");
-
-  const { data, isLoading, isError, error, refetch, isFetching } = useQuery({
-    queryKey: ["fightflow-calendar", viewMode, selectedDate],
-    queryFn: () => fetchCalendar(viewMode, selectedDate),
-    staleTime: 2 * 60 * 1000, // 2 minutes
-    refetchInterval: 5 * 60 * 1000, // auto-refresh every 5 min
+  const { data: bookings = [], isLoading: bookLoading } = useQuery({
+    queryKey: ['class_bookings', weekStartStr],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('class_bookings')
+        .select('id,booking_date,status,notes,class_schedule(*),contacts(first_name,last_name,email)')
+        .gte('booking_date', weekStartStr)
+        .lte('booking_date', weekEndStr)
+        .order('booking_date');
+      if (error) throw error;
+      return data as Booking[];
+    },
   });
 
-  // Derived values for display
-  const isToday = selectedDate === todayET();
-  const appointments =
-    data?.mode === "day" ? data.appointments : [];
-  const total = data?.total ?? 0;
+  const isLoading = schedLoading || bookLoading;
 
-  const handlePrevDay = () => setSelectedDate((d) => addDays(d, -1));
-  const handleNextDay = () => setSelectedDate((d) => addDays(d, 1));
-  const handleToday = () => setSelectedDate(todayET());
+  // Summary counts
+  const totalBookings = bookings.length;
+  const confirmed = bookings.filter(b => b.status === 'confirmed').length;
+  const cancelled = bookings.filter(b => b.status === 'cancelled').length;
+
+  // Filter bookings for search/status
+  const filteredBookings = bookings.filter(b => {
+    const matchStatus = statusFilter === 'all' || b.status === statusFilter;
+    const q = search.toLowerCase();
+    const name = `${b.contacts?.first_name || ''} ${b.contacts?.last_name || ''}`.toLowerCase();
+    const cls = (b.class_schedule?.class_name || '').toLowerCase();
+    const instructor = (b.class_schedule?.instructor || '').toLowerCase();
+    const matchSearch = !q || name.includes(q) || cls.includes(q) || instructor.includes(q);
+    return matchStatus && matchSearch;
+  });
 
   return (
-    <DashboardLayout
-      selectedBusinessId={selectedBusiness?.id}
-      onBusinessChange={(id) => {
-        const business = businesses.find((b) => b.id === id);
-        if (business) setSelectedBusiness(business);
-      }}
-      businessName={selectedBusiness?.name}
-    >
+    <DashboardLayout>
+      <PageHeader
+        title="Bookings & Schedule"
+        description="Fight Flow Academy — class schedule and member bookings"
+      />
       <PageContent>
-        {/* Header */}
-        <div className="mb-6">
-          <h1 className="text-2xl font-bold text-slate-900 flex items-center gap-2">
-            <CalendarDays className="h-7 w-7 text-green-600" />
-            {selectedBusiness ? `${selectedBusiness.name} Bookings` : "Fight Flow Bookings"}
-          </h1>
-          <p className="text-slate-500 mt-1">
-            Live class schedule synced from Wix · {selectedBusiness?.name ?? "Fight Flow Academy"}
-          </p>
-        </div>
-
-        {/* Toolbar */}
-        <div className="flex flex-wrap items-center gap-3 mb-6">
-          {/* View toggle */}
-          <div className="flex rounded-lg border border-slate-200 overflow-hidden">
-            <Button
-              variant={viewMode === "day" ? "default" : "ghost"}
-              size="sm"
-              className={`rounded-none gap-1.5 ${viewMode === "day" ? "bg-green-600 hover:bg-green-700 text-white" : ""}`}
-              onClick={() => setViewMode("day")}
-            >
-              <Calendar className="h-4 w-4" />
-              Day
-            </Button>
-            <Button
-              variant={viewMode === "week" ? "default" : "ghost"}
-              size="sm"
-              className={`rounded-none gap-1.5 ${viewMode === "week" ? "bg-green-600 hover:bg-green-700 text-white" : ""}`}
-              onClick={() => setViewMode("week")}
-            >
-              <LayoutGrid className="h-4 w-4" />
-              Week
-            </Button>
-          </div>
-
-          {/* Day navigation (only in day mode) */}
-          {viewMode === "day" && (
-            <>
-              <Button variant="outline" size="sm" onClick={handlePrevDay}>
-                <ChevronLeft className="h-4 w-4" />
-              </Button>
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={handleToday}
-                disabled={isToday}
-                className={isToday ? "font-semibold border-green-300 text-green-700" : ""}
-              >
-                Today
-              </Button>
-              <Button variant="outline" size="sm" onClick={handleNextDay}>
-                <ChevronRight className="h-4 w-4" />
-              </Button>
-
-              {/* Date picker */}
-              <Input
-                type="date"
-                value={selectedDate}
-                onChange={(e) => e.target.value && setSelectedDate(e.target.value)}
-                className="w-auto text-sm"
-              />
-            </>
-          )}
-
-          {/* Week date picker */}
-          {viewMode === "week" && (
-            <Input
-              type="date"
-              value={selectedDate}
-              onChange={(e) => e.target.value && setSelectedDate(e.target.value)}
-              className="w-auto text-sm"
-            />
-          )}
-
-          {/* Refresh */}
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={() => refetch()}
-            disabled={isFetching}
-            className="ml-auto gap-1.5 text-slate-500"
-          >
-            <RefreshCw className={`h-4 w-4 ${isFetching ? "animate-spin" : ""}`} />
-            {isFetching ? "Syncing…" : "Refresh"}
+        {/* Week navigator */}
+        <div className="flex items-center justify-between mb-6">
+          <Button variant="outline" size="sm" onClick={() => setWeekOffset(w => w - 1)}>
+            <ChevronLeft className="h-4 w-4 mr-1" /> Prev Week
+          </Button>
+          <span className="font-semibold text-gray-700">
+            {format(weekStart, 'MMM d')} – {format(addDays(weekStart, 6), 'MMM d, yyyy')}
+            {weekOffset === 0 && <Badge variant="outline" className="ml-2 text-xs">This Week</Badge>}
+          </span>
+          <Button variant="outline" size="sm" onClick={() => setWeekOffset(w => w + 1)}>
+            Next Week <ChevronRight className="h-4 w-4 ml-1" />
           </Button>
         </div>
 
-        {/* Date heading (day mode) */}
-        {viewMode === "day" && (
-          <div className="flex items-center gap-3 mb-4">
-            <h2 className="text-lg font-semibold text-slate-800">
-              {formatDisplayDate(selectedDate)}
-            </h2>
-            {!isLoading && (
-              <Badge variant="secondary" className="flex items-center gap-1">
-                <Users className="h-3 w-3" />
-                {total} {total === 1 ? "class" : "classes"}
-              </Badge>
+        {/* Stats */}
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
+          <Card><CardContent className="pt-4"><div className="text-2xl font-bold">{schedule.length}</div><div className="text-sm text-gray-500">Weekly Classes</div></CardContent></Card>
+          <Card><CardContent className="pt-4"><div className="text-2xl font-bold text-blue-600">{totalBookings}</div><div className="text-sm text-gray-500">Bookings This Week</div></CardContent></Card>
+          <Card><CardContent className="pt-4"><div className="text-2xl font-bold text-green-600">{confirmed}</div><div className="text-sm text-gray-500">Confirmed</div></CardContent></Card>
+          <Card><CardContent className="pt-4"><div className="text-2xl font-bold text-red-500">{cancelled}</div><div className="text-sm text-gray-500">Cancelled</div></CardContent></Card>
+        </div>
+
+        {/* Weekly class schedule grid */}
+        <Card className="mb-6">
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2 text-base">
+              <Calendar className="h-5 w-5 text-indigo-600" />
+              Weekly Class Schedule
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            {schedLoading ? (
+              <div className="flex items-center justify-center py-8">
+                <Loader2 className="h-6 w-6 animate-spin text-indigo-400 mr-2" />
+                <span className="text-gray-400">Loading schedule...</span>
+              </div>
+            ) : (
+              <div className="grid grid-cols-7 gap-2">
+                {weekDates.map((date, dayIdx) => {
+                  const dayClasses = schedule.filter(c => c.day_of_week === dayIdx);
+                  const isToday = isSameDay(date, new Date());
+                  return (
+                    <div key={dayIdx} className={`min-h-24 rounded-lg p-2 ${isToday ? 'bg-indigo-50 border border-indigo-200' : 'bg-gray-50 border border-gray-100'}`}>
+                      <div className={`text-xs font-semibold mb-1 ${isToday ? 'text-indigo-700' : 'text-gray-500'}`}>
+                        {DAYS[dayIdx]}<br />
+                        <span className="font-normal">{format(date, 'M/d')}</span>
+                      </div>
+                      <div className="space-y-1">
+                        {dayClasses.map(cls => (
+                          <div key={cls.id} className="bg-white rounded p-1 border border-gray-200 shadow-sm">
+                            <div className="text-xs font-medium text-gray-800 truncate">{cls.class_name}</div>
+                            <div className="text-xs text-gray-400">{cls.start_time.slice(0,5)}</div>
+                            <div className="text-xs text-gray-400 truncate">{cls.instructor}</div>
+                          </div>
+                        ))}
+                        {dayClasses.length === 0 && (
+                          <div className="text-xs text-gray-300 text-center pt-2">—</div>
+                        )}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
             )}
-          </div>
-        )}
+          </CardContent>
+        </Card>
 
-        {/* Week heading */}
-        {viewMode === "week" && data?.mode === "week" && (
-          <div className="flex items-center gap-3 mb-4">
-            <h2 className="text-lg font-semibold text-slate-800">
-              Week of {formatShortDate(data.week_start)} – {formatShortDate(data.week_end)}
-            </h2>
-            <Badge variant="secondary" className="flex items-center gap-1">
-              <Users className="h-3 w-3" />
-              {total} total
-            </Badge>
-          </div>
-        )}
+        {/* Bookings list */}
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2 text-base">
+              <Users className="h-5 w-5 text-indigo-600" />
+              Bookings This Week
+              <Badge variant="outline" className="ml-1">{filteredBookings.length}</Badge>
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            {/* Filters */}
+            <div className="flex gap-3 mb-4">
+              <div className="relative flex-1 max-w-xs">
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
+                <Input
+                  placeholder="Search member, class, instructor..."
+                  value={search}
+                  onChange={e => setSearch(e.target.value)}
+                  className="pl-9 h-9 text-sm"
+                />
+              </div>
+              <Select value={statusFilter} onValueChange={setStatusFilter}>
+                <SelectTrigger className="w-36 h-9 text-sm">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">All Statuses</SelectItem>
+                  <SelectItem value="confirmed">Confirmed</SelectItem>
+                  <SelectItem value="pending">Pending</SelectItem>
+                  <SelectItem value="cancelled">Cancelled</SelectItem>
+                  <SelectItem value="completed">Completed</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
 
-        {/* Loading state */}
-        {isLoading && (
-          <div className="space-y-3">
-            {[1, 2, 3].map((i) => (
-              <Card key={i} className="animate-pulse">
-                <CardContent className="p-4 h-24 bg-slate-50" />
-              </Card>
-            ))}
-          </div>
-        )}
-
-        {/* Error state */}
-        {isError && (
-          <Card className="border-red-200 bg-red-50">
-            <CardContent className="p-4 text-center text-red-700">
-              <p className="font-medium">Failed to load bookings</p>
-              <p className="text-sm mt-1 text-red-600">
-                {(error as Error)?.message || "Unknown error"}
-              </p>
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => refetch()}
-                className="mt-3 border-red-300 text-red-700 hover:bg-red-100"
-              >
-                Try Again
-              </Button>
-            </CardContent>
-          </Card>
-        )}
-
-        {/* Content */}
-        {!isLoading && !isError && data && (
-          <>
-            {viewMode === "day" && data.mode === "day" && (
-              <DayView appointments={data.appointments} date={selectedDate} />
+            {bookLoading ? (
+              <div className="flex items-center justify-center py-8">
+                <Loader2 className="h-6 w-6 animate-spin text-indigo-400 mr-2" />
+                <span className="text-gray-400">Loading bookings...</span>
+              </div>
+            ) : filteredBookings.length === 0 ? (
+              <div className="text-center py-10 text-gray-400">
+                No bookings found for this week.
+              </div>
+            ) : (
+              <div className="space-y-2">
+                {filteredBookings.map(b => (
+                  <div key={b.id} className="flex items-center justify-between p-3 rounded-lg border border-gray-100 hover:bg-gray-50">
+                    <div className="flex items-center gap-3 min-w-0">
+                      <div className="w-10 h-10 rounded-full bg-indigo-100 flex items-center justify-center text-indigo-700 font-semibold text-sm shrink-0">
+                        {(b.contacts?.first_name?.[0] || '?')}{(b.contacts?.last_name?.[0] || '')}
+                      </div>
+                      <div className="min-w-0">
+                        <div className="font-medium text-gray-900 text-sm">
+                          {b.contacts ? `${b.contacts.first_name} ${b.contacts.last_name}` : 'Unknown Member'}
+                        </div>
+                        <div className="text-xs text-gray-500 truncate">
+                          {b.class_schedule?.class_name} · {b.class_schedule?.instructor} · {b.class_schedule?.start_time?.slice(0,5)}
+                        </div>
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-2 shrink-0">
+                      <span className="text-xs text-gray-400">{format(parseISO(b.booking_date), 'EEE M/d')}</span>
+                      <Badge variant="outline" className={`text-xs capitalize ${STATUS_COLORS[b.status] || ''}`}>
+                        {b.status}
+                      </Badge>
+                    </div>
+                  </div>
+                ))}
+              </div>
             )}
-            {viewMode === "week" && data.mode === "week" && (
-              <WeekView days={data.days} />
-            )}
-          </>
-        )}
+          </CardContent>
+        </Card>
       </PageContent>
     </DashboardLayout>
   );
-}
+};
+
+export default Bookings;
