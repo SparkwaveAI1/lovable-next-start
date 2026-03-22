@@ -19,6 +19,8 @@ import { AgentOutputsFeedPanel } from "@/components/dashboard/AgentOutputsFeedPa
 import { ContentCalendarPanel } from "@/components/dashboard/ContentCalendarPanel"
 import { IrisPipelinePanel } from "@/components/dashboard/IrisPipelinePanel"
 import { SparkwaveAnalyticsPanel } from "@/components/dashboard/SparkwaveAnalyticsPanel"
+import { AgentMonitoringPanel } from "@/components/dashboard/AgentMonitoringPanel"
+import { SystemMonitoringPanel } from "@/components/dashboard/SystemMonitoringPanel"
 
 const Index = () => {
   const { selectedBusiness, setSelectedBusiness } = useBusinessContext();
@@ -67,6 +69,11 @@ const Index = () => {
 
         {/* ── Always-visible global panels (no business selection required) ── */}
 
+        {/* System Monitoring — agent health, external services, business metrics */}
+        <div className="mb-6">
+          <SystemMonitoringPanel />
+        </div>
+
         {/* Mission Control Tasks — Scott's pending action items */}
         <div className="mb-6">
           <MissionControlTasksPanel />
@@ -80,6 +87,11 @@ const Index = () => {
         {/* Sparkwave Analytics — business metrics overview */}
         <div className="mb-6">
           <SparkwaveAnalyticsPanel />
+        </div>
+
+        {/* System Health — agent status, service health, business metrics */}
+        <div className="mb-6">
+          <AgentMonitoringPanel />
         </div>
 
         {/* Sales Actions Required — mc_tasks tagged sales_action */}
