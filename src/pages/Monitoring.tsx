@@ -5,21 +5,59 @@ import {
   Activity,
   AlertCircle,
   AlertTriangle,
+  Bot,
   CheckCircle2,
   Clock,
+  Mail,
   RefreshCw,
-  Server,
+  Shield,
+  Target,
+  Timer,
+  TrendingUp,
+  Users,
   XCircle,
-  Heart,
+  Zap,
 } from "lucide-react"
 import { supabase } from "@/integrations/supabase/client"
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { cn } from "@/lib/utils"
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
+interface HealthCheckResult {
+  id: string
+  name: string
+  status: "GREEN" | "YELLOW" | "RED"
+  checks: Array<{ name: string; status: string; detail: string }>
+  agent?: string
+}
+
+interface HealthReport {
+  results: HealthCheckResult[]
+  summary: { green: number; yellow: number; red: number; total: number }
+  timestamp: string
+}
+
+interface InstructionChange {
+  id: string
+  status: string
+  created_at: string
+  applied_at: string | null
+}
+
+interface AgentFailure {
+  failure_id: string
+  agent_name: string
+  session_date: string
+  category: string
+  short_label: string
+  severity: string
+  created_at: string
+}
+
 interface AgentRow {
   name: string
-  status: "Running" | "Idle" | string
+  status: string
   last_activity: string | null
   current_task: string | null
 }
@@ -28,33 +66,19 @@ interface CronJobRow {
   id: string
   name: string
   enabled: boolean
-  schedule: string
   last_run_at: string | null
   next_run_at: string | null
   last_status: string | null
   consecutive_errors: number
 }
 
-interface ErrorRow {
-  error_type: string
-  message: string
-  created_at: string
-}
-
-interface HealthMetric {
-  label: string
-  value: string
-  pct?: number // 0-100, used for colour thresholds
-  ok?: boolean // for boolean OK/FAIL metrics
-}
-
-// ─── Helpers ─────────────────────────────────────────────────────────────────
+// ─── Helpers ──────────────────────────────────────────────────────────────────
 
 function relativeTime(iso: string | null | undefined): string {
-  if (!iso) return "—"
+  if (!iso) return "Never"
   try {
     const diff = Date.now() - new Date(iso).getTime()
-    if (diff < 0) return "—"
+    if (diff < 0) return "just now"
     const secs = Math.floor(diff / 1000)
     if (secs < 60) return `${secs}s ago`
     const mins = Math.floor(secs / 60)
@@ -63,7 +87,7 @@ function relativeTime(iso: string | null | undefined): string {
     if (hrs < 24) return `${hrs}h ago`
     return `${Math.floor(hrs / 24)}d ago`
   } catch {
-    return "—"
+    return "?"
   }
 }
 
@@ -71,231 +95,468 @@ function futureTime(iso: string | null | undefined): string {
   if (!iso) return "—"
   try {
     const diff = new Date(iso).getTime() - Date.now()
-    if (diff <= 0) return "—"
+    if (diff <= 0) return "overdue"
     const secs = Math.floor(diff / 1000)
     if (secs < 60) return `in ${secs}s`
     const mins = Math.floor(secs / 60)
     if (mins < 60) return `in ${mins}m`
     const hrs = Math.floor(mins / 60)
-    if (hrs < 24) return `in ${hrs}h`
-    return `in ${Math.floor(hrs / 24)}d`
+    return `in ${hrs}h`
   } catch {
     return "—"
   }
 }
 
-function healthColor(metric: HealthMetric): string {
-  if (metric.ok !== undefined) {
-    return metric.ok ? "text-emerald-700 bg-emerald-100" : "text-red-700 bg-red-100"
-  }
-  if (metric.pct !== undefined) {
-    if (metric.pct > 80) return "text-emerald-700 bg-emerald-100"
-    if (metric.pct >= 50) return "text-amber-700 bg-amber-100"
-    return "text-red-700 bg-red-100"
-  }
-  return "text-slate-700 bg-slate-100"
+function StatusBadge({ status }: { status: "GREEN" | "YELLOW" | "RED" | "OK" | "WARN" | "ERROR" | string }) {
+  const s = status?.toUpperCase()
+  const cls = s === "GREEN" || s === "OK" || s === "RUNNING"
+    ? "bg-emerald-100 text-emerald-700"
+    : s === "YELLOW" || s === "WARN" || s === "IDLE"
+    ? "bg-amber-100 text-amber-700"
+    : "bg-red-100 text-red-700"
+  const icon = s === "GREEN" || s === "OK" || s === "RUNNING"
+    ? <CheckCircle2 className="h-3 w-3" />
+    : s === "YELLOW" || s === "WARN" || s === "IDLE"
+    ? <AlertTriangle className="h-3 w-3" />
+    : <XCircle className="h-3 w-3" />
+  const label = s === "GREEN" ? "OK" : s === "YELLOW" ? "WARN" : s === "RED" ? "Error" : status
+  return (
+    <span className={cn("inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-semibold", cls)}>
+      {icon} {label}
+    </span>
+  )
 }
 
 function SectionCard({
   title,
   icon,
+  lastUpdated,
   children,
+  unavailable,
 }: {
   title: string
   icon: React.ReactNode
+  lastUpdated?: string | null
   children: React.ReactNode
+  unavailable?: boolean
 }) {
   return (
-    <div className="bg-white rounded-xl border border-slate-200 overflow-hidden">
-      <div className="px-5 py-4 border-b border-slate-100 flex items-center gap-2">
-        <span className="text-slate-500">{icon}</span>
-        <h2 className="text-sm font-semibold text-slate-700 uppercase tracking-wide">{title}</h2>
-      </div>
-      <div className="p-5">{children}</div>
-    </div>
-  )
-}
-
-// ─── Section 1: Agent Status ──────────────────────────────────────────────────
-
-const FALLBACK_AGENTS: AgentRow[] = [
-  { name: "Rico", status: "Idle", last_activity: null, current_task: "Orchestration" },
-  { name: "Dev", status: "Idle", last_activity: null, current_task: "Code & Deploy" },
-  { name: "Iris", status: "Idle", last_activity: null, current_task: "Sales & Social" },
-  { name: "Jerry", status: "Idle", last_activity: null, current_task: "Support" },
-]
-
-function AgentStatusSection({ agents }: { agents: AgentRow[] }) {
-  return (
-    <SectionCard title="Agent Status" icon={<Server className="h-4 w-4" />}>
-      <div className="overflow-x-auto">
-        <table className="w-full text-sm">
-          <thead>
-            <tr className="border-b border-slate-100">
-              {["Agent", "Status", "Last Activity", "Current Task"].map((h) => (
-                <th key={h} className="text-left text-xs font-semibold text-slate-500 uppercase tracking-wide pb-2 pr-4">
-                  {h}
-                </th>
-              ))}
-            </tr>
-          </thead>
-          <tbody className="divide-y divide-slate-50">
-            {agents.map((a) => (
-              <tr key={a.name} className="hover:bg-slate-50 transition-colors">
-                <td className="py-2.5 pr-4 font-medium text-slate-900">{a.name}</td>
-                <td className="py-2.5 pr-4">
-                  <span
-                    className={cn(
-                      "inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-medium",
-                      a.status === "Running"
-                        ? "bg-emerald-100 text-emerald-700"
-                        : "bg-amber-100 text-amber-700"
-                    )}
-                  >
-                    <span
-                      className={cn(
-                        "h-1.5 w-1.5 rounded-full",
-                        a.status === "Running" ? "bg-emerald-500" : "bg-amber-400"
-                      )}
-                    />
-                    {a.status}
-                  </span>
-                </td>
-                <td className="py-2.5 pr-4 text-slate-500 text-xs">{relativeTime(a.last_activity)}</td>
-                <td className="py-2.5 text-slate-600 text-xs">{a.current_task ?? "—"}</td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
-    </SectionCard>
-  )
-}
-
-// ─── Section 2: Cron Jobs ─────────────────────────────────────────────────────
-
-function CronJobsSection({ cronJobs, unavailable }: { cronJobs: CronJobRow[]; unavailable?: boolean }) {
-  if (unavailable) {
-    return (
-      <SectionCard title="Cron Jobs" icon={<Clock className="h-4 w-4" />}>
-        <div className="flex items-center gap-2 text-amber-600 py-3">
-          <AlertTriangle className="h-5 w-5" />
-          <span className="text-sm font-medium">Cron data unavailable</span>
+    <Card className="shadow-sm">
+      <CardHeader className="pb-3 pt-4 px-5">
+        <div className="flex items-center justify-between">
+          <CardTitle className="text-sm font-semibold text-slate-800 flex items-center gap-2">
+            <span className="text-slate-500">{icon}</span>
+            {title}
+          </CardTitle>
+          {lastUpdated && (
+            <span className="text-xs text-slate-400 flex items-center gap-1">
+              <Clock className="h-3 w-3" />
+              {relativeTime(lastUpdated)}
+            </span>
+          )}
         </div>
-      </SectionCard>
-    )
-  }
+      </CardHeader>
+      <CardContent className="px-5 pb-4">
+        {unavailable ? (
+          <div className="flex items-center gap-2 text-slate-400 py-2">
+            <AlertCircle className="h-4 w-4" />
+            <span className="text-sm">Data unavailable</span>
+          </div>
+        ) : (
+          children
+        )}
+      </CardContent>
+    </Card>
+  )
+}
+
+// ─── Section 1: Automated Health Checks ──────────────────────────────────────
+
+function OrgHealthSection({
+  report,
+  reportTime,
+  unavailable,
+}: {
+  report: HealthReport | null
+  reportTime: string | null
+  unavailable: boolean
+}) {
   return (
-    <SectionCard title="Cron Jobs" icon={<Clock className="h-4 w-4" />}>
-      <div className="overflow-x-auto">
-        <table className="w-full text-sm">
-          <thead>
-            <tr className="border-b border-slate-100">
-              {["Cron Name", "Schedule", "Status", "Last Run", "Next Run"].map((h) => (
-                <th key={h} className="text-left text-xs font-semibold text-slate-500 uppercase tracking-wide pb-2 pr-4">
-                  {h}
-                </th>
-              ))}
-            </tr>
-          </thead>
-          <tbody className="divide-y divide-slate-50">
-            {cronJobs.map((c) => {
-              const status = c.last_status?.toUpperCase() ?? "OK"
-              const isOk = status === "OK" || c.consecutive_errors === 0
-              return (
-                <tr key={c.id} className="hover:bg-slate-50 transition-colors">
-                  <td className="py-2.5 pr-4 font-medium text-slate-800 font-mono text-xs">{c.name}</td>
-                  <td className="py-2.5 pr-4 text-slate-500 font-mono text-xs">{c.schedule}</td>
-                  <td className="py-2.5 pr-4">
-                    <span
-                      className={cn(
-                        "inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-medium",
-                        isOk
-                          ? "bg-emerald-100 text-emerald-700"
-                          : "bg-red-100 text-red-700"
-                      )}
-                    >
-                      {isOk ? (
-                        <CheckCircle2 className="h-3 w-3" />
-                      ) : (
-                        <XCircle className="h-3 w-3" />
-                      )}
-                      {isOk ? "OK" : "Error"}
-                    </span>
-                  </td>
-                  <td className="py-2.5 pr-4 text-slate-500 text-xs">{relativeTime(c.last_run_at)}</td>
-                  <td className="py-2.5 text-slate-500 text-xs">{futureTime(c.next_run_at)}</td>
-                </tr>
-              )
-            })}
-          </tbody>
-        </table>
-      </div>
+    <SectionCard title="Automated Health Checks" icon={<Shield className="h-4 w-4" />} lastUpdated={reportTime} unavailable={unavailable && !report}>
+      {report ? (
+        <>
+          {/* Summary bar */}
+          <div className="flex items-center gap-3 mb-4 p-3 bg-slate-50 rounded-lg border border-slate-100">
+            <span className="text-xs font-medium text-slate-600">Last run:</span>
+            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-bold bg-emerald-100 text-emerald-700">
+              <CheckCircle2 className="h-3 w-3" /> {report.summary.green} OK
+            </span>
+            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-bold bg-amber-100 text-amber-700">
+              <AlertTriangle className="h-3 w-3" /> {report.summary.yellow} Warn
+            </span>
+            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-bold bg-red-100 text-red-700">
+              <XCircle className="h-3 w-3" /> {report.summary.red} Error
+            </span>
+            <span className="ml-auto text-xs text-slate-400">{report.summary.total} checks total</span>
+          </div>
+          {/* Individual results */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2">
+            {report.results.map((r) => (
+              <div
+                key={r.id}
+                className={cn(
+                  "flex items-center justify-between p-3 rounded-lg border text-xs",
+                  r.status === "GREEN"
+                    ? "bg-emerald-50 border-emerald-100"
+                    : r.status === "YELLOW"
+                    ? "bg-amber-50 border-amber-100"
+                    : "bg-red-50 border-red-100"
+                )}
+              >
+                <span className="font-medium text-slate-700 truncate mr-2 flex-1">{r.name}</span>
+                <StatusBadge status={r.status} />
+              </div>
+            ))}
+          </div>
+        </>
+      ) : (
+        <div className="text-slate-400 text-sm py-2">No health report data found</div>
+      )}
     </SectionCard>
   )
 }
 
-// ─── Section 3: Recent Errors ─────────────────────────────────────────────────
+// ─── Section 2: Karpathy Improvement Loop ────────────────────────────────────
 
-function RecentErrorsSection({ errors }: { errors: ErrorRow[] }) {
+function KarpathySection({
+  changes,
+  unavailable,
+}: {
+  changes: InstructionChange[]
+  unavailable: boolean
+}) {
+  const lastApplied = changes.find((c) => c.status === "applied")
+  const pending = changes.filter((c) => c.status === "pending").length
+  const loopStatus: "GREEN" | "YELLOW" | "RED" = lastApplied
+    ? Date.now() - new Date(lastApplied.applied_at || lastApplied.created_at).getTime() < 7 * 86400000
+      ? "GREEN"
+      : "YELLOW"
+    : "RED"
+
   return (
-    <SectionCard title="Recent Errors (last 10)" icon={<AlertTriangle className="h-4 w-4" />}>
-      {errors.length === 0 ? (
-        <div className="flex items-center gap-2 text-emerald-600 py-3">
-          <CheckCircle2 className="h-5 w-5" />
-          <span className="text-sm font-medium">No errors in last hour</span>
+    <SectionCard
+      title="Karpathy Improvement Loop"
+      icon={<TrendingUp className="h-4 w-4" />}
+      lastUpdated={lastApplied?.applied_at || null}
+      unavailable={unavailable}
+    >
+      {/* Status summary */}
+      <div className="flex items-center gap-3 mb-4">
+        <StatusBadge status={loopStatus} />
+        <span className="text-xs text-slate-500">
+          {lastApplied
+            ? `Last applied ${relativeTime(lastApplied.applied_at)}`
+            : "No applied changes found"}
+        </span>
+        {pending > 0 && (
+          <span className="ml-auto text-xs bg-amber-50 text-amber-700 px-2 py-0.5 rounded-full border border-amber-100">
+            {pending} pending
+          </span>
+        )}
+      </div>
+      {/* Recent changes */}
+      {changes.length > 0 ? (
+        <div className="space-y-1.5">
+          {changes.slice(0, 5).map((c) => {
+            const st = c.status === "applied" ? "GREEN" : c.status === "pending" ? "YELLOW" : "RED"
+            return (
+              <div key={c.id} className="flex items-center justify-between py-1.5 border-b border-slate-100 last:border-0">
+                <div className="flex items-center gap-2">
+                  <StatusBadge status={st} />
+                  <span className="text-xs text-slate-600 capitalize">{c.status}</span>
+                </div>
+                <div className="text-xs text-slate-400">
+                  {c.applied_at ? `Applied ${relativeTime(c.applied_at)}` : `Created ${relativeTime(c.created_at)}`}
+                </div>
+              </div>
+            )
+          })}
         </div>
       ) : (
-        <div className="space-y-2">
-          {errors.map((e, i) => (
-            <div key={i} className="flex items-start gap-3 p-3 bg-red-50 rounded-lg border border-red-100">
-              <AlertCircle className="h-4 w-4 text-red-500 mt-0.5 flex-shrink-0" />
-              <div className="flex-1 min-w-0">
-                <div className="flex items-center gap-2 mb-0.5">
-                  <span className="text-xs font-semibold text-red-700">{e.error_type}</span>
-                  <span className="text-xs text-slate-400">{relativeTime(e.created_at)}</span>
+        <div className="text-slate-400 text-sm py-1">No instruction changes found</div>
+      )}
+    </SectionCard>
+  )
+}
+
+// ─── Section 3: BCF Failure Detection ────────────────────────────────────────
+
+function BCFSection({
+  failures,
+  unavailable,
+}: {
+  failures: AgentFailure[]
+  unavailable: boolean
+}) {
+  // Group by agent
+  const byAgent: Record<string, AgentFailure[]> = {}
+  failures.forEach((f) => {
+    if (!byAgent[f.agent_name]) byAgent[f.agent_name] = []
+    byAgent[f.agent_name].push(f)
+  })
+
+  const today = new Date().toISOString().slice(0, 10)
+  const hasToday = failures.some((f) => f.session_date === today)
+  const overallStatus: "GREEN" | "YELLOW" | "RED" = failures.length === 0 ? "GREEN" : hasToday ? "RED" : "YELLOW"
+
+  return (
+    <SectionCard
+      title="BCF Failure Detection"
+      icon={<AlertTriangle className="h-4 w-4" />}
+      unavailable={unavailable}
+      lastUpdated={failures[0]?.created_at || null}
+    >
+      <div className="flex items-center gap-3 mb-3">
+        <StatusBadge status={overallStatus} />
+        <span className="text-xs text-slate-500">
+          {failures.length === 0
+            ? "No failures in last 7 days"
+            : `${failures.length} failure(s) detected`}
+        </span>
+      </div>
+      {Object.keys(byAgent).length > 0 ? (
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2">
+          {Object.entries(byAgent).map(([agent, agentFailures]) => {
+            const todayCount = agentFailures.filter((f) => f.session_date === today).length
+            const st: "GREEN" | "YELLOW" | "RED" = todayCount > 0 ? "RED" : "YELLOW"
+            return (
+              <div key={agent} className="p-3 rounded-lg border border-slate-100 bg-slate-50">
+                <div className="flex items-center justify-between mb-1">
+                  <span className="text-xs font-semibold text-slate-700 capitalize">{agent}</span>
+                  <StatusBadge status={st} />
                 </div>
-                <p className="text-xs text-slate-700 truncate">{e.message}</p>
+                <div className="text-xs text-slate-500">
+                  {agentFailures.length} failure(s) · {todayCount} today
+                </div>
+                <div className="text-xs text-slate-400 truncate mt-0.5">{agentFailures[0].category}</div>
               </div>
-            </div>
-          ))}
+            )
+          })}
+        </div>
+      ) : (
+        <div className="flex items-center gap-2 text-emerald-600 py-1">
+          <CheckCircle2 className="h-4 w-4" />
+          <span className="text-xs font-medium">Clean — no failures in last 7 days</span>
         </div>
       )}
     </SectionCard>
   )
 }
 
-// ─── Section 4: System Health ─────────────────────────────────────────────────
+// ─── Section 4: Agent Status ──────────────────────────────────────────────────
 
-const HEALTH_METRICS: HealthMetric[] = [
-  { label: "JWT Auth Status", value: "OK", ok: true },
-  { label: "Notification Delivery", value: "94%", pct: 94 },
-  { label: "Classes Booking Sync", value: "OK", ok: true },
-  { label: "Task Board", value: "OK", ok: true },
-  { label: "Email Delivery Rate", value: "88%", pct: 88 },
-  { label: "Supabase Connection", value: "OK", ok: true },
+const AGENT_ORG = [
+  { key: "rico", role: "CEO / Orchestrator", ip: "5.161.190.94" },
+  { key: "dev", role: "PersonaAI + CharX coding", ip: "5.161.186.106" },
+  { key: "iris", role: "Sales + Marketing", ip: "178.156.250.119" },
+  { key: "jerry", role: "Research + Ventures", ip: "5.161.184.240" },
+  { key: "opal", role: "Process + PM", ip: "178.156.214.228" },
 ]
 
-function SystemHealthSection({ metrics }: { metrics: HealthMetric[] }) {
+function AgentStatusSection({
+  agents,
+  unavailable,
+}: {
+  agents: AgentRow[]
+  unavailable: boolean
+}) {
   return (
-    <SectionCard title="System Health" icon={<Heart className="h-4 w-4" />}>
-      <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3">
-        {metrics.map((m) => (
-          <div
-            key={m.label}
-            className="flex items-center justify-between p-3 bg-slate-50 rounded-lg border border-slate-100"
-          >
-            <span className="text-xs text-slate-600 font-medium">{m.label}</span>
-            <span
-              className={cn(
-                "ml-2 px-2 py-0.5 rounded-full text-xs font-semibold flex-shrink-0",
-                healthColor(m)
+    <SectionCard title="Agent Status" icon={<Users className="h-4 w-4" />} unavailable={unavailable}>
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2">
+        {AGENT_ORG.map((meta) => {
+          const row = agents.find((a) => a.name?.toLowerCase() === meta.key)
+          const status = row?.status || "unknown"
+          const stNorm: "GREEN" | "YELLOW" | "RED" =
+            status.toLowerCase().includes("run") || status.toLowerCase().includes("active")
+              ? "GREEN"
+              : status.toLowerCase().includes("idle")
+              ? "YELLOW"
+              : row
+              ? "YELLOW"
+              : "RED"
+          return (
+            <div key={meta.key} className="p-3 rounded-lg border border-slate-100 bg-slate-50">
+              <div className="flex items-center justify-between mb-1">
+                <span className="text-xs font-semibold text-slate-700 capitalize">{meta.key}</span>
+                <StatusBadge status={stNorm} />
+              </div>
+              <div className="text-xs text-slate-500">{meta.role}</div>
+              {row?.last_activity && (
+                <div className="text-xs text-slate-400 mt-0.5">{relativeTime(row.last_activity)}</div>
               )}
-            >
-              {m.value}
-            </span>
+              {row?.current_task && (
+                <div className="text-xs text-slate-400 truncate mt-0.5" title={row.current_task}>
+                  {row.current_task}
+                </div>
+              )}
+              {!row && <div className="text-xs text-red-400 mt-0.5">No data in mc_agents</div>}
+            </div>
+          )
+        })}
+      </div>
+    </SectionCard>
+  )
+}
+
+// ─── Section 5: Cron Jobs ────────────────────────────────────────────────────
+
+function CronSection({
+  cronJobs,
+  unavailable,
+}: {
+  cronJobs: CronJobRow[]
+  unavailable: boolean
+}) {
+  const errorJobs = cronJobs.filter((c) => (c.consecutive_errors || 0) > 0)
+  const overallStatus: "GREEN" | "YELLOW" | "RED" = errorJobs.length > 0 ? "RED" : "GREEN"
+
+  return (
+    <SectionCard
+      title="Cron Jobs"
+      icon={<Timer className="h-4 w-4" />}
+      unavailable={unavailable}
+    >
+      <div className="flex items-center gap-3 mb-3">
+        <StatusBadge status={overallStatus} />
+        <span className="text-xs text-slate-500">
+          {cronJobs.length} enabled · {errorJobs.length} with errors
+        </span>
+      </div>
+      {cronJobs.length > 0 ? (
+        <div className="overflow-x-auto">
+          <table className="w-full text-xs">
+            <thead>
+              <tr className="border-b border-slate-100">
+                <th className="text-left py-2 font-medium text-slate-500 pr-4">Name</th>
+                <th className="text-left py-2 font-medium text-slate-500 pr-4">Status</th>
+                <th className="text-left py-2 font-medium text-slate-500 pr-4">Last Run</th>
+                <th className="text-left py-2 font-medium text-slate-500">Next Run</th>
+              </tr>
+            </thead>
+            <tbody>
+              {cronJobs.map((c) => {
+                const isOk = !c.consecutive_errors || c.consecutive_errors === 0
+                return (
+                  <tr key={c.id} className="border-b border-slate-50 last:border-0 hover:bg-slate-50">
+                    <td className="py-2 pr-4 text-slate-700 max-w-[180px] truncate" title={c.name}>
+                      {c.name}
+                    </td>
+                    <td className="py-2 pr-4">
+                      <StatusBadge status={isOk ? "GREEN" : "RED"} />
+                      {!isOk && (
+                        <span className="ml-1 text-red-500 text-xs">{c.consecutive_errors} err</span>
+                      )}
+                    </td>
+                    <td className="py-2 pr-4 text-slate-500">{relativeTime(c.last_run_at)}</td>
+                    <td className="py-2 text-slate-500">{futureTime(c.next_run_at)}</td>
+                  </tr>
+                )
+              })}
+            </tbody>
+          </table>
+        </div>
+      ) : (
+        <div className="text-slate-400 text-sm py-1">No enabled cron jobs found</div>
+      )}
+    </SectionCard>
+  )
+}
+
+// ─── Section 6: Email Deliverability ─────────────────────────────────────────
+
+function EmailSection({
+  emailSends,
+  emailUnavailable,
+}: {
+  emailSends: { sent: number; failed: number; lastSent: string | null } | null
+  emailUnavailable: boolean
+}) {
+  const rate = emailSends && (emailSends.sent + emailSends.failed) > 0
+    ? Math.round((emailSends.sent / (emailSends.sent + emailSends.failed)) * 100)
+    : null
+  const status: "GREEN" | "YELLOW" | "RED" = rate === null ? "YELLOW" : rate >= 90 ? "GREEN" : rate >= 70 ? "YELLOW" : "RED"
+
+  return (
+    <SectionCard
+      title="Email Deliverability"
+      icon={<Mail className="h-4 w-4" />}
+      unavailable={emailUnavailable}
+      lastUpdated={emailSends?.lastSent}
+    >
+      {emailSends ? (
+        <div className="flex items-start gap-6">
+          <div className="flex items-center gap-2">
+            <StatusBadge status={status} />
+            {rate !== null && <span className="text-lg font-bold text-slate-800">{rate}%</span>}
           </div>
-        ))}
+          <div className="space-y-1 text-xs text-slate-500">
+            <div>
+              <span className="text-emerald-600 font-medium">{emailSends.sent}</span> sent in last 24h
+            </div>
+            {emailSends.failed > 0 && (
+              <div>
+                <span className="text-red-500 font-medium">{emailSends.failed}</span> failed
+              </div>
+            )}
+            {emailSends.lastSent && (
+              <div>Last sent: {relativeTime(emailSends.lastSent)}</div>
+            )}
+          </div>
+        </div>
+      ) : !emailUnavailable ? (
+        <div className="text-slate-400 text-sm py-1">No email send data in last 24h</div>
+      ) : null}
+    </SectionCard>
+  )
+}
+
+// ─── Section 7: Fight Flow Pipeline ──────────────────────────────────────────
+
+function FightFlowSection({
+  leads24h,
+  lastLead,
+  sms24h,
+  lastSms,
+  unavailable,
+}: {
+  leads24h: number
+  lastLead: string | null
+  sms24h: number
+  lastSms: string | null
+  unavailable: boolean
+}) {
+  const status: "GREEN" | "YELLOW" | "RED" = unavailable
+    ? "YELLOW"
+    : leads24h >= 1 || sms24h >= 1
+    ? "GREEN"
+    : "YELLOW"
+
+  return (
+    <SectionCard title="Fight Flow Pipeline" icon={<Target className="h-4 w-4" />} unavailable={unavailable}>
+      <div className="flex items-center gap-3 mb-3">
+        <StatusBadge status={status} />
+      </div>
+      <div className="grid grid-cols-2 gap-3">
+        <div className="p-3 rounded-lg bg-slate-50 border border-slate-100">
+          <div className="text-2xl font-bold text-slate-800">{leads24h}</div>
+          <div className="text-xs text-slate-500 mt-0.5">New leads (24h)</div>
+          {lastLead && <div className="text-xs text-slate-400 mt-1">Last: {relativeTime(lastLead)}</div>}
+        </div>
+        <div className="p-3 rounded-lg bg-slate-50 border border-slate-100">
+          <div className="text-2xl font-bold text-slate-800">{sms24h}</div>
+          <div className="text-xs text-slate-500 mt-0.5">SMS sent (24h)</div>
+          {lastSms && <div className="text-xs text-slate-400 mt-1">Last: {relativeTime(lastSms)}</div>}
+        </div>
       </div>
     </SectionCard>
   )
@@ -304,72 +565,181 @@ function SystemHealthSection({ metrics }: { metrics: HealthMetric[] }) {
 // ─── Main Page ────────────────────────────────────────────────────────────────
 
 export default function MonitoringPage() {
-  const [agents, setAgents] = useState<AgentRow[]>(FALLBACK_AGENTS)
+  const [healthReport, setHealthReport] = useState<HealthReport | null>(null)
+  const [healthReportTime, setHealthReportTime] = useState<string | null>(null)
+  const [healthUnavailable, setHealthUnavailable] = useState(false)
+
+  const [karpathyChanges, setKarpathyChanges] = useState<InstructionChange[]>([])
+  const [karpathyUnavailable, setKarpathyUnavailable] = useState(false)
+
+  const [bcfFailures, setBcfFailures] = useState<AgentFailure[]>([])
+  const [bcfUnavailable, setBcfUnavailable] = useState(false)
+
+  const [agents, setAgents] = useState<AgentRow[]>([])
+  const [agentsUnavailable, setAgentsUnavailable] = useState(false)
+
   const [cronJobs, setCronJobs] = useState<CronJobRow[]>([])
   const [cronUnavailable, setCronUnavailable] = useState(false)
-  const [errors, setErrors] = useState<ErrorRow[]>([])
+
+  const [emailData, setEmailData] = useState<{ sent: number; failed: number; lastSent: string | null } | null>(null)
+  const [emailUnavailable, setEmailUnavailable] = useState(false)
+
+  const [leads24h, setLeads24h] = useState(0)
+  const [lastLead, setLastLead] = useState<string | null>(null)
+  const [sms24h, setSms24h] = useState(0)
+  const [lastSms, setLastSms] = useState<string | null>(null)
+  const [fightFlowUnavailable, setFightFlowUnavailable] = useState(false)
+
   const [lastRefresh, setLastRefresh] = useState<Date>(new Date())
   const [loading, setLoading] = useState(false)
 
   const fetchData = useCallback(async () => {
     setLoading(true)
+
+    // 1. Org health reports
     try {
-      // Agent status from mc_agents if table exists
-      const { data: agentData } = await supabase
+      const { data, error } = await supabase
+        .from("mc_health_reports" as never)
+        .select("report, created_at")
+        .order("created_at" as never, { ascending: false })
+        .limit(1)
+      if (error) throw error
+      if (data && Array.isArray(data) && data.length > 0) {
+        const row = data[0] as { report: HealthReport; created_at: string }
+        setHealthReport(row.report)
+        setHealthReportTime(row.created_at)
+        setHealthUnavailable(false)
+      } else {
+        setHealthUnavailable(true)
+      }
+    } catch {
+      setHealthUnavailable(true)
+    }
+
+    // 2. Karpathy instruction_changes
+    try {
+      const { data, error } = await supabase
+        .from("instruction_changes" as never)
+        .select("id, status, created_at, applied_at")
+        .order("created_at" as never, { ascending: false })
+        .limit(8)
+      if (error) throw error
+      setKarpathyChanges((data as InstructionChange[]) || [])
+      setKarpathyUnavailable(false)
+    } catch {
+      setKarpathyUnavailable(true)
+    }
+
+    // 3. BCF agent_failures (last 7 days)
+    try {
+      const sevenDaysAgo = new Date(Date.now() - 7 * 86400000).toISOString().slice(0, 10)
+      const { data, error } = await supabase
+        .from("agent_failures" as never)
+        .select("failure_id, agent_name, session_date, category, short_label, severity, created_at")
+        .gte("session_date" as never, sevenDaysAgo)
+        .order("created_at" as never, { ascending: false })
+        .limit(50)
+      if (error) throw error
+      setBcfFailures((data as AgentFailure[]) || [])
+      setBcfUnavailable(false)
+    } catch {
+      setBcfUnavailable(true)
+    }
+
+    // 4. Agent status (mc_agents)
+    try {
+      const { data, error } = await supabase
         .from("mc_agents" as never)
         .select("name, status, last_activity, current_task")
         .limit(20)
-      if (agentData && Array.isArray(agentData) && agentData.length > 0) {
-        setAgents(agentData as AgentRow[])
-      }
+      if (error) throw error
+      setAgents((data as AgentRow[]) || [])
+      setAgentsUnavailable(false)
     } catch {
-      // Keep fallback
+      setAgentsUnavailable(true)
     }
 
+    // 5. Cron jobs
     try {
-      // Cron jobs from cron_jobs table
-      const { data: cronData, error: cronError } = await supabase
+      const { data, error } = await supabase
         .from("cron_jobs" as never)
-        .select("id, name, enabled, schedule, last_run_at, next_run_at, last_status, consecutive_errors")
+        .select("id, name, enabled, last_run_at, next_run_at, last_status, consecutive_errors")
         .eq("enabled" as never, true)
         .order("name" as never)
-      if (cronError) {
-        setCronUnavailable(true)
-      } else if (cronData && Array.isArray(cronData)) {
-        setCronJobs(cronData as CronJobRow[])
-        setCronUnavailable(false)
-      }
+        .limit(40)
+      if (error) throw error
+      setCronJobs((data as CronJobRow[]) || [])
+      setCronUnavailable(false)
     } catch {
       setCronUnavailable(true)
     }
 
+    // 6. Email sends (last 24h)
     try {
-      // Recent errors — last 10 from past hour
-      const oneHourAgo = new Date(Date.now() - 3600000).toISOString()
-      const { data: errorData } = await supabase
-        .from("mc_errors" as never)
-        .select("error_type, message, created_at")
-        .gte("created_at", oneHourAgo)
-        .order("created_at", { ascending: false })
-        .limit(10)
-      if (errorData && Array.isArray(errorData)) {
-        setErrors(errorData as ErrorRow[])
+      const oneDayAgo = new Date(Date.now() - 86400000).toISOString()
+      const { data, error } = await supabase
+        .from("email_sends" as never)
+        .select("status, sent_at")
+        .gte("sent_at" as never, oneDayAgo)
+        .limit(500)
+      if (error) {
+        setEmailUnavailable(true)
+      } else {
+        const rows = (data as Array<{ status: string; sent_at: string }>) || []
+        const sent = rows.filter((r) => r.status === "sent" || r.status === "delivered").length
+        const failed = rows.filter((r) => r.status === "failed" || r.status === "bounced").length
+        const lastSentRow = rows.sort((a, b) => new Date(b.sent_at).getTime() - new Date(a.sent_at).getTime())[0]
+        setEmailData({ sent, failed, lastSent: lastSentRow?.sent_at || null })
+        setEmailUnavailable(false)
       }
     } catch {
-      // No errors table — show empty
-      setErrors([])
+      setEmailUnavailable(true)
+    }
+
+    // 7. Fight Flow pipeline
+    try {
+      const oneDayAgo = new Date(Date.now() - 86400000).toISOString()
+      const { data: leadData } = await supabase
+        .from("fightflow_form_submissions" as never)
+        .select("created_at")
+        .gte("created_at" as never, oneDayAgo)
+        .order("created_at" as never, { ascending: false })
+        .limit(100)
+      const leads = (leadData as Array<{ created_at: string }>) || []
+      setLeads24h(leads.length)
+      setLastLead(leads[0]?.created_at || null)
+
+      const { data: smsData } = await supabase
+        .from("sms_messages" as never)
+        .select("created_at")
+        .gte("created_at" as never, oneDayAgo)
+        .order("created_at" as never, { ascending: false })
+        .limit(500)
+      const smsRows = (smsData as Array<{ created_at: string }>) || []
+      setSms24h(smsRows.length)
+      setLastSms(smsRows[0]?.created_at || null)
+      setFightFlowUnavailable(false)
+    } catch {
+      setFightFlowUnavailable(true)
     }
 
     setLastRefresh(new Date())
     setLoading(false)
   }, [])
 
-  // Initial load + 30s auto-refresh
   useEffect(() => {
     fetchData()
-    const interval = setInterval(fetchData, 30000)
+    const interval = setInterval(fetchData, 60000)
     return () => clearInterval(interval)
   }, [fetchData])
+
+  // Overall org status
+  const orgRed =
+    (healthReport?.summary.red || 0) > 0 ||
+    cronJobs.some((c) => (c.consecutive_errors || 0) > 0)
+  const orgYellow =
+    !orgRed &&
+    ((healthReport?.summary.yellow || 0) > 0 || bcfFailures.length > 0)
 
   return (
     <DashboardLayout>
@@ -379,15 +749,29 @@ export default function MonitoringPage() {
           <div>
             <h1 className="text-2xl font-bold text-slate-900 flex items-center gap-2">
               <Activity className="h-7 w-7 text-violet-600" />
-              System Monitoring
+              Org Monitoring Dashboard
             </h1>
-            <p className="text-slate-500 mt-1 text-sm">
-              Display-only · Auto-refreshes every 30s
+            <p className="text-slate-500 mt-1 text-sm flex items-center gap-2">
+              One-glance org health · Auto-refreshes every 60s
+              {orgRed ? (
+                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-bold bg-red-100 text-red-700">
+                  <XCircle className="h-3 w-3" /> Issues detected
+                </span>
+              ) : orgYellow ? (
+                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-bold bg-amber-100 text-amber-700">
+                  <AlertTriangle className="h-3 w-3" /> Warnings
+                </span>
+              ) : (
+                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-bold bg-emerald-100 text-emerald-700">
+                  <CheckCircle2 className="h-3 w-3" /> All systems OK
+                </span>
+              )}
             </p>
           </div>
           <div className="flex items-center gap-3">
-            <span className="text-xs text-slate-400">
-              Updated {relativeTime(lastRefresh.toISOString())}
+            <span className="text-xs text-slate-400 flex items-center gap-1">
+              <Clock className="h-3 w-3" />
+              {relativeTime(lastRefresh.toISOString())}
             </span>
             <button
               onClick={fetchData}
@@ -400,12 +784,29 @@ export default function MonitoringPage() {
           </div>
         </div>
 
-        {/* 4 Sections */}
-        <div className="space-y-6">
-          <AgentStatusSection agents={agents} />
-          <CronJobsSection cronJobs={cronJobs} unavailable={cronUnavailable} />
-          <RecentErrorsSection errors={errors} />
-          <SystemHealthSection metrics={HEALTH_METRICS} />
+        {/* Dashboard sections */}
+        <div className="space-y-5">
+          <OrgHealthSection
+            report={healthReport}
+            reportTime={healthReportTime}
+            unavailable={healthUnavailable}
+          />
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
+            <KarpathySection changes={karpathyChanges} unavailable={karpathyUnavailable} />
+            <BCFSection failures={bcfFailures} unavailable={bcfUnavailable} />
+          </div>
+          <AgentStatusSection agents={agents} unavailable={agentsUnavailable} />
+          <CronSection cronJobs={cronJobs} unavailable={cronUnavailable} />
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
+            <EmailSection emailSends={emailData} emailUnavailable={emailUnavailable} />
+            <FightFlowSection
+              leads24h={leads24h}
+              lastLead={lastLead}
+              sms24h={sms24h}
+              lastSms={lastSms}
+              unavailable={fightFlowUnavailable}
+            />
+          </div>
         </div>
       </PageContent>
     </DashboardLayout>
