@@ -126,7 +126,7 @@ const App = () => (
             <Route path="/content-visibility" element={<Navigate replace to="/content-hub" />} />
             <Route path="/content-review" element={<Navigate replace to="/content-hub" />} />
             <Route path="/system-monitoring" element={<ProtectedRoute><ErrorBoundary><SystemMonitoring /></ErrorBoundary></ProtectedRoute>} />
-            <Route path="/monitoring" element={<MonitoringPage />} />
+            <Route path="/monitoring" element={<ProtectedRoute><ErrorBoundary><MonitoringPage /></ErrorBoundary></ProtectedRoute>} />
             <Route path="/org-monitoring" element={<ProtectedRoute><ErrorBoundary><OrgMonitoring /></ErrorBoundary></ProtectedRoute>} />
             <Route path="/process-monitoring" element={<ProtectedRoute><ErrorBoundary><ProcessMonitoring /></ErrorBoundary></ProtectedRoute>} />
             <Route path="/tools/autoresearch" element={<ProtectedRoute><ErrorBoundary><AutoresearchDashboard /></ErrorBoundary></ProtectedRoute>} />
