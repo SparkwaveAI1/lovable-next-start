@@ -51,6 +51,7 @@ import ROICalculator from "./pages/ROICalculator";
 import Onboarding from "./pages/Onboarding";
 import SystemMonitoring from "./pages/SystemMonitoring";
 import MonitoringPage from "./pages/Monitoring";
+import OrgMonitoringPage from "./pages/OrgMonitoring";
 import FightFlow from "./pages/FightFlow";
 import SystemOperations from "./pages/SystemOperations";
 import CRM from "./pages/CRM";
@@ -122,6 +123,7 @@ const App = () => (
             <Route path="/content-review" element={<Navigate replace to="/content-hub" />} />
             <Route path="/system-monitoring" element={<ProtectedRoute><ErrorBoundary><SystemMonitoring /></ErrorBoundary></ProtectedRoute>} />
             <Route path="/monitoring" element={<MonitoringPage />} />
+            <Route path="/org-monitoring" element={<ProtectedRoute><ErrorBoundary><OrgMonitoringPage /></ErrorBoundary></ProtectedRoute>} />
             <Route path="/tools/autoresearch" element={<ProtectedRoute><ErrorBoundary><AutoresearchDashboard /></ErrorBoundary></ProtectedRoute>} />
             <Route path="/fight-flow" element={<ProtectedRoute><ErrorBoundary><FightFlow /></ErrorBoundary></ProtectedRoute>} />
             <Route path="/crm" element={<ProtectedRoute><ErrorBoundary><CRM /></ErrorBoundary></ProtectedRoute>} />
