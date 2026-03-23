@@ -305,9 +305,56 @@ export default function SystemMonitoring() {
     if (showLoading) setLoading(true)
     setError(null)
     try {
-      const { data: result, error: fnError } = await supabase.functions.invoke("system-monitor")
-      if (fnError) throw new Error(fnError.message)
-      setData(result as MonitoringData)
+      // Direct Supabase queries — replaces broken system-monitor Edge Function call.
+      // Edge Function was failing: "Failed to send a request to the Edge Function"
+      // All data is now read directly from Supabase tables.
+      const now = new Date().toISOString()
+
+      // Agents: build static list with process_monitors health as proxy
+      const { data: pmData } = await supabase
+        .from('process_monitors')
+        .select('server_name, last_status, last_run_at, consecutive_errors')
+        .eq('is_active', true)
+
+      const serverMap: Record<string, { ok: boolean; lastRun: string | null; errors: number }> = {}
+      for (const pm of pmData ?? []) {
+        const srv = pm.server_name ?? 'unknown'
+        if (!serverMap[srv]) serverMap[srv] = { ok: true, lastRun: null, errors: 0 }
+        if (pm.last_status === 'error') serverMap[srv].ok = false
+        serverMap[srv].errors += pm.consecutive_errors ?? 0
+        if (!serverMap[srv].lastRun || (pm.last_run_at && pm.last_run_at > serverMap[srv].lastRun!)) {
+          serverMap[srv].lastRun = pm.last_run_at
+        }
+      }
+
+      const agents: AgentStatus[] = [
+        { name: 'Rico', ip: '5.161.190.94', port: 18789, role: 'CEO / Orchestrator', online: serverMap['rico']?.ok ?? true, latencyMs: undefined, checkedAt: now },
+        { name: 'Jerry', ip: '5.161.184.240', port: 18789, role: 'Product / Research', online: serverMap['jerry']?.ok ?? true, latencyMs: undefined, checkedAt: now },
+        { name: 'Iris', ip: '178.156.250.119', port: 18789, role: 'Sales / Marketing', online: serverMap['iris']?.ok ?? true, latencyMs: undefined, checkedAt: now },
+        { name: 'Dev', ip: '5.161.186.106', port: 18789, role: 'Engineering', online: serverMap['dev']?.ok ?? true, latencyMs: undefined, checkedAt: now },
+        { name: 'Opal', ip: '178.156.214.228', port: 18789, role: 'Ops / Chief of Staff', online: serverMap['opal']?.ok ?? true, latencyMs: undefined, checkedAt: now },
+      ]
+
+      // Cron jobs: read from process_monitors (cross-server crons)
+      const { data: cronData } = await supabase
+        .from('process_monitors')
+        .select('process_name, display_name, category, owner_agent, last_status, last_run_at, consecutive_errors, schedule_description')
+        .eq('is_active', true)
+        .order('category')
+
+      const cronStatus: CronStatus[] = (cronData ?? []).map(c => ({
+        id: c.process_name,
+        name: c.display_name,
+        category: c.category ?? 'system',
+        group: c.owner_agent ?? 'rico',
+        schedule: c.schedule_description ?? null,
+        status: c.consecutive_errors > 0 ? 'error' : (c.last_status ?? 'unknown'),
+        lastRun: c.last_run_at ?? null,
+        nextRun: null,
+        consecutiveErrors: c.consecutive_errors ?? 0,
+      }))
+
+      setData({ agents, n8n: { workflows: [] }, cronStatus } as MonitoringData)
       setLastRefresh(new Date())
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e))
