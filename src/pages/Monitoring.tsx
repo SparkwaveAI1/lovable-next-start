@@ -15,11 +15,13 @@ import {
   Siren,
   Target,
   Timer,
+  TrendingDown,
   TrendingUp,
   Users,
   XCircle,
   Zap,
 } from "lucide-react"
+import { LineChart, Line, ResponsiveContainer, Tooltip } from "recharts"
 import { supabase } from "@/integrations/supabase/client"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { cn } from "@/lib/utils"
@@ -770,6 +772,107 @@ function AgentDiagnosticSection({
   )
 }
 
+// ─── Section: Karpathy Score Trending ────────────────────────────────────────
+
+interface KarpathyDataPoint {
+  date: string
+  score: number
+}
+
+function KarpathyTrendingSection({
+  scores,
+  unavailable,
+}: {
+  scores: Record<string, KarpathyDataPoint[]>
+  unavailable: boolean
+}) {
+  const agents = Object.keys(scores)
+
+  return (
+    <SectionCard
+      title="Karpathy Score Trending (7d)"
+      icon={<TrendingUp className="h-4 w-4" />}
+      unavailable={unavailable}
+    >
+      {agents.length === 0 ? (
+        <div className="text-slate-400 text-sm py-1">No quality score data in last 7 days</div>
+      ) : (
+        <div className="grid grid-cols-2 lg:grid-cols-3 gap-3">
+          {agents.map((agentName) => {
+            const pts = scores[agentName]
+            const latest = pts[pts.length - 1]?.score ?? 0
+            const first = pts[0]?.score ?? 0
+            const delta = latest - first
+            const trend: "up" | "down" | "flat" =
+              delta > 0.5 ? "up" : delta < -0.5 ? "down" : "flat"
+            const lineColor =
+              trend === "up" ? "#10b981" : trend === "down" ? "#ef4444" : "#f59e0b"
+            const trendIcon =
+              trend === "up" ? (
+                <TrendingUp className="h-3 w-3 text-emerald-500" />
+              ) : trend === "down" ? (
+                <TrendingDown className="h-3 w-3 text-red-500" />
+              ) : (
+                <span className="text-amber-500 text-xs font-bold">~</span>
+              )
+
+            return (
+              <div
+                key={agentName}
+                className="rounded-lg border border-slate-100 bg-slate-50 p-3"
+              >
+                <div className="flex items-center justify-between mb-1">
+                  <span className="text-xs font-semibold text-slate-700 capitalize">
+                    {agentName}
+                  </span>
+                  <div className="flex items-center gap-1">
+                    {trendIcon}
+                    <span className="text-xs font-bold text-slate-800">
+                      {latest.toFixed(1)}
+                    </span>
+                  </div>
+                </div>
+                <ResponsiveContainer width="100%" height={48}>
+                  <LineChart data={pts} margin={{ top: 2, right: 2, bottom: 2, left: 2 }}>
+                    <Line
+                      type="monotone"
+                      dataKey="score"
+                      stroke={lineColor}
+                      strokeWidth={2}
+                      dot={false}
+                      isAnimationActive={false}
+                    />
+                    <Tooltip
+                      contentStyle={{ fontSize: 11, padding: "2px 6px" }}
+                      formatter={(v: number) => [v.toFixed(1), "Score"]}
+                      labelFormatter={(l: string) => l}
+                    />
+                  </LineChart>
+                </ResponsiveContainer>
+                <div className="text-xs text-slate-400 mt-1">
+                  {pts.length} day{pts.length !== 1 ? "s" : ""} · Δ{" "}
+                  <span
+                    className={
+                      trend === "up"
+                        ? "text-emerald-600"
+                        : trend === "down"
+                        ? "text-red-500"
+                        : "text-amber-500"
+                    }
+                  >
+                    {delta >= 0 ? "+" : ""}
+                    {delta.toFixed(1)}
+                  </span>
+                </div>
+              </div>
+            )
+          })}
+        </div>
+      )}
+    </SectionCard>
+  )
+}
+
 // ─── Main Page ────────────────────────────────────────────────────────────────
 
 export default function MonitoringPage() {
@@ -805,6 +908,10 @@ export default function MonitoringPage() {
   const [escalationUnavailable, setEscalationUnavailable] = useState(false)
   const [diagnosticSignals, setDiagnosticSignals] = useState<AgentSignal[]>([])
   const [diagnosticUnavailable, setDiagnosticUnavailable] = useState(false)
+
+  // Karpathy score trending
+  const [karpathyScores, setKarpathyScores] = useState<Record<string, KarpathyDataPoint[]>>({})
+  const [karpathyScoresUnavailable, setKarpathyScoresUnavailable] = useState(false)
 
   const [lastRefresh, setLastRefresh] = useState<Date>(new Date())
   const [loading, setLoading] = useState(false)
@@ -991,6 +1098,29 @@ export default function MonitoringPage() {
       setDiagnosticUnavailable(true)
     }
 
+    // 11. Karpathy score trending — agent_quality_scores last 7 days
+    try {
+      const sevenDaysAgo = new Date(Date.now() - 7 * 86400000).toISOString().slice(0, 10)
+      const { data, error } = await supabase
+        .from("agent_quality_scores" as never)
+        .select("agent_name, review_date, quality_score")
+        .gte("review_date" as never, sevenDaysAgo)
+        .order("review_date" as never, { ascending: true })
+        .limit(100)
+      if (error) throw error
+      const rows = (data as Array<{ agent_name: string; review_date: string; quality_score: number }>) || []
+      const grouped: Record<string, KarpathyDataPoint[]> = {}
+      for (const r of rows) {
+        if (!grouped[r.agent_name]) grouped[r.agent_name] = []
+        grouped[r.agent_name].push({ date: r.review_date, score: r.quality_score })
+      }
+      setKarpathyScores(grouped)
+      setKarpathyScoresUnavailable(false)
+    } catch (err) {
+      console.error("Karpathy trending fetch error:", err)
+      setKarpathyScoresUnavailable(true)
+    }
+
     setLastRefresh(new Date())
     setLoading(false)
   }, [])
@@ -1063,6 +1193,7 @@ export default function MonitoringPage() {
             <KarpathySection changes={karpathyChanges} unavailable={karpathyUnavailable} />
             <BCFSection failures={bcfFailures} unavailable={bcfUnavailable} />
           </div>
+          <KarpathyTrendingSection scores={karpathyScores} unavailable={karpathyScoresUnavailable} />
           <AgentStatusSection agents={agents} unavailable={agentsUnavailable} />
           <CronSection cronJobs={cronJobs} unavailable={cronUnavailable} />
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">

@@ -91,10 +91,15 @@ function StatusBadge({ status, health }: { status: ProcessStatus; health: string
     red:    "bg-red-100 text-red-800 border-red-200",
     gray:   "bg-gray-100 text-gray-600 border-gray-200",
   };
+  // If DB says "ok" but computed health says overdue/stale, show the real state
+  const label =
+    health === "yellow" && status === "ok" ? "stale"
+    : health === "red" && status === "ok" ? "overdue"
+    : status;
   return (
     <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium border ${colorMap[health]}`}>
       <StatusIcon status={status} health={health} />
-      {status}
+      {label}
     </span>
   );
 }
