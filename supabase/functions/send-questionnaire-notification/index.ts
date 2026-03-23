@@ -1,7 +1,7 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 
 const RESEND_API_KEY = Deno.env.get("RESEND_API_KEY") || "";
-const NOTIFY_EMAIL = "scott@sparkwave-ai.com";
+const NOTIFY_EMAIL = "cumbucotrader@gmail.com";
 const FROM_EMAIL = "info@sparkwave-ai.com";
 
 const Q_LABELS: Record<string, string> = {
@@ -85,6 +85,7 @@ serve(async (req) => {
       </div>
     `;
 
+    // Send notification to Scott
     const res = await fetch("https://api.resend.com/emails", {
       method: "POST",
       headers: {
@@ -98,8 +99,39 @@ serve(async (req) => {
         html,
       }),
     });
-
     const result = await res.json();
+
+    // Send confirmation copy to respondent if they provided an email
+    if (respondent_email) {
+      const confirmHtml = `
+        <div style="font-family:sans-serif;max-width:640px;margin:0 auto">
+          <div style="background:#1e293b;color:#fff;padding:24px 32px;border-radius:8px 8px 0 0">
+            <h1 style="margin:0;font-size:20px">Your Questionnaire Responses</h1>
+            <p style="margin:6px 0 0;opacity:0.7;font-size:14px">AI & Marketing Optimization Assessment</p>
+          </div>
+          <div style="padding:24px 32px;border:1px solid #e5e7eb;border-top:none;border-radius:0 0 8px 8px">
+            <p style="color:#374151;font-size:15px">Hi ${(respondent_name || "there").split(" ")[0]}, here's a copy of your responses for your records.</p>
+            <table style="width:100%;border-collapse:collapse;font-size:13px;margin-top:8px">
+              ${rows}
+            </table>
+            <p style="margin-top:24px;font-size:12px;color:#9ca3af">We'll be in touch soon. — Sparkwave AI</p>
+          </div>
+        </div>
+      `;
+      await fetch("https://api.resend.com/emails", {
+        method: "POST",
+        headers: {
+          "Authorization": `Bearer ${RESEND_API_KEY}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          from: FROM_EMAIL,
+          to: respondent_email,
+          subject: "Your AI & Marketing Questionnaire Responses",
+          html: confirmHtml,
+        }),
+      });
+    }
 
     return new Response(JSON.stringify({ ok: true, resend: result }), {
       headers: { "Content-Type": "application/json", "Access-Control-Allow-Origin": "*" },
