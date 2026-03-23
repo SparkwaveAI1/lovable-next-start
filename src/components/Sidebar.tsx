@@ -24,6 +24,9 @@ import {
   Settings,
   Activity,
   Building2,
+  Radio,
+  Server,
+  BarChart3,
 } from "lucide-react"
 import { cn } from "@/lib/utils"
 import sparkwaveIcon from "@/assets/sparkwave-icon.png"
@@ -63,6 +66,9 @@ const navGroups: NavGroup[] = [
     label: "System",
     items: [
       { label: "System Monitoring", href: "/system-monitoring", icon: Activity },
+      { label: "Org Monitoring", href: "/monitoring", icon: Radio },
+      { label: "Process Monitoring", href: "/process-monitoring", icon: Server },
+      { label: "Business Metrics", href: "/business-metrics", icon: BarChart3 },
     ],
   },
   {
