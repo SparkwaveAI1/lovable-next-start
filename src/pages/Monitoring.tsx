@@ -10,7 +10,9 @@ import {
   Clock,
   Mail,
   RefreshCw,
+  Search,
   Shield,
+  Siren,
   Target,
   Timer,
   TrendingUp,
@@ -60,6 +62,19 @@ interface AgentRow {
   status: string
   last_activity: string | null
   current_task: string | null
+}
+
+interface AgentSignal {
+  id: string
+  signal_type: string
+  title: string | null
+  created_at: string
+}
+
+interface AutomationLog {
+  id: string
+  status: string | null
+  created_at: string
 }
 
 interface CronJobRow {
@@ -562,6 +577,199 @@ function FightFlowSection({
   )
 }
 
+// ─── New Section: SEO Research Automation ─────────────────────────────────────
+
+function SeoResearchSection({
+  signals,
+  unavailable,
+}: {
+  signals: AgentSignal[]
+  unavailable: boolean
+}) {
+  const now = Date.now()
+  const latest = signals[0]
+  const ageMs = latest ? now - new Date(latest.created_at).getTime() : null
+  const health: "green" | "yellow" | "red" | "gray" =
+    unavailable ? "gray"
+    : ageMs === null ? "red"
+    : ageMs < 25 * 3600000 ? "green"
+    : ageMs < 48 * 3600000 ? "yellow"
+    : "red"
+
+  const dotColors: Record<string, string> = {
+    green: "bg-emerald-500",
+    yellow: "bg-amber-400",
+    red: "bg-red-500",
+    gray: "bg-slate-400",
+  }
+  const summaryText =
+    unavailable ? "Data unavailable"
+    : !latest ? "No signals — cron may not have run yet"
+    : health === "green" ? `Last signal ${relativeTime(latest.created_at)}`
+    : health === "yellow" ? `Last signal ${relativeTime(latest.created_at)} — running late`
+    : `Last signal ${relativeTime(latest.created_at)} — stale`
+
+  return (
+    <SectionCard title="SEO Research Automation" icon={<Search className="h-4 w-4" />} unavailable={false}>
+      <div className="flex items-center gap-2 mb-3">
+        <span className={cn("inline-block h-2.5 w-2.5 rounded-full flex-shrink-0", dotColors[health])} />
+        <span className="text-xs text-slate-600">{summaryText}</span>
+      </div>
+      {signals.length > 0 && !unavailable && (
+        <div className="space-y-1.5">
+          {signals.slice(0, 5).map((s) => (
+            <div key={s.id} className="flex items-center justify-between py-1 border-b border-slate-100 last:border-0">
+              <span className="text-xs text-slate-700 truncate max-w-[70%]" title={s.title ?? s.signal_type}>
+                {s.title ?? s.signal_type}
+              </span>
+              <span className="text-xs text-slate-400 flex-shrink-0 ml-2">{relativeTime(s.created_at)}</span>
+            </div>
+          ))}
+        </div>
+      )}
+      {!signals.length && !unavailable && (
+        <p className="text-xs text-slate-400">No research_ready signals found in agent_signals</p>
+      )}
+    </SectionCard>
+  )
+}
+
+// ─── New Section: Agent Escalation Monitoring ──────────────────────────────────
+
+function AgentEscalationSection({
+  failures,
+  unavailable,
+}: {
+  failures: AgentFailure[]
+  unavailable: boolean
+}) {
+  const now = Date.now()
+  const cutoff24h = new Date(now - 24 * 3600000).toISOString().slice(0, 10)
+  const critical24h = failures.filter((f) => f.severity === "critical" && f.session_date >= cutoff24h).length
+  const high24h = failures.filter((f) => f.severity === "high" && f.session_date >= cutoff24h).length
+
+  const health: "green" | "yellow" | "red" | "gray" =
+    unavailable ? "gray"
+    : critical24h > 0 ? "red"
+    : high24h > 0 ? "yellow"
+    : "green"
+
+  const dotColors: Record<string, string> = {
+    green: "bg-emerald-500",
+    yellow: "bg-amber-400",
+    red: "bg-red-500",
+    gray: "bg-slate-400",
+  }
+  const summaryText =
+    unavailable ? "Data unavailable"
+    : critical24h > 0 ? `${critical24h} critical escalation(s) in last 24h`
+    : high24h > 0 ? `${high24h} high-severity escalation(s) in last 24h`
+    : failures.length > 0 ? `${failures.length} total in last 7d — none critical/high in 24h`
+    : "No critical/high escalations in last 7 days"
+
+  return (
+    <SectionCard title="Agent Escalation Monitoring" icon={<Siren className="h-4 w-4" />} unavailable={false}>
+      <div className="flex items-center gap-2 mb-3">
+        <span className={cn("inline-block h-2.5 w-2.5 rounded-full flex-shrink-0", dotColors[health])} />
+        <span className="text-xs text-slate-600">{summaryText}</span>
+      </div>
+      {failures.length > 0 && !unavailable && (
+        <div className="space-y-1.5">
+          {failures.slice(0, 5).map((f) => {
+            const badgeCls = f.severity === "critical"
+              ? "bg-red-100 text-red-700"
+              : f.severity === "high"
+              ? "bg-amber-100 text-amber-700"
+              : "bg-slate-100 text-slate-600"
+            return (
+              <div key={f.failure_id} className="flex items-center justify-between py-1 border-b border-slate-100 last:border-0">
+                <div className="flex items-center gap-2 min-w-0">
+                  <span className={cn("inline-block px-1.5 py-0.5 rounded text-xs font-semibold flex-shrink-0", badgeCls)}>
+                    {f.severity}
+                  </span>
+                  <span className="text-xs text-slate-700 truncate" title={f.short_label}>
+                    {f.agent_name}: {f.short_label}
+                  </span>
+                </div>
+                <span className="text-xs text-slate-400 flex-shrink-0 ml-2">{relativeTime(f.created_at)}</span>
+              </div>
+            )
+          })}
+        </div>
+      )}
+      {!failures.length && !unavailable && (
+        <div className="flex items-center gap-2 text-emerald-600 py-1">
+          <CheckCircle2 className="h-4 w-4" />
+          <span className="text-xs font-medium">Clean — no high/critical escalations in last 7 days</span>
+        </div>
+      )}
+    </SectionCard>
+  )
+}
+
+// ─── New Section: Agent Diagnostic Triggers ────────────────────────────────────
+
+function AgentDiagnosticSection({
+  signals,
+  unavailable,
+}: {
+  signals: AgentSignal[]
+  unavailable: boolean
+}) {
+  const now = Date.now()
+  const cutoff24h = now - 24 * 3600000
+  const count24h = signals.filter((s) => new Date(s.created_at).getTime() >= cutoff24h).length
+
+  const health: "green" | "yellow" | "red" | "gray" =
+    unavailable ? "gray"
+    : count24h === 0 ? "green"
+    : count24h <= 2 ? "yellow"
+    : "red"
+
+  const dotColors: Record<string, string> = {
+    green: "bg-emerald-500",
+    yellow: "bg-amber-400",
+    red: "bg-red-500",
+    gray: "bg-slate-400",
+  }
+  const summaryText =
+    unavailable ? "Data unavailable"
+    : count24h === 0 ? "No diagnostic triggers in last 24h"
+    : `${count24h} diagnostic trigger(s) in last 24h`
+
+  return (
+    <SectionCard title="Agent Diagnostic Triggers" icon={<Zap className="h-4 w-4" />} unavailable={false}>
+      <div className="flex items-center gap-2 mb-3">
+        <span className={cn("inline-block h-2.5 w-2.5 rounded-full flex-shrink-0", dotColors[health])} />
+        <span className="text-xs text-slate-600">{summaryText}</span>
+      </div>
+      {signals.length > 0 && !unavailable && (
+        <div className="space-y-1.5">
+          {signals.slice(0, 5).map((s) => (
+            <div key={s.id} className="flex items-center justify-between py-1 border-b border-slate-100 last:border-0">
+              <div className="flex items-center gap-2 min-w-0">
+                <span className="inline-block px-1.5 py-0.5 rounded text-xs font-semibold bg-amber-100 text-amber-700 flex-shrink-0">
+                  {s.signal_type}
+                </span>
+                <span className="text-xs text-slate-700 truncate" title={s.title ?? ""}>
+                  {s.title ?? "—"}
+                </span>
+              </div>
+              <span className="text-xs text-slate-400 flex-shrink-0 ml-2">{relativeTime(s.created_at)}</span>
+            </div>
+          ))}
+        </div>
+      )}
+      {!signals.length && !unavailable && (
+        <div className="flex items-center gap-2 text-emerald-600 py-1">
+          <CheckCircle2 className="h-4 w-4" />
+          <span className="text-xs font-medium">No diagnostic/alert signals in last 7 days</span>
+        </div>
+      )}
+    </SectionCard>
+  )
+}
+
 // ─── Main Page ────────────────────────────────────────────────────────────────
 
 export default function MonitoringPage() {
@@ -589,6 +797,14 @@ export default function MonitoringPage() {
   const [sms24h, setSms24h] = useState(0)
   const [lastSms, setLastSms] = useState<string | null>(null)
   const [fightFlowUnavailable, setFightFlowUnavailable] = useState(false)
+
+  // New org-monitoring sections
+  const [seoSignals, setSeoSignals] = useState<AgentSignal[]>([])
+  const [seoUnavailable, setSeoUnavailable] = useState(false)
+  const [escalationFailures, setEscalationFailures] = useState<AgentFailure[]>([])
+  const [escalationUnavailable, setEscalationUnavailable] = useState(false)
+  const [diagnosticSignals, setDiagnosticSignals] = useState<AgentSignal[]>([])
+  const [diagnosticUnavailable, setDiagnosticUnavailable] = useState(false)
 
   const [lastRefresh, setLastRefresh] = useState<Date>(new Date())
   const [loading, setLoading] = useState(false)
@@ -723,6 +939,58 @@ export default function MonitoringPage() {
       setFightFlowUnavailable(true)
     }
 
+    // 8. SEO Research Automation — agent_signals with signal_type='research_ready'
+    try {
+      const { data, error } = await supabase
+        .from("agent_signals" as never)
+        .select("id, signal_type, title, created_at")
+        .eq("signal_type" as never, "research_ready")
+        .order("created_at" as never, { ascending: false })
+        .limit(5)
+      if (error) throw error
+      setSeoSignals((data as AgentSignal[]) || [])
+      setSeoUnavailable(false)
+    } catch (err) {
+      console.error("SEO Research Automation fetch error:", err)
+      setSeoUnavailable(true)
+    }
+
+    // 9. Agent Escalation Monitoring — agent_failures severity high/critical last 7d
+    try {
+      const sevenDaysAgo = new Date(Date.now() - 7 * 86400000).toISOString().slice(0, 10)
+      const { data, error } = await supabase
+        .from("agent_failures" as never)
+        .select("failure_id, agent_name, session_date, short_label, severity, created_at")
+        .in("severity" as never, ["high", "critical"])
+        .gte("session_date" as never, sevenDaysAgo)
+        .order("created_at" as never, { ascending: false })
+        .limit(10)
+      if (error) throw error
+      setEscalationFailures((data as AgentFailure[]) || [])
+      setEscalationUnavailable(false)
+    } catch (err) {
+      console.error("Agent Escalation Monitoring fetch error:", err)
+      setEscalationUnavailable(true)
+    }
+
+    // 10. Agent Diagnostic Triggers — agent_signals diagnostic/alert/error last 7d
+    try {
+      const sevenDaysAgo = new Date(Date.now() - 7 * 86400000).toISOString()
+      const { data, error } = await supabase
+        .from("agent_signals" as never)
+        .select("id, signal_type, title, created_at")
+        .in("signal_type" as never, ["diagnostic", "alert", "error"])
+        .gte("created_at" as never, sevenDaysAgo)
+        .order("created_at" as never, { ascending: false })
+        .limit(10)
+      if (error) throw error
+      setDiagnosticSignals((data as AgentSignal[]) || [])
+      setDiagnosticUnavailable(false)
+    } catch (err) {
+      console.error("Agent Diagnostic Triggers fetch error:", err)
+      setDiagnosticUnavailable(true)
+    }
+
     setLastRefresh(new Date())
     setLoading(false)
   }, [])
@@ -807,6 +1075,12 @@ export default function MonitoringPage() {
               unavailable={fightFlowUnavailable}
             />
           </div>
+          {/* New org-monitoring sections */}
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+            <SeoResearchSection signals={seoSignals} unavailable={seoUnavailable} />
+            <AgentEscalationSection failures={escalationFailures} unavailable={escalationUnavailable} />
+          </div>
+          <AgentDiagnosticSection signals={diagnosticSignals} unavailable={diagnosticUnavailable} />
         </div>
       </PageContent>
     </DashboardLayout>
