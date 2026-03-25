@@ -436,6 +436,149 @@ function RecentLeadsPanel({
   );
 }
 
+// ─── Panel 4: Automation Status ──────────────────────────────────────────────
+
+interface AutomationLog {
+  id: string;
+  automation_type: string;
+  status: string;
+  source_data: Record<string, any> | null;
+  processed_data: Record<string, any> | null;
+  error_message: string | null;
+  execution_time_ms: number | null;
+  created_at: string;
+}
+
+function AutomationStatusPanel({ businessId }: { businessId: string }) {
+  const { data: logs = [], isLoading } = useQuery({
+    queryKey: ['ff-automation-logs', businessId],
+    queryFn: async (): Promise<AutomationLog[]> => {
+      const since = subHours(new Date(), 24).toISOString();
+
+      const { data, error } = await supabase
+        .from('automation_logs')
+        .select('id, automation_type, status, source_data, processed_data, error_message, execution_time_ms, created_at')
+        .eq('business_id', businessId)
+        .gte('created_at', since)
+        .order('created_at', { ascending: false })
+        .limit(10);
+
+      if (error) {
+        console.error('Error fetching automation logs:', error);
+        return [];
+      }
+
+      return (data ?? []) as AutomationLog[];
+    },
+    enabled: !!businessId,
+    refetchInterval: 30000,
+  });
+
+  const successCount = logs.filter(l => l.status === 'success').length;
+  const failureCount = logs.filter(l => l.status === 'error').length;
+  const pendingCount = logs.filter(l => l.status === 'pending').length;
+
+  const automationTypeLabel = (type: string): string => {
+    const map: Record<string, string> = {
+      'sms_send': '📱 SMS',
+      'email_send': '✉️ Email',
+      'ai_response': '🤖 AI Response',
+      'sequence_send': '📨 Sequence',
+      'appointment_reminder': '📅 Reminder',
+    };
+    return map[type] || type;
+  };
+
+  return (
+    <Card>
+      <CardHeader className="pb-3">
+        <CardTitle className="flex items-center justify-between text-lg">
+          <span>⚡ Automation Status (Last 24h)</span>
+          <div className="flex gap-2">
+            {successCount > 0 && (
+              <Badge className="bg-green-100 text-green-800 border-green-300">
+                {successCount} sent
+              </Badge>
+            )}
+            {failureCount > 0 && (
+              <Badge className="bg-red-100 text-red-800 border-red-300">
+                {failureCount} failed
+              </Badge>
+            )}
+            {pendingCount > 0 && (
+              <Badge className="bg-yellow-100 text-yellow-800 border-yellow-300">
+                {pendingCount} pending
+              </Badge>
+            )}
+          </div>
+        </CardTitle>
+      </CardHeader>
+      <CardContent>
+        {isLoading ? (
+          <div className="space-y-3">
+            {[1, 2, 3].map(i => (
+              <div key={i} className="animate-pulse h-14 bg-gray-100 rounded-lg" />
+            ))}
+          </div>
+        ) : logs.length === 0 ? (
+          <p className="text-gray-500 py-4 text-center">No automations in the last 24 hours.</p>
+        ) : (
+          <div className="space-y-2">
+            {logs.map(log => {
+              const recipient =
+                log.source_data?.phone ||
+                log.source_data?.email ||
+                log.processed_data?.phone ||
+                log.processed_data?.email ||
+                'Unknown';
+              const statusColor =
+                log.status === 'success'
+                  ? 'text-green-600'
+                  : log.status === 'error'
+                  ? 'text-red-600'
+                  : 'text-yellow-600';
+              const statusIcon =
+                log.status === 'success' ? '✓' : log.status === 'error' ? '✗' : '⏳';
+
+              return (
+                <div
+                  key={log.id}
+                  className="flex items-start justify-between p-3 rounded-lg border border-gray-200 hover:bg-gray-50"
+                >
+                  <div className="flex-1">
+                    <div className="flex items-center gap-3 mb-1">
+                      <span className={`font-semibold ${statusColor}`}>
+                        {statusIcon}
+                      </span>
+                      <span className="font-medium text-gray-900">
+                        {automationTypeLabel(log.automation_type)}
+                      </span>
+                      <span className="text-sm text-gray-500">→ {recipient}</span>
+                    </div>
+                    {log.error_message && (
+                      <div className="text-xs text-red-600 mt-1">
+                        Error: {log.error_message}
+                      </div>
+                    )}
+                  </div>
+                  <div className="flex flex-col items-end gap-1 flex-shrink-0 ml-2">
+                    <span className={`text-xs font-medium ${statusColor}`}>
+                      {log.status.charAt(0).toUpperCase() + log.status.slice(1)}
+                    </span>
+                    <span className="text-xs text-gray-400">
+                      {formatDistanceToNow(new Date(log.created_at), { addSuffix: true })}
+                    </span>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        )}
+      </CardContent>
+    </Card>
+  );
+}
+
 // ─── Main Export ──────────────────────────────────────────────────────────────
 
 export function FightFlowDashboard({ businessId, onContactClick }: FightFlowDashboardProps) {
@@ -443,6 +586,7 @@ export function FightFlowDashboard({ businessId, onContactClick }: FightFlowDash
     <div className="space-y-6">
       <h2 className="text-xl font-bold text-gray-900">Fight Flow At-a-Glance</h2>
       <NeedsAttentionPanel businessId={businessId} onContactClick={onContactClick} />
+      <AutomationStatusPanel businessId={businessId} />
       <TrialClassesPanel />
       <RecentLeadsPanel businessId={businessId} onContactClick={onContactClick} />
     </div>
