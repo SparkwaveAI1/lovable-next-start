@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { supabase } from '@/integrations/supabase/client';
 import { DashboardLayout } from '@/components/layout/DashboardLayout';
 import { PageHeader, PageContent } from '@/components/layout/PageLayout';
@@ -37,6 +38,7 @@ const STATUS_COLORS: Record<string, string> = {
 };
 
 const CRM = () => {
+  const navigate = useNavigate();
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState('all');
 
@@ -154,7 +156,11 @@ const CRM = () => {
                   </TableHeader>
                   <TableBody>
                     {filtered.slice(0, 200).map(p => (
-                      <TableRow key={p.id} className="hover:bg-gray-50">
+                      <TableRow
+                        key={p.id}
+                        className="hover:bg-gray-50 cursor-pointer"
+                        onClick={() => navigate(`/crm/${p.id}`)}
+                      >
                         <TableCell>
                           <div className="font-medium text-gray-900">
                             {[p.first_name, p.last_name].filter(Boolean).join(' ') || '—'}

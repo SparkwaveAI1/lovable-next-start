@@ -56,6 +56,7 @@ import ProcessMonitoring from "./pages/ProcessMonitoring";
 import FightFlow from "./pages/FightFlow";
 import SystemOperations from "./pages/SystemOperations";
 import CRM from "./pages/CRM";
+import AccountDetailPage from "./pages/AccountDetailPage";
 import DealPipeline from "./pages/DealPipeline";
 import BusinessMetrics from "./pages/BusinessMetrics";
 import ToneyFalknerQuestionnaire from "./pages/questionnaire/ToneyFalknerQuestionnaire";
@@ -133,7 +134,7 @@ const App = () => (
             <Route path="/fight-flow" element={<ProtectedRoute><ErrorBoundary><FightFlow /></ErrorBoundary></ProtectedRoute>} />
             <Route path="/crm" element={<ProtectedRoute><ErrorBoundary><CRM /></ErrorBoundary></ProtectedRoute>} />
             <Route path="/crm/deals" element={<ProtectedRoute><ErrorBoundary><DealPipeline /></ErrorBoundary></ProtectedRoute>} />
-            <Route path="/crm/:id" element={<ProtectedRoute><ErrorBoundary><CRM /></ErrorBoundary></ProtectedRoute>} />
+            <Route path="/crm/:id" element={<ProtectedRoute><ErrorBoundary><AccountDetailPage /></ErrorBoundary></ProtectedRoute>} />
             <Route path="/business-metrics" element={<ProtectedRoute><ErrorBoundary><BusinessMetrics /></ErrorBoundary></ProtectedRoute>} />
             <Route path="/questionnaire/toney-falkner" element={<ToneyFalknerQuestionnaire />} />
             <Route path="/questionnaire/toney-falkner/results" element={<ProtectedRoute><ErrorBoundary><ToneyFalknerResults /></ErrorBoundary></ProtectedRoute>} />
