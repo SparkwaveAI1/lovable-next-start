@@ -8,7 +8,7 @@ import { TrendingUp, Users, Activity, DollarSign, BarChart2, AlertCircle, Chevro
 // ─── Constants ────────────────────────────────────────────────────────────────
 
 const IRIS_AGENT_ID = '15562d82-85f5-4d52-bc72-b038ba21da35';
-const OPEN_STAGES: string[] = ['won', 'lost'];
+const TERMINAL_STAGES: string[] = ['won', 'lost', 'converted'];
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -103,9 +103,9 @@ export function SalesSummaryPanel() {
 
       const deals = dealsResult.data ?? [];
 
-      const openDeals = deals.filter(d => !OPEN_STAGES.includes(d.stage ?? '')).length;
+      const openDeals = deals.filter(d => !TERMINAL_STAGES.includes(d.stage ?? '')).length;
       const pipelineValue = deals
-        .filter(d => !OPEN_STAGES.includes(d.stage ?? ''))
+        .filter(d => !TERMINAL_STAGES.includes(d.stage ?? ''))
         .reduce((sum, d) => sum + (Number(d.value) || 0), 0);
       const dealsMoved7d = deals.filter(
         d => d.updated_at && d.updated_at >= sevenDaysAgo
