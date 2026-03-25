@@ -45,8 +45,7 @@ import {
   ChevronUp,
 } from 'lucide-react';
 import { formatToEasternCompact } from '@/lib/dateUtils';
-
-const BUSINESS_ID = '5a9bbfcf-fae5-4063-9780-bcbe366bae88';
+import { useBusinessContext } from '@/contexts/BusinessContext';
 
 interface CrmAccount {
   id: string;
@@ -153,6 +152,7 @@ interface AccountDetailProps {
 export function AccountDetail({ accountId, onBack }: AccountDetailProps) {
   const { toast } = useToast();
   const queryClient = useQueryClient();
+  const { selectedBusiness } = useBusinessContext();
 
   // Inline header editing state
   const [isEditingHeader, setIsEditingHeader] = useState(false);
@@ -354,7 +354,7 @@ export function AccountDetail({ accountId, onBack }: AccountDetailProps) {
       const { error } = await supabase
         .from('crm_interactions')
         .insert({
-          business_id: BUSINESS_ID,
+          business_id: selectedBusiness?.id,
           account_id: accountId,
           type: intType,
           direction: intType === 'note' ? null : intDirection,
@@ -389,7 +389,7 @@ export function AccountDetail({ accountId, onBack }: AccountDetailProps) {
       const { error } = await supabase
         .from('crm_deals')
         .insert({
-          business_id: BUSINESS_ID,
+          business_id: selectedBusiness?.id,
           account_id: accountId,
           title: dealTitle.trim(),
           stage: dealStage,
@@ -443,7 +443,7 @@ export function AccountDetail({ accountId, onBack }: AccountDetailProps) {
       const { error } = await supabase
         .from('crm_documents')
         .insert({
-          business_id: BUSINESS_ID,
+          business_id: selectedBusiness?.id,
           account_id: accountId,
           title: docTitle.trim(),
           type: docType || null,
