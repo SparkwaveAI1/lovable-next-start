@@ -366,22 +366,25 @@ export default function Communications() {
     if (!composeMessage.phone || !composeMessage.message) return;
     
     try {
-      const { error } = await supabase
-        .from('sms_messages')
-        .insert({
-          phone_number: composeMessage.phone,
+      const { data, error } = await supabase.functions.invoke('send-sms', {
+        body: {
+          to: composeMessage.phone,
           message: composeMessage.message,
-          direction: 'outbound',
-          status: 'pending',
-          business_id: selectedBusiness?.id,
-        });
-      
-      if (error) throw error;
-      
+          businessId: selectedBusiness?.id,
+        },
+      });
+
+      if (error || !data?.success) {
+        const errorMsg = data?.error || error?.message || 'Failed to send SMS';
+        toast.error(errorMsg);
+        return;
+      }
+
+      toast.success('SMS sent successfully');
       setIsComposeOpen(false);
       setComposeMessage({ phone: '', message: '' });
-    } catch (err) {
-      console.error('Failed to send message:', err);
+    } catch (err: any) {
+      toast.error(err?.message || 'Failed to send SMS');
     }
   };
 
