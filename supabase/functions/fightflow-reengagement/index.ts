@@ -217,6 +217,7 @@ Deno.serve(async (req) => {
           thread_id: row.thread_id,
           direction: "outbound",
           message: reEngageMsg,
+          business_id: "456dc53b-d9d9-41b0-bc33-4f4c4a791eff", // SPA-1583: FF business_id
           created_at: new Date().toISOString(),
           metadata: { source: "reengagement", attempt: row.attempt, type: row.type },
         }).catch((e: Error) => console.error("sms_messages insert error:", e.message));

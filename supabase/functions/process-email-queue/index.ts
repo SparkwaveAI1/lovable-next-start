@@ -286,12 +286,19 @@ serve(async (req) => {
         });
 
         // Create email_sends record for tracking
+        // SPA-1583: derive business_id from campaign for proper filtering
+        let insert_business_id: string | null = null;
+        if (campaign_id) {
+          const { data: campData } = await supabase.from('campaigns').select('business_id').eq('id', campaign_id).single();
+          insert_business_id = campData?.business_id ?? null;
+        }
         await supabase.from('email_sends').insert({
           campaign_id: campaign_id,
           contact_id: item.contact_id,
           resend_id: result.id,
           status: 'sent',
           sent_at: new Date().toISOString(),
+          business_id: insert_business_id,
         });
 
         // Update contact's last activity

@@ -617,6 +617,7 @@ serve(async (req) => {
         campaign_id: null,
         subscriber_id: null,
         contact_id: null, // We don't have a contact_id here, but the email is tracked
+        business_id: null, // SPA-1583: no campaign/contact context here; acceptable per spec
       });
     } catch (e: any) {
       console.log(`[${requestId}] Could not log to email_sends:`, e.message);

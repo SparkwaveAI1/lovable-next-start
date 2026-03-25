@@ -613,6 +613,7 @@ export default function Communications() {
             phone
           )
         `)
+        .eq('business_id', selectedBusiness!.id)
         .order('created_at', { ascending: false })
         .limit(50);
       if (error) throw error;
@@ -646,6 +647,7 @@ export default function Communications() {
           contact_id,
           contact:contacts(email, first_name, last_name)
         `)
+        .eq('business_id', selectedBusiness!.id)
         .order('created_at', { ascending: false })
         .limit(20);
       if (error) throw error;
