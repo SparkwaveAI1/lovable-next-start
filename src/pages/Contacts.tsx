@@ -822,7 +822,7 @@ export default function Contacts() {
             )}
           </TabsContent>
           <TabsContent value="sales-queue">
-            <SalesQueueTab onProspectClick={(p) => { console.log('prospect clicked:', p.name); }} />
+            <SalesQueueTab />
           </TabsContent>
         </Tabs>
       </main>
