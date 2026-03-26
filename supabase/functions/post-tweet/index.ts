@@ -1,12 +1,11 @@
-import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
-import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { createClient } from "npm:@supabase/supabase-js@2";
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
 
-serve(async (req) => {
+Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') {
     return new Response(null, { headers: corsHeaders });
   }
@@ -17,7 +16,8 @@ serve(async (req) => {
       Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
     );
 
-    const { content, businessId } = await req.json();
+    // Accept optional replyToTweetId for thread replies
+    const { content, businessId, replyToTweetId } = await req.json();
 
     if (!content || !businessId) {
       return new Response(
@@ -69,20 +69,26 @@ serve(async (req) => {
       );
     }
 
-    console.log(`Posting tweet for ${business.name} via GAME platform...`);
+    const isReply = Boolean(replyToTweetId);
+    console.log(`${isReply ? 'Replying to tweet' : 'Posting tweet'} for ${business.name} via GAME platform...`);
+
+    // Build GAME API payload — include in_reply_to_tweet_id for replies
+    const gamePayload: Record<string, string> = {
+      accessToken: business.game_twitter_token,
+      text: content,
+    };
+    if (isReply) {
+      gamePayload.in_reply_to_tweet_id = String(replyToTweetId);
+    }
 
     // Call GAME's virtualized Twitter API
-    // This is the correct endpoint that works with GAME tokens
     const gameResponse = await fetch('https://api.virtuals.io/api/virtuals-twitter/tweet', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
         'x-api-key': gameApiKey,
       },
-      body: JSON.stringify({
-        accessToken: business.game_twitter_token,
-        text: content
-      })
+      body: JSON.stringify(gamePayload),
     });
 
     if (!gameResponse.ok) {
@@ -98,20 +104,36 @@ serve(async (req) => {
     }
 
     const gameData = await gameResponse.json();
+
+    // Post-submit verification: require a tweet ID from the API response.
+    // If absent, the post did not actually land — fail loudly rather than silently claiming success.
+    const tweetId: string | undefined = gameData?.data?.id;
+    if (!tweetId) {
+      console.error('GAME API returned no tweet id — post may not have landed:', JSON.stringify(gameData));
+      return new Response(
+        JSON.stringify({
+          success: false,
+          error: 'Tweet post could not be verified: no tweet_id returned from GAME API',
+          rawResponse: gameData,
+        }),
+        { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 502 }
+      );
+    }
     
-    console.log(`Successfully posted tweet for ${business.name}:`, gameData);
+    console.log(`Successfully ${isReply ? 'replied' : 'posted'} for ${business.name}: tweet_id=${tweetId}`);
 
     return new Response(
       JSON.stringify({
         success: true,
-        tweetId: gameData.data?.id || 'posted',
-        message: `Posted to ${business.name} Twitter account`,
-        data: gameData
+        tweetId,
+        isReply,
+        message: `${isReply ? 'Reply posted' : 'Posted'} to ${business.name} Twitter account`,
+        data: gameData,
       }),
       { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     );
 
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error('Error posting tweet:', error);
     return new Response(
       JSON.stringify({ 
