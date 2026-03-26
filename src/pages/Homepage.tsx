@@ -482,116 +482,7 @@ export default function Homepage() {
         </div>
       </section>
 
-      {/* ── PERSONAAI SHOWCASE ── */}
-      <section className="py-20 px-4 sm:px-6 lg:px-8 bg-[#0a0e1a]">
-        <div className="max-w-[1280px] mx-auto">
-          <div className="grid lg:grid-cols-2 gap-12 items-center">
-            {/* Left: Copy */}
-            <div>
-              <Badge
-                variant="outline"
-                className="mb-5 border-purple-500/50 text-purple-300 bg-purple-600/10"
-              >
-                Flagship Product
-              </Badge>
-              <h2 className="text-3xl sm:text-4xl font-bold text-white mb-5 leading-tight">
-                Meet PersonaAI —{" "}
-                <span className="bg-gradient-to-r from-purple-400 to-pink-400 bg-clip-text text-transparent">
-                  Market Research at Scale
-                </span>
-              </h2>
-              <p className="text-lg text-gray-400 mb-8 leading-relaxed">
-                4,000+ AI personas for customer research, UX testing, and
-                product feedback. No surveys. No bias. Get instant insights
-                from demographically diverse AI personas.
-              </p>
-              <div className="flex flex-col sm:flex-row gap-4">
-                <Button
-                  onClick={() => window.open("https://personaresearch.ai", "_blank")}
-                  className="bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-700 hover:to-pink-700 text-white font-semibold px-7 py-4 rounded-xl"
-                >
-                  <Users className="w-5 h-5 mr-2" />
-                  Explore PersonaAI
-                </Button>
-                <Button
-                  variant="outline"
-                  onClick={handleBookDemo}
-                  className="border-2 border-purple-500/40 text-purple-300 hover:bg-purple-600/10 font-semibold px-7 py-4 rounded-xl"
-                >
-                  Book a Demo
-                </Button>
-              </div>
-            </div>
-
-            {/* Right: Product mock */}
-            <div className="bg-[#1a202c] rounded-2xl border border-white/10 p-6 shadow-2xl">
-              <div className="flex items-center justify-between mb-5">
-                <div className="flex items-center gap-2">
-                  <div className="w-8 h-8 bg-gradient-to-br from-purple-500 to-pink-500 rounded-lg flex items-center justify-center">
-                    <Users className="w-4 h-4 text-white" />
-                  </div>
-                  <span className="font-semibold text-white text-sm">
-                    PersonaAI Dashboard
-                  </span>
-                </div>
-                <Badge className="bg-emerald-600/20 text-emerald-300 border-emerald-500/30 text-xs">
-                  4,000+ Personas
-                </Badge>
-              </div>
-
-              {/* Persona list mock */}
-              <div className="space-y-3">
-                {[
-                  {
-                    name: "Sarah M.",
-                    desc: "Millennial, urban professional, tech-forward",
-                    color: "bg-blue-500",
-                  },
-                  {
-                    name: "James K.",
-                    desc: "Gen X, suburban SMB owner, value-driven",
-                    color: "bg-purple-500",
-                  },
-                  {
-                    name: "Priya L.",
-                    desc: "Gen Z, first-gen entrepreneur, mobile-first",
-                    color: "bg-pink-500",
-                  },
-                  {
-                    name: "Robert T.",
-                    desc: "Boomer, enterprise exec, risk-averse",
-                    color: "bg-orange-500",
-                  },
-                ].map((persona) => (
-                  <div
-                    key={persona.name}
-                    className="flex items-center gap-3 bg-white/5 rounded-lg px-4 py-3"
-                  >
-                    <div
-                      className={`w-8 h-8 ${persona.color} rounded-full flex items-center justify-center text-white text-xs font-bold flex-shrink-0`}
-                    >
-                      {persona.name.charAt(0)}
-                    </div>
-                    <div>
-                      <p className="text-sm font-medium text-white">
-                        {persona.name}
-                      </p>
-                      <p className="text-xs text-gray-500">{persona.desc}</p>
-                    </div>
-                    <CheckCircle2 className="w-4 h-4 text-emerald-400 ml-auto flex-shrink-0" />
-                  </div>
-                ))}
-              </div>
-
-              <div className="mt-4 p-3 bg-purple-600/10 border border-purple-500/20 rounded-lg">
-                <p className="text-xs text-purple-300 text-center">
-                  Simulate conversations with any demographic instantly
-                </p>
-              </div>
-            </div>
-          </div>
-        </div>
-      </section>
+      {/* ── PRODUCTS SECTION ── (Moved after How It Works for secondary positioning) */}
 
       {/* ── HOW IT WORKS ── */}
       <section id="how-it-works" className="py-20 px-4 sm:px-6 lg:px-8 bg-[#0d1220]">
@@ -716,6 +607,108 @@ export default function Homepage() {
                 <ArrowRight className="w-5 h-5 ml-2" />
               </Button>
             </Link>
+          </div>
+        </div>
+      </section>
+
+      {/* ── PERSONAAI SHOWCASE (Secondary: Product for clients) ── */}
+      <section className="py-20 px-4 sm:px-6 lg:px-8 bg-[#0a0e1a]">
+        <div className="max-w-[1280px] mx-auto">
+          <div className="grid lg:grid-cols-2 gap-12 items-center">
+            {/* Left: Copy */}
+            <div>
+              <Badge
+                variant="outline"
+                className="mb-5 border-purple-500/50 text-purple-300 bg-purple-600/10"
+              >
+                Our Research Tool
+              </Badge>
+              <h2 className="text-3xl sm:text-4xl font-bold text-white mb-5 leading-tight">
+                Use PersonaAI for{" "}
+                <span className="bg-gradient-to-r from-purple-400 to-pink-400 bg-clip-text text-transparent">
+                  Customer Insights
+                </span>
+              </h2>
+              <p className="text-lg text-gray-400 mb-8 leading-relaxed">
+                Built as part of our AI research work: 4,000+ AI personas for UX testing, product feedback, and market research. No surveys. No bias. Get instant insights from demographically diverse personas.
+              </p>
+              <div className="flex flex-col sm:flex-row gap-4">
+                <Button
+                  onClick={() => window.open("https://personaresearch.ai", "_blank")}
+                  className="bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-700 hover:to-pink-700 text-white font-semibold px-7 py-4 rounded-xl"
+                >
+                  <Users className="w-5 h-5 mr-2" />
+                  Explore PersonaAI
+                </Button>
+              </div>
+            </div>
+
+            {/* Right: Product mock */}
+            <div className="bg-[#1a202c] rounded-2xl border border-white/10 p-6 shadow-2xl">
+              <div className="flex items-center justify-between mb-5">
+                <div className="flex items-center gap-2">
+                  <div className="w-8 h-8 bg-gradient-to-br from-purple-500 to-pink-500 rounded-lg flex items-center justify-center">
+                    <Users className="w-4 h-4 text-white" />
+                  </div>
+                  <span className="font-semibold text-white text-sm">
+                    PersonaAI Platform
+                  </span>
+                </div>
+                <Badge className="bg-emerald-600/20 text-emerald-300 border-emerald-500/30 text-xs">
+                  4,000+ Personas
+                </Badge>
+              </div>
+
+              {/* Persona list mock */}
+              <div className="space-y-3">
+                {[
+                  {
+                    name: "Sarah M.",
+                    desc: "Millennial, urban professional, tech-forward",
+                    color: "bg-blue-500",
+                  },
+                  {
+                    name: "James K.",
+                    desc: "Gen X, suburban SMB owner, value-driven",
+                    color: "bg-purple-500",
+                  },
+                  {
+                    name: "Priya L.",
+                    desc: "Gen Z, first-gen entrepreneur, mobile-first",
+                    color: "bg-pink-500",
+                  },
+                  {
+                    name: "Robert T.",
+                    desc: "Boomer, enterprise exec, risk-averse",
+                    color: "bg-orange-500",
+                  },
+                ].map((persona) => (
+                  <div
+                    key={persona.name}
+                    className="flex items-center gap-3 bg-white/5 rounded-lg px-4 py-3"
+                  >
+                    <div
+                      className={`w-8 h-8 ${persona.color} rounded-full flex items-center justify-center text-white text-xs font-bold flex-shrink-0`}
+                    >
+                      {persona.name.charAt(0)}
+                    </div>
+                    <div>
+                      <p className="text-sm font-medium text-white">
+                        {persona.name}
+                      </p>
+                      <p className="text-xs text-gray-500">{persona.desc}</p>
+                    </div>
+                    <CheckCircle2 className="w-4 h-4 text-emerald-400 ml-auto flex-shrink-0" />
+                  </div>
+                ))}
+              </div>
+
+              <div className="mt-4 p-3 bg-purple-600/10 border border-purple-500/20 rounded-lg">
+                <p className="text-xs text-purple-300 text-center">
+                  Simulate conversations with any demographic instantly
+                </p>
+              </div>
+            </div>
           </div>
         </div>
       </section>
