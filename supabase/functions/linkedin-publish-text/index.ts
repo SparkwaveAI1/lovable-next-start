@@ -7,8 +7,7 @@
  * Creates a text post on a personal LinkedIn account immediately.
  * Phase 2A: text-only, publish-now, personal accounts only.
  */
-import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
-import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { createClient } from "npm:@supabase/supabase-js@2";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -18,7 +17,7 @@ const corsHeaders = {
 
 const MAX_CHARS = 3000;
 
-serve(async (req) => {
+Deno.serve(async (req) => {
   // Handle CORS preflight
   if (req.method === "OPTIONS") {
     return new Response(null, { headers: corsHeaders });

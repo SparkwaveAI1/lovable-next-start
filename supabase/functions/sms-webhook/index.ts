@@ -1,5 +1,4 @@
-import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
-import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
+import { createClient } from 'npm:@supabase/supabase-js@2';
 import { withRetry, SMS_RETRY_OPTIONS } from "../_shared/retry.ts";
 import { enrollInFollowUp, pauseFollowUpOnResponse } from "../_shared/follow-up.ts";
 
@@ -434,7 +433,7 @@ async function detectBookingConfirmation(
   }
 }
 
-serve(async (req) => {
+Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') {
     return new Response('ok', { headers: corsHeaders });
   }
