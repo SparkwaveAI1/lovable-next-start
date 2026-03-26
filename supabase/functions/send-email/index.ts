@@ -156,7 +156,7 @@ serve(async (req) => {
       throw new Error('Missing required fields: to, subject, html');
     }
 
-    const fromEmail = body.from_email || 'noreply@yourdomain.com';
+    const fromEmail = body.from_email || 'info@sparkwave-ai.com';
     const fromName = body.from_name || 'Your Company';
 
     console.log(`[${requestId}] Sending to:`, body.to);
