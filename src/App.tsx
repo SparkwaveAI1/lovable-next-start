@@ -6,6 +6,7 @@ import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import { Analytics } from "@/components/Analytics";
 import { AssistantButton } from "@/components/assistant";
 import Index from "./pages/Index";
+import Homepage from "./pages/Homepage";
 import NotFound from "./pages/NotFound";
 import ContentHub from "./pages/ContentHub";
 import Contacts from "./pages/Contacts";
@@ -96,7 +97,8 @@ const App = () => (
             <Route path="/blog/:slug" element={<BlogPost />} />
             <Route path="/crisis-monitor" element={<CrisisMonitor />} />
             <Route path="/upload" element={<EmployeeUpload />} />
-            <Route path="/" element={<ProtectedRoute><ErrorBoundary><Index /></ErrorBoundary></ProtectedRoute>} />
+            <Route path="/" element={<Homepage />} />
+            <Route path="/dashboard" element={<ProtectedRoute><ErrorBoundary><Index /></ErrorBoundary></ProtectedRoute>} />
             <Route path="/contacts" element={<ProtectedRoute><ErrorBoundary><Contacts /></ErrorBoundary></ProtectedRoute>} />
             <Route path="/content-hub" element={<ProtectedRoute><ErrorBoundary><ContentHub /></ErrorBoundary></ProtectedRoute>} />
             <Route path="/content-center" element={<Navigate replace to="/content-hub" />} />

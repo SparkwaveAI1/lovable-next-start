@@ -11,9 +11,9 @@ export interface PageSEO {
 
 export const SEO_CONFIG: Record<string, PageSEO> = {
   home: {
-    title: 'AI Automation Platform',
+    title: 'AI Automation That Drives Revenue',
     description:
-      '10x your output, zero extra hours. Custom AI automation that multiplies your productivity—not just saves time. Do what took a team of 10, with just you.',
+      'We build custom AI systems for sales, marketing, and operations. Not chatbot wrappers. Real automation that 10x your team output. Book a free audit today.',
     canonical: '/',
   },
   about: {
