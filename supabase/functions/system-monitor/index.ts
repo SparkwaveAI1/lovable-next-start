@@ -26,6 +26,73 @@ async function pingAgent(ip: string, port: number): Promise<PingResult> {
   return { online: false }
 }
 
+// n8n is deprecated org-wide. This function is fully isolated — any failure returns
+// empty workflows array and never propagates to the outer handler.
+async function fetchN8nWorkflows(
+  n8nUrl: string,
+  n8nApiKey: string,
+): Promise<{ workflows: unknown[]; error: string | null }> {
+  try {
+    const wfController = new AbortController()
+    const wfTimer = setTimeout(() => wfController.abort(), 3000)
+    let wfRes: Response
+    try {
+      wfRes = await fetch(`${n8nUrl}/api/v1/workflows?limit=50`, {
+        headers: { "X-N8N-API-KEY": n8nApiKey, "Accept": "application/json" },
+        signal: wfController.signal,
+      })
+    } finally {
+      clearTimeout(wfTimer)
+    }
+
+    if (!wfRes.ok) {
+      return { workflows: [], error: `HTTP ${wfRes.status}` }
+    }
+
+    let wfJson: { data?: Array<{ id: string; name: string; active: boolean }> }
+    try {
+      wfJson = await wfRes.json()
+    } catch {
+      return { workflows: [], error: "n8n response parse error" }
+    }
+
+    // Fetch executions
+    const lastExecMap: Record<string, { startedAt: string; status: string }> = {}
+    try {
+      const execController = new AbortController()
+      const execTimer = setTimeout(() => execController.abort(), 3000)
+      let execRes: Response | null = null
+      try {
+        execRes = await fetch(`${n8nUrl}/api/v1/executions?limit=250`, {
+          headers: { "X-N8N-API-KEY": n8nApiKey, "Accept": "application/json" },
+          signal: execController.signal,
+        })
+      } finally {
+        clearTimeout(execTimer)
+      }
+      if (execRes?.ok) {
+        const execJson = await execRes.json()
+        for (const exec of execJson.data ?? []) {
+          if (!lastExecMap[exec.workflowId]) {
+            lastExecMap[exec.workflowId] = { startedAt: exec.startedAt, status: exec.status }
+          }
+        }
+      }
+    } catch { /* executions are best-effort */ }
+
+    const workflows = (wfJson.data ?? []).map((wf) => ({
+      id: wf.id, name: wf.name, active: wf.active,
+      lastRunAt: lastExecMap[wf.id]?.startedAt ?? null,
+      lastStatus: lastExecMap[wf.id]?.status ?? null,
+    }))
+
+    return { workflows, error: null }
+  } catch (e) {
+    // Catch-all: n8n is deprecated, never let it crash the function
+    return { workflows: [], error: String(e) }
+  }
+}
+
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") {
     return new Response(null, { headers: corsHeaders })
@@ -50,45 +117,8 @@ Deno.serve(async (req) => {
       return { name: agent.name, ip: agent.ip, port: agent.port, role: agent.role, online: ping.online, latencyMs: ping.latencyMs ?? null, checkedAt: now }
     })
 
-    // 2. n8n workflows
-    let workflows: unknown[] = []
-    let n8nError: string | null = null
-    try {
-      const wfController = new AbortController()
-      setTimeout(() => wfController.abort(), 3000)
-      const wfRes = await fetch(`${n8nUrl}/api/v1/workflows?limit=50`, {
-        headers: { "X-N8N-API-KEY": n8nApiKey, "Accept": "application/json" },
-        signal: wfController.signal,
-      })
-      if (wfRes.ok) {
-        const wfJson = await wfRes.json()
-        // Fetch executions
-        const execController = new AbortController()
-        setTimeout(() => execController.abort(), 3000)
-        const execRes = await fetch(`${n8nUrl}/api/v1/executions?limit=250`, {
-          headers: { "X-N8N-API-KEY": n8nApiKey, "Accept": "application/json" },
-          signal: execController.signal,
-        }).catch(() => null)
-        const lastExecMap: Record<string, { startedAt: string; status: string }> = {}
-        if (execRes?.ok) {
-          const execJson = await execRes.json()
-          for (const exec of execJson.data ?? []) {
-            if (!lastExecMap[exec.workflowId]) {
-              lastExecMap[exec.workflowId] = { startedAt: exec.startedAt, status: exec.status }
-            }
-          }
-        }
-        workflows = (wfJson.data ?? []).map((wf: { id: string; name: string; active: boolean }) => ({
-          id: wf.id, name: wf.name, active: wf.active,
-          lastRunAt: lastExecMap[wf.id]?.startedAt ?? null,
-          lastStatus: lastExecMap[wf.id]?.status ?? null,
-        }))
-      } else {
-        n8nError = `HTTP ${wfRes.status}`
-      }
-    } catch (e) {
-      n8nError = String(e)
-    }
+    // 2. n8n workflows — fully isolated, never crashes the function (n8n deprecated org-wide)
+    const { workflows, error: n8nError } = await fetchN8nWorkflows(n8nUrl, n8nApiKey)
 
     // 3. Supabase queries via REST (no supabase-js client needed)
     const sbHeaders = { "apikey": supabaseKey, "Authorization": `Bearer ${supabaseKey}`, "Content-Type": "application/json" }
