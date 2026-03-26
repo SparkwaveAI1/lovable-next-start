@@ -35,6 +35,36 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { formatDistanceToNow } from 'date-fns';
 import { toast } from '@/hooks/use-toast';
 
+// ---------------------------------------------------------------------------
+// Brand configuration
+// Each brand entry maps to campaign_tag prefixes (case-insensitive substring).
+// A prospect is assigned to a brand if its campaign_tag contains the prefix.
+// Prospects with no campaign_tag are bucketed under 'sparkwave' as the default.
+// ---------------------------------------------------------------------------
+const BRANDS = [
+  { key: 'all',         label: 'All Brands' },
+  { key: 'sparkwave',   label: 'Sparkwave' },
+  { key: 'personaai',  label: 'PersonaAI' },
+  { key: 'charx',      label: 'CharX' },
+  { key: 'fightflow',  label: 'Fight Flow' },
+] as const;
+
+type BrandKey = (typeof BRANDS)[number]['key'];
+
+/** Map a campaign_tag string to the canonical brand key. */
+function tagToBrand(tag: string | null): BrandKey {
+  if (!tag) return 'sparkwave'; // untagged → default brand
+  const t = tag.toLowerCase();
+  if (t.includes('personaai') || t.includes('persona-ai')) return 'personaai';
+  if (t.includes('charx') || t.includes('char-x'))           return 'charx';
+  if (t.includes('fightflow') || t.includes('fight-flow') || t.includes('fight_flow') || t.includes('mma'))
+    return 'fightflow';
+  // iris-seo-outreach, sparkwave, or anything else → sparkwave
+  return 'sparkwave';
+}
+
+// ---------------------------------------------------------------------------
+
 interface Prospect {
   id: string;
   first_name: string | null;
@@ -89,6 +119,8 @@ const CRM = () => {
 
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState('all');
+  // Default to Sparkwave — never show all brands mixed by default
+  const [brandFilter, setBrandFilter] = useState<BrandKey>('sparkwave');
 
   // Dialog state
   const [dialogOpen, setDialogOpen] = useState(false);
@@ -183,7 +215,12 @@ const CRM = () => {
     }
   };
 
-  const filtered = prospects.filter(p => {
+  // Brand-scoped prospects (applied before search/status)
+  const brandScoped = brandFilter === 'all'
+    ? prospects
+    : prospects.filter(p => tagToBrand(p.campaign_tag) === brandFilter);
+
+  const filtered = brandScoped.filter(p => {
     const matchStatus = statusFilter === 'all' || p.status === statusFilter;
     const q = search.toLowerCase();
     const matchSearch =
@@ -195,8 +232,8 @@ const CRM = () => {
     return matchStatus && matchSearch;
   });
 
-  // Summary counts
-  const counts = prospects.reduce(
+  // Summary counts scoped to the selected brand
+  const counts = brandScoped.reduce(
     (acc, p) => {
       const s = p.status || 'new';
       acc[s] = (acc[s] || 0) + 1;
@@ -205,17 +242,52 @@ const CRM = () => {
     {} as Record<string, number>
   );
 
+  const activeBrandLabel = BRANDS.find(b => b.key === brandFilter)?.label ?? 'All Brands';
+
   return (
     <DashboardLayout>
       <PageHeader
         title="CRM — Prospect Pipeline"
-        description={`${prospects.length.toLocaleString()} prospects across all campaigns`}
+        description={
+          brandFilter === 'all'
+            ? `${prospects.length.toLocaleString()} prospects across all brands`
+            : `${brandScoped.length.toLocaleString()} prospects · ${activeBrandLabel}`
+        }
       />
       <PageContent>
+        {/* Brand Tabs */}
+        <div className="flex flex-wrap gap-2 mb-6">
+          {BRANDS.map(brand => (
+            <button
+              key={brand.key}
+              onClick={() => setBrandFilter(brand.key)}
+              className={`px-4 py-1.5 rounded-full text-sm font-medium border transition-colors ${
+                brandFilter === brand.key
+                  ? 'bg-indigo-600 text-white border-indigo-600'
+                  : 'bg-white text-gray-600 border-gray-300 hover:border-indigo-400 hover:text-indigo-600'
+              }`}
+            >
+              {brand.label}
+              {brand.key !== 'all' && (
+                <span className={`ml-1.5 text-xs ${brandFilter === brand.key ? 'text-indigo-200' : 'text-gray-400'}`}>
+                  {brand.key === brandFilter
+                    ? brandScoped.length.toLocaleString()
+                    : prospects.filter(p => tagToBrand(p.campaign_tag) === brand.key).length.toLocaleString()}
+                </span>
+              )}
+              {brand.key === 'all' && (
+                <span className={`ml-1.5 text-xs ${brandFilter === brand.key ? 'text-indigo-200' : 'text-gray-400'}`}>
+                  {prospects.length.toLocaleString()}
+                </span>
+              )}
+            </button>
+          ))}
+        </div>
+
         {/* Summary Cards */}
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
           {[
-            { label: 'Total', count: prospects.length, color: 'text-gray-700' },
+            { label: 'Total', count: brandScoped.length, color: 'text-gray-700' },
             { label: 'New', count: counts.new || 0, color: 'text-gray-600' },
             { label: 'Contacted', count: counts.contacted || 0, color: 'text-blue-600' },
             { label: 'Replied', count: counts.replied || 0, color: 'text-green-600' },
@@ -264,7 +336,7 @@ const CRM = () => {
             <div className="flex items-center justify-between">
               <CardTitle className="flex items-center gap-2">
                 <Users className="h-5 w-5 text-indigo-600" />
-                Prospects
+                {activeBrandLabel} Prospects
                 <Badge variant="outline" className="ml-2">
                   {filtered.length.toLocaleString()}
                 </Badge>
