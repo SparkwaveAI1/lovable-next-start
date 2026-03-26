@@ -55,6 +55,7 @@ import { format, formatDistanceToNow } from 'date-fns';
 import { toast } from 'sonner';
 import { EmailSequencesList } from '@/components/email/EmailSequencesList';
 import { EmailCampaignSequenceBuilder } from '@/components/email/EmailCampaignSequenceBuilder';
+import { DripQueueTab } from '@/components/email/DripQueueTab';
 
 interface EmailCampaign {
   id: string;
@@ -266,7 +267,7 @@ export default function Communications() {
 
   // Email campaign state
   const [isEmailCampaignOpen, setIsEmailCampaignOpen] = useState(false);
-  const [emailSubTab, setEmailSubTab] = useState<'campaigns' | 'sequences'>('campaigns');
+  const [emailSubTab, setEmailSubTab] = useState<'campaigns' | 'sequences' | 'drip'>('campaigns');
   const [isSequenceBuilderOpen, setIsSequenceBuilderOpen] = useState(false);
   const [editingSequenceId, setEditingSequenceId] = useState<string | null>(null);
   const [newEmailCampaign, setNewEmailCampaign] = useState({
@@ -1624,6 +1625,14 @@ export default function Communications() {
                 <Clock className="h-4 w-4 mr-2" />
                 Email Sequences
               </Button>
+              <Button
+                variant={emailSubTab === 'drip' ? 'default' : 'ghost'}
+                size="sm"
+                onClick={() => setEmailSubTab('drip')}
+              >
+                <Send className="h-4 w-4 mr-2" />
+                Drip Queue
+              </Button>
             </div>
 
             {/* Sequence Builder View */}
@@ -1655,6 +1664,11 @@ export default function Communications() {
                   setIsSequenceBuilderOpen(true);
                 }}
               />
+            )}
+
+            {/* Drip Queue View */}
+            {emailSubTab === 'drip' && selectedBusiness && (
+              <DripQueueTab businessId={selectedBusiness.id} />
             )}
 
             {/* Single Campaigns View */}
