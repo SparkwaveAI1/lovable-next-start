@@ -2,7 +2,7 @@ import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
-import { formatDistanceToNow, format, subHours } from 'date-fns';
+import { formatDistanceToNow, format, subHours, subDays } from 'date-fns';
 
 // ─── Interfaces ──────────────────────────────────────────────────────────────
 
@@ -209,11 +209,11 @@ function NeedsAttentionPanel({
 
 // ─── Panel 2: Today's Trial Classes ──────────────────────────────────────────
 
-function TrialClassesPanel() {
+function TrialClassesPanel({ businessId }: { businessId: string }) {
   const todayET = getTodayET();
 
   const { data: appointments = [], isLoading } = useQuery({
-    queryKey: ['ff-trial-classes', todayET],
+    queryKey: ['ff-trial-classes', todayET, businessId],
     queryFn: async (): Promise<AppointmentWithStatus[]> => {
       // Fetch today's appointments
       const { data: appts, error: apptError } = await supabase
@@ -234,13 +234,14 @@ function TrialClassesPanel() {
       const phones = appts.map(a => a.contact_phone).filter((p): p is string => !!p);
       const emails = appts.map(a => a.contact_email).filter((e): e is string => !!e);
 
-      // Fetch matching contacts
+      // Fetch matching contacts — scoped to this business to prevent commingling
       let contactRows: { phone: string | null; email: string | null; status: string | null; auto_responded: boolean | null }[] = [];
 
       if (phones.length > 0 || emails.length > 0) {
         let query = supabase
           .from('contacts')
-          .select('phone, email, status, auto_responded');
+          .select('phone, email, status, auto_responded')
+          .eq('business_id', businessId);
 
         if (phones.length > 0 && emails.length > 0) {
           query = query.or(`phone.in.(${phones.join(',')}),email.in.(${emails.join(',')})`);
@@ -344,12 +345,13 @@ function RecentLeadsPanel({
   const { data: contacts = [], isLoading } = useQuery({
     queryKey: ['ff-recent-leads', businessId],
     queryFn: async (): Promise<RecentContact[]> => {
-      const since = subHours(new Date(), 72).toISOString();
+      const since = subDays(new Date(), 30).toISOString();
 
       const { data, error } = await supabase
         .from('contacts')
         .select('id, first_name, last_name, phone, created_at, status, last_activity_at')
         .eq('business_id', businessId)
+        .eq('source', 'wix_form')
         .gte('created_at', since)
         .order('created_at', { ascending: false });
 
@@ -368,7 +370,7 @@ function RecentLeadsPanel({
     <Card>
       <CardHeader className="pb-3">
         <CardTitle className="flex items-center justify-between text-lg">
-          <span>🆕 Last 72 Hours</span>
+          <span>🆕 Last 30 Days (Wix Form Leads)</span>
           {contacts.length > 0 && (
             <Badge variant="secondary">{contacts.length} leads</Badge>
           )}
@@ -587,7 +589,7 @@ export function FightFlowDashboard({ businessId, onContactClick }: FightFlowDash
       <h2 className="text-xl font-bold text-gray-900">Fight Flow At-a-Glance</h2>
       <NeedsAttentionPanel businessId={businessId} onContactClick={onContactClick} />
       <AutomationStatusPanel businessId={businessId} />
-      <TrialClassesPanel />
+      <TrialClassesPanel businessId={businessId} />
       <RecentLeadsPanel businessId={businessId} onContactClick={onContactClick} />
     </div>
   );
