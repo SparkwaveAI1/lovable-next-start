@@ -12,26 +12,23 @@ import { AlertCircle, CheckCircle2, Clock, XCircle } from "lucide-react";
 import { DashboardLayout } from "@/components/layout/DashboardLayout";
 import { useBusinessContext } from "@/contexts/BusinessContext";
 
-interface ContactInfo {
-  first_name: string | null;
-  last_name: string | null;
-  email: string | null;
-  phone: string | null;
-}
-
 interface ServiceRequest {
   id: string;
-  business_id: string | null;
-  contact_id: string | null;
   title: string;
   description: string | null;
   request_type: string;
   status: string;
   priority: string;
   created_at: string;
-  updated_at: string;
   resolved_at: string | null;
-  contacts: ContactInfo | null;
+  business_id: string | null;
+  contact_id: string | null;
+  contact?: {
+    first_name: string | null;
+    last_name: string | null;
+    email: string | null;
+    phone: string | null;
+  } | null;
 }
 
 export default function ServiceRequests() {
@@ -58,23 +55,23 @@ export default function ServiceRequests() {
   const loadRequests = async () => {
     setIsLoading(true);
     try {
-      let query = supabase
+      let query = (supabase as any)
         .from("service_requests")
-        .select("*, contacts(first_name, last_name, email, phone)")
+        .select("*, contact:contacts(first_name, last_name, email, phone)")
         .order("created_at", { ascending: false });
 
       if (selectedBusiness?.id) {
-        query = (query as any).eq("business_id", selectedBusiness.id);
+        query = query.eq("business_id", selectedBusiness.id);
       }
 
       if (statusFilter !== "all") {
-        query = (query as any).eq("status", statusFilter);
+        query = query.eq("status", statusFilter);
       }
 
       const { data, error } = await query;
 
       if (error) throw error;
-      setRequests((data as unknown as ServiceRequest[]) || []);
+      setRequests(data || []);
     } catch (error) {
       console.error("Error loading service requests:", error);
       toast({
@@ -89,13 +86,17 @@ export default function ServiceRequests() {
 
   const updateRequestStatus = async (requestId: string, newStatus: string) => {
     try {
-      const { error } = await supabase
+      const updateData: Record<string, string> = {
+        status: newStatus,
+        updated_at: new Date().toISOString(),
+      };
+      if (newStatus === "completed") {
+        updateData.resolved_at = new Date().toISOString();
+      }
+
+      const { error } = await (supabase as any)
         .from("service_requests")
-        .update({
-          status: newStatus,
-          updated_at: new Date().toISOString(),
-          ...(newStatus === "completed" ? { resolved_at: new Date().toISOString() } : {}),
-        })
+        .update(updateData)
         .eq("id", requestId);
 
       if (error) throw error;
@@ -106,7 +107,7 @@ export default function ServiceRequests() {
       });
       loadRequests();
     } catch (error) {
-      console.error("Error updating request:", error);
+      console.error("Error updating service request:", error);
       toast({
         title: "Error",
         description: "Failed to update request status",
@@ -164,7 +165,7 @@ export default function ServiceRequests() {
   const getRequestTypeBadge = (type: string) => {
     return (
       <Badge variant={type === "freeze_request" ? "secondary" : "destructive"}>
-        {type === "freeze_request" ? "Freeze" : type === "cancellation_request" ? "Cancellation" : type}
+        {type === "freeze_request" ? "Freeze" : "Cancellation"}
       </Badge>
     );
   };
@@ -188,14 +189,18 @@ export default function ServiceRequests() {
       <main className="container mx-auto p-6 space-y-6">
         <div>
           <h1 className="text-3xl font-bold mb-2">Service Requests</h1>
-          <p className="text-muted-foreground">Manage freeze and cancellation requests</p>
+          <p className="text-muted-foreground">
+            Manage freeze and cancellation requests
+          </p>
         </div>
 
         {/* Stats Cards */}
         <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
           <Card>
             <CardHeader className="pb-2">
-              <CardTitle className="text-sm font-medium text-muted-foreground">Total Requests</CardTitle>
+              <CardTitle className="text-sm font-medium text-muted-foreground">
+                Total Requests
+              </CardTitle>
             </CardHeader>
             <CardContent>
               <div className="text-2xl font-bold">{stats.total}</div>
@@ -203,26 +208,38 @@ export default function ServiceRequests() {
           </Card>
           <Card>
             <CardHeader className="pb-2">
-              <CardTitle className="text-sm font-medium text-muted-foreground">Pending Review</CardTitle>
+              <CardTitle className="text-sm font-medium text-muted-foreground">
+                Pending Review
+              </CardTitle>
             </CardHeader>
             <CardContent>
-              <div className="text-2xl font-bold text-orange-600">{stats.pending}</div>
+              <div className="text-2xl font-bold text-orange-600">
+                {stats.pending}
+              </div>
             </CardContent>
           </Card>
           <Card>
             <CardHeader className="pb-2">
-              <CardTitle className="text-sm font-medium text-muted-foreground">In Progress</CardTitle>
+              <CardTitle className="text-sm font-medium text-muted-foreground">
+                In Progress
+              </CardTitle>
             </CardHeader>
             <CardContent>
-              <div className="text-2xl font-bold text-blue-600">{stats.inProgress}</div>
+              <div className="text-2xl font-bold text-blue-600">
+                {stats.inProgress}
+              </div>
             </CardContent>
           </Card>
           <Card>
             <CardHeader className="pb-2">
-              <CardTitle className="text-sm font-medium text-muted-foreground">Completed</CardTitle>
+              <CardTitle className="text-sm font-medium text-muted-foreground">
+                Completed
+              </CardTitle>
             </CardHeader>
             <CardContent>
-              <div className="text-2xl font-bold text-green-600">{stats.completed}</div>
+              <div className="text-2xl font-bold text-green-600">
+                {stats.completed}
+              </div>
             </CardContent>
           </Card>
         </div>
@@ -249,14 +266,19 @@ export default function ServiceRequests() {
           </CardHeader>
           <CardContent>
             {isLoading ? (
-              <div className="text-center py-8 text-muted-foreground">Loading requests...</div>
+              <div className="text-center py-8 text-muted-foreground">
+                Loading requests...
+              </div>
             ) : requests.length === 0 ? (
-              <div className="text-center py-8 text-muted-foreground">No service requests found</div>
+              <div className="text-center py-8 text-muted-foreground">
+                No service requests found
+              </div>
             ) : (
               <Table>
                 <TableHeader>
                   <TableRow>
                     <TableHead>Type</TableHead>
+                    <TableHead>Title</TableHead>
                     <TableHead>Member</TableHead>
                     <TableHead>Contact</TableHead>
                     <TableHead>Status</TableHead>
@@ -267,20 +289,41 @@ export default function ServiceRequests() {
                 <TableBody>
                   {requests.map((request) => (
                     <TableRow key={request.id} className="group">
-                      <TableCell>{getRequestTypeBadge(request.request_type)}</TableCell>
                       <TableCell>
-                        <div className="font-medium">
-                          {request.contacts?.first_name} {request.contacts?.last_name}
+                        {getRequestTypeBadge(request.request_type)}
+                      </TableCell>
+                      <TableCell className="font-medium max-w-[200px]">
+                        <div className="truncate" title={request.title}>
+                          {request.title}
                         </div>
-                        {request.title && (
-                          <div className="text-xs text-muted-foreground mt-0.5">{request.title}</div>
+                        {request.description && (
+                          <div
+                            className="text-xs text-muted-foreground truncate"
+                            title={request.description}
+                          >
+                            {request.description}
+                          </div>
                         )}
                       </TableCell>
                       <TableCell>
+                        <div className="font-medium">
+                          {request.contact
+                            ? `${request.contact.first_name ?? ""} ${request.contact.last_name ?? ""}`.trim() || "—"
+                            : "—"}
+                        </div>
+                      </TableCell>
+                      <TableCell>
                         <div className="text-sm">
-                          {request.contacts?.email && <div>{request.contacts.email}</div>}
-                          {request.contacts?.phone && (
-                            <div className="text-muted-foreground">{request.contacts.phone}</div>
+                          {request.contact?.email && (
+                            <div>{request.contact.email}</div>
+                          )}
+                          {request.contact?.phone && (
+                            <div className="text-muted-foreground">
+                              {request.contact.phone}
+                            </div>
+                          )}
+                          {!request.contact?.email && !request.contact?.phone && (
+                            <span className="text-muted-foreground">—</span>
                           )}
                         </div>
                       </TableCell>
@@ -293,7 +336,9 @@ export default function ServiceRequests() {
                           {request.status === "pending_review" && (
                             <Button
                               size="sm"
-                              onClick={() => updateRequestStatus(request.id, "in_progress")}
+                              onClick={() =>
+                                updateRequestStatus(request.id, "in_progress")
+                              }
                             >
                               Start Processing
                             </Button>
@@ -302,7 +347,9 @@ export default function ServiceRequests() {
                             <Button
                               size="sm"
                               variant="default"
-                              onClick={() => updateRequestStatus(request.id, "completed")}
+                              onClick={() =>
+                                updateRequestStatus(request.id, "completed")
+                              }
                             >
                               Mark Complete
                             </Button>
