@@ -9,6 +9,7 @@ import { TrendingUp, Users, Activity, DollarSign, BarChart2, AlertCircle, Chevro
 
 const IRIS_AGENT_ID = '15562d82-85f5-4d52-bc72-b038ba21da35';
 const TERMINAL_STAGES: string[] = ['won', 'lost', 'converted'];
+const FF_BUSINESS_ID = '456dc53b-d9d9-41b0-bc33-4f4c4a791eff';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -16,6 +17,7 @@ interface SalesMetrics {
   openDeals: number;
   pipelineValue: number;
   newLeads7d: number;
+  ffLeads7d: number;
   irisLastActive: string | null;
   dealsMoved7d: number;
 }
@@ -66,6 +68,7 @@ export function SalesSummaryPanel() {
     openDeals: 0,
     pipelineValue: 0,
     newLeads7d: 0,
+    ffLeads7d: 0,
     irisLastActive: null,
     dealsMoved7d: 0,
   });
@@ -76,16 +79,23 @@ export function SalesSummaryPanel() {
     try {
       const sevenDaysAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString();
 
-      const [dealsResult, leadsResult, irisResult] = await Promise.all([
+      const [dealsResult, leadsResult, ffLeadsResult, irisResult] = await Promise.all([
         // Open deals + pipeline value + deals moved
         supabase
           .from('crm_deals')
           .select('stage, value, updated_at'),
 
-        // New leads in 7d
+        // New leads in 7d (all businesses — overall pipeline health)
         supabase
           .from('contacts')
           .select('id', { count: 'exact', head: true })
+          .gte('created_at', sevenDaysAgo),
+
+        // Fight Flow new leads in 7d (business-scoped, no commingling)
+        supabase
+          .from('contacts')
+          .select('id', { count: 'exact', head: true })
+          .eq('business_id', FF_BUSINESS_ID)
           .gte('created_at', sevenDaysAgo),
 
         // Iris last active
@@ -99,6 +109,7 @@ export function SalesSummaryPanel() {
 
       if (dealsResult.error) throw dealsResult.error;
       if (leadsResult.error) throw leadsResult.error;
+      if (ffLeadsResult.error) throw ffLeadsResult.error;
       if (irisResult.error) throw irisResult.error;
 
       const deals = dealsResult.data ?? [];
@@ -112,12 +123,13 @@ export function SalesSummaryPanel() {
       ).length;
 
       const newLeads7d = leadsResult.count ?? 0;
+      const ffLeads7d = ffLeadsResult.count ?? 0;
       const irisLastActive =
         irisResult.data && irisResult.data.length > 0
           ? irisResult.data[0].created_at
           : null;
 
-      setMetrics({ openDeals, pipelineValue, newLeads7d, irisLastActive, dealsMoved7d });
+      setMetrics({ openDeals, pipelineValue, newLeads7d, ffLeads7d, irisLastActive, dealsMoved7d });
       setLoadState('loaded');
     } catch (err) {
       console.error('[SalesSummaryPanel] fetch error:', err);
@@ -203,7 +215,7 @@ export function SalesSummaryPanel() {
         </div>
 
         {/* Desktop: full grid */}
-        <div className="hidden md:grid md:grid-cols-3 lg:grid-cols-5 gap-3">
+        <div className="hidden md:grid md:grid-cols-3 lg:grid-cols-6 gap-3">
           <MetricCard
             icon={<BarChart2 className="h-4 w-4" />}
             label="Open Deals"
@@ -220,6 +232,13 @@ export function SalesSummaryPanel() {
             icon={<Users className="h-4 w-4" />}
             label="New Leads (7d)"
             value={metrics.newLeads7d}
+            loading={isLoading}
+          />
+          <MetricCard
+            icon={<Users className="h-4 w-4" />}
+            label="FF Leads (7d)"
+            value={metrics.ffLeads7d}
+            sub="Fight Flow only"
             loading={isLoading}
           />
           <MetricCard
