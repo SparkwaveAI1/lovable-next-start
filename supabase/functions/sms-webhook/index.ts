@@ -1,6 +1,331 @@
 import { createClient } from 'npm:@supabase/supabase-js@2';
-import { withRetry, SMS_RETRY_OPTIONS } from "../_shared/retry.ts";
-import { enrollInFollowUp, pauseFollowUpOnResponse } from "../_shared/follow-up.ts";
+
+// === INLINED: _shared/retry.ts ===
+/**
+ * Retry utility with exponential backoff
+ * 
+ * Usage:
+ * const result = await withRetry(() => riskyOperation(), {
+ *   maxAttempts: 3,
+ *   initialDelayMs: 1000,
+ *   maxDelayMs: 10000,
+ *   backoffMultiplier: 2
+ * });
+ */
+
+interface RetryOptions {
+  maxAttempts?: number;
+  initialDelayMs?: number;
+  maxDelayMs?: number;
+  backoffMultiplier?: number;
+  shouldRetry?: (error: Error) => boolean;
+  onRetry?: (error: Error, attempt: number) => void;
+}
+
+const DEFAULT_OPTIONS: Required<RetryOptions> = {
+  maxAttempts: 3,
+  initialDelayMs: 1000,
+  maxDelayMs: 30000,
+  backoffMultiplier: 2,
+  shouldRetry: () => true,
+  onRetry: () => {},
+};
+
+async function withRetry<T>(
+  fn: () => Promise<T>,
+  options: RetryOptions = {}
+): Promise<T> {
+  const opts = { ...DEFAULT_OPTIONS, ...options };
+  let lastError: Error | null = null;
+  let delay = opts.initialDelayMs;
+
+  for (let attempt = 1; attempt <= opts.maxAttempts; attempt++) {
+    try {
+      return await fn();
+    } catch (error) {
+      lastError = error instanceof Error ? error : new Error(String(error));
+      
+      // Check if we should retry
+      if (attempt >= opts.maxAttempts || !opts.shouldRetry(lastError)) {
+        throw lastError;
+      }
+
+      // Log retry attempt
+      opts.onRetry(lastError, attempt);
+      console.log(`Retry attempt ${attempt}/${opts.maxAttempts} after ${delay}ms. Error: ${lastError.message}`);
+
+      // Wait before retrying
+      await new Promise(resolve => setTimeout(resolve, delay));
+
+      // Calculate next delay with exponential backoff
+      delay = Math.min(delay * opts.backoffMultiplier, opts.maxDelayMs);
+    }
+  }
+
+  throw lastError || new Error('Retry failed');
+}
+
+/**
+ * Check if an error is likely transient (worth retrying)
+ */
+function isTransientError(error: Error): boolean {
+  const message = error.message.toLowerCase();
+  
+  // Network-related errors
+  if (message.includes('network') || 
+      message.includes('timeout') || 
+      message.includes('econnreset') ||
+      message.includes('econnrefused') ||
+      message.includes('socket hang up')) {
+    return true;
+  }
+
+  // Rate limiting
+  if (message.includes('rate limit') || 
+      message.includes('too many requests') ||
+      message.includes('429')) {
+    return true;
+  }
+
+  // Temporary server errors
+  if (message.includes('500') || 
+      message.includes('502') || 
+      message.includes('503') || 
+      message.includes('504')) {
+    return true;
+  }
+
+  return false;
+}
+
+/**
+ * Preset for SMS sending (Twilio)
+ */
+const SMS_RETRY_OPTIONS: RetryOptions = {
+  maxAttempts: 3,
+  initialDelayMs: 1000,
+  maxDelayMs: 10000,
+  backoffMultiplier: 2,
+  shouldRetry: isTransientError,
+  onRetry: (error, attempt) => {
+    console.log(`SMS retry ${attempt}: ${error.message}`);
+  }
+};
+
+/**
+ * Preset for email sending (Resend)
+ */
+const EMAIL_RETRY_OPTIONS: RetryOptions = {
+  maxAttempts: 3,
+  initialDelayMs: 500,
+  maxDelayMs: 5000,
+  backoffMultiplier: 2,
+  shouldRetry: isTransientError,
+  onRetry: (error, attempt) => {
+    console.log(`Email retry ${attempt}: ${error.message}`);
+  }
+};
+
+/**
+ * Preset for social posting (Late API)
+ */
+const SOCIAL_RETRY_OPTIONS: RetryOptions = {
+  maxAttempts: 2, // Less aggressive for social posts
+  initialDelayMs: 2000,
+  maxDelayMs: 10000,
+  backoffMultiplier: 2,
+  shouldRetry: (error) => {
+    // Don't retry auth errors
+    if (error.message.includes('token') || 
+        error.message.includes('expired') ||
+        error.message.includes('unauthorized')) {
+      return false;
+    }
+    return isTransientError(error);
+  },
+  onRetry: (error, attempt) => {
+    console.log(`Social post retry ${attempt}: ${error.message}`);
+  }
+};
+
+// === INLINED: _shared/follow-up.ts ===
+/**
+ * Follow-Up System Utilities
+ * 
+ * Shared functions for enrolling contacts in follow-up sequences.
+ */
+
+
+type FollowUpTrigger = 
+  | 'new_lead' 
+  | 'no_response' 
+  | 'missed_class' 
+  | 'attended_no_signup' 
+  | 'conversation_dropped';
+
+interface EnrollOptions {
+  contactId: string;
+  businessId: string;
+  trigger: FollowUpTrigger;
+  /** Override the default delay for the first step (in hours) */
+  initialDelayHours?: number;
+}
+
+/**
+ * Enroll a contact in a follow-up sequence.
+ * 
+ * This will:
+ * 1. Find the active sequence for the trigger type and business
+ * 2. Check if contact is already enrolled (skip if so)
+ * 3. Create the enrollment with next_step_due_at calculated
+ * 
+ * @returns true if enrolled, false if already enrolled or no sequence exists
+ */
+async function enrollInFollowUp(
+  supabase: SupabaseClient,
+  options: EnrollOptions
+): Promise<{ enrolled: boolean; reason?: string }> {
+  const { contactId, businessId, trigger, initialDelayHours } = options;
+
+  console.log(`📋 Attempting to enroll contact ${contactId} in ${trigger} sequence`);
+
+  // Find active sequence for this trigger and business
+  const { data: sequence, error: seqError } = await supabase
+    .from('follow_up_sequences')
+    .select('id')
+    .eq('business_id', businessId)
+    .eq('trigger_type', trigger)
+    .eq('is_active', true)
+    .single();
+
+  if (seqError || !sequence) {
+    console.log(`📋 No active ${trigger} sequence for business ${businessId}`);
+    return { enrolled: false, reason: 'no_sequence' };
+  }
+
+  // Check if already enrolled in this sequence
+  const { data: existing } = await supabase
+    .from('contact_follow_ups')
+    .select('id, status')
+    .eq('contact_id', contactId)
+    .eq('sequence_id', sequence.id)
+    .single();
+
+  if (existing && existing.status === 'active') {
+    console.log(`📋 Contact already enrolled in ${trigger} sequence`);
+    return { enrolled: false, reason: 'already_enrolled' };
+  }
+
+  // Get the first step to calculate initial delay
+  const { data: firstStep } = await supabase
+    .from('follow_up_steps')
+    .select('delay_hours')
+    .eq('sequence_id', sequence.id)
+    .eq('step_order', 1)
+    .single();
+
+  const delayHours = initialDelayHours ?? firstStep?.delay_hours ?? 24;
+  const nextStepDue = new Date(Date.now() + delayHours * 60 * 60 * 1000).toISOString();
+
+  // Create or update enrollment
+  if (existing) {
+    // Re-enroll (was completed/paused/responded before)
+    const { error: updateError } = await supabase
+      .from('contact_follow_ups')
+      .update({
+        status: 'active',
+        current_step: 0,
+        enrolled_at: new Date().toISOString(),
+        next_step_due_at: nextStepDue,
+        last_step_sent_at: null,
+        completed_at: null,
+        pause_reason: null,
+      })
+      .eq('id', existing.id);
+
+    if (updateError) {
+      console.error(`📋 Failed to re-enroll: ${updateError.message}`);
+      return { enrolled: false, reason: 'update_error' };
+    }
+  } else {
+    // New enrollment
+    const { error: insertError } = await supabase
+      .from('contact_follow_ups')
+      .insert({
+        contact_id: contactId,
+        sequence_id: sequence.id,
+        business_id: businessId,
+        status: 'active',
+        current_step: 0,
+        next_step_due_at: nextStepDue,
+      });
+
+    if (insertError) {
+      // Handle unique constraint violation (race condition)
+      if (insertError.code === '23505') {
+        console.log(`📋 Contact already enrolled (race condition)`);
+        return { enrolled: false, reason: 'already_enrolled' };
+      }
+      console.error(`📋 Failed to enroll: ${insertError.message}`);
+      return { enrolled: false, reason: 'insert_error' };
+    }
+  }
+
+  console.log(`✅ Contact ${contactId} enrolled in ${trigger} sequence, first step due: ${nextStepDue}`);
+  return { enrolled: true };
+}
+
+/**
+ * Pause a contact's follow-up when they respond.
+ * 
+ * Call this when a contact sends a message (in sms-webhook) to stop
+ * the automated sequence and let the conversation flow naturally.
+ */
+async function pauseFollowUpOnResponse(
+  supabase: SupabaseClient,
+  contactId: string
+): Promise<void> {
+  const { data: activeFollowUps, error } = await supabase
+    .from('contact_follow_ups')
+    .select('id')
+    .eq('contact_id', contactId)
+    .eq('status', 'active');
+
+  if (error || !activeFollowUps || activeFollowUps.length === 0) {
+    return; // No active follow-ups to pause
+  }
+
+  console.log(`⏸️ Pausing ${activeFollowUps.length} follow-up(s) for contact ${contactId} due to response`);
+
+  await supabase
+    .from('contact_follow_ups')
+    .update({
+      status: 'responded',
+      pause_reason: 'Contact responded',
+    })
+    .eq('contact_id', contactId)
+    .eq('status', 'active');
+}
+
+/**
+ * Cancel all follow-ups for a contact (e.g., when they convert or opt out).
+ */
+async function cancelFollowUps(
+  supabase: SupabaseClient,
+  contactId: string,
+  reason: string
+): Promise<void> {
+  await supabase
+    .from('contact_follow_ups')
+    .update({
+      status: 'cancelled',
+      pause_reason: reason,
+    })
+    .eq('contact_id', contactId)
+    .eq('status', 'active');
+}
+
+// === END INLINED ===
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
