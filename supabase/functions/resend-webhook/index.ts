@@ -91,11 +91,20 @@ Deno.serve(async (req) => {
 
     if (event.type === "email.delivered") {
       await supabase.from("email_sends").update({ status: "delivered", delivered_at: now }).eq("id", sendRecord.id);
-      await supabase.rpc("increment_campaign_stat", { p_campaign_id: sendRecord.campaign_id, p_stat: "total_delivered" });
+      // SPA-2320: guard against null campaign_id — non-campaign emails have campaign_id=null
+      if (sendRecord.campaign_id) {
+        await supabase.rpc("increment_campaign_stat", { p_campaign_id: sendRecord.campaign_id, p_stat: "total_delivered" });
+      }
 
     } else if (event.type === "email.opened" && sendRecord.status !== "opened" && sendRecord.status !== "clicked") {
       await supabase.from("email_sends").update({ status: "opened", opened_at: now }).eq("id", sendRecord.id);
-      await supabase.rpc("increment_campaign_stat", { p_campaign_id: sendRecord.campaign_id, p_stat: "total_opened" });
+      // SPA-2320: guard against null campaign_id — non-campaign emails have campaign_id=null
+      if (sendRecord.campaign_id) {
+        await supabase.rpc("increment_campaign_stat", { p_campaign_id: sendRecord.campaign_id, p_stat: "total_opened" });
+        console.log("✅ increment_campaign_stat total_opened for campaign:", sendRecord.campaign_id);
+      } else {
+        console.log("⚠️ email.opened: no campaign_id on send record — skipping stat increment for id:", sendRecord.id);
+      }
 
     } else if (event.type === "email.clicked") {
       await supabase.from("email_sends").update({ status: "clicked", clicked_at: now }).eq("id", sendRecord.id);
@@ -108,7 +117,8 @@ Deno.serve(async (req) => {
           ip_address: event.data.click.ip_address,
         });
       }
-      if (sendRecord.status !== "clicked") {
+      // SPA-2320: guard against null campaign_id
+      if (sendRecord.status !== "clicked" && sendRecord.campaign_id) {
         await supabase.rpc("increment_campaign_stat", { p_campaign_id: sendRecord.campaign_id, p_stat: "total_clicked" });
       }
 
@@ -119,12 +129,18 @@ Deno.serve(async (req) => {
         error_message: event.data?.bounce?.message,
       }).eq("id", sendRecord.id);
       await supabase.from("email_subscribers").update({ status: "bounced", updated_at: now }).eq("id", sendRecord.subscriber_id);
-      await supabase.rpc("increment_campaign_stat", { p_campaign_id: sendRecord.campaign_id, p_stat: "total_bounced" });
+      // SPA-2320: guard against null campaign_id
+      if (sendRecord.campaign_id) {
+        await supabase.rpc("increment_campaign_stat", { p_campaign_id: sendRecord.campaign_id, p_stat: "total_bounced" });
+      }
 
     } else if (event.type === "email.complained") {
       await supabase.from("email_sends").update({ status: "complained" }).eq("id", sendRecord.id);
       await supabase.from("email_subscribers").update({ status: "complained", unsubscribed_at: now, updated_at: now }).eq("id", sendRecord.subscriber_id);
-      await supabase.rpc("increment_campaign_stat", { p_campaign_id: sendRecord.campaign_id, p_stat: "total_complained" });
+      // SPA-2320: guard against null campaign_id
+      if (sendRecord.campaign_id) {
+        await supabase.rpc("increment_campaign_stat", { p_campaign_id: sendRecord.campaign_id, p_stat: "total_complained" });
+      }
 
     } else {
       console.log("📬 Unhandled event type:", event.type);

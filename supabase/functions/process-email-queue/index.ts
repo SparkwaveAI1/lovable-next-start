@@ -286,19 +286,16 @@ serve(async (req) => {
         });
 
         // Create email_sends record for tracking
-        // SPA-1583: derive business_id from campaign for proper filtering
-        let insert_business_id: string | null = null;
-        if (campaign_id) {
-          const { data: campData } = await supabase.from('campaigns').select('business_id').eq('id', campaign_id).single();
-          insert_business_id = campData?.business_id ?? null;
-        }
+        // SPA-2320: use campaign.business_id directly — campaign is already fetched above.
+        // Prior code queried the wrong `campaigns` table (CRM campaigns, not email_campaigns),
+        // causing business_id to always be null.
         await supabase.from('email_sends').insert({
           campaign_id: campaign_id,
           contact_id: item.contact_id,
           resend_id: result.id,
           status: 'sent',
           sent_at: new Date().toISOString(),
-          business_id: insert_business_id,
+          business_id: campaign.business_id ?? null,
         });
 
         // Update contact's last activity
