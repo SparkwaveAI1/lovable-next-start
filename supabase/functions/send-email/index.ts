@@ -1,6 +1,39 @@
-import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
-import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
-import { withRetry, EMAIL_RETRY_OPTIONS } from "../_shared/retry.ts";
+import { createClient } from "npm:@supabase/supabase-js@2";
+
+// Inlined from _shared/retry.ts (SPA-2320: relative imports don't resolve in edge runtime)
+interface RetryOptions {
+  maxAttempts?: number;
+  initialDelayMs?: number;
+  maxDelayMs?: number;
+  backoffMultiplier?: number;
+  shouldRetry?: (error: Error) => boolean;
+  onRetry?: (error: Error, attempt: number) => void;
+}
+async function withRetry<T>(fn: () => Promise<T>, options: RetryOptions = {}): Promise<T> {
+  const opts = { maxAttempts: 3, initialDelayMs: 1000, maxDelayMs: 30000, backoffMultiplier: 2, shouldRetry: () => true, onRetry: () => {}, ...options };
+  let lastError: Error | null = null;
+  let delay = opts.initialDelayMs;
+  for (let attempt = 1; attempt <= opts.maxAttempts; attempt++) {
+    try { return await fn(); } catch (error) {
+      lastError = error instanceof Error ? error : new Error(String(error));
+      if (attempt >= opts.maxAttempts || !opts.shouldRetry(lastError)) throw lastError;
+      opts.onRetry(lastError, attempt);
+      await new Promise(r => setTimeout(r, delay));
+      delay = Math.min(delay * opts.backoffMultiplier, opts.maxDelayMs);
+    }
+  }
+  throw lastError;
+}
+function isTransientError(error: Error): boolean {
+  const msg = error.message.toLowerCase();
+  return msg.includes('network') || msg.includes('timeout') || msg.includes('429') ||
+    msg.includes('500') || msg.includes('502') || msg.includes('503') || msg.includes('504');
+}
+const EMAIL_RETRY_OPTIONS: RetryOptions = {
+  maxAttempts: 3, initialDelayMs: 500, maxDelayMs: 5000, backoffMultiplier: 2,
+  shouldRetry: isTransientError,
+  onRetry: (error, attempt) => console.log(`Email retry ${attempt}: ${error.message}`),
+};
 
 /**
  * Send Email Edge Function (v2.0 - with retry logic)
@@ -79,7 +112,7 @@ async function sendViaResend(
   return result;
 }
 
-serve(async (req) => {
+Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') {
     return new Response(null, { headers: corsHeaders });
   }
@@ -186,7 +219,7 @@ serve(async (req) => {
         resend_id: result.id,
         status: 'sent',
         sent_at: new Date().toISOString(),
-        campaign_id: null,
+        campaign_id: body.campaign_id ?? null,
         subscriber_id: null,
       });
 
