@@ -7,12 +7,14 @@ import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Calendar, Clock, Users, Search, Loader2, ChevronLeft, ChevronRight } from 'lucide-react';
-import { useQuery } from '@tanstack/react-query';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
+import { Label } from '@/components/ui/label';
+import { Calendar, Clock, Users, Search, Loader2, ChevronLeft, ChevronRight, Plus, X } from 'lucide-react';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { format, addDays, startOfWeek, isSameDay, parseISO } from 'date-fns';
+import { toast } from 'sonner';
 
 const DAYS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
-const DAY_NAMES = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
 
 const STATUS_COLORS: Record<string, string> = {
   confirmed:   'bg-green-100 text-green-800 border-green-200',
@@ -42,10 +44,205 @@ interface Booking {
   contacts: { first_name: string; last_name: string; email: string } | null;
 }
 
+interface Contact {
+  id: string;
+  first_name: string;
+  last_name: string;
+  email: string;
+}
+
+// ─── Create Booking Dialog ─────────────────────────────────────────────────
+
+function CreateBookingDialog({
+  open,
+  onClose,
+  schedule,
+  weekDates,
+}: {
+  open: boolean;
+  onClose: () => void;
+  schedule: ClassSchedule[];
+  weekDates: Date[];
+}) {
+  const queryClient = useQueryClient();
+  const [selectedScheduleId, setSelectedScheduleId] = useState('');
+  const [selectedDate, setSelectedDate] = useState('');
+  const [selectedContactId, setSelectedContactId] = useState('');
+  const [notes, setNotes] = useState('');
+
+  // Fetch contacts for dropdown
+  const { data: contacts = [], isLoading: contactsLoading } = useQuery({
+    queryKey: ['contacts_for_booking'],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('contacts')
+        .select('id, first_name, last_name, email')
+        .order('first_name');
+      if (error) throw error;
+      return data as Contact[];
+    },
+    enabled: open,
+  });
+
+  const createMutation = useMutation({
+    mutationFn: async () => {
+      if (!selectedScheduleId || !selectedDate || !selectedContactId) {
+        throw new Error('Please fill in all required fields');
+      }
+      const { data, error } = await supabase
+        .from('class_bookings')
+        .insert({
+          class_schedule_id: selectedScheduleId,
+          booking_date: selectedDate,
+          contact_id: selectedContactId,
+          status: 'confirmed',
+          notes: notes || null,
+        })
+        .select()
+        .single();
+      if (error) throw error;
+      return data;
+    },
+    onSuccess: () => {
+      toast.success('Booking created successfully');
+      queryClient.invalidateQueries({ queryKey: ['class_bookings'] });
+      handleClose();
+    },
+    onError: (err: Error) => {
+      toast.error(err.message || 'Failed to create booking');
+    },
+  });
+
+  const handleClose = () => {
+    setSelectedScheduleId('');
+    setSelectedDate('');
+    setSelectedContactId('');
+    setNotes('');
+    onClose();
+  };
+
+  // When a class is selected, auto-select the matching weekday date
+  const handleClassSelect = (scheduleId: string) => {
+    setSelectedScheduleId(scheduleId);
+    const cls = schedule.find(c => c.id === scheduleId);
+    if (cls) {
+      const matchingDate = weekDates[cls.day_of_week];
+      if (matchingDate) {
+        setSelectedDate(format(matchingDate, 'yyyy-MM-dd'));
+      }
+    }
+  };
+
+  const selectedClass = schedule.find(c => c.id === selectedScheduleId);
+
+  return (
+    <Dialog open={open} onOpenChange={open => !open && handleClose()}>
+      <DialogContent className="sm:max-w-md">
+        <DialogHeader>
+          <DialogTitle className="flex items-center gap-2">
+            <Plus className="h-5 w-5 text-indigo-600" />
+            Create Booking
+          </DialogTitle>
+        </DialogHeader>
+
+        <div className="space-y-4 py-2">
+          {/* Class selection */}
+          <div className="space-y-1.5">
+            <Label>Class <span className="text-red-500">*</span></Label>
+            <Select value={selectedScheduleId} onValueChange={handleClassSelect}>
+              <SelectTrigger>
+                <SelectValue placeholder="Select a class..." />
+              </SelectTrigger>
+              <SelectContent>
+                {schedule.map(cls => (
+                  <SelectItem key={cls.id} value={cls.id}>
+                    {DAYS[cls.day_of_week]} · {cls.class_name} ({cls.start_time.slice(0, 5)}) — {cls.instructor}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+
+          {/* Date */}
+          <div className="space-y-1.5">
+            <Label>Booking Date <span className="text-red-500">*</span></Label>
+            <Input
+              type="date"
+              value={selectedDate}
+              onChange={e => setSelectedDate(e.target.value)}
+            />
+            {selectedClass && selectedDate && (
+              <p className="text-xs text-gray-500">
+                {selectedClass.class_name} on {format(parseISO(selectedDate), 'EEEE, MMM d')}
+              </p>
+            )}
+          </div>
+
+          {/* Contact */}
+          <div className="space-y-1.5">
+            <Label>Member <span className="text-red-500">*</span></Label>
+            {contactsLoading ? (
+              <div className="flex items-center gap-2 text-gray-400 text-sm py-2">
+                <Loader2 className="h-4 w-4 animate-spin" /> Loading contacts...
+              </div>
+            ) : (
+              <Select value={selectedContactId} onValueChange={setSelectedContactId}>
+                <SelectTrigger>
+                  <SelectValue placeholder="Select a member..." />
+                </SelectTrigger>
+                <SelectContent>
+                  {contacts.map(c => (
+                    <SelectItem key={c.id} value={c.id}>
+                      {c.first_name} {c.last_name}
+                      {c.email ? ` (${c.email})` : ''}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            )}
+          </div>
+
+          {/* Notes */}
+          <div className="space-y-1.5">
+            <Label>Notes <span className="text-gray-400 text-xs">(optional)</span></Label>
+            <Input
+              placeholder="Add notes..."
+              value={notes}
+              onChange={e => setNotes(e.target.value)}
+            />
+          </div>
+        </div>
+
+        <DialogFooter className="gap-2">
+          <Button variant="outline" onClick={handleClose} disabled={createMutation.isPending}>
+            Cancel
+          </Button>
+          <Button
+            onClick={() => createMutation.mutate()}
+            disabled={createMutation.isPending || !selectedScheduleId || !selectedDate || !selectedContactId}
+            className="bg-indigo-600 hover:bg-indigo-700 text-white"
+          >
+            {createMutation.isPending ? (
+              <><Loader2 className="h-4 w-4 animate-spin mr-2" />Creating...</>
+            ) : (
+              'Create Booking'
+            )}
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+// ─── Main Component ────────────────────────────────────────────────────────
+
 const Bookings = () => {
+  const queryClient = useQueryClient();
   const [weekOffset, setWeekOffset] = useState(0);
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState('all');
+  const [createDialogOpen, setCreateDialogOpen] = useState(false);
+  const [cancellingId, setCancellingId] = useState<string | null>(null);
 
   const weekStart = startOfWeek(addDays(new Date(), weekOffset * 7), { weekStartsOn: 0 });
   const weekDates = Array.from({ length: 7 }, (_, i) => addDays(weekStart, i));
@@ -82,6 +279,31 @@ const Bookings = () => {
       return data as Booking[];
     },
   });
+
+  // Cancel booking mutation
+  const cancelMutation = useMutation({
+    mutationFn: async (bookingId: string) => {
+      const { error } = await supabase
+        .from('class_bookings')
+        .update({ status: 'cancelled' })
+        .eq('id', bookingId);
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      toast.success('Booking cancelled');
+      queryClient.invalidateQueries({ queryKey: ['class_bookings'] });
+      setCancellingId(null);
+    },
+    onError: () => {
+      toast.error('Failed to cancel booking');
+      setCancellingId(null);
+    },
+  });
+
+  const handleCancelBooking = (bookingId: string) => {
+    setCancellingId(bookingId);
+    cancelMutation.mutate(bookingId);
+  };
 
   const isLoading = schedLoading || bookLoading;
 
@@ -178,11 +400,22 @@ const Bookings = () => {
         {/* Bookings list */}
         <Card>
           <CardHeader>
-            <CardTitle className="flex items-center gap-2 text-base">
-              <Users className="h-5 w-5 text-indigo-600" />
-              Bookings This Week
-              <Badge variant="outline" className="ml-1">{filteredBookings.length}</Badge>
-            </CardTitle>
+            <div className="flex items-center justify-between">
+              <CardTitle className="flex items-center gap-2 text-base">
+                <Users className="h-5 w-5 text-indigo-600" />
+                Bookings This Week
+                <Badge variant="outline" className="ml-1">{filteredBookings.length}</Badge>
+              </CardTitle>
+              <Button
+                onClick={() => setCreateDialogOpen(true)}
+                size="sm"
+                className="bg-indigo-600 hover:bg-indigo-700 text-white gap-1.5"
+                disabled={schedLoading}
+              >
+                <Plus className="h-4 w-4" />
+                Create Booking
+              </Button>
+            </div>
           </CardHeader>
           <CardContent>
             {/* Filters */}
@@ -218,6 +451,17 @@ const Bookings = () => {
             ) : filteredBookings.length === 0 ? (
               <div className="text-center py-10 text-gray-400">
                 No bookings found for this week.
+                <div className="mt-3">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setCreateDialogOpen(true)}
+                    className="gap-1.5"
+                  >
+                    <Plus className="h-4 w-4" />
+                    Create First Booking
+                  </Button>
+                </div>
               </div>
             ) : (
               <div className="space-y-2">
@@ -241,6 +485,23 @@ const Bookings = () => {
                       <Badge variant="outline" className={`text-xs capitalize ${STATUS_COLORS[b.status] || ''}`}>
                         {b.status}
                       </Badge>
+                      {b.status !== 'cancelled' && b.status !== 'completed' && (
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          className="h-7 px-2 text-red-500 hover:text-red-700 hover:bg-red-50"
+                          onClick={() => handleCancelBooking(b.id)}
+                          disabled={cancellingId === b.id}
+                          title="Cancel booking"
+                        >
+                          {cancellingId === b.id ? (
+                            <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                          ) : (
+                            <X className="h-3.5 w-3.5" />
+                          )}
+                          <span className="ml-1 text-xs">Cancel</span>
+                        </Button>
+                      )}
                     </div>
                   </div>
                 ))}
@@ -248,6 +509,14 @@ const Bookings = () => {
             )}
           </CardContent>
         </Card>
+
+        {/* Create Booking Dialog */}
+        <CreateBookingDialog
+          open={createDialogOpen}
+          onClose={() => setCreateDialogOpen(false)}
+          schedule={schedule}
+          weekDates={weekDates}
+        />
       </PageContent>
     </DashboardLayout>
   );
