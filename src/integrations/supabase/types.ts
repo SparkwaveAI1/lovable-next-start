@@ -1194,6 +1194,53 @@ export type Database = {
           },
         ]
       }
+      business_metrics_snapshots: {
+        Row: {
+          id: string
+          snapshot_at: string
+          metric_category: string
+          metric_key: string
+          metric_value: number | null
+          metric_label: string | null
+          status: string | null
+          source_agent: string | null
+          business_id: string | null
+          created_at: string
+        }
+        Insert: {
+          id?: string
+          snapshot_at?: string
+          metric_category: string
+          metric_key: string
+          metric_value?: number | null
+          metric_label?: string | null
+          status?: string | null
+          source_agent?: string | null
+          business_id?: string | null
+          created_at?: string
+        }
+        Update: {
+          id?: string
+          snapshot_at?: string
+          metric_category?: string
+          metric_key?: string
+          metric_value?: number | null
+          metric_label?: string | null
+          status?: string | null
+          source_agent?: string | null
+          business_id?: string | null
+          created_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "business_metrics_snapshots_business_id_fkey"
+            columns: ["business_id"]
+            isOneToOne: false
+            referencedRelation: "businesses"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       businesses: {
         Row: {
           business_type: string
