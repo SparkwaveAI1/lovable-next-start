@@ -152,7 +152,7 @@ export default function Reports() {
     setActivityLoading(true);
     setActivityError(null);
     try {
-      const { data, error: fetchError } = await (supabase as any)
+      const { data, error: fetchError } = await supabase
         .from('agent_logs')
         .select('id, agent_name, log_type, content, created_at')
         .not('agent_name', 'is', null)
@@ -177,7 +177,7 @@ export default function Reports() {
     setIsLoading(true);
     setError(null);
     try {
-      let query = (supabase as any)
+      let query = supabase
         .from('mc_reports')
         .select('id, type, title, content, metadata, business_id, created_at')
         .order('created_at', { ascending: false })
@@ -218,9 +218,9 @@ export default function Reports() {
 
   // Real-time subscription to mc_reports
   useEffect(() => {
-    const channel = (supabase as any)
+    const channel = supabase
       .channel('mc_reports_changes')
-      .on('postgres_changes',
+      .on('postgres_changes' as any,
         { event: 'INSERT', schema: 'public', table: 'mc_reports' },
         (payload: any) => {
           const raw = payload.new as McReport;
@@ -242,7 +242,7 @@ export default function Reports() {
       });
 
     return () => {
-      (supabase as any).removeChannel(channel);
+      supabase.removeChannel(channel);
     };
   }, [agentFilter, logTypeFilter, toast]);
 

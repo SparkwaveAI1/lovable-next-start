@@ -4400,6 +4400,47 @@ export type Database = {
           },
         ]
       }
+      agent_logs: {
+        Row: {
+          id: string
+          agent: string | null
+          event_type: string | null
+          label: string | null
+          status: string | null
+          details: string | null
+          business_id: string | null
+          created_at: string
+        }
+        Insert: {
+          id?: string
+          agent?: string | null
+          event_type?: string | null
+          label?: string | null
+          status?: string | null
+          details?: string | null
+          business_id?: string | null
+          created_at?: string
+        }
+        Update: {
+          id?: string
+          agent?: string | null
+          event_type?: string | null
+          label?: string | null
+          status?: string | null
+          details?: string | null
+          business_id?: string | null
+          created_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "agent_logs_business_id_fkey"
+            columns: ["business_id"]
+            isOneToOne: false
+            referencedRelation: "businesses"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       mc_reports: {
         Row: {
           business_id: string | null
