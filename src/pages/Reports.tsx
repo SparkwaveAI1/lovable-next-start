@@ -72,10 +72,16 @@ function mcReportToAgentLog(r: McReport): AgentLog {
 
 interface ActivityLogEntry {
   id: string;
-  agent_name: string | null;
-  log_type: string | null;
-  content: string | null;
+  business_id: string | null;
   created_at: string;
+  input_message: string;
+  response_text: string;
+  input_channel: string | null;
+  contact_id: string | null;
+  cost_cents: number | null;
+  confidence_score: number | null;
+  contact_replied: boolean | null;
+  contact_booked: boolean | null;
 }
 
 const AGENT_OPTIONS: Array<AgentName | 'All'> = ['All', 'Rico', 'Iris', 'Dev', 'Jerry'];
@@ -153,15 +159,14 @@ export default function Reports() {
     setActivityError(null);
     try {
       const { data, error: fetchError } = await supabase
-        .from('agent_logs')
-        .select('id, agent_name, log_type, content, created_at')
-        .not('agent_name', 'is', null)
+        .from('ai_response_logs')
+        .select('id, business_id, created_at, input_message, response_text, input_channel, contact_id, cost_cents, confidence_score, contact_replied, contact_booked')
         .order('created_at', { ascending: false })
         .limit(50);
       if (fetchError) throw fetchError;
       setActivityLogs((data || []) as ActivityLogEntry[]);
     } catch (err) {
-      console.error('Error fetching activity logs:', err);
+      console.error('Error fetching ai_response_logs:', err);
       setActivityError(err instanceof Error ? err.message : 'Failed to load activity logs');
     } finally {
       setActivityLoading(false);
@@ -510,7 +515,7 @@ export default function Reports() {
           <div className="p-4 border-b border-slate-100 flex items-center justify-between">
             <div>
               <h2 className="font-semibold text-slate-900">Agent Activity Log</h2>
-              <p className="text-xs text-slate-400 mt-0.5">Recent agent events from all agents — last 50</p>
+              <p className="text-xs text-slate-400 mt-0.5">Recent AI responses from ai_response_logs — last 50</p>
             </div>
             <button
               onClick={() => fetchActivityLogs()}
@@ -536,7 +541,7 @@ export default function Reports() {
           ) : activityLogs.length === 0 ? (
             <div className="p-10 text-center text-slate-400">
               <FileText className="h-10 w-10 mx-auto mb-3 opacity-30" />
-              <p className="text-sm text-slate-500">No activity logged yet</p>
+              <p className="text-sm text-slate-500">No AI responses logged yet</p>
             </div>
           ) : (
             <div className="overflow-x-auto">
@@ -544,33 +549,66 @@ export default function Reports() {
                 <thead>
                   <tr className="border-b border-slate-100 bg-slate-50">
                     <th className="px-4 py-3 text-left text-xs font-semibold text-slate-500 uppercase tracking-wide">Time</th>
-                    <th className="px-4 py-3 text-left text-xs font-semibold text-slate-500 uppercase tracking-wide">Agent</th>
-                    <th className="px-4 py-3 text-left text-xs font-semibold text-slate-500 uppercase tracking-wide">Type</th>
-                    <th className="px-4 py-3 text-left text-xs font-semibold text-slate-500 uppercase tracking-wide">Content</th>
+                    <th className="px-4 py-3 text-left text-xs font-semibold text-slate-500 uppercase tracking-wide">Channel</th>
+                    <th className="px-4 py-3 text-left text-xs font-semibold text-slate-500 uppercase tracking-wide">Input</th>
+                    <th className="px-4 py-3 text-left text-xs font-semibold text-slate-500 uppercase tracking-wide">Response</th>
+                    <th className="px-4 py-3 text-left text-xs font-semibold text-slate-500 uppercase tracking-wide">Confidence</th>
+                    <th className="px-4 py-3 text-left text-xs font-semibold text-slate-500 uppercase tracking-wide">Cost</th>
+                    <th className="px-4 py-3 text-left text-xs font-semibold text-slate-500 uppercase tracking-wide">Replied</th>
+                    <th className="px-4 py-3 text-left text-xs font-semibold text-slate-500 uppercase tracking-wide">Booked</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-50">
-                  {activityLogs.map((entry) => {
-                    const agentDisplay = entry.agent_name
-                      ? entry.agent_name.charAt(0).toUpperCase() + entry.agent_name.slice(1)
-                      : null;
-                    return (
-                      <tr key={entry.id} className="hover:bg-slate-50 transition-colors">
-                        <td className="px-4 py-3 text-xs text-slate-400 whitespace-nowrap" title={entry.created_at}>
-                          {format(new Date(entry.created_at), 'MMM d, h:mm a')}
-                        </td>
-                        <td className="px-4 py-3">
-                          <span className={`px-2 py-0.5 rounded text-xs font-semibold ${AGENT_COLORS[agentDisplay || ''] || 'bg-slate-100 text-slate-700'}`}>
-                            {agentDisplay || '—'}
+                  {activityLogs.map((entry) => (
+                    <tr key={entry.id} className="hover:bg-slate-50 transition-colors">
+                      <td className="px-4 py-3 text-xs text-slate-400 whitespace-nowrap" title={entry.created_at ?? ''}>
+                        {entry.created_at ? format(new Date(entry.created_at), 'MMM d, h:mm a') : '—'}
+                      </td>
+                      <td className="px-4 py-3">
+                        {entry.input_channel ? (
+                          <span className="px-2 py-0.5 rounded text-xs font-semibold bg-slate-100 text-slate-700">
+                            {entry.input_channel}
                           </span>
-                        </td>
-                        <td className="px-4 py-3 text-xs text-slate-600">{entry.log_type || '—'}</td>
-                        <td className="px-4 py-3 text-xs text-slate-600 max-w-xs truncate" title={entry.content || ''}>
-                          {entry.content || '—'}
-                        </td>
-                      </tr>
-                    );
-                  })}
+                        ) : (
+                          <span className="text-slate-300">—</span>
+                        )}
+                      </td>
+                      <td className="px-4 py-3 text-xs text-slate-600 max-w-xs truncate" title={entry.input_message}>
+                        {entry.input_message || '—'}
+                      </td>
+                      <td className="px-4 py-3 text-xs text-slate-600 max-w-xs truncate" title={entry.response_text}>
+                        {entry.response_text || '—'}
+                      </td>
+                      <td className="px-4 py-3 text-xs text-slate-600 whitespace-nowrap">
+                        {entry.confidence_score != null
+                          ? `${Math.round(entry.confidence_score * 100)}%`
+                          : <span className="text-slate-300">—</span>}
+                      </td>
+                      <td className="px-4 py-3 text-xs text-slate-600 whitespace-nowrap">
+                        {entry.cost_cents != null
+                          ? `$${(entry.cost_cents / 100).toFixed(4)}`
+                          : <span className="text-slate-300">—</span>}
+                      </td>
+                      <td className="px-4 py-3">
+                        {entry.contact_replied != null ? (
+                          <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${entry.contact_replied ? 'bg-emerald-100 text-emerald-700' : 'bg-slate-100 text-slate-500'}`}>
+                            {entry.contact_replied ? 'Yes' : 'No'}
+                          </span>
+                        ) : (
+                          <span className="text-slate-300">—</span>
+                        )}
+                      </td>
+                      <td className="px-4 py-3">
+                        {entry.contact_booked != null ? (
+                          <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${entry.contact_booked ? 'bg-emerald-100 text-emerald-700' : 'bg-slate-100 text-slate-500'}`}>
+                            {entry.contact_booked ? 'Yes' : 'No'}
+                          </span>
+                        ) : (
+                          <span className="text-slate-300">—</span>
+                        )}
+                      </td>
+                    </tr>
+                  ))}
                 </tbody>
               </table>
             </div>
