@@ -5106,6 +5106,63 @@ export type Database = {
           },
         ]
       }
+      service_requests: {
+        Row: {
+          id: string
+          business_id: string | null
+          contact_id: string | null
+          title: string
+          description: string | null
+          request_type: string
+          status: string
+          priority: string
+          created_at: string
+          updated_at: string
+          resolved_at: string | null
+        }
+        Insert: {
+          id?: string
+          business_id?: string | null
+          contact_id?: string | null
+          title: string
+          description?: string | null
+          request_type?: string
+          status?: string
+          priority?: string
+          created_at?: string
+          updated_at?: string
+          resolved_at?: string | null
+        }
+        Update: {
+          id?: string
+          business_id?: string | null
+          contact_id?: string | null
+          title?: string
+          description?: string | null
+          request_type?: string
+          status?: string
+          priority?: string
+          created_at?: string
+          updated_at?: string
+          resolved_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "service_requests_business_id_fkey"
+            columns: ["business_id"]
+            isOneToOne: false
+            referencedRelation: "businesses"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "service_requests_contact_id_fkey"
+            columns: ["contact_id"]
+            isOneToOne: false
+            referencedRelation: "contacts"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       sales_activities: {
         Row: {
           activity_type: string

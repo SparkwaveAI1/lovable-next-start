@@ -55,7 +55,7 @@ export default function ServiceRequests() {
   const loadRequests = async () => {
     setIsLoading(true);
     try {
-      let query = (supabase as any)
+      let query = supabase
         .from("service_requests")
         .select("*, contact:contacts(first_name, last_name, email, phone)")
         .order("created_at", { ascending: false });
@@ -94,7 +94,7 @@ export default function ServiceRequests() {
         updateData.resolved_at = new Date().toISOString();
       }
 
-      const { error } = await (supabase as any)
+      const { error } = await supabase
         .from("service_requests")
         .update(updateData)
         .eq("id", requestId);
