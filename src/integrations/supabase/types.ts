@@ -6340,6 +6340,51 @@ export type Database = {
         }
         Relationships: []
       }
+      system_latest_status: {
+        Row: {
+          registry_id: string | null
+          name: string | null
+          category: string | null
+          type: string | null
+          pipeline: string | null
+          schedule: string | null
+          status: string | null
+          last_run: string | null
+          next_run: string | null
+          error_message: string | null
+          runtime_seconds: number | null
+          status_checked_at: string | null
+        }
+        Insert: {
+          registry_id?: string | null
+          name?: string | null
+          category?: string | null
+          type?: string | null
+          pipeline?: string | null
+          schedule?: string | null
+          status?: string | null
+          last_run?: string | null
+          next_run?: string | null
+          error_message?: string | null
+          runtime_seconds?: number | null
+          status_checked_at?: string | null
+        }
+        Update: {
+          registry_id?: string | null
+          name?: string | null
+          category?: string | null
+          type?: string | null
+          pipeline?: string | null
+          schedule?: string | null
+          status?: string | null
+          last_run?: string | null
+          next_run?: string | null
+          error_message?: string | null
+          runtime_seconds?: number | null
+          status_checked_at?: string | null
+        }
+        Relationships: []
+      }
       screener_profiles: {
         Row: {
           asset_types: string[]
