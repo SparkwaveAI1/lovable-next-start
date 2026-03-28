@@ -4957,6 +4957,63 @@ export type Database = {
           },
         ]
       }
+      process_monitors: {
+        Row: {
+          id: string
+          process_name: string
+          display_name: string
+          category: string | null
+          owner_agent: string | null
+          server_name: string | null
+          schedule_description: string | null
+          last_status: string | null
+          last_run_at: string | null
+          next_run_at: string | null
+          consecutive_errors: number
+          error_message: string | null
+          is_active: boolean
+          metadata: Json | null
+          created_at: string
+          updated_at: string
+        }
+        Insert: {
+          id?: string
+          process_name: string
+          display_name: string
+          category?: string | null
+          owner_agent?: string | null
+          server_name?: string | null
+          schedule_description?: string | null
+          last_status?: string | null
+          last_run_at?: string | null
+          next_run_at?: string | null
+          consecutive_errors?: number
+          error_message?: string | null
+          is_active?: boolean
+          metadata?: Json | null
+          created_at?: string
+          updated_at?: string
+        }
+        Update: {
+          id?: string
+          process_name?: string
+          display_name?: string
+          category?: string | null
+          owner_agent?: string | null
+          server_name?: string | null
+          schedule_description?: string | null
+          last_status?: string | null
+          last_run_at?: string | null
+          next_run_at?: string | null
+          consecutive_errors?: number
+          error_message?: string | null
+          is_active?: boolean
+          metadata?: Json | null
+          created_at?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
       prospects: {
         Row: {
           company: string | null
