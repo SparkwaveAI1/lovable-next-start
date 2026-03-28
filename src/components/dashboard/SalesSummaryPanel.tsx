@@ -8,7 +8,6 @@ import { TrendingUp, Users, Activity, DollarSign, BarChart2, AlertCircle, Chevro
 // ─── Constants ────────────────────────────────────────────────────────────────
 
 const IRIS_AGENT_ID = '15562d82-85f5-4d52-bc72-b038ba21da35';
-const TERMINAL_STAGES: string[] = ['won', 'lost', 'converted'];
 const FF_BUSINESS_ID = '456dc53b-d9d9-41b0-bc33-4f4c4a791eff';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -80,10 +79,10 @@ export function SalesSummaryPanel() {
       const sevenDaysAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString();
 
       const [dealsResult, leadsResult, ffLeadsResult, irisResult] = await Promise.all([
-        // Open deals + pipeline value + deals moved
+        // Open prospects (active pipeline) — crm_deals is unused, use sales_prospects
         supabase
-          .from('crm_deals')
-          .select('stage, value, updated_at'),
+          .from('sales_prospects')
+          .select('id, status, updated_at'),
 
         // New leads in 7d (all businesses — overall pipeline health)
         supabase
@@ -112,14 +111,13 @@ export function SalesSummaryPanel() {
       if (ffLeadsResult.error) throw ffLeadsResult.error;
       if (irisResult.error) throw irisResult.error;
 
-      const deals = dealsResult.data ?? [];
+      const prospects = dealsResult.data ?? [];
 
-      const openDeals = deals.filter(d => !TERMINAL_STAGES.includes(d.stage ?? '')).length;
-      const pipelineValue = deals
-        .filter(d => !TERMINAL_STAGES.includes(d.stage ?? ''))
-        .reduce((sum, d) => sum + (Number(d.value) || 0), 0);
-      const dealsMoved7d = deals.filter(
-        d => d.updated_at && d.updated_at >= sevenDaysAgo
+      const openDeals = prospects.filter(p => p.status !== 'closed').length;
+      // sales_prospects has no monetary value column — show 0 until CRM enrichment
+      const pipelineValue = 0;
+      const dealsMoved7d = prospects.filter(
+        p => p.updated_at && p.updated_at >= sevenDaysAgo
       ).length;
 
       const newLeads7d = leadsResult.count ?? 0;
@@ -145,10 +143,10 @@ export function SalesSummaryPanel() {
   // Real-time subscription on crm_deals
   useEffect(() => {
     const channel = supabase
-      .channel('sales-summary-crm-deals')
+      .channel('sales-summary-prospects')
       .on(
         'postgres_changes',
-        { event: '*', schema: 'public', table: 'crm_deals' },
+        { event: '*', schema: 'public', table: 'sales_prospects' },
         () => {
           fetchMetrics();
         }

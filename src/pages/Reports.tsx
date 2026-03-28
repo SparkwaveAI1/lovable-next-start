@@ -72,11 +72,9 @@ function mcReportToAgentLog(r: McReport): AgentLog {
 
 interface ActivityLogEntry {
   id: string;
-  agent: string | null;
-  event_type: string | null;
-  label: string | null;
-  status: string | null;
-  details: string | null;
+  agent_name: string | null;
+  log_type: string | null;
+  content: string | null;
   created_at: string;
 }
 
@@ -156,8 +154,8 @@ export default function Reports() {
     try {
       const { data, error: fetchError } = await (supabase as any)
         .from('agent_logs')
-        .select('id, agent, event_type, label, status, details, created_at')
-        .not('agent', 'is', null)
+        .select('id, agent_name, log_type, content, created_at')
+        .not('agent_name', 'is', null)
         .order('created_at', { ascending: false })
         .limit(50);
       if (fetchError) throw fetchError;
@@ -547,42 +545,28 @@ export default function Reports() {
                   <tr className="border-b border-slate-100 bg-slate-50">
                     <th className="px-4 py-3 text-left text-xs font-semibold text-slate-500 uppercase tracking-wide">Time</th>
                     <th className="px-4 py-3 text-left text-xs font-semibold text-slate-500 uppercase tracking-wide">Agent</th>
-                    <th className="px-4 py-3 text-left text-xs font-semibold text-slate-500 uppercase tracking-wide">Event</th>
-                    <th className="px-4 py-3 text-left text-xs font-semibold text-slate-500 uppercase tracking-wide">Label</th>
-                    <th className="px-4 py-3 text-left text-xs font-semibold text-slate-500 uppercase tracking-wide">Status</th>
+                    <th className="px-4 py-3 text-left text-xs font-semibold text-slate-500 uppercase tracking-wide">Type</th>
+                    <th className="px-4 py-3 text-left text-xs font-semibold text-slate-500 uppercase tracking-wide">Content</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-50">
                   {activityLogs.map((entry) => {
-                    const statusLower = (entry.status || '').toLowerCase();
-                    const statusColor =
-                      statusLower === 'pass'
-                        ? 'bg-emerald-100 text-emerald-700'
-                        : statusLower === 'fail'
-                        ? 'bg-red-100 text-red-700'
-                        : 'bg-amber-100 text-amber-700';
+                    const agentDisplay = entry.agent_name
+                      ? entry.agent_name.charAt(0).toUpperCase() + entry.agent_name.slice(1)
+                      : null;
                     return (
                       <tr key={entry.id} className="hover:bg-slate-50 transition-colors">
                         <td className="px-4 py-3 text-xs text-slate-400 whitespace-nowrap" title={entry.created_at}>
                           {format(new Date(entry.created_at), 'MMM d, h:mm a')}
                         </td>
                         <td className="px-4 py-3">
-                          <span className={`px-2 py-0.5 rounded text-xs font-semibold ${AGENT_COLORS[entry.agent || ''] || 'bg-slate-100 text-slate-700'}`}>
-                            {entry.agent || '—'}
+                          <span className={`px-2 py-0.5 rounded text-xs font-semibold ${AGENT_COLORS[agentDisplay || ''] || 'bg-slate-100 text-slate-700'}`}>
+                            {agentDisplay || '—'}
                           </span>
                         </td>
-                        <td className="px-4 py-3 text-xs text-slate-600">{entry.event_type || '—'}</td>
-                        <td className="px-4 py-3 text-xs text-slate-600 max-w-xs truncate" title={entry.label || ''}>
-                          {entry.label || '—'}
-                        </td>
-                        <td className="px-4 py-3">
-                          {entry.status ? (
-                            <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${statusColor}`}>
-                              {entry.status}
-                            </span>
-                          ) : (
-                            <span className="text-slate-300">—</span>
-                          )}
+                        <td className="px-4 py-3 text-xs text-slate-600">{entry.log_type || '—'}</td>
+                        <td className="px-4 py-3 text-xs text-slate-600 max-w-xs truncate" title={entry.content || ''}>
+                          {entry.content || '—'}
                         </td>
                       </tr>
                     );

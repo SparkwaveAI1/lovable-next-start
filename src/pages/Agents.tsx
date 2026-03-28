@@ -9,11 +9,9 @@ import {
   WifiOff,
   Activity,
   Globe,
-  Zap,
   CheckCircle2,
   XCircle,
   Clock,
-  PauseCircle,
 } from "lucide-react"
 import { supabase } from "@/integrations/supabase/client"
 import { formatDistanceToNow, parseISO } from "date-fns"
@@ -31,20 +29,8 @@ interface AgentStatus {
   checkedAt: string
 }
 
-interface N8nWorkflow {
-  id: string
-  name: string
-  active: boolean
-  lastRunAt: string | null
-  lastStatus: string | null
-}
-
 interface MonitoringData {
   agents: AgentStatus[]
-  n8n?: {
-    workflows: N8nWorkflow[]
-    error: string | null
-  }
   fetchedAt: string
 }
 
@@ -241,128 +227,10 @@ function AgentCard({ agent }: { agent: AgentStatus }) {
   )
 }
 
-// ─── n8n Execution Status Helpers ─────────────────────────────────────────────
-
-function execStatusConfig(status: string | null) {
-  switch (status) {
-    case "success":
-      return {
-        icon: <CheckCircle2 className="h-3.5 w-3.5" />,
-        label: "Success",
-        className: "bg-emerald-100 text-emerald-700",
-      }
-    case "error":
-    case "crashed":
-      return {
-        icon: <XCircle className="h-3.5 w-3.5" />,
-        label: status === "crashed" ? "Crashed" : "Error",
-        className: "bg-red-100 text-red-700",
-      }
-    case "running":
-      return {
-        icon: <Activity className="h-3.5 w-3.5 animate-pulse" />,
-        label: "Running",
-        className: "bg-blue-100 text-blue-700",
-      }
-    case "waiting":
-      return {
-        icon: <Clock className="h-3.5 w-3.5" />,
-        label: "Waiting",
-        className: "bg-amber-100 text-amber-700",
-      }
-    default:
-      return {
-        icon: <Clock className="h-3.5 w-3.5" />,
-        label: status ?? "Unknown",
-        className: "bg-slate-100 text-slate-500",
-      }
-  }
-}
-
-// ─── n8n Workflow Card ────────────────────────────────────────────────────────
-
-function N8nWorkflowCard({ workflow }: { workflow: N8nWorkflow }) {
-  const execStatus = execStatusConfig(workflow.lastStatus)
-
-  return (
-    <div className="bg-white rounded-xl border border-slate-200 overflow-hidden hover:shadow-md transition-shadow">
-      {/* Top status bar */}
-      <div
-        className={cn(
-          "h-1.5 w-full",
-          workflow.active ? "bg-emerald-500" : "bg-slate-300"
-        )}
-      />
-
-      <div className="p-5">
-        {/* Header */}
-        <div className="flex items-start justify-between mb-3">
-          <div className="flex items-center gap-3 flex-1 min-w-0">
-            <div className="h-10 w-10 rounded-xl bg-orange-100 flex items-center justify-center flex-shrink-0">
-              <Zap className="h-5 w-5 text-orange-600" />
-            </div>
-            <div className="min-w-0">
-              <h3 className="text-base font-bold text-slate-900 truncate">{workflow.name}</h3>
-            </div>
-          </div>
-
-          {/* Active / Paused badge */}
-          <div
-            className={cn(
-              "flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold flex-shrink-0 ml-2",
-              workflow.active
-                ? "bg-emerald-100 text-emerald-700"
-                : "bg-slate-100 text-slate-500"
-            )}
-          >
-            {workflow.active ? (
-              <Activity className="h-3.5 w-3.5" />
-            ) : (
-              <PauseCircle className="h-3.5 w-3.5" />
-            )}
-            {workflow.active ? "Active" : "Paused"}
-          </div>
-        </div>
-
-        {/* Last Execution */}
-        <div className="bg-slate-50 rounded-lg p-3 border border-slate-100">
-          <p className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-2">
-            Last Execution
-          </p>
-          <div className="flex items-center justify-between gap-2">
-            <p className="text-sm text-slate-600">
-              {workflow.lastRunAt ? relativeTime(workflow.lastRunAt) : "Never run"}
-            </p>
-            {workflow.lastStatus && (
-              <div
-                className={cn(
-                  "flex items-center gap-1.5 px-2 py-0.5 rounded-full text-xs font-semibold",
-                  execStatus.className
-                )}
-              >
-                {execStatus.icon}
-                {execStatus.label}
-              </div>
-            )}
-            {!workflow.lastStatus && (
-              <div className="flex items-center gap-1.5 px-2 py-0.5 rounded-full text-xs font-semibold bg-slate-100 text-slate-400">
-                <Clock className="h-3.5 w-3.5" />
-                No runs yet
-              </div>
-            )}
-          </div>
-        </div>
-      </div>
-    </div>
-  )
-}
-
 // ─── Main Page ────────────────────────────────────────────────────────────────
 
 export default function Agents() {
   const [agents, setAgents] = useState<AgentStatus[]>([])
-  const [n8nWorkflows, setN8nWorkflows] = useState<N8nWorkflow[]>([])
-  const [n8nError, setN8nError] = useState<string | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [lastRefresh, setLastRefresh] = useState<Date>(new Date())
@@ -416,7 +284,6 @@ export default function Agents() {
   }, [fetchData])
 
   const onlineCount = agents.filter((a) => a.online).length
-  const activeWorkflowCount = n8nWorkflows.filter((w) => w.active).length
 
   return (
     <DashboardLayout>
@@ -511,64 +378,6 @@ export default function Agents() {
           </div>
         )}
 
-        {/* ─── n8n Workflow Agents Section ──────────────────────────────────── */}
-        <div className="mt-10">
-          {/* Section header */}
-          <div className="flex items-center justify-between mb-4">
-            <div>
-              <h2 className="text-xl font-bold text-slate-900 flex items-center gap-2">
-                <Zap className="h-6 w-6 text-orange-500" />
-                n8n Workflow Agents
-              </h2>
-              <p className="text-slate-500 mt-0.5 text-sm">
-                Automated workflows running on n8n cloud
-                {!loading && n8nWorkflows.length > 0 && (
-                  <span className="ml-2 text-slate-400">
-                    · {activeWorkflowCount}/{n8nWorkflows.length} active
-                  </span>
-                )}
-              </p>
-            </div>
-          </div>
-
-          {/* n8n API error */}
-          {n8nError && (
-            <div className="mb-4 p-4 bg-amber-50 border border-amber-200 rounded-xl text-amber-700 text-sm">
-              n8n API error: {n8nError}
-            </div>
-          )}
-
-          {/* Loading skeleton for n8n */}
-          {loading && n8nWorkflows.length === 0 && (
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-              {[1, 2].map((i) => (
-                <div key={i} className="h-48 bg-slate-100 rounded-xl animate-pulse" />
-              ))}
-            </div>
-          )}
-
-          {/* Empty state */}
-          {!loading && n8nWorkflows.length === 0 && !n8nError && (
-            <div className="flex flex-col items-center justify-center py-16 bg-white rounded-xl border border-slate-200 text-center">
-              <div className="h-14 w-14 rounded-xl bg-orange-50 flex items-center justify-center mb-3">
-                <Zap className="h-7 w-7 text-orange-300" />
-              </div>
-              <p className="text-slate-500 text-sm font-medium">No n8n workflows deployed yet</p>
-              <p className="text-slate-400 text-xs mt-1">
-                Workflows created in n8n will appear here automatically
-              </p>
-            </div>
-          )}
-
-          {/* Workflow Cards */}
-          {n8nWorkflows.length > 0 && (
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-              {n8nWorkflows.map((workflow) => (
-                <N8nWorkflowCard key={workflow.id} workflow={workflow} />
-              ))}
-            </div>
-          )}
-        </div>
       </PageContent>
     </DashboardLayout>
   )
