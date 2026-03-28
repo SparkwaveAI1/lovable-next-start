@@ -62,8 +62,7 @@ export function AgentOutputsFeedPanel() {
     const sevenDaysAgo = new Date();
     sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
 
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    let query = (supabase as any)
+    let query = supabase
       .from("agent_outputs")
       .select("id, agent_name, output_type, title, summary, body, is_recurring, is_actioned, actioned_at, created_at")
       .gte("created_at", sevenDaysAgo.toISOString())
@@ -81,11 +80,10 @@ export function AgentOutputsFeedPanel() {
   useEffect(() => {
     fetchOutputs();
     // Real-time updates
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const channel = (supabase as any)
+    const channel = supabase
       .channel("agent-outputs-feed")
       .on(
-        "postgres_changes",
+        "postgres_changes" as any,
         { event: "*", schema: "public", table: "agent_outputs" },
         () => { fetchOutputs(); }
       )
@@ -95,8 +93,7 @@ export function AgentOutputsFeedPanel() {
 
   const markActioned = async (id: string) => {
     setActioningId(id);
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const { error } = await (supabase as any)
+    const { error } = await supabase
       .from("agent_outputs")
       .update({ is_actioned: true, actioned_at: new Date().toISOString() })
       .eq("id", id);

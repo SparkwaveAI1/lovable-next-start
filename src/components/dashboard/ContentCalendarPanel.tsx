@@ -280,7 +280,7 @@ export function ContentCalendarPanel() {
   const [dateRange, setDateRange] = useState<DateRange>('last30');
 
   const load = useCallback(async () => {
-    const { data, error } = await (supabase as any)
+    const { data, error } = await supabase
       .from('content_calendar')
       .select('id,title,brand,platform,status,abby_status,publish_date,published_at,created_at,campaign,target_keyword')
       .order('created_at', { ascending: false })
@@ -299,16 +299,16 @@ export function ContentCalendarPanel() {
     load();
 
     // Realtime subscription
-    const channel = (supabase as any)
+    const channel = supabase
       .channel('content_calendar_changes')
       .on(
-        'postgres_changes',
+        'postgres_changes' as any,
         { event: '*', schema: 'public', table: 'content_calendar' },
         () => { load(); }
       )
       .subscribe();
 
-    return () => { (supabase as any).removeChannel(channel); };
+    return () => { supabase.removeChannel(channel); };
   }, [load]);
 
   // Apply filters

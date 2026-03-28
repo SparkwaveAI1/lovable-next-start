@@ -86,17 +86,15 @@ export function KarpathyAuditPanel() {
       const d7ago = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString()
 
       // Failures (last 30d)
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const { count: failures } = await (supabase as any)
+      const { count: failures } = await supabase
         .from("agent_failures")
         .select("failure_id", { count: "exact", head: true })
         .gte("created_at", d30ago)
 
       // Proposals (last 30d)
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const { data: proposalRows } = await (supabase as any)
+      const { data: proposalRows } = await supabase
         .from("instruction_changes")
-        .select("id, status, verification_status, agent_name, short_label, applied_at, verification_status, proposed_at, source_failure_uuids")
+        .select("id, status, verification_status, agent_name, short_label, applied_at, proposed_at, source_failure_uuids")
         .gte("proposed_at", d30ago)
         .order("proposed_at", { ascending: false })
         .limit(50)

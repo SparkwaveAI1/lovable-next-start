@@ -57,6 +57,39 @@ export type Database = {
         }
         Relationships: []
       }
+      agent_failures: {
+        Row: {
+          failure_id: string
+          agent_name: string
+          category: string | null
+          description: string
+          session_reference: string | null
+          severity: string
+          metadata: Json | null
+          created_at: string
+        }
+        Insert: {
+          failure_id?: string
+          agent_name: string
+          category?: string | null
+          description: string
+          session_reference?: string | null
+          severity?: string
+          metadata?: Json | null
+          created_at?: string
+        }
+        Update: {
+          failure_id?: string
+          agent_name?: string
+          category?: string | null
+          description?: string
+          session_reference?: string | null
+          severity?: string
+          metadata?: Json | null
+          created_at?: string
+        }
+        Relationships: []
+      }
       activities: {
         Row: {
           agent_id: string
@@ -2099,6 +2132,60 @@ export type Database = {
           },
         ]
       }
+      content_calendar: {
+        Row: {
+          id: string
+          title: string
+          brand: string | null
+          platform: string | null
+          status: string
+          abby_status: string | null
+          publish_date: string | null
+          published_at: string | null
+          campaign: string | null
+          target_keyword: string | null
+          content: string | null
+          media_url: string | null
+          created_by: string | null
+          created_at: string
+          updated_at: string
+        }
+        Insert: {
+          id?: string
+          title: string
+          brand?: string | null
+          platform?: string | null
+          status?: string
+          abby_status?: string | null
+          publish_date?: string | null
+          published_at?: string | null
+          campaign?: string | null
+          target_keyword?: string | null
+          content?: string | null
+          media_url?: string | null
+          created_by?: string | null
+          created_at?: string
+          updated_at?: string
+        }
+        Update: {
+          id?: string
+          title?: string
+          brand?: string | null
+          platform?: string | null
+          status?: string
+          abby_status?: string | null
+          publish_date?: string | null
+          published_at?: string | null
+          campaign?: string | null
+          target_keyword?: string | null
+          content?: string | null
+          media_url?: string | null
+          created_by?: string | null
+          created_at?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
       content_engagement_targets: {
         Row: {
           account_handle: string
@@ -3521,6 +3608,57 @@ export type Database = {
           pipeline_id?: string
           stage_id?: string
           updated_at?: string
+        }
+        Relationships: []
+      }
+      instruction_changes: {
+        Row: {
+          id: string
+          agent_name: string
+          short_label: string
+          description: string | null
+          status: string
+          verification_status: string | null
+          tier: number | null
+          proposed_at: string
+          applied_at: string | null
+          verified_at: string | null
+          source_failure_uuids: string[] | null
+          reviewer_agent: string | null
+          metadata: Json | null
+          created_at: string
+        }
+        Insert: {
+          id?: string
+          agent_name: string
+          short_label: string
+          description?: string | null
+          status?: string
+          verification_status?: string | null
+          tier?: number | null
+          proposed_at?: string
+          applied_at?: string | null
+          verified_at?: string | null
+          source_failure_uuids?: string[] | null
+          reviewer_agent?: string | null
+          metadata?: Json | null
+          created_at?: string
+        }
+        Update: {
+          id?: string
+          agent_name?: string
+          short_label?: string
+          description?: string | null
+          status?: string
+          verification_status?: string | null
+          tier?: number | null
+          proposed_at?: string
+          applied_at?: string | null
+          verified_at?: string | null
+          source_failure_uuids?: string[] | null
+          reviewer_agent?: string | null
+          metadata?: Json | null
+          created_at?: string
         }
         Relationships: []
       }
