@@ -324,11 +324,11 @@ export default function OrgMonitoringPage() {
       const since7d = new Date(Date.now() - 7 * 24 * 3600 * 1000).toISOString()
       const { data } = await supabase
         .from("agent_failures" as never)
-        .select("agent_name, severity")
+        .select("failure_id, agent_name, severity, is_test, created_at")
         .gte("created_at" as never, since7d)
         .eq("is_test" as never, false)
       if (data && Array.isArray(data)) {
-        type AFRow = { agent_name: string; severity: string }
+        type AFRow = { failure_id: string; agent_name: string; severity: string; is_test: boolean; created_at: string }
         const rows = data as AFRow[]
         const map: Record<string, Record<string, number>> = {}
         rows.forEach(r => {
