@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback } from "react";
 import { DashboardLayout } from "@/components/layout/DashboardLayout";
 import { PageContent } from "@/components/layout/PageLayout";
 import { supabase } from "@/integrations/supabase/client";
+import { useBusinessContext } from "@/contexts/BusinessContext";
 import { RefreshCw, BarChart3, CheckCircle, AlertTriangle, XCircle, HelpCircle } from "lucide-react";
 import { formatDistanceToNow } from "date-fns";
 
@@ -19,6 +20,7 @@ interface MetricSnapshot {
   metric_label: string | null;
   status: MetricStatus | null;
   source_agent: string | null;
+  source_business_id: string | null;
 }
 
 // ─── Category config ──────────────────────────────────────────────────────────
@@ -81,16 +83,23 @@ export default function BusinessMetrics() {
   const [loading, setLoading] = useState(true);
   const [lastRefresh, setLastRefresh] = useState<Date>(new Date());
   const [activeTab, setActiveTab] = useState<MetricCategory | "all">("all");
+  const { selectedBusiness } = useBusinessContext();
 
   const fetchMetrics = useCallback(async () => {
     setLoading(true);
     try {
       const since = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
-      const { data, error } = await supabase
+      let query = supabase
         .from("business_metrics_snapshots")
-        .select("id, snapshot_at, metric_category, metric_key, metric_value, metric_label, status, source_agent")
+        .select("id, snapshot_at, metric_category, metric_key, metric_value, metric_label, status, source_agent, source_business_id")
         .gte("snapshot_at", since)
         .order("snapshot_at", { ascending: false });
+
+      if (selectedBusiness) {
+        query = query.eq("source_business_id", selectedBusiness.id);
+      }
+
+      const { data, error } = await query;
 
       if (error) throw error;
 
@@ -107,7 +116,7 @@ export default function BusinessMetrics() {
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [selectedBusiness]);
 
   // Initial load
   useEffect(() => {
@@ -147,7 +156,10 @@ export default function BusinessMetrics() {
             <div>
               <h1 className="text-2xl font-bold text-gray-900">Business Metrics</h1>
               <p className="text-sm text-gray-500">
-                Last refreshed {formatDistanceToNow(lastRefresh, { addSuffix: true })} · auto-refreshes every 60s
+                {selectedBusiness
+                  ? <>Showing: <span className="font-medium text-indigo-600">{selectedBusiness.name}</span> · Last refreshed {formatDistanceToNow(lastRefresh, { addSuffix: true })} · auto-refreshes every 60s</>
+                  : <>Showing all businesses · Last refreshed {formatDistanceToNow(lastRefresh, { addSuffix: true })} · auto-refreshes every 60s</>
+                }
               </p>
             </div>
           </div>

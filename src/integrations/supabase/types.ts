@@ -1296,7 +1296,7 @@ export type Database = {
           metric_label: string | null
           status: string | null
           source_agent: string | null
-          business_id: string | null
+          source_business_id: string | null
           created_at: string
         }
         Insert: {
@@ -1308,7 +1308,7 @@ export type Database = {
           metric_label?: string | null
           status?: string | null
           source_agent?: string | null
-          business_id?: string | null
+          source_business_id?: string | null
           created_at?: string
         }
         Update: {
@@ -1320,13 +1320,13 @@ export type Database = {
           metric_label?: string | null
           status?: string | null
           source_agent?: string | null
-          business_id?: string | null
+          source_business_id?: string | null
           created_at?: string
         }
         Relationships: [
           {
-            foreignKeyName: "business_metrics_snapshots_business_id_fkey"
-            columns: ["business_id"]
+            foreignKeyName: "business_metrics_snapshots_source_business_id_fkey"
+            columns: ["source_business_id"]
             isOneToOne: false
             referencedRelation: "businesses"
             referencedColumns: ["id"]
