@@ -22,11 +22,18 @@ import {
 } from "lucide-react";
 import sparkwaveIcon from "@/assets/sparkwave-icon.png";
 
+type CalculatorMode = 'lead-response' | 'operational-efficiency';
+
 interface FormData {
+  // Lead Response Mode
   leadsPerMonth: string;
   responseTimeHours: string;
   avgDealValue: string;
   closeRate: string;
+  // Operational Efficiency Mode
+  teamSize: string;
+  hoursPerWeek: string;
+  hourlyRate: string;
 }
 
 interface Results {
@@ -38,23 +45,57 @@ interface Results {
 }
 
 export default function ROICalculator() {
+  const [mode, setMode] = useState<CalculatorMode>('lead-response');
   const [stage, setStage] = useState<'calculator' | 'teaser' | 'email' | 'results'>('calculator');
   const [formData, setFormData] = useState<FormData>({
     leadsPerMonth: '',
     responseTimeHours: '',
     avgDealValue: '',
-    closeRate: ''
+    closeRate: '',
+    teamSize: '',
+    hoursPerWeek: '',
+    hourlyRate: ''
   });
   const [email, setEmail] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [results, setResults] = useState<Results | null>(null);
   const { toast } = useToast();
 
-  const isFormValid = 
-    formData.leadsPerMonth && 
-    formData.responseTimeHours && 
-    formData.avgDealValue && 
-    formData.closeRate;
+  const isFormValid = mode === 'lead-response' 
+    ? (formData.leadsPerMonth && 
+       formData.responseTimeHours && 
+       formData.avgDealValue && 
+       formData.closeRate)
+    : (formData.teamSize && 
+       formData.hoursPerWeek && 
+       formData.hourlyRate);
+
+  const calculateOperationalEfficiency = (): Results => {
+    const teamSize = parseFloat(formData.teamSize) || 0;
+    const hoursPerWeek = parseFloat(formData.hoursPerWeek) || 0;
+    const hourlyRate = parseFloat(formData.hourlyRate) || 0;
+
+    // Annual calculation: hours/week * 52 weeks * team size * hourly rate
+    const currentRevenue = hoursPerWeek * 52 * teamSize * hourlyRate;
+    
+    // Assume Sparkwave automation can eliminate 60-80% of repetitive work
+    const automationElimination = 0.70; // 70% as middle estimate
+    const potentialRecovery = currentRevenue * automationElimination;
+    
+    // Payback period: assume Sparkwave costs ~$300-500/mo per team member
+    const monthlyCost = 400 * teamSize;
+    const paybackMonths = (monthlyCost * 12) / potentialRecovery;
+    
+    const responseImpact = `With Sparkwave automation, your team could recover ${formatCurrency(potentialRecovery)}/year in operational efficiency — equivalent to having ${Math.round(potentialRecovery / (teamSize * hourlyRate * 40 * 52))} additional team members at full capacity.`;
+
+    return {
+      currentRevenue,
+      lostFromSlowResponse: 0,
+      potentialRecovery,
+      annualSavings: potentialRecovery,
+      responseImpact
+    };
+  };
 
   const calculateROI = (): Results => {
     const leads = parseFloat(formData.leadsPerMonth) || 0;
@@ -119,7 +160,9 @@ export default function ROICalculator() {
   };
 
   const handleCalculate = () => {
-    const calculatedResults = calculateROI();
+    const calculatedResults = mode === 'lead-response' 
+      ? calculateROI() 
+      : calculateOperationalEfficiency();
     setResults(calculatedResults);
     setStage('teaser');
   };
@@ -184,83 +227,184 @@ export default function ROICalculator() {
             </div>
             <CardTitle className="text-2xl flex items-center justify-center gap-2">
               <Calculator className="h-6 w-6 text-green-600" />
-              Lead Response ROI Calculator
+              ROI Calculator
             </CardTitle>
             <CardDescription className="text-base">
-              Discover how much revenue you're losing to slow response times
+              See how Sparkwave saves time and money
             </CardDescription>
+            
+            {/* Mode Toggle */}
+            <div className="flex gap-2 mt-4 justify-center">
+              <Button
+                variant={mode === 'lead-response' ? 'default' : 'outline'}
+                size="sm"
+                onClick={() => {
+                  setMode('lead-response');
+                  setFormData(prev => ({
+                    ...prev,
+                    leadsPerMonth: '',
+                    responseTimeHours: '',
+                    avgDealValue: '',
+                    closeRate: ''
+                  }));
+                  setResults(null);
+                  setStage('calculator');
+                }}
+                className="text-xs"
+              >
+                Sales Teams
+              </Button>
+              <Button
+                variant={mode === 'operational-efficiency' ? 'default' : 'outline'}
+                size="sm"
+                onClick={() => {
+                  setMode('operational-efficiency');
+                  setFormData(prev => ({
+                    ...prev,
+                    teamSize: '',
+                    hoursPerWeek: '',
+                    hourlyRate: ''
+                  }));
+                  setResults(null);
+                  setStage('calculator');
+                }}
+                className="text-xs"
+              >
+                Operations
+              </Button>
+            </div>
           </CardHeader>
           <CardContent className="space-y-5 pt-4">
-            {/* Leads per month */}
-            <div className="space-y-2">
-              <Label htmlFor="leads" className="flex items-center gap-2">
-                <Users className="h-4 w-4 text-blue-500" />
-                How many leads do you get per month?
-              </Label>
-              <Input
-                id="leads"
-                type="number"
-                placeholder="e.g., 50"
-                value={formData.leadsPerMonth}
-                onChange={(e) => setFormData(prev => ({ ...prev, leadsPerMonth: e.target.value }))}
-                className="text-lg"
-              />
-            </div>
+            {mode === 'lead-response' ? (
+              <>
+                {/* Leads per month */}
+                <div className="space-y-2">
+                  <Label htmlFor="leads" className="flex items-center gap-2">
+                    <Users className="h-4 w-4 text-blue-500" />
+                    How many leads do you get per month?
+                  </Label>
+                  <Input
+                    id="leads"
+                    type="number"
+                    placeholder="e.g., 50"
+                    value={formData.leadsPerMonth}
+                    onChange={(e) => setFormData(prev => ({ ...prev, leadsPerMonth: e.target.value }))}
+                    className="text-lg"
+                  />
+                </div>
 
-            {/* Response time */}
-            <div className="space-y-2">
-              <Label htmlFor="response" className="flex items-center gap-2">
-                <Clock className="h-4 w-4 text-orange-500" />
-                Average response time (hours)?
-              </Label>
-              <Input
-                id="response"
-                type="number"
-                step="0.5"
-                placeholder="e.g., 4"
-                value={formData.responseTimeHours}
-                onChange={(e) => setFormData(prev => ({ ...prev, responseTimeHours: e.target.value }))}
-                className="text-lg"
-              />
-              <p className="text-xs text-slate-500">
-                Be honest! From lead comes in to first human contact
-              </p>
-            </div>
+                {/* Response time */}
+                <div className="space-y-2">
+                  <Label htmlFor="response" className="flex items-center gap-2">
+                    <Clock className="h-4 w-4 text-orange-500" />
+                    Average response time (hours)?
+                  </Label>
+                  <Input
+                    id="response"
+                    type="number"
+                    step="0.5"
+                    placeholder="e.g., 4"
+                    value={formData.responseTimeHours}
+                    onChange={(e) => setFormData(prev => ({ ...prev, responseTimeHours: e.target.value }))}
+                    className="text-lg"
+                  />
+                  <p className="text-xs text-slate-500">
+                    Be honest! From lead comes in to first human contact
+                  </p>
+                </div>
 
-            {/* Deal value */}
-            <div className="space-y-2">
-              <Label htmlFor="dealValue" className="flex items-center gap-2">
-                <DollarSign className="h-4 w-4 text-green-500" />
-                Average deal value ($)?
-              </Label>
-              <Input
-                id="dealValue"
-                type="number"
-                placeholder="e.g., 5000"
-                value={formData.avgDealValue}
-                onChange={(e) => setFormData(prev => ({ ...prev, avgDealValue: e.target.value }))}
-                className="text-lg"
-              />
-            </div>
+                {/* Deal value */}
+                <div className="space-y-2">
+                  <Label htmlFor="dealValue" className="flex items-center gap-2">
+                    <DollarSign className="h-4 w-4 text-green-500" />
+                    Average deal value ($)?
+                  </Label>
+                  <Input
+                    id="dealValue"
+                    type="number"
+                    placeholder="e.g., 5000"
+                    value={formData.avgDealValue}
+                    onChange={(e) => setFormData(prev => ({ ...prev, avgDealValue: e.target.value }))}
+                    className="text-lg"
+                  />
+                </div>
 
-            {/* Close rate */}
-            <div className="space-y-2">
-              <Label htmlFor="closeRate" className="flex items-center gap-2">
-                <TrendingUp className="h-4 w-4 text-purple-500" />
-                Current close rate (%)?
-              </Label>
-              <Input
-                id="closeRate"
-                type="number"
-                placeholder="e.g., 25"
-                value={formData.closeRate}
-                onChange={(e) => setFormData(prev => ({ ...prev, closeRate: e.target.value }))}
-                className="text-lg"
-              />
-              <p className="text-xs text-slate-500">
-                % of leads that become paying customers
-              </p>
-            </div>
+                {/* Close rate */}
+                <div className="space-y-2">
+                  <Label htmlFor="closeRate" className="flex items-center gap-2">
+                    <TrendingUp className="h-4 w-4 text-purple-500" />
+                    Current close rate (%)?
+                  </Label>
+                  <Input
+                    id="closeRate"
+                    type="number"
+                    placeholder="e.g., 25"
+                    value={formData.closeRate}
+                    onChange={(e) => setFormData(prev => ({ ...prev, closeRate: e.target.value }))}
+                    className="text-lg"
+                  />
+                  <p className="text-xs text-slate-500">
+                    % of leads that become paying customers
+                  </p>
+                </div>
+              </>
+            ) : (
+              <>
+                {/* Team size */}
+                <div className="space-y-2">
+                  <Label htmlFor="teamSize" className="flex items-center gap-2">
+                    <Users className="h-4 w-4 text-blue-500" />
+                    Team size handling admin/operations?
+                  </Label>
+                  <Input
+                    id="teamSize"
+                    type="number"
+                    placeholder="e.g., 3"
+                    value={formData.teamSize}
+                    onChange={(e) => setFormData(prev => ({ ...prev, teamSize: e.target.value }))}
+                    className="text-lg"
+                  />
+                </div>
+
+                {/* Hours per week */}
+                <div className="space-y-2">
+                  <Label htmlFor="hoursPerWeek" className="flex items-center gap-2">
+                    <Clock className="h-4 w-4 text-orange-500" />
+                    Hours per week on repetitive tasks?
+                  </Label>
+                  <Input
+                    id="hoursPerWeek"
+                    type="number"
+                    placeholder="e.g., 15"
+                    value={formData.hoursPerWeek}
+                    onChange={(e) => setFormData(prev => ({ ...prev, hoursPerWeek: e.target.value }))}
+                    className="text-lg"
+                  />
+                  <p className="text-xs text-slate-500">
+                    Admin, scheduling, email, data entry, etc.
+                  </p>
+                </div>
+
+                {/* Hourly rate */}
+                <div className="space-y-2">
+                  <Label htmlFor="hourlyRate" className="flex items-center gap-2">
+                    <DollarSign className="h-4 w-4 text-green-500" />
+                    Average hourly rate per person?
+                  </Label>
+                  <Input
+                    id="hourlyRate"
+                    type="number"
+                    placeholder="e.g., 50"
+                    value={formData.hourlyRate}
+                    onChange={(e) => setFormData(prev => ({ ...prev, hourlyRate: e.target.value }))}
+                    className="text-lg"
+                  />
+                  <p className="text-xs text-slate-500">
+                    Include salary + benefits cost
+                  </p>
+                </div>
+              </>
+            )}
 
             <Button 
               size="lg" 
