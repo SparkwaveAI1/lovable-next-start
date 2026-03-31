@@ -45,8 +45,8 @@ export default function Homepage() {
       icon: TrendingUp,
       title: "AI Sales Automation",
       description:
-        "Custom AI systems that prospect, qualify, and follow up at scale. Never miss a lead again.",
-      outcome: "Reached 10x more prospects in the same time",
+        "Respond to every lead in 60 seconds. Custom AI systems that prospect, qualify, and follow up automatically. Win more deals just by being first.",
+      outcome: "Respond in <60 seconds, win 21x more deals",
       color: "text-blue-400",
       bg: "bg-blue-600/20",
       border: "border-blue-500/30",
@@ -308,34 +308,34 @@ export default function Homepage() {
               </Badge>
 
               <h1 className="text-4xl sm:text-5xl lg:text-6xl font-bold text-white mb-6 leading-tight">
-                AI Automation That
+                Respond to Leads
                 <span className="block bg-gradient-to-r from-blue-400 via-purple-400 to-pink-400 bg-clip-text text-transparent">
-                  Drives Revenue
+                  in 60 Seconds
                 </span>
               </h1>
 
               <p className="text-xl text-gray-400 mb-8 leading-relaxed max-w-lg">
-                We build custom AI systems for sales, marketing, and operations.
-                Not chatbot wrappers. Real automation that 10x your team output.
+                50% of sales go to the first responder. Sparkwave automates lead response, qualification, and follow-up so your team never misses a deal. From first contact to closed won — in less time.
               </p>
 
               {/* CTA Buttons */}
               <div className="flex flex-col sm:flex-row gap-4 mb-10">
+                <Link to="/roi-calculator">
+                  <Button
+                    size="lg"
+                    className="bg-gradient-to-r from-green-600 to-emerald-600 hover:from-green-700 hover:to-emerald-700 text-white font-semibold px-8 py-6 text-base rounded-xl w-full"
+                  >
+                    Calculate Your ROI
+                    <ArrowRight className="w-5 h-5 ml-2" />
+                  </Button>
+                </Link>
                 <Button
                   size="lg"
                   onClick={handleBookAudit}
                   className="bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700 text-white font-semibold px-8 py-6 text-base rounded-xl"
                 >
-                  Get Your Free Automation Audit
+                  Book a Demo
                   <ArrowRight className="w-5 h-5 ml-2" />
-                </Button>
-                <Button
-                  size="lg"
-                  variant="outline"
-                  onClick={() => scrollToSection("how-it-works")}
-                  className="border-2 border-white/30 text-white hover:bg-white/10 hover:border-white/50 font-semibold px-8 py-6 text-base rounded-xl"
-                >
-                  See How We Work
                 </Button>
               </div>
 
