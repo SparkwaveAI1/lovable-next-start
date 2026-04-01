@@ -158,11 +158,15 @@ export default function Reports() {
     setActivityLoading(true);
     setActivityError(null);
     try {
-      const { data, error: fetchError } = await supabase
+      let query = supabase
         .from('ai_response_logs')
         .select('id, business_id, created_at, input_message, response_text, input_channel, contact_id, cost_cents, confidence_score, contact_replied, contact_booked')
         .order('created_at', { ascending: false })
         .limit(50);
+      if (selectedBusiness?.id) {
+        query = query.eq('business_id', selectedBusiness.id);
+      }
+      const { data, error: fetchError } = await query;
       if (fetchError) throw fetchError;
       setActivityLogs((data || []) as ActivityLogEntry[]);
     } catch (err) {
@@ -171,7 +175,7 @@ export default function Reports() {
     } finally {
       setActivityLoading(false);
     }
-  }, []);
+  }, [selectedBusiness?.id]);
 
   useEffect(() => {
     fetchActivityLogs();

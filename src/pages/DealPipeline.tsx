@@ -25,10 +25,20 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
-import { Search, Loader2 } from 'lucide-react';
+import { Search, Loader2, Plus } from 'lucide-react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { formatDistanceToNow, format, parseISO } from 'date-fns';
 import { useToast } from '@/hooks/use-toast';
+import { Button } from '@/components/ui/button';
+import { Label } from '@/components/ui/label';
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogFooter,
+} from '@/components/ui/dialog';
+import { useBusinessContext } from '@/contexts/BusinessContext';
 
 interface Deal {
   id: string;
@@ -42,6 +52,24 @@ interface Deal {
   created_at: string | null;
   updated_at: string | null;
 }
+
+interface NewDealForm {
+  title: string;
+  stage: string;
+  value: string;
+  probability: string;
+  expected_close_date: string;
+  notes: string;
+}
+
+const BLANK_DEAL: NewDealForm = {
+  title: '',
+  stage: 'lead',
+  value: '',
+  probability: '',
+  expected_close_date: '',
+  notes: '',
+};
 
 const COLUMNS = [
   { id: 'lead',         label: 'Lead',        color: 'border-t-gray-400',    badge: 'bg-gray-100 text-gray-700'       },
@@ -162,9 +190,13 @@ const DealPipeline = () => {
   const [search, setSearch] = useState('');
   const [activeDeal, setActiveDeal] = useState<Deal | null>(null);
   const [overColId, setOverColId] = useState<string | null>(null);
+  const [newDealOpen, setNewDealOpen] = useState(false);
+  const [newDealForm, setNewDealForm] = useState<NewDealForm>(BLANK_DEAL);
+  const [saving, setSaving] = useState(false);
 
   const queryClient = useQueryClient();
   const { toast } = useToast();
+  const { selectedBusiness } = useBusinessContext();
 
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 8 } }),
@@ -219,6 +251,35 @@ const DealPipeline = () => {
     stageMutation.mutate({ id, stage });
   };
 
+  // ── Create deal ───────────────────────────────────────────────────────────
+  const handleCreateDeal = async () => {
+    if (!newDealForm.title.trim()) {
+      toast({ title: 'Deal title is required', variant: 'destructive' });
+      return;
+    }
+    setSaving(true);
+    try {
+      const { error } = await (supabase as any).from('crm_deals').insert({
+        title: newDealForm.title.trim(),
+        stage: newDealForm.stage || 'lead',
+        value: newDealForm.value ? parseFloat(newDealForm.value) : null,
+        probability: newDealForm.probability ? parseInt(newDealForm.probability) : null,
+        expected_close_date: newDealForm.expected_close_date || null,
+        notes: newDealForm.notes.trim() || null,
+        account_id: selectedBusiness?.id ?? '',
+      });
+      if (error) throw error;
+      queryClient.invalidateQueries({ queryKey: [QUERY_KEY] });
+      toast({ title: 'Deal created' });
+      setNewDealOpen(false);
+      setNewDealForm(BLANK_DEAL);
+    } catch (err) {
+      toast({ title: 'Failed to create deal', description: err instanceof Error ? err.message : 'Unknown error', variant: 'destructive' });
+    } finally {
+      setSaving(false);
+    }
+  };
+
   // ── Drag handlers ─────────────────────────────────────────────────────────
   const handleDragStart = ({ active }: DragStartEvent) => {
     const d = (deals as Deal[]).find((x) => x.id === active.id);
@@ -269,8 +330,63 @@ const DealPipeline = () => {
       <PageHeader
         title="Deal Pipeline"
         description={`${(deals as Deal[]).length.toLocaleString()} deals — ${totalWon} closed won${totalValue > 0 ? ` · ${formatCurrency(totalValue)} won` : ''}`}
+        actions={<Button onClick={() => setNewDealOpen(true)} size="sm" className="gap-1"><Plus className="h-4 w-4" /> New Deal</Button>}
       />
       <PageContent>
+        {/* New Deal Dialog */}
+        <Dialog open={newDealOpen} onOpenChange={setNewDealOpen}>
+          <DialogContent className="max-w-md">
+            <DialogHeader>
+              <DialogTitle>New Deal</DialogTitle>
+            </DialogHeader>
+            <div className="space-y-4 py-2">
+              <div>
+                <Label htmlFor="deal-title">Title *</Label>
+                <Input id="deal-title" placeholder="Deal name" value={newDealForm.title}
+                  onChange={e => setNewDealForm(f => ({ ...f, title: e.target.value }))} />
+              </div>
+              <div>
+                <Label htmlFor="deal-stage">Stage</Label>
+                <Select value={newDealForm.stage} onValueChange={v => setNewDealForm(f => ({ ...f, stage: v }))}>
+                  <SelectTrigger id="deal-stage"><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    {COLUMNS.map(col => <SelectItem key={col.id} value={col.id}>{col.label}</SelectItem>)}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <Label htmlFor="deal-value">Value ($)</Label>
+                  <Input id="deal-value" type="number" placeholder="0" value={newDealForm.value}
+                    onChange={e => setNewDealForm(f => ({ ...f, value: e.target.value }))} />
+                </div>
+                <div>
+                  <Label htmlFor="deal-prob">Probability (%)</Label>
+                  <Input id="deal-prob" type="number" placeholder="0-100" value={newDealForm.probability}
+                    onChange={e => setNewDealForm(f => ({ ...f, probability: e.target.value }))} />
+                </div>
+              </div>
+              <div>
+                <Label htmlFor="deal-close">Expected Close Date</Label>
+                <Input id="deal-close" type="date" value={newDealForm.expected_close_date}
+                  onChange={e => setNewDealForm(f => ({ ...f, expected_close_date: e.target.value }))} />
+              </div>
+              <div>
+                <Label htmlFor="deal-notes">Notes</Label>
+                <Input id="deal-notes" placeholder="Optional notes" value={newDealForm.notes}
+                  onChange={e => setNewDealForm(f => ({ ...f, notes: e.target.value }))} />
+              </div>
+            </div>
+            <DialogFooter>
+              <Button variant="outline" onClick={() => setNewDealOpen(false)} disabled={saving}>Cancel</Button>
+              <Button onClick={handleCreateDeal} disabled={saving}>
+                {saving ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : null}
+                Create Deal
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+
         {/* Stats row */}
         <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-6 gap-4 mb-6">
           {COLUMNS.map((col) => (

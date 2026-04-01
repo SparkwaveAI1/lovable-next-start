@@ -34,6 +34,7 @@ import { Search, Users, Mail, Building2, Loader2, Plus, Pencil } from 'lucide-re
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { formatDistanceToNow } from 'date-fns';
 import { toast } from '@/hooks/use-toast';
+import { useBusinessContext } from '@/contexts/BusinessContext';
 
 // ---------------------------------------------------------------------------
 // Brand configuration
@@ -116,6 +117,7 @@ const QUERY_KEY = 'sales_prospects';
 const CRM = () => {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
+  const { selectedBusiness } = useBusinessContext();
 
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState('all');
@@ -129,14 +131,18 @@ const CRM = () => {
   const [saving, setSaving] = useState(false);
 
   const { data: prospects = [], isLoading } = useQuery({
-    queryKey: [QUERY_KEY],
+    queryKey: [QUERY_KEY, selectedBusiness?.id],
     queryFn: async () => {
-      const { data, error } = await supabase
+      let query = supabase
         .from('sales_prospects')
         .select(
-          'id,first_name,last_name,title,company,email,mobile_phone,status,city,state,industry,linkedin_url,last_contacted_at,created_at,campaign_tag'
+          'id,first_name,last_name,title,company,email,mobile_phone,status,city,state,industry,linkedin_url,last_contacted_at,created_at,campaign_tag,business_id'
         )
         .order('last_contacted_at', { ascending: false, nullsFirst: false });
+      if (selectedBusiness?.id) {
+        query = query.eq('business_id', selectedBusiness.id);
+      }
+      const { data, error } = await query;
       if (error) throw error;
       return data as Prospect[];
     },
@@ -160,7 +166,8 @@ const CRM = () => {
           .eq('id', payload.id);
         if (error) throw error;
       } else {
-        const { error } = await supabase.from('sales_prospects').insert(record);
+        const insertRecord = { ...record, business_id: selectedBusiness?.id ?? null };
+        const { error } = await supabase.from('sales_prospects').insert(insertRecord);
         if (error) throw error;
       }
     },
