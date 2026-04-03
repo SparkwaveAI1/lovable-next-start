@@ -912,18 +912,18 @@ export function CrossPlatformMap({ className, onEditItem, onViewItem }: CrossPla
           .eq("business_id", selectedBusiness.id)
           .order("created_at", { ascending: false });
         
-        socialContent?.forEach((item: any) => {
-          const platform = (item.platform?.toLowerCase() || "twitter") as ContentPlatform;
+        socialContent?.forEach((item: Record<string, unknown>) => {
+          const platform = (item.platform?.toString().toLowerCase() || "twitter") as ContentPlatform;
           if (["twitter", "linkedin"].includes(platform)) {
             allItems.push({
-              id: item.id,
+              id: item.id as string,
               platform,
-              content: item.content || "",
-              status: mapStatus(item.status),
-              scheduledFor: item.scheduled_for,
-              createdAt: item.created_at,
-              sourceTable: "scheduled_content",
-              qualityScore: item.quality_score,
+              content: (item.content as string) || "",
+              status: mapStatus(item.status as string),
+              scheduledFor: item.scheduled_for as string | null,
+              createdAt: item.created_at as string,
+              sourceTable: "scheduled_content" as const,
+              qualityScore: item.quality_score as number | undefined,
             });
           }
         });
@@ -935,13 +935,13 @@ export function CrossPlatformMap({ className, onEditItem, onViewItem }: CrossPla
           .eq("business_id", selectedBusiness.id)
           .order("created_at", { ascending: false });
         
-        emailCampaigns?.forEach((item: any) => {
+        emailCampaigns?.forEach((item: Record<string, unknown>) => {
           allItems.push({
-            id: item.id,
-            platform: "email",
-            content: item.body || item.template_content || "",
-            subject: item.subject,
-            status: mapEmailStatus(item.status),
+            id: item.id as string,
+            platform: "email" as const,
+            content: (item.body as string) || (item.template_content as string) || "",
+            subject: item.subject as string | undefined,
+            status: mapEmailStatus(item.status as string),
             scheduledFor: item.scheduled_for,
             sentAt: item.sent_at,
             createdAt: item.created_at,
@@ -963,20 +963,20 @@ export function CrossPlatformMap({ className, onEditItem, onViewItem }: CrossPla
           .eq("business_id", selectedBusiness.id)
           .order("created_at", { ascending: false });
         
-        smsCampaigns?.forEach((item: any) => {
+        smsCampaigns?.forEach((item: Record<string, unknown>) => {
           allItems.push({
-            id: item.id,
-            platform: "sms",
-            content: item.message || "",
-            status: mapSmsStatus(item.status),
-            scheduledFor: item.scheduled_for,
-            sentAt: item.sent_at,
-            createdAt: item.created_at,
-            sourceTable: "sms_campaigns",
-            recipientCount: item.recipient_count,
+            id: item.id as string,
+            platform: "sms" as const,
+            content: (item.message as string) || "",
+            status: mapSmsStatus(item.status as string),
+            scheduledFor: item.scheduled_for as string | null,
+            sentAt: item.sent_at as string | null,
+            createdAt: item.created_at as string,
+            sourceTable: "sms_campaigns" as const,
+            recipientCount: item.recipient_count as number | undefined,
             metrics: {
-              sent: item.sent_count,
-              delivered: item.delivered_count,
+              sent: item.sent_count as number | undefined,
+              delivered: item.delivered_count as number | undefined,
               replied: item.reply_count,
               failed: item.failed_count,
             },

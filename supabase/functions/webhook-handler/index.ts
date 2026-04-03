@@ -47,6 +47,24 @@ interface ContactData {
   pipelineStage?: string;
 }
 
+interface Contact {
+  id: string;
+  business_id: string;
+  first_name: string | null;
+  last_name: string | null;
+  email: string | null;
+  phone: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+interface BusinessData {
+  id: string;
+  name: string;
+  slug: string;
+  timezone?: string;
+}
+
 /**
  * HubSpot-style findOrCreateContact:
  * 1. Try to find existing contact by email (primary identifier)
@@ -55,11 +73,11 @@ interface ContactData {
  * 4. If match found, update with any new data
  */
 async function findOrCreateContact(
-  supabase: any,
+  supabase: ReturnType<typeof createClient>,
   businessId: string,
   formData: ContactData,
-  businessData: any
-): Promise<{ contact: any; isNew: boolean; matchedBy: string | null }> {
+  businessData: BusinessData
+): Promise<{ contact: Contact; isNew: boolean; matchedBy: string | null }> {
 
   const email = formData.email?.toLowerCase().trim();
   const phone = formData.phone ? normalizePhoneNumber(formData.phone) : null;
@@ -310,8 +328,8 @@ async function sendInitialOutreach(
     ? inquiry!
     : `New lead just signed up via our website contact form. Their name is ${contactName || 'a potential student'}. Please write a warm, personalized opening text message to welcome them by name and invite them to ask questions or schedule a free trial class. Do NOT use the phrase "Thanks for your interest in our programs". Make it sound like a real person texting them.`;
 
-  if (true) {
-    // Always use AI for the response — either to answer their inquiry or generate a personalized greeting
+  // Always use AI for the response — either to answer their inquiry or generate a personalized greeting
+  {
     console.log(hasRealInquiry ? 'Inquiry provided, generating AI response...' : 'No inquiry, generating personalized AI greeting...');
 
     console.log('Knowledge base loaded:', knowledgeBase.length, 'items');

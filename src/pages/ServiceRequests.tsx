@@ -62,6 +62,11 @@ export default function ServiceRequests() {
 
       if (selectedBusiness?.id) {
         query = query.eq("business_id", selectedBusiness.id);
+      } else {
+        // If no business selected, don't show any requests (security: no data leakage across tenants)
+        setRequests([]);
+        setIsLoading(false);
+        return;
       }
 
       if (statusFilter !== "all") {

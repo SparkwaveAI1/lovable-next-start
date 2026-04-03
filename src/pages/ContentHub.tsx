@@ -34,8 +34,9 @@ export default function ContentHub() {
   const { selectedBusiness } = useBusinessContext();
 
   // Short brand name for content_queue queries (e.g. "charx")
-  const brand = selectedBusiness
-    ? (SLUG_TO_BRAND[selectedBusiness.slug] ?? selectedBusiness.slug)
+  // Uses explicit mapping for known brands; falls back to slug; empty if neither available
+  const brand = selectedBusiness && selectedBusiness.slug
+    ? (SLUG_TO_BRAND[selectedBusiness.slug] ?? selectedBusiness.slug.toLowerCase().replace(/\s+/g, '-'))
     : "";
 
   // UUID for scheduled_content queries

@@ -72,7 +72,7 @@ export default function SimpleTimeInput({ value, onChange, className, id, disabl
   };
   const onHourBlur = () => {
     if (!hour) return;
-    let h = Math.max(1, Math.min(12, Number(hour)));
+    const h = Math.max(1, Math.min(12, Number(hour)));
     const normalized = String(h);
     setHour(normalized);
     emitIfValid(normalized, minute, meridiem);
@@ -85,7 +85,7 @@ export default function SimpleTimeInput({ value, onChange, className, id, disabl
   };
   const onMinuteBlur = () => {
     if (minute.length === 0) return;
-    let m = Math.max(0, Math.min(59, Number(minute)));
+    const m = Math.max(0, Math.min(59, Number(minute)));
     const normalized = String(m).padStart(2, "0");
     setMinute(normalized);
     emitIfValid(hour, normalized, meridiem);
