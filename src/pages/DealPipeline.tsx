@@ -207,7 +207,7 @@ const DealPipeline = () => {
     queryKey: [QUERY_KEY, selectedBusiness?.id],
     queryFn: async () => {
       if (!selectedBusiness?.id) return [];
-      const { data, error } = await (supabase as any)
+      const { data, error } = await supabase
         .from('crm_deals')
         .select('id,title,stage,value,probability,expected_close_date,notes,account_id,created_at,updated_at')
         .eq('account_id', selectedBusiness.id)
