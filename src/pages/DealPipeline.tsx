@@ -204,21 +204,24 @@ const DealPipeline = () => {
   );
 
   const { data: deals = [], isLoading } = useQuery({
-    queryKey: [QUERY_KEY],
+    queryKey: [QUERY_KEY, selectedBusiness?.id],
     queryFn: async () => {
+      if (!selectedBusiness?.id) return [];
       const { data, error } = await (supabase as any)
         .from('crm_deals')
         .select('id,title,stage,value,probability,expected_close_date,notes,account_id,created_at,updated_at')
+        .eq('account_id', selectedBusiness.id)
         .order('updated_at', { ascending: false, nullsFirst: false });
       if (error) throw error;
       return data as Deal[];
     },
+    enabled: !!selectedBusiness?.id,
   });
 
   // ── Stage mutation with optimistic update + rollback ──────────────────────
   const stageMutation = useMutation({
     mutationFn: async ({ id, stage }: { id: string; stage: string }) => {
-      const { error } = await (supabase as any)
+      const { error } = await supabase
         .from('crm_deals')
         .update({ stage })
         .eq('id', id);
@@ -259,7 +262,7 @@ const DealPipeline = () => {
     }
     setSaving(true);
     try {
-      const { error } = await (supabase as any).from('crm_deals').insert({
+      const { error } = await supabase.from('crm_deals').insert({
         title: newDealForm.title.trim(),
         stage: newDealForm.stage || 'lead',
         value: newDealForm.value ? parseFloat(newDealForm.value) : null,
@@ -269,7 +272,7 @@ const DealPipeline = () => {
         account_id: selectedBusiness?.id ?? '',
       });
       if (error) throw error;
-      queryClient.invalidateQueries({ queryKey: [QUERY_KEY] });
+      queryClient.invalidateQueries({ queryKey: [QUERY_KEY, selectedBusiness?.id] });
       toast({ title: 'Deal created' });
       setNewDealOpen(false);
       setNewDealForm(BLANK_DEAL);
