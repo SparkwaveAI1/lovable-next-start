@@ -6,9 +6,7 @@ import { test, expect, request } from '@playwright/test';
  * Auth-required pages are tested structurally (redirect to login = pass).
  */
 
-test.describe('Sparkwave App - Public Pages', () => {
-
-  test('Test 1: App loads (sparkwaveai.app returns 200)', async ({ page }) => {
+test('Test 1: App loads (sparkwaveai.app returns 200)', async ({ page }) => {
     const response = await page.goto('https://sparkwaveai.app/');
     expect(response?.status()).toBe(200);
     // Page should have a title
@@ -17,7 +15,7 @@ test.describe('Sparkwave App - Public Pages', () => {
     console.log(`✅ App loaded. Title: "${title}"`);
   });
 
-  test('Test 2: Login page renders correctly', async ({ page }) => {
+test('Test 2: Login page renders correctly', async ({ page }) => {
     await page.goto('https://sparkwaveai.app/auth');
     // Should contain a login form or redirect to auth page
     // Wait for content to load
@@ -46,7 +44,7 @@ test.describe('Sparkwave App - Public Pages', () => {
     console.log(`✅ Auth page rendered. Has auth content: ${hasAuthContent}`);
   });
 
-  test('Test 3: Protected routes redirect to auth or show proper page', async ({ page }) => {
+test('Test 3: Protected routes redirect to auth or show proper page', async ({ page }) => {
     // SPA behavior: unauthenticated access may redirect to auth, show 404, or show auth form
     const response = await page.goto('https://sparkwaveai.app/dashboard');
     // Give SPA time to do client-side routing
@@ -76,7 +74,7 @@ test.describe('Sparkwave App - Public Pages', () => {
     console.log(`✅ Protected route behavior correct: ${outcome}. URL: ${finalUrl}`);
   });
 
-  test('Test 4: Fight Flow public page / route accessible', async ({ page }) => {
+test('Test 4: Fight Flow public page / route accessible', async ({ page }) => {
     // Check Fight Flow related route
     await page.goto('https://sparkwaveai.app/fight-flow');
     await page.waitForLoadState('networkidle', { timeout: 15000 }).catch(() => {});
@@ -93,7 +91,7 @@ test.describe('Sparkwave App - Public Pages', () => {
     console.log(`✅ Fight Flow route: ${finalUrl}, status: ${httpStatus}`);
   });
 
-  test('Test 5: Supabase API health check', async () => {
+test('Test 5: Supabase API health check', async () => {
     // Direct API health check using fetch (no browser needed)
     const apiContext = await request.newContext();
     
@@ -116,5 +114,3 @@ test.describe('Sparkwave App - Public Pages', () => {
     
     await apiContext.dispose();
   });
-
-});
