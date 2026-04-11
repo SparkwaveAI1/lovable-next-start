@@ -1040,6 +1040,21 @@ export default function Communications() {
     }
   };
 
+  const { data: websiteLeads = [], isLoading: websiteLeadsLoading } = useQuery({
+    queryKey: ['website-leads', selectedBusiness?.id],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('sparkwave_contact_submissions')
+        .select('*')
+        .eq('business_id', selectedBusiness!.id)
+        .order('created_at', { ascending: false })
+        .limit(100);
+      if (error) throw error;
+      return data || [];
+    },
+    enabled: !!selectedBusiness?.id,
+  });
+
   return (
     <DashboardLayout
       selectedBusinessId={selectedBusiness?.id}
@@ -1440,6 +1455,7 @@ export default function Communications() {
             <TabsTrigger value="campaigns">SMS Campaigns</TabsTrigger>
             <TabsTrigger value="email">Email Marketing</TabsTrigger>
             <TabsTrigger value="inbox">Inbox</TabsTrigger>
+            <TabsTrigger value="website-leads">Website Leads</TabsTrigger>
             <TabsTrigger value="quality">
               <Sparkles className="h-4 w-4 mr-1" />
               Quality
@@ -2081,6 +2097,58 @@ export default function Communications() {
                           </TableCell>
                           <TableCell className="text-muted-foreground">
                             {formatDistanceToNow(new Date(item.created_at), { addSuffix: true })}
+                          </TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                )}
+              </CardContent>
+            </Card>
+          </TabsContent>
+
+          {/* Website Leads Tab */}
+          <TabsContent value="website-leads" className="space-y-4">
+            <Card>
+              <CardHeader>
+                <CardTitle>Website Contact Form Submissions</CardTitle>
+                <CardDescription>Leads from sparkwave-ai.com contact form</CardDescription>
+              </CardHeader>
+              <CardContent>
+                {websiteLeadsLoading ? (
+                  <p className="text-center py-8">Loading leads...</p>
+                ) : websiteLeads.length === 0 ? (
+                  <p className="text-muted-foreground text-center py-8">No website submissions yet</p>
+                ) : (
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead>Name</TableHead>
+                        <TableHead>Email</TableHead>
+                        <TableHead>Company</TableHead>
+                        <TableHead>Interest</TableHead>
+                        <TableHead>Message</TableHead>
+                        <TableHead>Status</TableHead>
+                        <TableHead>Date</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {websiteLeads.map((lead: any) => (
+                        <TableRow key={lead.id}>
+                          <TableCell className="font-medium">{lead.name}</TableCell>
+                          <TableCell>
+                            <a href={`mailto:${lead.email}`} className="text-blue-600 hover:underline">{lead.email}</a>
+                          </TableCell>
+                          <TableCell>{lead.company || '-'}</TableCell>
+                          <TableCell>{lead.interest || '-'}</TableCell>
+                          <TableCell className="max-w-xs truncate">{lead.message}</TableCell>
+                          <TableCell>
+                            <Badge variant={lead.status === 'new' ? 'default' : 'secondary'}>
+                              {lead.status || 'new'}
+                            </Badge>
+                          </TableCell>
+                          <TableCell className="text-muted-foreground">
+                            {new Date(lead.created_at).toLocaleDateString()}
                           </TableCell>
                         </TableRow>
                       ))}
