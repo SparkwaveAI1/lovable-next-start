@@ -763,9 +763,6 @@ Deno.serve(async (req) => {
     return new Response('ok', { headers: corsHeaders });
   }
 
-  // PRE-TRY TRACE: log to a static endpoint to verify function even starts
-  let _traceError = '';
-  try { _traceError += 'URL:' + new URL(req.url).searchParams.get('test'); } catch(e: any) { _traceError += 'URL_ERR:' + e.message; }
 
   try {
     // ── Test mode: ?test=true uses fake business_id, skips Twilio sends ──────
@@ -785,8 +782,6 @@ Deno.serve(async (req) => {
     const to = formData.get('To')?.toString() || '';
 
     console.log('Incoming SMS:', { from, body: body.substring(0, 50), to });
-    // TRACE 0: First possible trace point
-    try { await supabase.from('automation_logs').insert({ business_id: isTest ? testBusinessId : '456dc53b-d9d9-41b0-bc33-4f4c4a791eff', automation_type: 'trace_0_start', status: 'info', error_message: `pre=${_traceError} from=${from} body=${body.substring(0,20)}` }); } catch(_e: any) { console.error('TRACE 0 FAIL:', _e.message); }
 
     // ── DEDUP: Skip if we already processed this exact message recently ──────
     const messageSid = formData.get('MessageSid')?.toString() || '';
@@ -815,7 +810,6 @@ Deno.serve(async (req) => {
       }
     }
 
-    try { await supabase.from('automation_logs').insert({ business_id: isTest ? testBusinessId : '456dc53b-d9d9-41b0-bc33-4f4c4a791eff', automation_type: 'trace_2_dedup', status: 'info', error_message: `past dedup from=${from}` }); } catch(_e){}
     // ========================================
     // STEP 0: CHECK FOR STOP REQUEST FIRST!
     // ========================================
@@ -946,11 +940,9 @@ Deno.serve(async (req) => {
     const businessId = isTest ? testBusinessId : smsConfig!.business_id;
     const businessName = isTest ? 'TEST Business' : ((smsConfig!.businesses as any)?.[0]?.name || (smsConfig!.businesses as any)?.name || 'Unknown Business');
     console.log(`SMS for business: ${businessName} (${businessId})${isTest ? ' [TEST MODE]' : ''}`);
-    try { await supabase.from('automation_logs').insert({ business_id: businessId, automation_type: 'trace_3_biz', status: 'info', error_message: `biz=${businessName}` }); } catch(_e){}
 
     // STEP 2: Find or create contact
     const contact = await findOrCreateContact(supabase, businessId, from);
-    try { await supabase.from('automation_logs').insert({ business_id: businessId, automation_type: 'trace_4_contact', status: 'info', error_message: `cid=${contact?.id||'NULL'}` }); } catch(_e){}
 
     // ========================================
     // STEP 2.5: CHECK IF CONTACT IS BLOCKED
@@ -1289,7 +1281,6 @@ INSTRUCTIONS FOR RETURNING CONTACT:
     // that keeps the conversation going instead of a dead-end "someone will get back to you"
     let responseMessage = `Hey${contactName ? ' ' + contactName : ''}! Thanks for reaching out to ${businessName || 'us'}. What info can I help you with?`;
     let aiResult: any = { message: null };
-    try { await supabase.from('automation_logs').insert({ business_id: businessId, automation_type: 'trace_5_pre_ai', status: 'info', error_message: 'before ai call' }); } catch(_e){}
 
     const maxAiRetries = 2;
     for (let aiAttempt = 0; aiAttempt < maxAiRetries; aiAttempt++) {
@@ -1378,7 +1369,6 @@ INSTRUCTIONS FOR RETURNING CONTACT:
       }
     }
 
-    try { await supabase.from('automation_logs').insert({ business_id: businessId, automation_type: 'trace_6_post_ai', status: 'info', error_message: `msg=${responseMessage.substring(0,40)}` }); } catch(_e){}
     // Handle class booking if AI detected intent
     if (aiResult.shouldBook && aiResult.classDetails) {
       console.log('Processing booking:', aiResult.classDetails);
@@ -1624,7 +1614,7 @@ INSTRUCTIONS FOR RETURNING CONTACT:
       await fetch(`${supabaseUrl}/rest/v1/automation_logs`, {
         method: 'POST',
         headers: { 'apikey': supabaseKey, 'Authorization': `Bearer ${supabaseKey}`, 'Content-Type': 'application/json' },
-        body: JSON.stringify({ business_id: '00000000-0000-0000-0000-000000000000', automation_type: 'sms_webhook_error', status: 'error', error_message: `CATCH: ${error.message} | pre=${_traceError} | Stack: ${(error.stack || '').substring(0, 200)}` })
+        body: JSON.stringify({ business_id: '456dc53b-d9d9-41b0-bc33-4f4c4a791eff', automation_type: 'sms_webhook_error', status: 'error', error_message: `CATCH: ${error.message} | Stack: ${(error.stack || '').substring(0, 200)}` })
       });
     } catch {}
     return new Response(
