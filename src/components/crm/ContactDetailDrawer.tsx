@@ -14,7 +14,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Separator } from '@/components/ui/separator';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { ScrollArea } from '@/components/ui/scroll-area';
-import { Mail, Phone, Building2, GitBranch, MessageCircle, Send, Clock } from 'lucide-react';
+import { Mail, Phone, Building2, GitBranch, MessageCircle, Send, Clock, ExternalLink, CheckCircle, XCircle, Eye } from 'lucide-react';
 
 export interface Contact {
   id: string;
@@ -88,6 +88,8 @@ export function ContactDetailDrawer({
   const [activeTab, setActiveTab] = useState('details');
   const [messages, setMessages] = useState<any[]>([]);
   const [isLoadingMessages, setIsLoadingMessages] = useState(false);
+  const [outreachHistory, setOutreachHistory] = useState<any[]>([]);
+  const [isLoadingOutreach, setIsLoadingOutreach] = useState(false);
 
   // Fetch messages for this contact
   useEffect(() => {
@@ -127,6 +129,92 @@ export function ContactDetailDrawer({
     
     fetchMessages();
   }, [contact?.id, activeTab]);
+
+  // Fetch outreach history (emails, SMS, activities) for this contact
+  useEffect(() => {
+    if (!contact?.id) return;
+
+    const fetchOutreach = async () => {
+      setIsLoadingOutreach(true);
+      try {
+        const results: any[] = [];
+
+        // Fetch email sends
+        const { data: emails } = await supabase
+          .from('email_sends')
+          .select('id, subject, to_email, status, sent_at, opened_at, clicked_at, bounced_at, created_at')
+          .eq('contact_id', contact.id)
+          .order('created_at', { ascending: false });
+
+        if (emails) {
+          for (const e of emails) {
+            results.push({
+              id: e.id,
+              type: 'email',
+              label: e.subject || '(no subject)',
+              status: e.status,
+              sent_at: e.sent_at || e.created_at,
+              opened: !!e.opened_at,
+              clicked: !!e.clicked_at,
+              bounced: !!e.bounced_at,
+            });
+          }
+        }
+
+        // Fetch SMS messages
+        const { data: sms } = await supabase
+          .from('sms_messages')
+          .select('id, direction, message, created_at, ai_response')
+          .eq('contact_id', contact.id)
+          .order('created_at', { ascending: false });
+
+        if (sms) {
+          for (const s of sms) {
+            results.push({
+              id: s.id,
+              type: 'sms',
+              direction: s.direction,
+              label: s.direction === 'inbound' ? 'Incoming SMS' : `Outgoing SMS${s.ai_response ? ' (AI)' : ''}`,
+              status: s.direction,
+              sent_at: s.created_at,
+              preview: s.message?.substring(0, 80),
+            });
+          }
+        }
+
+        // Fetch sales activities
+        const { data: activities } = await supabase
+          .from('sales_activities')
+          .select('id, activity_type, description, created_at, metadata')
+          .eq('metadata->>contact_id', contact.id)
+          .order('created_at', { ascending: false });
+
+        if (activities) {
+          for (const a of activities) {
+            results.push({
+              id: a.id,
+              type: 'activity',
+              label: a.activity_type?.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase()) || 'Activity',
+              status: 'completed',
+              sent_at: a.created_at,
+              description: a.description,
+            });
+          }
+        }
+
+        // Sort by date descending
+        results.sort((a, b) => new Date(b.sent_at || 0).getTime() - new Date(a.sent_at || 0).getTime());
+        setOutreachHistory(results);
+      } catch (err) {
+        console.error('Failed to fetch outreach history:', err);
+        setOutreachHistory([]);
+      } finally {
+        setIsLoadingOutreach(false);
+      }
+    };
+
+    fetchOutreach();
+  }, [contact?.id]);
 
   // Sync notes when contact changes
   useEffect(() => {
@@ -248,9 +336,56 @@ export function ContactDetailDrawer({
                 </CardTitle>
               </CardHeader>
               <CardContent>
-                <p className="text-sm text-muted-foreground italic">
-                  Outreach history will appear here once email tracking is wired (SPA-487).
-                </p>
+                {isLoadingOutreach ? (
+                  <div className="flex items-center justify-center py-4">
+                    <Clock className="h-4 w-4 animate-spin text-muted-foreground" />
+                  </div>
+                ) : outreachHistory.length === 0 ? (
+                  <p className="text-sm text-muted-foreground italic">
+                    No outreach activity yet for this contact.
+                  </p>
+                ) : (
+                  <div className="space-y-2">
+                    {outreachHistory.map((item) => (
+                      <div key={`${item.type}-${item.id}`} className="flex items-start gap-3 py-2 border-b last:border-0">
+                        <div className="mt-0.5 shrink-0">
+                          {item.type === 'email' && <Mail className="h-4 w-4 text-blue-500" />}
+                          {item.type === 'sms' && item.direction === 'inbound' && <MessageCircle className="h-4 w-4 text-green-500" />}
+                          {item.type === 'sms' && item.direction !== 'inbound' && <Send className="h-4 w-4 text-orange-500" />}
+                          {item.type === 'activity' && <CheckCircle className="h-4 w-4 text-purple-500" />}
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center gap-2">
+                            <span className="text-sm font-medium truncate">{item.label}</span>
+                            {item.type === 'email' && item.opened && (
+                              <Eye className="h-3 w-3 text-green-500 shrink-0" title="Opened" />
+                            )}
+                            {item.type === 'email' && item.clicked && (
+                              <ExternalLink className="h-3 w-3 text-blue-500 shrink-0" title="Clicked" />
+                            )}
+                            {item.type === 'email' && item.bounced && (
+                              <XCircle className="h-3 w-3 text-red-500 shrink-0" title="Bounced" />
+                            )}
+                            {item.type === 'email' && item.status && (
+                              <Badge variant="outline" className="text-[10px] h-4 shrink-0">
+                                {item.status}
+                              </Badge>
+                            )}
+                          </div>
+                          {item.preview && (
+                            <p className="text-xs text-muted-foreground truncate mt-0.5">{item.preview}</p>
+                          )}
+                          {item.description && (
+                            <p className="text-xs text-muted-foreground truncate mt-0.5">{item.description}</p>
+                          )}
+                          <p className="text-[11px] text-muted-foreground mt-0.5">
+                            {item.sent_at ? new Date(item.sent_at).toLocaleString() : 'Pending'}
+                          </p>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
               </CardContent>
             </Card>
 
