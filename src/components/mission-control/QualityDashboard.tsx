@@ -36,6 +36,7 @@ interface AutomationLog {
 interface SMSMessage {
   id: string;
   direction: string;
+  message: string | null;
   created_at: string;
 }
 
@@ -146,7 +147,7 @@ export function QualityDashboard({ className, businessId }: QualityDashboardProp
       // Fetch SMS messages (last 7 days)
       let smsQuery = supabase
         .from("sms_messages")
-        .select("id, direction, created_at")
+        .select("id, direction, message, created_at")
         .gte("created_at", sevenDaysAgoStr)
         .order("created_at", { ascending: false });
 

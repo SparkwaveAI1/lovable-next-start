@@ -157,6 +157,8 @@ interface ActivityItem {
   created_at: string;
   ai_response?: boolean;
   contact_id?: string | null;
+  thread_id?: string;  // For SMS threads
+  contact_name?: string | null;  // Contact name for SMS threads
   opened_at?: string | null;
   clicked_at?: string | null;
   agent_name?: string | null;
@@ -261,6 +263,9 @@ export default function Communications() {
   const [selectedContactId, setSelectedContactId] = useState<string | null>(null);
   const [replyMessage, setReplyMessage] = useState('');
   const [isSendingReply, setIsSendingReply] = useState(false);
+  
+  // Inbox expanded threads state
+  const [expandedInboxThreads, setExpandedInboxThreads] = useState<Set<string>>(new Set());
   
   // Agent filter state
   const [agentFilter, setAgentFilter] = useState<'all' | 'Rico' | 'Iris'>('all');
@@ -597,14 +602,28 @@ export default function Communications() {
     }
   };
 
-  // Fetch recent SMS messages (with contact name for grouping)
+  // Fetch recent SMS messages grouped by conversation thread
   const { data: recentMessages = [], isLoading: messagesLoading } = useQuery({
     queryKey: ['recent-messages', selectedBusiness?.id],
     queryFn: async () => {
-      const { data, error } = await supabase
+      // First get conversation threads for this business
+      const { data: threads, error: threadsError } = await supabase
+        .from('conversation_threads')
+        .select('id, contact_id, created_at, status')
+        .eq('business_id', selectedBusiness!.id)
+        .order('created_at', { ascending: false })
+        .limit(50);
+      
+      if (threadsError) throw threadsError;
+      if (!threads || threads.length === 0) return [];
+
+      // Get messages for these threads
+      const threadIds = threads.map(t => t.id);
+      const { data: messages, error } = await supabase
         .from('sms_messages')
         .select(`
           id,
+          thread_id,
           direction,
           message,
           created_at,
@@ -614,20 +633,55 @@ export default function Communications() {
           contacts:contact_id (
             first_name,
             last_name,
-            phone
+            phone,
+            email
           )
         `)
-        .eq('business_id', selectedBusiness!.id)
-        .order('created_at', { ascending: false })
-        .limit(50);
+        .in('thread_id', threadIds)
+        .order('created_at', { ascending: true });
+      
       if (error) throw error;
-      // Attach contact_name from join
-      return ((data || []) as any[]).map(msg => ({
-        ...msg,
-        contact_name: msg.contacts
-          ? [msg.contacts.first_name, msg.contacts.last_name].filter(Boolean).join(' ') || msg.contacts.phone || null
-          : null,
-      })) as RecentMessage[];
+
+      // Group messages by thread and add contact info
+      const threadMap = new Map<string, any>();
+      for (const msg of messages || []) {
+        const threadId = msg.thread_id;
+        if (!threadId) continue;
+        
+        if (!threadMap.has(threadId)) {
+          // Find the thread info
+          const threadInfo = threads.find(t => t.id === threadId);
+          threadMap.set(threadId, {
+            thread_id: threadId,
+            contact_id: msg.contact_id,
+            contact_name: msg.contacts 
+              ? [msg.contacts.first_name, msg.contacts.last_name].filter(Boolean).join(' ') || msg.contacts.phone || null
+              : null,
+            contact_phone: msg.contacts?.phone || null,
+            contact_email: msg.contacts?.email || null,
+            thread_created_at: threadInfo?.created_at || msg.created_at,
+            messages: [],
+          });
+        }
+        threadMap.get(threadId).messages.push({
+          id: msg.id,
+          direction: msg.direction,
+          message: msg.message,
+          created_at: msg.created_at,
+          ai_response: msg.ai_response,
+          agent_name: msg.agent_name,
+        });
+      }
+
+      // Convert to array and sort by most recent message
+      return Array.from(threadMap.values())
+        .map(thread => ({
+          ...thread,
+          last_message: thread.messages[thread.messages.length - 1]?.message || '',
+          last_message_time: thread.messages[thread.messages.length - 1]?.created_at || thread.thread_created_at,
+          last_message_direction: thread.messages[thread.messages.length - 1]?.direction || 'outbound',
+        }))
+        .sort((a, b) => new Date(b.last_message_time).getTime() - new Date(a.last_message_time).getTime());
     },
     enabled: !!selectedBusiness?.id,
     refetchInterval: 10000, // Refresh every 10 seconds
@@ -682,15 +736,17 @@ export default function Communications() {
 
   // Merge and sort SMS + Email activity
   const mergedActivity = useMemo((): ActivityItem[] => {
-    const smsItems: ActivityItem[] = recentMessages.map(msg => ({
-      id: msg.id,
+    // Flatten threaded SMS messages - take the latest message from each thread for the inbox view
+    const smsItems: ActivityItem[] = recentMessages.map(thread => ({
+      id: thread.thread_id,
       type: 'sms' as const,
-      direction: msg.direction,
-      message: msg.message,
-      created_at: msg.created_at,
-      ai_response: msg.ai_response,
-      contact_id: msg.contact_id,
-      agent_name: msg.agent_name,
+      direction: thread.last_message_direction,
+      message: thread.last_message,
+      created_at: thread.last_message_time,
+      ai_response: thread.messages?.[thread.messages.length - 1]?.ai_response || false,
+      contact_id: thread.contact_id,
+      thread_id: thread.thread_id,
+      contact_name: thread.contact_name,
     }));
 
     const emailItems: ActivityItem[] = recentEmails.map(email => ({
@@ -975,6 +1031,19 @@ export default function Communications() {
   const openThread = (contactId: string) => {
     setSelectedContactId(contactId);
     setIsThreadOpen(true);
+  };
+
+  // Toggle inbox thread expansion
+  const toggleInboxThread = (threadId: string) => {
+    setExpandedInboxThreads(prev => {
+      const next = new Set(prev);
+      if (next.has(threadId)) {
+        next.delete(threadId);
+      } else {
+        next.add(threadId);
+      }
+      return next;
+    });
   };
 
   // Send reply in thread
@@ -2020,6 +2089,7 @@ export default function Communications() {
                     <TableHeader>
                       <TableRow>
                         <TableHead>Channel</TableHead>
+                        <TableHead>Contact</TableHead>
                         <TableHead>Direction</TableHead>
                         <TableHead>Agent</TableHead>
                         <TableHead>Content</TableHead>
@@ -2028,78 +2098,135 @@ export default function Communications() {
                       </TableRow>
                     </TableHeader>
                     <TableBody>
-                      {mergedActivity.map(item => (
-                        <TableRow key={`${item.type}-${item.id}`}>
-                          <TableCell>
-                            <Badge variant="outline" className="gap-1">
-                              {item.type === 'sms' ? (
-                                <>
-                                  <MessageSquare className="h-3 w-3" />
-                                  SMS
-                                </>
-                              ) : (
-                                <>
-                                  <Mail className="h-3 w-3" />
-                                  Email
-                                </>
-                              )}
-                            </Badge>
-                          </TableCell>
-                          <TableCell>
-                            <Badge variant={item.direction === 'inbound' ? 'default' : 'secondary'}>
-                              {item.direction === 'inbound' ? '📥 In' : '📤 Out'}
-                            </Badge>
-                          </TableCell>
-                          <TableCell>
-                            {item.agent_name ? (
-                              <Badge variant="default" className={item.agent_name === 'Iris' ? 'bg-purple-500 text-white' : 'bg-slate-500 text-white'}>
-                                {item.agent_name}
-                              </Badge>
-                            ) : null}
-                          </TableCell>
-                          <TableCell className="max-w-md">
-                            {item.type === 'sms' ? (
-                              <span className="truncate block">{item.message}</span>
-                            ) : (
-                              <div>
-                                <span className="font-medium truncate block">{item.subject}</span>
-                                <span className="text-xs text-muted-foreground">To: {item.to}</span>
-                              </div>
-                            )}
-                          </TableCell>
-                          <TableCell>
-                            {item.type === 'sms' ? (
-                              item.ai_response ? (
-                                <Badge variant="outline">AI Response</Badge>
-                              ) : item.direction === 'outbound' ? (
-                                <Badge variant="outline">Manual</Badge>
-                              ) : null
-                            ) : (
-                              <div className="flex gap-1 flex-wrap">
-                                <Badge 
-                                  variant="outline" 
-                                  className={
-                                    item.clicked_at ? 'bg-emerald-50 text-emerald-700' :
-                                    item.opened_at ? 'bg-purple-50 text-purple-700' :
-                                    item.status === 'delivered' ? 'bg-blue-50 text-blue-700' :
-                                    item.status === 'sent' ? 'bg-green-50 text-green-700' :
-                                    ''
-                                  }
-                                >
-                                  {item.clicked_at ? 'Clicked' :
-                                   item.opened_at ? 'Opened' :
-                                   item.status === 'delivered' ? 'Delivered' :
-                                   item.status === 'sent' ? 'Sent' :
-                                   item.status || 'Pending'}
+                      {mergedActivity.map(item => {
+                        const isExpanded = item.thread_id && expandedInboxThreads.has(item.thread_id);
+                        const threadMessages = item.thread_id ? recentMessages.find(t => t.thread_id === item.thread_id)?.messages || [] : [];
+                        
+                        return (
+                          <>
+                            <TableRow key={`${item.type}-${item.id}`}>
+                              <TableCell>
+                                <Badge variant="outline" className="gap-1">
+                                  {item.type === 'sms' ? (
+                                    <>
+                                      <MessageSquare className="h-3 w-3" />
+                                      SMS
+                                    </>
+                                  ) : (
+                                    <>
+                                      <Mail className="h-3 w-3" />
+                                      Email
+                                    </>
+                                  )}
                                 </Badge>
-                              </div>
+                              </TableCell>
+                              <TableCell>
+                                {item.type === 'sms' && item.contact_name ? (
+                                  <span className="font-medium">{item.contact_name}</span>
+                                ) : item.type === 'email' ? (
+                                  <span className="text-muted-foreground text-xs">{item.to || item.from}</span>
+                                ) : null}
+                              </TableCell>
+                              <TableCell>
+                                <Badge variant={item.direction === 'inbound' ? 'default' : 'secondary'}>
+                                  {item.direction === 'inbound' ? '📥 In' : '📤 Out'}
+                                </Badge>
+                              </TableCell>
+                              <TableCell>
+                                {item.ai_response ? (
+                                  <Badge variant="default" className="bg-purple-500 text-white">AI</Badge>
+                                ) : item.type === 'sms' && item.direction === 'outbound' ? (
+                                  <Badge variant="outline">Manual</Badge>
+                                ) : null}
+                              </TableCell>
+                              <TableCell className="max-w-md">
+                                {item.type === 'sms' ? (
+                                  <span className="truncate block">{item.message}</span>
+                                ) : (
+                                  <div>
+                                    <span className="font-medium truncate block">{item.subject}</span>
+                                    <span className="text-xs text-muted-foreground">To: {item.to}</span>
+                                  </div>
+                                )}
+                              </TableCell>
+                              <TableCell>
+                                {item.type === 'sms' ? (
+                                  item.ai_response ? (
+                                    <Badge variant="outline">AI Response</Badge>
+                                  ) : item.direction === 'outbound' ? (
+                                    <Badge variant="outline">Manual</Badge>
+                                  ) : null
+                                ) : (
+                                  <div className="flex gap-1 flex-wrap">
+                                    <Badge 
+                                      variant="outline" 
+                                      className={
+                                        item.clicked_at ? 'bg-emerald-50 text-emerald-700' :
+                                        item.opened_at ? 'bg-purple-50 text-purple-700' :
+                                        item.status === 'delivered' ? 'bg-blue-50 text-blue-700' :
+                                        item.status === 'sent' ? 'bg-green-50 text-green-700' :
+                                        ''
+                                      }
+                                    >
+                                      {item.clicked_at ? 'Clicked' :
+                                       item.opened_at ? 'Opened' :
+                                       item.status === 'delivered' ? 'Delivered' :
+                                       item.status === 'sent' ? 'Sent' :
+                                       item.status || 'Pending'}
+                                    </Badge>
+                                  </div>
+                                )}
+                              </TableCell>
+                              <TableCell>
+                                {item.type === 'sms' && item.thread_id ? (
+                                  <Button 
+                                    variant="ghost" 
+                                    size="sm" 
+                                    onClick={() => toggleInboxThread(item.thread_id!)}
+                                    className="h-6 px-2 text-xs"
+                                  >
+                                    {isExpanded ? 'Hide' : `View (${threadMessages.length})`}
+                                  </Button>
+                                ) : (
+                                  <span className="text-muted-foreground">
+                                    {formatDistanceToNow(new Date(item.created_at), { addSuffix: true })}
+                                  </span>
+                                )}
+                              </TableCell>
+                            </TableRow>
+                            {isExpanded && threadMessages.length > 0 && (
+                              <TableRow key={`${item.type}-${item.id}-expanded`}>
+                                <TableCell colSpan={7} className="bg-slate-50 p-3">
+                                  <div className="space-y-2 max-h-48 overflow-y-auto">
+                                    {threadMessages.map((msg: any) => (
+                                      <div 
+                                        key={msg.id}
+                                        className={`flex ${msg.direction === 'outbound' ? 'justify-end' : 'justify-start'}`}
+                                      >
+                                        <div className={`max-w-[70%] p-2 rounded-lg text-xs ${
+                                          msg.direction === 'outbound' 
+                                            ? 'bg-blue-100 text-blue-900' 
+                                            : 'bg-gray-200 text-gray-900'
+                                        }`}>
+                                          <div className="flex items-center gap-1 mb-1">
+                                            <span className="font-medium text-[10px]">
+                                              {msg.direction === 'outbound' ? (msg.ai_response ? 'AI' : 'You') : item.contact_name}
+                                            </span>
+                                            <span className="text-[10px] text-gray-400">
+                                              {formatDistanceToNow(new Date(msg.created_at), { addSuffix: true })}
+                                            </span>
+                                          </div>
+                                          <p className="text-xs">{msg.message}</p>
+                                        </div>
+                                      </div>
+                                    ))}
+                                  </div>
+                                </TableCell>
+                              </TableRow>
                             )}
-                          </TableCell>
-                          <TableCell className="text-muted-foreground">
-                            {formatDistanceToNow(new Date(item.created_at), { addSuffix: true })}
-                          </TableCell>
-                        </TableRow>
-                      ))}
+                          </>
+                        );
+                      })}
                     </TableBody>
                   </Table>
                 )}

@@ -716,6 +716,46 @@ Deno.serve(async (req) => {
 
   } catch (error: any) {
     console.error("ai-response fatal:", error);
+    
+    // RETRY: Try once with a backup model before giving up
+    // Only send the fallback if we truly can't generate a response
+    try {
+      console.log("[ai-response] Retrying with backup model...");
+      const retryApiKey = Deno.env.get("OPENROUTER_API_KEY");
+      if (!retryApiKey) throw new Error("No API key for retry");
+      const backupModel = "openai/gpt-4o-mini";
+      const backupMessages: Array<{role: string; content: string}> = [
+        {
+          role: "system",
+          content: `You are a lead responder for Fight Flow Academy, an MMA & fitness gym in Raleigh-Durham, NC. Sound like a real person texting. Max 160 chars. Answer their question directly, then ask one follow-up question. RESPOND ONLY with the SMS text. No quotes. No labels.`
+        },
+        { role: "user", content: "I'm interested in your gym. What can you tell me?" }
+      ];
+      
+      const backupResponse = await callLLM(backupModel, backupMessages, retryApiKey, 120, 0.7);
+      if (backupResponse && backupResponse.length > 5) {
+        return new Response(JSON.stringify({
+          message: truncate(backupResponse, MAX_CHARS),
+          intent: "ROUTINE",
+          urgency: 3,
+          tier: "T1",
+          shouldHandoff: false,
+          handoffSent: false,
+          reengagementScheduled: false,
+          shouldBook: false,
+          classDetails: null,
+          detectedIntents: ["ROUTINE"],
+          evaluation: { enabled: false, tier: "T1" },
+          _retried: true,
+        }), {
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+    } catch (retryError: any) {
+      console.error("[ai-response] Backup model also failed:", retryError.message);
+    }
+
+    // LAST RESORT: Generic fallback — ONLY used when ALL AI attempts fail
     return new Response(JSON.stringify({
       message: "Thanks for reaching out! We'll get back to you shortly.",
       error: error.message,

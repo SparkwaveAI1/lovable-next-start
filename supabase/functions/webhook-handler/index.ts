@@ -448,22 +448,14 @@ async function sendInitialOutreach(
       contact_id: contact.id,
       direction: 'inbound',
       message: inquiry,
-      ai_response: false
+      ai_response: false,
+      business_id: businessId
     });
   }
 
-  // Store the outbound response
-  if (threadId) {
-    await supabase.from('sms_messages').insert({
-      thread_id: threadId,
-      contact_id: contact.id,
-      direction: 'outbound',
-      message: responseMessage,
-      ai_response: true
-    });
-  }
-
-  // SEND SMS if contact has phone
+  // SEND SMS if contact has phone - and THEN record to sms_messages with twilio_sid
+  let twilioSid = null;
+  let smsPhone = null;
   if (contact.phone) {
     try {
       console.log('Sending SMS to:', contact.phone);
@@ -488,6 +480,8 @@ async function sendInitialOutreach(
 
         if (twilioResponse.ok) {
           const result = await twilioResponse.json();
+          twilioSid = result.sid;
+          smsPhone = contact.phone;
           console.log('SMS sent successfully, SID:', result.sid);
         } else {
           const error = await twilioResponse.text();
@@ -501,17 +495,32 @@ async function sendInitialOutreach(
       await supabase.from('automation_logs').insert({
         business_id: businessId,
         automation_type: 'initial_outreach_sms',
-        status: 'success',
+        status: twilioSid ? 'success' : 'failed',
         processed_data: {
           contact_id: contact.id,
           phone: contact.phone,
           message: responseMessage,
-          had_inquiry: hasRealInquiry
+          had_inquiry: hasRealInquiry,
+          twilio_sid: twilioSid
         }
       });
     } catch (smsError: any) {
       console.error('SMS sending failed:', smsError.message);
     }
+  }
+
+  // Store the outbound response AFTER sending (with twilio_sid and phone captured)
+  if (threadId) {
+    await supabase.from('sms_messages').insert({
+      thread_id: threadId,
+      contact_id: contact.id,
+      direction: 'outbound',
+      message: responseMessage,
+      ai_response: true,
+      phone: smsPhone,
+      twilio_sid: twilioSid,
+      business_id: businessId
+    });
   }
 
   // SEND EMAIL if contact has email

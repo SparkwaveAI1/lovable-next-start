@@ -967,7 +967,8 @@ Deno.serve(async (req) => {
           contact_id: contact.id,
           direction: 'inbound',
           message: body,
-          ai_response: false
+          ai_response: false,
+          business_id: businessId
         });
       }
 
@@ -1074,7 +1075,8 @@ Deno.serve(async (req) => {
         contact_id: contact.id,
         direction: 'inbound',
         message: body,
-        ai_response: false
+        ai_response: false,
+        business_id: businessId
       });
 
     if (messageError) {
@@ -1240,77 +1242,98 @@ INSTRUCTIONS FOR RETURNING CONTACT:
       : null;
 
     // ========================================
-    // CALL AI - WITH ERROR PROTECTION
+    // CALL AI - WITH RETRY AND ERROR PROTECTION
     // ========================================
-    let responseMessage = 'Thanks for your message! Someone will get back to you soon.';
+    // If AI fails, we still send something useful — a personalized greeting
+    // that keeps the conversation going instead of a dead-end "someone will get back to you"
+    let responseMessage = `Hey${contactName ? ' ' + contactName : ''}! Thanks for reaching out to ${businessName || 'us'}. What info can I help you with?`;
     let aiResult: any = { message: null };
 
-    try {
-      const aiResponse = await fetch(`${Deno.env.get('SUPABASE_URL')}/functions/v1/ai-response`, {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')}`,
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify({
-          messages: conversationMessages,
-          businessId: businessId,
-          businessContext: business?.name || businessName,
-          classSchedule: classes || [],
-          contactName: contactName,
-          threadId: thread.id,
-          conversationHistory: historyText,
-          knowledgeBase: (knowledgeText || '') + (returningContactContext ? '\n\n' + returningContactContext : ''),
-          scheduleText: scheduleText,
-          todaysSchedule: todaysScheduleText,
-          currentDay: currentDayName,
-          contactPhone: from
-        })
-      });
+    const maxAiRetries = 2;
+    for (let aiAttempt = 0; aiAttempt < maxAiRetries; aiAttempt++) {
+      try {
+        const aiResponse = await fetch(`${Deno.env.get('SUPABASE_URL')}/functions/v1/ai-response`, {
+          method: 'POST',
+          headers: {
+            'Authorization': `Bearer ${Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')}`,
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify({
+            messages: conversationMessages,
+            businessId: businessId,
+            businessContext: business?.name || businessName,
+            classSchedule: classes || [],
+            contactName: contactName,
+            threadId: thread.id,
+            conversationHistory: historyText,
+            knowledgeBase: (knowledgeText || '') + (returningContactContext ? '\n\n' + returningContactContext : ''),
+            scheduleText: scheduleText,
+            todaysSchedule: todaysScheduleText,
+            currentDay: currentDayName,
+            contactPhone: from
+          })
+        });
 
-      // Only use AI response if it was successful
-      if (aiResponse.ok) {
-        aiResult = await aiResponse.json();
-        
-        // CRITICAL: Only use AI message if it looks like a real response
-        // Never send error messages, stack traces, or technical text
-        if (aiResult.message && 
-            typeof aiResult.message === 'string' &&
-            aiResult.message.length > 0 &&
-            aiResult.message.length < 500 &&
-            !aiResult.message.toLowerCase().includes('error') &&
-            !aiResult.message.toLowerCase().includes('invalid') &&
-            !aiResult.message.toLowerCase().includes('failed') &&
-            !aiResult.message.toLowerCase().includes('exception') &&
-            !aiResult.message.toLowerCase().includes('jwt') &&
-            !aiResult.message.toLowerCase().includes('token') &&
-            !aiResult.message.toLowerCase().includes('undefined') &&
-            !aiResult.message.toLowerCase().includes('null')) {
-          responseMessage = aiResult.message;
+        // Only use AI response if it was successful
+        if (aiResponse.ok) {
+          aiResult = await aiResponse.json();
+          
+          // CRITICAL: Only use AI message if it looks like a real response
+          // Filter out stack traces and technical error text, but allow natural conversation
+          const msg = (aiResult.message || '').toLowerCase();
+          const isTechnicalError = (
+            msg.includes('stack trace') ||
+            msg.includes('exception in') ||
+            msg.includes('undefined is not') ||
+            msg.includes('cannot read propert') ||
+            msg.includes('typeerror:') ||
+            msg.includes('referenceerror:') ||
+            msg.includes('internal server error') ||
+            msg.includes('502 bad gateway') ||
+            msg.includes('503 service')
+          );
+          
+          if (aiResult.message && 
+              typeof aiResult.message === 'string' &&
+              aiResult.message.length > 0 &&
+              aiResult.message.length < 500 &&
+              !isTechnicalError) {
+            responseMessage = aiResult.message;
+            break; // Success — exit retry loop
+          } else {
+            console.warn('⚠️ AI response looks like a technical error, will retry if attempts remain');
+            if (aiAttempt < maxAiRetries - 1) {
+              await new Promise(r => setTimeout(r, 1000)); // Wait 1s before retry
+              continue;
+            }
+          }
         } else {
-          console.warn('⚠️ AI response looks like an error, using fallback');
+          console.error(`AI response failed with status ${aiResponse.status} (attempt ${aiAttempt + 1}/${maxAiRetries})`);
+          // Log the error internally but don't expose to customer
+          await supabase.from('automation_logs').insert({
+            business_id: businessId,
+            automation_type: 'ai_response_error',
+            status: 'error',
+            error_message: `AI returned status ${aiResponse.status} on attempt ${aiAttempt + 1}`,
+            processed_data: { contact_id: contact.id, thread_id: thread.id }
+          });
+          if (aiAttempt < maxAiRetries - 1) {
+            await new Promise(r => setTimeout(r, 1500)); // Wait 1.5s before retry
+          }
         }
-      } else {
-        console.error('AI response failed with status:', aiResponse.status);
-        // Log the error internally but don't expose to customer
+      } catch (aiError: any) {
+        console.error(`AI call failed (attempt ${aiAttempt + 1}/${maxAiRetries}):`, aiError.message);
         await supabase.from('automation_logs').insert({
           business_id: businessId,
           automation_type: 'ai_response_error',
           status: 'error',
-          error_message: `AI returned status ${aiResponse.status}`,
+          error_message: aiError.message,
           processed_data: { contact_id: contact.id, thread_id: thread.id }
         });
+        if (aiAttempt < maxAiRetries - 1) {
+          await new Promise(r => setTimeout(r, 1500));
+        }
       }
-    } catch (aiError: any) {
-      console.error('AI call failed:', aiError.message);
-      // Log internally, use fallback for customer
-      await supabase.from('automation_logs').insert({
-        business_id: businessId,
-        automation_type: 'ai_response_error',
-        status: 'error',
-        error_message: aiError.message,
-        processed_data: { contact_id: contact.id, thread_id: thread.id }
-      });
     }
 
     // Handle class booking if AI detected intent
@@ -1375,18 +1398,9 @@ INSTRUCTIONS FOR RETURNING CONTACT:
       }
     }
 
-    // Store AI response
-    await supabase
-      .from('sms_messages')
-      .insert({
-        thread_id: thread.id,
-        contact_id: contact.id,
-        direction: 'outbound',
-        message: responseMessage,
-        ai_response: true
-      });
-
-    // Send SMS via Twilio
+    // Send SMS via Twilio FIRST, then store with twilio_sid
+    let twilioSid = null;
+    let smsPhone = null;
     const accountSid = Deno.env.get('TWILIO_ACCOUNT_SID') || Deno.env.get('TWILIO_SID');
     const authToken = Deno.env.get('TWILIO_AUTH_TOKEN');
     const twilioFromNumber = Deno.env.get('TWILIO_PHONE_NUMBER');
@@ -1415,6 +1429,8 @@ INSTRUCTIONS FOR RETURNING CONTACT:
           return response.json();
         }, SMS_RETRY_OPTIONS);
 
+        twilioSid = twilioResult.sid;
+        smsPhone = from;
         console.log('📱 SMS sent successfully, SID:', twilioResult.sid);
         
         // Log for rate limiting
@@ -1443,6 +1459,20 @@ INSTRUCTIONS FOR RETURNING CONTACT:
         });
       }
     }
+
+    // Store AI response AFTER sending (with twilio_sid and phone)
+    await supabase
+      .from('sms_messages')
+      .insert({
+        thread_id: thread.id,
+        contact_id: contact.id,
+        direction: 'outbound',
+        message: responseMessage,
+        ai_response: true,
+        phone: smsPhone,
+        twilio_sid: twilioSid,
+        business_id: businessId
+      });
 
     // ========================================
     // STEP 7: BOOKING DETECTION → fightflow_appointments
@@ -1535,7 +1565,6 @@ INSTRUCTIONS FOR RETURNING CONTACT:
 
   } catch (error: any) {
     console.error('SMS webhook error:', error);
-    // NEVER return error details in the response - just acknowledge receipt
     return new Response(
       `<?xml version="1.0" encoding="UTF-8"?><Response></Response>`,
       { headers: { ...corsHeaders, 'Content-Type': 'text/xml; charset=utf-8' } }

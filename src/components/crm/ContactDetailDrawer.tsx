@@ -12,7 +12,9 @@ import { Badge } from '@/components/ui/badge';
 import { Textarea } from '@/components/ui/textarea';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Separator } from '@/components/ui/separator';
-import { Mail, Phone, Building2, GitBranch } from 'lucide-react';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { ScrollArea } from '@/components/ui/scroll-area';
+import { Mail, Phone, Building2, GitBranch, MessageCircle, Send, Clock } from 'lucide-react';
 
 export interface Contact {
   id: string;
@@ -83,6 +85,48 @@ export function ContactDetailDrawer({
   const [notesValue, setNotesValue] = useState('');
   const [isSavingNotes, setIsSavingNotes] = useState(false);
   const [actionLoading, setActionLoading] = useState<string | null>(null);
+  const [activeTab, setActiveTab] = useState('details');
+  const [messages, setMessages] = useState<any[]>([]);
+  const [isLoadingMessages, setIsLoadingMessages] = useState(false);
+
+  // Fetch messages for this contact
+  useEffect(() => {
+    if (!contact?.id || activeTab !== 'messages') return;
+    
+    const fetchMessages = async () => {
+      setIsLoadingMessages(true);
+      try {
+        // Get threads for this contact
+        const { data: threads } = await supabase
+          .from('conversation_threads')
+          .select('id')
+          .eq('contact_id', contact.id);
+        
+        if (!threads || threads.length === 0) {
+          setMessages([]);
+          return;
+        }
+        
+        const threadIds = threads.map(t => t.id);
+        
+        // Get messages for all threads
+        const { data: msgs } = await supabase
+          .from('sms_messages')
+          .select('*')
+          .in('thread_id', threadIds)
+          .order('created_at', { ascending: true });
+        
+        setMessages(msgs || []);
+      } catch (err) {
+        console.error('Failed to fetch messages:', err);
+        setMessages([]);
+      } finally {
+        setIsLoadingMessages(false);
+      }
+    };
+    
+    fetchMessages();
+  }, [contact?.id, activeTab]);
 
   // Sync notes when contact changes
   useEffect(() => {
@@ -157,95 +201,152 @@ export function ContactDetailDrawer({
           </div>
         </SheetHeader>
 
-        <div className="space-y-6">
-          {/* Contact Info */}
-          <Card>
-            <CardHeader className="pb-3">
-              <CardTitle className="text-sm font-medium text-muted-foreground uppercase tracking-wide">
-                Contact Info
-              </CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-2">
-              <div className="flex items-center gap-2 text-sm">
-                <Mail className="h-4 w-4 text-muted-foreground shrink-0" />
-                <span className="text-muted-foreground">{contact.email || '—'}</span>
-              </div>
-              <div className="flex items-center gap-2 text-sm">
-                <Phone className="h-4 w-4 text-muted-foreground shrink-0" />
-                <span className="text-muted-foreground">{contact.phone || '—'}</span>
-              </div>
-              <div className="flex items-center gap-2 text-sm">
-                <Building2 className="h-4 w-4 text-muted-foreground shrink-0" />
-                <span className="text-muted-foreground">{contact.source || '—'}</span>
-              </div>
-              <div className="flex items-center gap-2 text-sm">
-                <GitBranch className="h-4 w-4 text-muted-foreground shrink-0" />
-                <span className="text-muted-foreground">{contact.pipeline_stage || '—'}</span>
-              </div>
-            </CardContent>
-          </Card>
+        <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
+          <TabsList className="mb-4 w-full justify-start">
+            <TabsTrigger value="details">Details</TabsTrigger>
+            <TabsTrigger value="messages">
+              <MessageCircle className="h-4 w-4 mr-1" />
+              Messages
+            </TabsTrigger>
+          </TabsList>
+          
+          <TabsContent value="details" className="space-y-6">
+            {/* Contact Info */}
+            <Card>
+              <CardHeader className="pb-3">
+                <CardTitle className="text-sm font-medium text-muted-foreground uppercase tracking-wide">
+                  Contact Info
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-2">
+                <div className="flex items-center gap-2 text-sm">
+                  <Mail className="h-4 w-4 text-muted-foreground shrink-0" />
+                  <span className="text-muted-foreground">{contact.email || '—'}</span>
+                </div>
+                <div className="flex items-center gap-2 text-sm">
+                  <Phone className="h-4 w-4 text-muted-foreground shrink-0" />
+                  <span className="text-muted-foreground">{contact.phone || '—'}</span>
+                </div>
+                <div className="flex items-center gap-2 text-sm">
+                  <Building2 className="h-4 w-4 text-muted-foreground shrink-0" />
+                  <span className="text-muted-foreground">{contact.source || '—'}</span>
+                </div>
+                <div className="flex items-center gap-2 text-sm">
+                  <GitBranch className="h-4 w-4 text-muted-foreground shrink-0" />
+                  <span className="text-muted-foreground">{contact.pipeline_stage || '—'}</span>
+                </div>
+              </CardContent>
+            </Card>
 
-          <Separator />
+            <Separator />
 
-          {/* Outreach History */}
-          <Card>
-            <CardHeader className="pb-3">
-              <CardTitle className="text-sm font-medium text-muted-foreground uppercase tracking-wide">
-                Outreach History
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
-              <p className="text-sm text-muted-foreground italic">
-                Outreach history will appear here once email tracking is wired (SPA-487).
-              </p>
-            </CardContent>
-          </Card>
+            {/* Outreach History */}
+            <Card>
+              <CardHeader className="pb-3">
+                <CardTitle className="text-sm font-medium text-muted-foreground uppercase tracking-wide">
+                  Outreach History
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                <p className="text-sm text-muted-foreground italic">
+                  Outreach history will appear here once email tracking is wired (SPA-487).
+                </p>
+              </CardContent>
+            </Card>
 
-          <Separator />
+            <Separator />
 
-          {/* Notes */}
-          <div className="space-y-2">
-            <h3 className="text-sm font-medium text-muted-foreground uppercase tracking-wide">
-              Notes
-            </h3>
-            <Textarea
-              placeholder="Add notes about this contact..."
-              value={notesValue}
-              onChange={(e) => setNotesValue(e.target.value)}
-              rows={4}
-              className="resize-none"
-            />
-            <Button
-              size="sm"
-              onClick={handleSaveNotes}
-              disabled={isSavingNotes}
-            >
-              {isSavingNotes ? 'Saving...' : 'Save Notes'}
-            </Button>
-          </div>
-
-          <Separator />
-
-          {/* Quick Actions */}
-          <div className="space-y-3">
-            <h3 className="text-sm font-medium text-muted-foreground uppercase tracking-wide">
-              Quick Actions
-            </h3>
-            <div className="grid grid-cols-2 gap-2">
-              {QUICK_ACTIONS.map(({ label, activityType, newStage, variant }) => (
-                <Button
-                  key={activityType}
-                  variant={variant ?? 'outline'}
-                  size="sm"
-                  disabled={actionLoading !== null}
-                  onClick={() => handleQuickAction(activityType, newStage)}
-                >
-                  {actionLoading === activityType ? 'Working...' : label}
-                </Button>
-              ))}
+            {/* Notes */}
+            <div className="space-y-2">
+              <h3 className="text-sm font-medium text-muted-foreground uppercase tracking-wide">
+                Notes
+              </h3>
+              <Textarea
+                placeholder="Add notes about this contact..."
+                value={notesValue}
+                onChange={(e) => setNotesValue(e.target.value)}
+                rows={4}
+                className="resize-none"
+              />
+              <Button
+                size="sm"
+                onClick={handleSaveNotes}
+                disabled={isSavingNotes}
+              >
+                {isSavingNotes ? 'Saving...' : 'Save Notes'}
+              </Button>
             </div>
-          </div>
-        </div>
+
+            <Separator />
+
+            {/* Quick Actions */}
+            <div className="space-y-3">
+              <h3 className="text-sm font-medium text-muted-foreground uppercase tracking-wide">
+                Quick Actions
+              </h3>
+              <div className="grid grid-cols-2 gap-2">
+                {QUICK_ACTIONS.map(({ label, activityType, newStage, variant }) => (
+                  <Button
+                    key={activityType}
+                    variant={variant ?? 'outline'}
+                    size="sm"
+                    disabled={actionLoading !== null}
+                    onClick={() => handleQuickAction(activityType, newStage)}
+                  >
+                    {actionLoading === activityType ? 'Working...' : label}
+                  </Button>
+                ))}
+              </div>
+            </div>
+          </TabsContent>
+          
+          <TabsContent value="messages">
+            <ScrollArea className="h-[500px] pr-4">
+              {isLoadingMessages ? (
+                <div className="flex items-center justify-center py-8">
+                  <Clock className="h-5 w-5 animate-spin text-muted-foreground" />
+                </div>
+              ) : messages.length === 0 ? (
+                <div className="text-center py-8 text-muted-foreground">
+                  <MessageCircle className="h-8 w-8 mx-auto mb-2 opacity-50" />
+                  <p className="text-sm">No messages for this contact yet</p>
+                </div>
+              ) : (
+                <div className="space-y-3">
+                  {messages.map((msg) => (
+                    <div
+                      key={msg.id}
+                      className={`flex ${msg.direction === 'inbound' ? 'justify-start' : 'justify-end'}`}
+                    >
+                      <div
+                        className={`max-w-[80%] rounded-lg px-3 py-2 ${
+                          msg.direction === 'inbound'
+                            ? 'bg-muted'
+                            : 'bg-primary text-primary-foreground'
+                        }`}
+                      >
+                        <div className="flex items-center gap-1 text-xs opacity-70 mb-1">
+                          {msg.direction === 'inbound' ? (
+                            <MessageCircle className="h-3 w-3" />
+                          ) : (
+                            <Send className="h-3 w-3" />
+                          )}
+                          <span>{new Date(msg.created_at).toLocaleString()}</span>
+                          {msg.is_ai_response && (
+                            <Badge variant="outline" className="ml-1 text-[10px] h-4">
+                              AI
+                            </Badge>
+                          )}
+                        </div>
+                        <p className="text-sm whitespace-pre-wrap">{msg.body}</p>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </ScrollArea>
+          </TabsContent>
+        </Tabs>
       </SheetContent>
     </Sheet>
   );
