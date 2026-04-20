@@ -203,7 +203,11 @@ export function ContactDetailDrawer({
         }
 
         // Sort by date descending
-        results.sort((a, b) => new Date(b.sent_at || 0).getTime() - new Date(a.sent_at || 0).getTime());
+        results.sort((a, b) => {
+          const da = a.sent_at ? new Date(a.sent_at).getTime() : 0;
+          const db = b.sent_at ? new Date(b.sent_at).getTime() : 0;
+          return db - da;
+        });
         setOutreachHistory(results);
       } catch (err) {
         console.error('Failed to fetch outreach history:', err);
@@ -466,7 +470,7 @@ export function ContactDetailDrawer({
                           ) : (
                             <Send className="h-3 w-3" />
                           )}
-                          <span>{new Date(msg.created_at).toLocaleString()}</span>
+                          <span>{msg.created_at ? new Date(msg.created_at).toLocaleString() : 'Unknown'}</span>
                           {msg.is_ai_response && (
                             <Badge variant="outline" className="ml-1 text-[10px] h-4">
                               AI

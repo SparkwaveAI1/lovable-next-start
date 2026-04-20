@@ -234,6 +234,14 @@ const SOURCE_OPTIONS = [
 ];
 
 export default function Communications() {
+  // Null-safe date helper — prevents "Invalid time value" crashes
+  const safeDate = (d: string | null | undefined): Date => {
+    if (!d) return new Date(0);
+    const dt = new Date(d);
+    return isNaN(dt.getTime()) ? new Date(0) : dt;
+  };
+  const safeDateStr = (d: string | null | undefined): string => safeDate(d).toISOString();
+
   const { selectedBusiness, setSelectedBusiness } = useBusinessContext();
   const { data: businesses = [] } = useBusinesses();
   const [activeTab, setActiveTab] = useState('overview');
@@ -681,7 +689,7 @@ export default function Communications() {
           last_message_time: thread.messages[thread.messages.length - 1]?.created_at || thread.thread_created_at,
           last_message_direction: thread.messages[thread.messages.length - 1]?.direction || 'outbound',
         }))
-        .sort((a, b) => new Date(b.last_message_time).getTime() - new Date(a.last_message_time).getTime());
+        .sort((a, b) => safeDate(b.last_message_time).getTime() - safeDate(a.last_message_time).getTime());
     },
     enabled: !!selectedBusiness?.id,
     refetchInterval: 10000, // Refresh every 10 seconds
@@ -770,13 +778,13 @@ export default function Communications() {
       subject: reply.subject || 'No subject',
       from: reply.from_name || reply.from_email || 'Unknown sender',
       status: reply.status,
-      created_at: reply.received_at,
+      created_at: reply.received_at || new Date().toISOString(),
       contact_id: reply.contact_id,
     }));
 
     // Merge and sort by created_at descending
     return [...smsItems, ...emailItems, ...inboundEmailItems]
-      .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())
+      .sort((a, b) => safeDate(b.created_at).getTime() - safeDate(a.created_at).getTime())
       .slice(0, 50);
   }, [recentMessages, recentEmails, inboundEmails]);
 
@@ -812,7 +820,7 @@ export default function Communications() {
       } else {
         const group = groupMap.get(cid)!;
         group.message_count += 1;
-        if (new Date(msg.created_at) > new Date(group.last_activity)) {
+        if (safeDate(msg.created_at) > safeDate(group.last_activity)) {
           group.last_message = msg.message;
           group.last_activity = msg.created_at;
         }
@@ -821,7 +829,7 @@ export default function Communications() {
     }
 
     return Array.from(groupMap.values())
-      .sort((a, b) => new Date(b.last_activity).getTime() - new Date(a.last_activity).getTime())
+      .sort((a, b) => safeDate(b.last_activity).getTime() - safeDate(a.last_activity).getTime())
       .slice(0, 15);
   }, [recentMessages]);
 
@@ -931,10 +939,10 @@ export default function Communications() {
       // Process SMS data
       const smsMessages = smsResult.data || [];
       const smsSentToday = smsMessages.filter(m => 
-        m.direction === 'outbound' && new Date(m.created_at) >= today
+        m.direction === 'outbound' && safeDate(m.created_at) >= today
       ).length;
       const smsReceivedToday = smsMessages.filter(m => 
-        m.direction === 'inbound' && new Date(m.created_at) >= today
+        m.direction === 'inbound' && safeDate(m.created_at) >= today
       ).length;
       const smsSentWeek = smsMessages.filter(m => m.direction === 'outbound').length;
       const smsReceivedWeek = smsMessages.filter(m => m.direction === 'inbound').length;
@@ -1605,7 +1613,7 @@ export default function Communications() {
                             <div className="flex items-center justify-between gap-2">
                               <p className="text-sm font-medium text-slate-900 truncate">{group.contact_name}</p>
                               <span className="text-xs text-slate-400 shrink-0">
-                                {formatDistanceToNow(new Date(group.last_activity), { addSuffix: true })}
+                                {formatDistanceToNow(safeDate(group.last_activity), { addSuffix: true })}
                               </span>
                             </div>
                             <div className="flex items-center justify-between gap-2 mt-0.5">
@@ -1676,10 +1684,9 @@ export default function Communications() {
                             </span>
                           </TableCell>
                           <TableCell>
-                            {campaign.started_at 
-                              ? format(new Date(campaign.started_at), 'MMM d, yyyy')
-                              : '-'
-                            }
+                            {campaign.started_at
+                              ? format(safeDate(campaign.started_at), 'MMM d, yyyy')
+                              : '-'}
                           </TableCell>
                         </TableRow>
                       ))}
@@ -2055,10 +2062,9 @@ export default function Communications() {
                             </TableCell>
                             <TableCell className="text-right">{campaign.total_clicked || 0}</TableCell>
                             <TableCell>
-                              {campaign.created_at 
-                                ? format(new Date(campaign.created_at), 'MMM d, yyyy')
-                                : '-'
-                              }
+                              {campaign.created_at
+                                ? format(safeDate(campaign.created_at), 'MMM d, yyyy')
+                                : '-'}
                             </TableCell>
                           </TableRow>
                         );
@@ -2189,7 +2195,7 @@ export default function Communications() {
                                   </Button>
                                 ) : (
                                   <span className="text-muted-foreground">
-                                    {formatDistanceToNow(new Date(item.created_at), { addSuffix: true })}
+                                    {formatDistanceToNow(safeDate(item.created_at), { addSuffix: true })}
                                   </span>
                                 )}
                               </TableCell>
@@ -2213,7 +2219,7 @@ export default function Communications() {
                                               {msg.direction === 'outbound' ? (msg.ai_response ? 'AI' : 'You') : item.contact_name}
                                             </span>
                                             <span className="text-[10px] text-gray-400">
-                                              {formatDistanceToNow(new Date(msg.created_at), { addSuffix: true })}
+                                              {formatDistanceToNow(safeDate(msg.created_at), { addSuffix: true })}
                                             </span>
                                           </div>
                                           <p className="text-xs">{msg.message}</p>
@@ -2275,7 +2281,7 @@ export default function Communications() {
                             </Badge>
                           </TableCell>
                           <TableCell className="text-muted-foreground">
-                            {new Date(lead.created_at).toLocaleDateString()}
+                            {safeDate(lead.created_at).toLocaleDateString()}
                           </TableCell>
                         </TableRow>
                       ))}
@@ -2640,7 +2646,7 @@ export default function Communications() {
                               ))}
                             </div>
                             <span className="text-xs text-muted-foreground">
-                              {formatDistanceToNow(new Date(msg.created_at), { addSuffix: true })}
+                              {formatDistanceToNow(safeDate(msg.created_at), { addSuffix: true })}
                             </span>
                           </div>
                         </div>
@@ -2692,7 +2698,7 @@ export default function Communications() {
                       <p className="text-sm whitespace-pre-wrap">{msg.message}</p>
                       <div className="flex items-center gap-2 mt-1">
                         <span className="text-xs opacity-70">
-                          {format(new Date(msg.created_at), 'MMM d, h:mm a')}
+                          {format(safeDate(msg.created_at), 'MMM d, h:mm a')}
                         </span>
                         {msg.ai_response && (
                           <Badge variant="outline" className="text-xs py-0 h-5 gap-1">
