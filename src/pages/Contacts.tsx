@@ -598,7 +598,7 @@ export default function Contacts() {
           </div>
         )}
 
-        <Tabs defaultValue="sales-queue" className="w-full">
+        <Tabs defaultValue="all" className="w-full">
           <TabsList className="mb-4">
             <TabsTrigger value="all">All Contacts</TabsTrigger>
             <TabsTrigger value="sales-queue">Sales Queue</TabsTrigger>
