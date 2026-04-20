@@ -763,10 +763,19 @@ Deno.serve(async (req) => {
     return new Response('ok', { headers: corsHeaders });
   }
 
+  // PRE-TRY TRACE: log to a static endpoint to verify function even starts
+  let _traceError = '';
+  try { _traceError += 'URL:' + new URL(req.url).searchParams.get('test'); } catch(e: any) { _traceError += 'URL_ERR:' + e.message; }
+
   try {
+    // ── Test mode: ?test=true uses fake business_id, skips Twilio sends ──────
+    const url = new URL(req.url);
+    const isTest = url.searchParams.get('test') === 'true';
+    const testBusinessId = '00000000-0000-0000-0000-000000000000';
+
     const supabase = createClient(
       Deno.env.get('SUPABASE_URL') ?? '',
-      Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
+      Deno.env.get('SERVICE_ROLE_JWT') ?? ''
     );
 
     // Parse Twilio webhook data
@@ -776,7 +785,37 @@ Deno.serve(async (req) => {
     const to = formData.get('To')?.toString() || '';
 
     console.log('Incoming SMS:', { from, body: body.substring(0, 50), to });
+    // TRACE 0: First possible trace point
+    try { await supabase.from('automation_logs').insert({ business_id: isTest ? testBusinessId : '456dc53b-d9d9-41b0-bc33-4f4c4a791eff', automation_type: 'trace_0_start', status: 'info', error_message: `pre=${_traceError} from=${from} body=${body.substring(0,20)}` }); } catch(_e: any) { console.error('TRACE 0 FAIL:', _e.message); }
 
+    // ── DEDUP: Skip if we already processed this exact message recently ──────
+    const messageSid = formData.get('MessageSid')?.toString() || '';
+    if (from && body) {
+      try {
+        const { data: recentMsgs } = await supabase
+          .from('sms_messages')
+          .select('id, created_at')
+          .eq('direction', 'inbound')
+          .eq('message', body)
+          .limit(1)
+          .order('created_at', { ascending: false });
+          
+        if (recentMsgs && recentMsgs.length > 0) {
+          const msgAge = Date.now() - new Date(recentMsgs[0].created_at).getTime();
+          if (msgAge < 60000) { // 60 second dedup window
+            console.log('⏩ Duplicate inbound detected, skipping:', messageSid);
+            return new Response(
+              '<?xml version="1.0" encoding="UTF-8"?><Response></Response>',
+              { headers: { ...corsHeaders, 'Content-Type': 'text/xml; charset=utf-8' } }
+            );
+          }
+        }
+      } catch (dedupErr: any) {
+        console.warn('Dedup check failed (non-fatal):', dedupErr.message);
+      }
+    }
+
+    try { await supabase.from('automation_logs').insert({ business_id: isTest ? testBusinessId : '456dc53b-d9d9-41b0-bc33-4f4c4a791eff', automation_type: 'trace_2_dedup', status: 'info', error_message: `past dedup from=${from}` }); } catch(_e){}
     // ========================================
     // STEP 0: CHECK FOR STOP REQUEST FIRST!
     // ========================================
@@ -904,12 +943,14 @@ Deno.serve(async (req) => {
       } as typeof smsConfig;
     }
 
-    const businessId = smsConfig!.business_id;
-    const businessName = (smsConfig!.businesses as any)?.[0]?.name || (smsConfig!.businesses as any)?.name || 'Unknown Business';
-    console.log(`SMS for business: ${businessName} (${businessId})`);
+    const businessId = isTest ? testBusinessId : smsConfig!.business_id;
+    const businessName = isTest ? 'TEST Business' : ((smsConfig!.businesses as any)?.[0]?.name || (smsConfig!.businesses as any)?.name || 'Unknown Business');
+    console.log(`SMS for business: ${businessName} (${businessId})${isTest ? ' [TEST MODE]' : ''}`);
+    try { await supabase.from('automation_logs').insert({ business_id: businessId, automation_type: 'trace_3_biz', status: 'info', error_message: `biz=${businessName}` }); } catch(_e){}
 
     // STEP 2: Find or create contact
     const contact = await findOrCreateContact(supabase, businessId, from);
+    try { await supabase.from('automation_logs').insert({ business_id: businessId, automation_type: 'trace_4_contact', status: 'info', error_message: `cid=${contact?.id||'NULL'}` }); } catch(_e){}
 
     // ========================================
     // STEP 2.5: CHECK IF CONTACT IS BLOCKED
@@ -1248,6 +1289,7 @@ INSTRUCTIONS FOR RETURNING CONTACT:
     // that keeps the conversation going instead of a dead-end "someone will get back to you"
     let responseMessage = `Hey${contactName ? ' ' + contactName : ''}! Thanks for reaching out to ${businessName || 'us'}. What info can I help you with?`;
     let aiResult: any = { message: null };
+    try { await supabase.from('automation_logs').insert({ business_id: businessId, automation_type: 'trace_5_pre_ai', status: 'info', error_message: 'before ai call' }); } catch(_e){}
 
     const maxAiRetries = 2;
     for (let aiAttempt = 0; aiAttempt < maxAiRetries; aiAttempt++) {
@@ -1255,7 +1297,7 @@ INSTRUCTIONS FOR RETURNING CONTACT:
         const aiResponse = await fetch(`${Deno.env.get('SUPABASE_URL')}/functions/v1/ai-response`, {
           method: 'POST',
           headers: {
-            'Authorization': `Bearer ${Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')}`,
+            'Authorization': `Bearer ${Deno.env.get('SERVICE_ROLE_JWT')}`,
             'Content-Type': 'application/json'
           },
           body: JSON.stringify({
@@ -1303,7 +1345,7 @@ INSTRUCTIONS FOR RETURNING CONTACT:
           } else {
             console.warn('⚠️ AI response looks like a technical error, will retry if attempts remain');
             if (aiAttempt < maxAiRetries - 1) {
-              await new Promise(r => setTimeout(r, 1000)); // Wait 1s before retry
+              await new Promise(r => setTimeout(r, 300)); // Wait 300ms before retry
               continue;
             }
           }
@@ -1318,7 +1360,7 @@ INSTRUCTIONS FOR RETURNING CONTACT:
             processed_data: { contact_id: contact.id, thread_id: thread.id }
           });
           if (aiAttempt < maxAiRetries - 1) {
-            await new Promise(r => setTimeout(r, 1500)); // Wait 1.5s before retry
+            await new Promise(r => setTimeout(r, 500)); // Wait 500ms before retry
           }
         }
       } catch (aiError: any) {
@@ -1331,11 +1373,12 @@ INSTRUCTIONS FOR RETURNING CONTACT:
           processed_data: { contact_id: contact.id, thread_id: thread.id }
         });
         if (aiAttempt < maxAiRetries - 1) {
-          await new Promise(r => setTimeout(r, 1500));
+          await new Promise(r => setTimeout(r, 500));
         }
       }
     }
 
+    try { await supabase.from('automation_logs').insert({ business_id: businessId, automation_type: 'trace_6_post_ai', status: 'info', error_message: `msg=${responseMessage.substring(0,40)}` }); } catch(_e){}
     // Handle class booking if AI detected intent
     if (aiResult.shouldBook && aiResult.classDetails) {
       console.log('Processing booking:', aiResult.classDetails);
@@ -1401,9 +1444,16 @@ INSTRUCTIONS FOR RETURNING CONTACT:
     // Send SMS via Twilio FIRST, then store with twilio_sid
     let twilioSid = null;
     let smsPhone = null;
-    const accountSid = Deno.env.get('TWILIO_ACCOUNT_SID') || Deno.env.get('TWILIO_SID');
-    const authToken = Deno.env.get('TWILIO_AUTH_TOKEN');
-    const twilioFromNumber = Deno.env.get('TWILIO_PHONE_NUMBER');
+
+    if (isTest) {
+      // ── TEST MODE: Skip real Twilio send, use fake SID ────────────────────
+      twilioSid = 'TEST_' + crypto.randomUUID().slice(0, 8);
+      smsPhone = from;
+      console.log('[TEST] Would send SMS:', responseMessage);
+    } else {
+      const accountSid = Deno.env.get('TWILIO_ACCOUNT_SID') || Deno.env.get('TWILIO_SID');
+      const authToken = Deno.env.get('TWILIO_AUTH_TOKEN');
+      const twilioFromNumber = Deno.env.get('TWILIO_PHONE_NUMBER');
 
     if (accountSid && authToken && twilioFromNumber) {
       try {
@@ -1459,6 +1509,7 @@ INSTRUCTIONS FOR RETURNING CONTACT:
         });
       }
     }
+    } // end else (non-test Twilio send)
 
     // Store AI response AFTER sending (with twilio_sid and phone)
     await supabase
@@ -1565,6 +1616,17 @@ INSTRUCTIONS FOR RETURNING CONTACT:
 
   } catch (error: any) {
     console.error('SMS webhook error:', error);
+    // Write error to automation_logs using the already-created supabase client (if available)
+    // We use a simple fetch to the REST API instead of dynamic import
+    try {
+      const supabaseUrl = Deno.env.get('SUPABASE_URL') ?? '';
+      const supabaseKey = Deno.env.get('SERVICE_ROLE_JWT') ?? '';
+      await fetch(`${supabaseUrl}/rest/v1/automation_logs`, {
+        method: 'POST',
+        headers: { 'apikey': supabaseKey, 'Authorization': `Bearer ${supabaseKey}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ business_id: '00000000-0000-0000-0000-000000000000', automation_type: 'sms_webhook_error', status: 'error', error_message: `CATCH: ${error.message} | pre=${_traceError} | Stack: ${(error.stack || '').substring(0, 200)}` })
+      });
+    } catch {}
     return new Response(
       `<?xml version="1.0" encoding="UTF-8"?><Response></Response>`,
       { headers: { ...corsHeaders, 'Content-Type': 'text/xml; charset=utf-8' } }

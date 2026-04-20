@@ -339,7 +339,7 @@ async function sendInitialOutreach(
       const aiResponse = await fetch(`${Deno.env.get('SUPABASE_URL')}/functions/v1/ai-response`, {
         method: 'POST',
         headers: {
-          'Authorization': `Bearer ${Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')}`,
+          'Authorization': `Bearer ${Deno.env.get('SERVICE_ROLE_JWT')}`,
           'Content-Type': 'application/json'
         },
         body: JSON.stringify({
@@ -456,7 +456,15 @@ async function sendInitialOutreach(
   // SEND SMS if contact has phone - and THEN record to sms_messages with twilio_sid
   let twilioSid = null;
   let smsPhone = null;
-  if (contact.phone) {
+
+  // Test mode: skip real Twilio sends
+  const isTestBusiness = businessId === '00000000-0000-0000-0000-000000000000';
+
+  if (isTestBusiness && contact.phone) {
+    twilioSid = 'TEST_' + crypto.randomUUID().slice(0, 8);
+    smsPhone = contact.phone;
+    console.log('[TEST] Would send SMS to:', contact.phone, '-', responseMessage);
+  } else if (contact.phone) {
     try {
       console.log('Sending SMS to:', contact.phone);
 
@@ -524,7 +532,7 @@ async function sendInitialOutreach(
   }
 
   // SEND EMAIL if contact has email
-  if (contact.email) {
+  if (contact.email && !isTestBusiness) {
     try {
       console.log('Attempting to send email to:', contact.email);
 
@@ -571,7 +579,7 @@ async function sendInitialOutreach(
         const emailResponse = await fetch(`${Deno.env.get('SUPABASE_URL')}/functions/v1/send-email`, {
           method: 'POST',
           headers: {
-            'Authorization': `Bearer ${Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')}`,
+            'Authorization': `Bearer ${Deno.env.get('SERVICE_ROLE_JWT')}`,
             'Content-Type': 'application/json'
           },
           body: JSON.stringify(emailPayload)
@@ -631,13 +639,15 @@ serve(async (req: Request) => {
   try {
     // Initialize Supabase client
     const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
-    const supabaseKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
+    const supabaseKey = Deno.env.get('SERVICE_ROLE_JWT')!;
     const supabase = createClient(supabaseUrl, supabaseKey);
 
     // Parse URL to get endpoint slug
     const url = new URL(req.url);
     const pathParts = url.pathname.split('/');
     const endpointSlug = pathParts[pathParts.length - 1];
+    const isTest = url.searchParams.get('test') === 'true';
+    const testBusinessId = '00000000-0000-0000-0000-000000000000';
 
     console.log(`Processing webhook for endpoint: ${endpointSlug}`);
 
@@ -669,6 +679,13 @@ serve(async (req: Request) => {
           headers: { ...corsHeaders, 'Content-Type': 'application/json' }
         }
       );
+    }
+
+    // ── Test mode: Override business_id and skip Twilio sends ──────────────
+    if (isTest) {
+      (endpoint as any).business_id = testBusinessId;
+      (endpoint as any).businesses = { id: testBusinessId, name: 'TEST Business', slug: 'test' };
+      console.log('[TEST MODE] Overriding business_id to test ID');
     }
 
     // Parse request body

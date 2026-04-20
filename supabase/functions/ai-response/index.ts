@@ -460,20 +460,19 @@ Deno.serve(async (req) => {
     return new Response("ok", { headers: corsHeaders });
   }
 
+  // ── Parse request BEFORE try so catch block can access it ──────────────────
+  let messages: any[];
+  let businessId: string;
+  let businessContext: any;
+  let classSchedule: any;
+  let contactName: string;
+  let contactPhone: string;
+  let threadId: string;
+  let knowledgeBase: any;
+  let latestMessage = "";
+
   try {
-    const supabase = createClient(
-      Deno.env.get("SUPABASE_URL") ?? "",
-      Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? ""
-    );
-
-    const apiKey = Deno.env.get("OPENROUTER_API_KEY");
-    if (!apiKey) throw new Error("OPENROUTER_API_KEY not configured");
-
-    const twilioSid = Deno.env.get("TWILIO_ACCOUNT_SID") || Deno.env.get("TWILIO_SID");
-    const twilioToken = Deno.env.get("TWILIO_AUTH_TOKEN");
-    const twilioFrom = Deno.env.get("TWILIO_PHONE_NUMBER") || "+19197372900";
-
-    const {
+    ({
       messages,
       businessId,
       businessContext,
@@ -482,10 +481,22 @@ Deno.serve(async (req) => {
       contactPhone,
       threadId,
       knowledgeBase,
-    } = await req.json();
+    } = await req.json());
+    latestMessage = messages?.[messages.length - 1]?.content ?? "";
+
+    const supabase = createClient(
+      Deno.env.get("SUPABASE_URL") ?? "",
+      Deno.env.get("SERVICE_ROLE_JWT") ?? ""
+    );
+
+    const apiKey = Deno.env.get("OPENROUTER_API_KEY");
+    if (!apiKey) throw new Error("OPENROUTER_API_KEY not configured");
+
+    const twilioSid = Deno.env.get("TWILIO_ACCOUNT_SID") || Deno.env.get("TWILIO_SID");
+    const twilioToken = Deno.env.get("TWILIO_AUTH_TOKEN");
+    const twilioFrom = Deno.env.get("TWILIO_PHONE_NUMBER") || "+191****2900";
 
     // ── Build context ────────────────────────────────────────────────────────
-    const latestMessage: string = messages?.[messages.length - 1]?.content ?? "";
     const msgCount: number = messages?.filter((m: any) => m.role === "user").length ?? 0;
     const schedule = formatSchedule(classSchedule ?? []);
     const knowledgeText = typeof knowledgeBase === "string"
@@ -729,7 +740,7 @@ Deno.serve(async (req) => {
           role: "system",
           content: `You are a lead responder for Fight Flow Academy, an MMA & fitness gym in Raleigh-Durham, NC. Sound like a real person texting. Max 160 chars. Answer their question directly, then ask one follow-up question. RESPOND ONLY with the SMS text. No quotes. No labels.`
         },
-        { role: "user", content: "I'm interested in your gym. What can you tell me?" }
+        { role: "user", content: latestMessage || "I'm interested in your gym" }
       ];
       
       const backupResponse = await callLLM(backupModel, backupMessages, retryApiKey, 120, 0.7);
@@ -755,11 +766,11 @@ Deno.serve(async (req) => {
       console.error("[ai-response] Backup model also failed:", retryError.message);
     }
 
-    // LAST RESORT: Generic fallback — ONLY used when ALL AI attempts fail
+    // LAST RESORT: Return null so caller uses personalized fallback
     return new Response(JSON.stringify({
-      message: "Thanks for reaching out! We'll get back to you shortly.",
+      message: null,
       error: error.message,
-      errorFiltered: true,
+      useFallback: true,
     }), {
       status: 500,
       headers: { ...corsHeaders, "Content-Type": "application/json" },
