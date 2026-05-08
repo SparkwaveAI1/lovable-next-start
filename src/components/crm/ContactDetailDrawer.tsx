@@ -9,7 +9,16 @@ import {
 } from '@/components/ui/sheet';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Separator } from '@/components/ui/separator';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
@@ -23,6 +32,16 @@ export interface Contact {
   email: string | null;
   phone: string | null;
   source: string | null;
+  source_type?: string | null;
+  consent_status?: string | null;
+  owner_agent?: string | null;
+  next_action?: string | null;
+  next_action_due_at?: string | null;
+  lead_score?: number | null;
+  priority?: string | null;
+  ai_summary?: string | null;
+  outcome?: string | null;
+  lost_reason?: string | null;
   status: string | null;
   pipeline_stage: string | null;
   tags: string[] | null;
@@ -83,7 +102,20 @@ export function ContactDetailDrawer({
   onActionComplete,
 }: ContactDetailDrawerProps) {
   const [notesValue, setNotesValue] = useState('');
+  const [crmFields, setCrmFields] = useState({
+    next_action: '',
+    next_action_due_at: '',
+    source_type: 'unknown',
+    consent_status: 'unknown',
+    owner_agent: '',
+    priority: 'normal',
+    lead_score: '',
+    ai_summary: '',
+    outcome: 'open',
+    lost_reason: '',
+  });
   const [isSavingNotes, setIsSavingNotes] = useState(false);
+  const [isSavingCrm, setIsSavingCrm] = useState(false);
   const [actionLoading, setActionLoading] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState('details');
   const [messages, setMessages] = useState<any[]>([]);
@@ -225,6 +257,21 @@ export function ContactDetailDrawer({
     setNotesValue(contact?.comments ?? '');
   }, [contact?.id, contact?.comments]);
 
+  useEffect(() => {
+    setCrmFields({
+      next_action: contact?.next_action ?? '',
+      next_action_due_at: contact?.next_action_due_at ? contact.next_action_due_at.slice(0, 16) : '',
+      source_type: contact?.source_type ?? 'unknown',
+      consent_status: contact?.consent_status ?? 'unknown',
+      owner_agent: contact?.owner_agent ?? '',
+      priority: contact?.priority ?? 'normal',
+      lead_score: contact?.lead_score?.toString() ?? '',
+      ai_summary: contact?.ai_summary ?? '',
+      outcome: contact?.outcome ?? 'open',
+      lost_reason: contact?.lost_reason ?? '',
+    });
+  }, [contact?.id]);
+
   if (!contact) return null;
 
   const fullName = [contact.first_name, contact.last_name].filter(Boolean).join(' ') || 'Unknown';
@@ -249,6 +296,37 @@ export function ContactDetailDrawer({
       toast.error(err.message || 'Failed to save notes');
     } finally {
       setIsSavingNotes(false);
+    }
+  };
+
+  const handleSaveCrmFields = async () => {
+    if (!contact) return;
+    setIsSavingCrm(true);
+    try {
+      const { error } = await supabase
+        .from('contacts')
+        .update({
+          next_action: crmFields.next_action || null,
+          next_action_due_at: crmFields.next_action_due_at ? new Date(crmFields.next_action_due_at).toISOString() : null,
+          source_type: crmFields.source_type || 'unknown',
+          consent_status: crmFields.consent_status || 'unknown',
+          owner_agent: crmFields.owner_agent || null,
+          priority: crmFields.priority || 'normal',
+          lead_score: crmFields.lead_score ? Number(crmFields.lead_score) : null,
+          ai_summary: crmFields.ai_summary || null,
+          outcome: crmFields.outcome || null,
+          lost_reason: crmFields.lost_reason || null,
+          last_activity_date: new Date().toISOString(),
+        })
+        .eq('id', contact.id);
+
+      if (error) throw error;
+      toast.success('CRM fields saved');
+      onActionComplete?.();
+    } catch (err: any) {
+      toast.error(err.message || 'Failed to save CRM fields');
+    } finally {
+      setIsSavingCrm(false);
     }
   };
 
@@ -327,6 +405,81 @@ export function ContactDetailDrawer({
                   <GitBranch className="h-4 w-4 text-muted-foreground shrink-0" />
                   <span className="text-muted-foreground">{contact.pipeline_stage || '—'}</span>
                 </div>
+              </CardContent>
+            </Card>
+
+            <Card>
+              <CardHeader className="pb-3">
+                <CardTitle className="text-sm font-medium text-muted-foreground uppercase tracking-wide">
+                  Growth OS CRM
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <div className="grid grid-cols-2 gap-3">
+                  <div className="space-y-1">
+                    <Label>Source Type</Label>
+                    <Select value={crmFields.source_type} onValueChange={(v) => setCrmFields(f => ({ ...f, source_type: v }))}>
+                      <SelectTrigger><SelectValue /></SelectTrigger>
+                      <SelectContent>
+                        {['inbound','opted_in','scraped_cold','partner','referral','manual','unknown'].map(v => <SelectItem key={v} value={v}>{v.replace(/_/g, ' ')}</SelectItem>)}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div className="space-y-1">
+                    <Label>Consent</Label>
+                    <Select value={crmFields.consent_status} onValueChange={(v) => setCrmFields(f => ({ ...f, consent_status: v }))}>
+                      <SelectTrigger><SelectValue /></SelectTrigger>
+                      <SelectContent>
+                        {['unknown','opted_in','not_opted_in','unsubscribed','do_not_contact','legitimate_interest'].map(v => <SelectItem key={v} value={v}>{v.replace(/_/g, ' ')}</SelectItem>)}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div className="space-y-1">
+                    <Label>Owner Agent</Label>
+                    <Input value={crmFields.owner_agent} onChange={(e) => setCrmFields(f => ({ ...f, owner_agent: e.target.value }))} placeholder="rico" />
+                  </div>
+                  <div className="space-y-1">
+                    <Label>Priority</Label>
+                    <Select value={crmFields.priority} onValueChange={(v) => setCrmFields(f => ({ ...f, priority: v }))}>
+                      <SelectTrigger><SelectValue /></SelectTrigger>
+                      <SelectContent>
+                        {['low','normal','high','urgent'].map(v => <SelectItem key={v} value={v}>{v}</SelectItem>)}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div className="space-y-1 col-span-2">
+                    <Label>Next Action</Label>
+                    <Input value={crmFields.next_action} onChange={(e) => setCrmFields(f => ({ ...f, next_action: e.target.value }))} placeholder="Follow up, qualify, book call..." />
+                  </div>
+                  <div className="space-y-1">
+                    <Label>Next Action Due</Label>
+                    <Input type="datetime-local" value={crmFields.next_action_due_at} onChange={(e) => setCrmFields(f => ({ ...f, next_action_due_at: e.target.value }))} />
+                  </div>
+                  <div className="space-y-1">
+                    <Label>Lead Score</Label>
+                    <Input type="number" value={crmFields.lead_score} onChange={(e) => setCrmFields(f => ({ ...f, lead_score: e.target.value }))} />
+                  </div>
+                  <div className="space-y-1 col-span-2">
+                    <Label>AI Summary</Label>
+                    <Textarea rows={3} value={crmFields.ai_summary} onChange={(e) => setCrmFields(f => ({ ...f, ai_summary: e.target.value }))} />
+                  </div>
+                  <div className="space-y-1">
+                    <Label>Outcome</Label>
+                    <Select value={crmFields.outcome} onValueChange={(v) => setCrmFields(f => ({ ...f, outcome: v }))}>
+                      <SelectTrigger><SelectValue /></SelectTrigger>
+                      <SelectContent>
+                        {['open','won','lost','nurture','do_not_contact'].map(v => <SelectItem key={v} value={v}>{v.replace(/_/g, ' ')}</SelectItem>)}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div className="space-y-1">
+                    <Label>Lost Reason</Label>
+                    <Input value={crmFields.lost_reason} onChange={(e) => setCrmFields(f => ({ ...f, lost_reason: e.target.value }))} />
+                  </div>
+                </div>
+                <Button size="sm" onClick={handleSaveCrmFields} disabled={isSavingCrm}>
+                  {isSavingCrm ? 'Saving...' : 'Save CRM Fields'}
+                </Button>
               </CardContent>
             </Card>
 

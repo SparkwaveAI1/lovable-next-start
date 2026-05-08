@@ -2197,8 +2197,11 @@ export type Database = {
       }
       contacts: {
         Row: {
+          ai_summary: string | null
           business_id: string | null
           comments: string | null
+          consent_notes: string | null
+          consent_status: string | null
           created_at: string | null
           email: string | null
           email_last_contacted: string | null
@@ -2208,24 +2211,37 @@ export type Database = {
           interested_programs: string[] | null
           last_activity_date: string | null
           last_name: string | null
+          lead_score: number | null
           lead_type: string | null
           lifetime_value: number | null
           metadata: Json | null
+          next_action: string | null
+          next_action_due_at: string | null
           next_follow_up_date: string | null
+          outcome: string | null
+          owner_agent: string | null
+          owner_user: string | null
           phone: string | null
           pipeline_stage: string | null
           preferred_channel: string | null
+          priority: string | null
+          qualification_data: Json | null
           sms_last_contacted: string | null
           sms_status: string | null
           source: string | null
+          source_campaign: string | null
+          source_type: string | null
           status: string | null
           status_notes: string | null
           tags: string[] | null
           updated_at: string | null
         }
         Insert: {
+          ai_summary?: string | null
           business_id?: string | null
           comments?: string | null
+          consent_notes?: string | null
+          consent_status?: string | null
           created_at?: string | null
           email?: string | null
           email_last_contacted?: string | null
@@ -2235,24 +2251,37 @@ export type Database = {
           interested_programs?: string[] | null
           last_activity_date?: string | null
           last_name?: string | null
+          lead_score?: number | null
           lead_type?: string | null
           lifetime_value?: number | null
           metadata?: Json | null
+          next_action?: string | null
+          next_action_due_at?: string | null
           next_follow_up_date?: string | null
+          outcome?: string | null
+          owner_agent?: string | null
+          owner_user?: string | null
           phone?: string | null
           pipeline_stage?: string | null
           preferred_channel?: string | null
+          priority?: string | null
+          qualification_data?: Json | null
           sms_last_contacted?: string | null
           sms_status?: string | null
           source?: string | null
+          source_campaign?: string | null
+          source_type?: string | null
           status?: string | null
           status_notes?: string | null
           tags?: string[] | null
           updated_at?: string | null
         }
         Update: {
+          ai_summary?: string | null
           business_id?: string | null
           comments?: string | null
+          consent_notes?: string | null
+          consent_status?: string | null
           created_at?: string | null
           email?: string | null
           email_last_contacted?: string | null
@@ -2262,16 +2291,26 @@ export type Database = {
           interested_programs?: string[] | null
           last_activity_date?: string | null
           last_name?: string | null
+          lead_score?: number | null
           lead_type?: string | null
           lifetime_value?: number | null
           metadata?: Json | null
+          next_action?: string | null
+          next_action_due_at?: string | null
           next_follow_up_date?: string | null
+          outcome?: string | null
+          owner_agent?: string | null
+          owner_user?: string | null
           phone?: string | null
           pipeline_stage?: string | null
           preferred_channel?: string | null
+          priority?: string | null
+          qualification_data?: Json | null
           sms_last_contacted?: string | null
           sms_status?: string | null
           source?: string | null
+          source_campaign?: string | null
+          source_type?: string | null
           status?: string | null
           status_notes?: string | null
           tags?: string[] | null
@@ -6073,7 +6112,9 @@ export type Database = {
       }
       sales_prospects: {
         Row: {
+          ai_summary: string | null
           annual_revenue: string | null
+          business_id: string | null
           city: string | null
           company: string | null
           company_address: string | null
@@ -6082,6 +6123,7 @@ export type Database = {
           company_linkedin: string | null
           company_name_emails: string | null
           company_state: string | null
+          consent_status: string | null
           corporate_phone: string | null
           country: string | null
           created_at: string | null
@@ -6102,12 +6144,18 @@ export type Database = {
           latest_funding_amount: string | null
           linkedin_url: string | null
           mobile_phone: string | null
+          next_action: string | null
+          next_action_due_at: string | null
           notes: string | null
+          owner_agent: string | null
+          priority: string | null
+          qualification_data: Json | null
           secondary_email: string | null
           seniority: string | null
           seo_description: string | null
           source: string | null
           source_sheet: string | null
+          source_type: string | null
           state: string | null
           status: string | null
           tags: string[] | null
@@ -6120,7 +6168,9 @@ export type Database = {
           website: string | null
         }
         Insert: {
+          ai_summary?: string | null
           annual_revenue?: string | null
+          business_id?: string | null
           city?: string | null
           company?: string | null
           company_address?: string | null
@@ -6129,6 +6179,7 @@ export type Database = {
           company_linkedin?: string | null
           company_name_emails?: string | null
           company_state?: string | null
+          consent_status?: string | null
           corporate_phone?: string | null
           country?: string | null
           created_at?: string | null
@@ -6149,12 +6200,18 @@ export type Database = {
           latest_funding_amount?: string | null
           linkedin_url?: string | null
           mobile_phone?: string | null
+          next_action?: string | null
+          next_action_due_at?: string | null
           notes?: string | null
+          owner_agent?: string | null
+          priority?: string | null
+          qualification_data?: Json | null
           secondary_email?: string | null
           seniority?: string | null
           seo_description?: string | null
           source?: string | null
           source_sheet?: string | null
+          source_type?: string | null
           state?: string | null
           status?: string | null
           tags?: string[] | null
@@ -6167,7 +6224,9 @@ export type Database = {
           website?: string | null
         }
         Update: {
+          ai_summary?: string | null
           annual_revenue?: string | null
+          business_id?: string | null
           city?: string | null
           company?: string | null
           company_address?: string | null
@@ -6176,6 +6235,7 @@ export type Database = {
           company_linkedin?: string | null
           company_name_emails?: string | null
           company_state?: string | null
+          consent_status?: string | null
           corporate_phone?: string | null
           country?: string | null
           created_at?: string | null
@@ -6196,12 +6256,18 @@ export type Database = {
           latest_funding_amount?: string | null
           linkedin_url?: string | null
           mobile_phone?: string | null
+          next_action?: string | null
+          next_action_due_at?: string | null
           notes?: string | null
+          owner_agent?: string | null
+          priority?: string | null
+          qualification_data?: Json | null
           secondary_email?: string | null
           seniority?: string | null
           seo_description?: string | null
           source?: string | null
           source_sheet?: string | null
+          source_type?: string | null
           state?: string | null
           status?: string | null
           tags?: string[] | null

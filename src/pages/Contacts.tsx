@@ -66,6 +66,16 @@ interface Contact {
   email: string | null;
   phone: string | null;
   source: string | null;
+  source_type: string | null;
+  consent_status: string | null;
+  owner_agent: string | null;
+  next_action: string | null;
+  next_action_due_at: string | null;
+  lead_score: number | null;
+  priority: string | null;
+  ai_summary: string | null;
+  outcome: string | null;
+  lost_reason: string | null;
   status: string | null;
   pipeline_stage: string | null;
   tags: string[] | null;
@@ -120,6 +130,18 @@ const TAG_COLORS: Record<string, string> = {
   gray: 'bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-300',
   red: 'bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-300',
 };
+
+function PriorityBadge({ priority }: { priority: string | null }) {
+  const key = priority || 'normal';
+  const className = key === 'urgent'
+    ? 'bg-red-100 text-red-700 border-red-200'
+    : key === 'high'
+      ? 'bg-orange-100 text-orange-700 border-orange-200'
+      : key === 'low'
+        ? 'bg-slate-100 text-slate-500 border-slate-200'
+        : 'bg-blue-100 text-blue-700 border-blue-200';
+  return <Badge variant="outline" className={`text-xs capitalize ${className}`}>{key}</Badge>;
+}
 
 export default function Contacts() {
   const { selectedBusiness, setSelectedBusiness } = useBusinessContext();
@@ -188,7 +210,7 @@ export default function Contacts() {
 
       let query = supabase
         .from('contacts')
-        .select('id, first_name, last_name, email, phone, source, status, pipeline_stage, tags, last_activity_date, created_at', { count: 'exact' })
+        .select('id, first_name, last_name, email, phone, source, source_type, consent_status, owner_agent, next_action, next_action_due_at, lead_score, priority, ai_summary, outcome, lost_reason, status, pipeline_stage, tags, last_activity_date, created_at', { count: 'exact' })
         .eq('business_id', selectedBusiness.id);
 
       // Apply search filter
@@ -362,6 +384,10 @@ export default function Contacts() {
           phone: newContactPhone.trim() || null,
           status: 'new_lead',
           source: 'manual',
+          source_type: 'manual',
+          consent_status: 'unknown',
+          priority: 'normal',
+          owner_agent: 'rico',
         });
 
       if (error) throw error;
@@ -632,7 +658,7 @@ export default function Contacts() {
               <>
                 {/* Table - scrollable on mobile */}
                 <div className="border rounded-lg overflow-x-auto">
-                  <Table className="min-w-[900px]">
+                  <Table className="min-w-[1200px]">
                     <TableHeader>
                       <TableRow>
                         <TableHead className="w-[50px]">
@@ -662,6 +688,10 @@ export default function Contacts() {
                           </div>
                         </TableHead>
                         <TableHead>Phone</TableHead>
+                        <TableHead>Priority</TableHead>
+                        <TableHead>Source Type</TableHead>
+                        <TableHead>Owner</TableHead>
+                        <TableHead>Next Action Due</TableHead>
                         <TableHead>Tags</TableHead>
                         <TableHead
                           className="cursor-pointer hover:bg-muted/50"
@@ -715,6 +745,20 @@ export default function Contacts() {
                           </TableCell>
                           <TableCell className="text-muted-foreground">
                             {contact.phone || '-'}
+                          </TableCell>
+                          <TableCell>
+                            <PriorityBadge priority={contact.priority} />
+                          </TableCell>
+                          <TableCell className="text-sm text-muted-foreground capitalize">
+                            {contact.source_type?.replace(/_/g, ' ') || '-'}
+                          </TableCell>
+                          <TableCell className="text-sm text-muted-foreground">
+                            {contact.owner_agent || '-'}
+                          </TableCell>
+                          <TableCell className="text-sm text-muted-foreground">
+                            {contact.next_action_due_at
+                              ? formatToEasternCompact(contact.next_action_due_at)
+                              : '-'}
                           </TableCell>
                           <TableCell>
                             <div className="flex flex-wrap gap-1 max-w-[200px]">

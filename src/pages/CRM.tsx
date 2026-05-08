@@ -82,6 +82,15 @@ interface Prospect {
   last_contacted_at: string | null;
   created_at: string;
   campaign_tag: string | null;
+  business_id: string | null;
+  source_type: string | null;
+  consent_status: string | null;
+  owner_agent: string | null;
+  priority: string | null;
+  next_action: string | null;
+  next_action_due_at: string | null;
+  qualification_data: unknown | null;
+  ai_summary: string | null;
 }
 
 interface ProspectFormData {
@@ -92,6 +101,8 @@ interface ProspectFormData {
   mobile_phone: string;
   title: string;
   status: string;
+  priority: string;
+  next_action: string;
 }
 
 const BLANK_FORM: ProspectFormData = {
@@ -102,6 +113,8 @@ const BLANK_FORM: ProspectFormData = {
   mobile_phone: '',
   title: '',
   status: 'new',
+  priority: 'normal',
+  next_action: '',
 };
 
 const STATUS_COLORS: Record<string, string> = {
@@ -136,12 +149,9 @@ const CRM = () => {
       let query = supabase
         .from('sales_prospects')
         .select(
-          'id,first_name,last_name,title,company,email,mobile_phone,status,city,state,industry,linkedin_url,last_contacted_at,created_at,campaign_tag,business_id'
+          'id,first_name,last_name,title,company,email,mobile_phone,status,city,state,industry,linkedin_url,last_contacted_at,created_at,campaign_tag,business_id,source_type,consent_status,owner_agent,priority,next_action,next_action_due_at,qualification_data,ai_summary'
         )
         .order('last_contacted_at', { ascending: false, nullsFirst: false });
-      if (selectedBusiness?.id) {
-        query = query.eq('business_id', selectedBusiness.id);
-      }
       const { data, error } = await query;
       if (error) throw error;
       return data as Prospect[];
@@ -158,6 +168,8 @@ const CRM = () => {
         mobile_phone: payload.data.mobile_phone || null,
         title: payload.data.title || null,
         status: payload.data.status || 'new',
+        priority: payload.data.priority || 'normal',
+        next_action: payload.data.next_action || null,
       };
       if (payload.id) {
         const { error } = await supabase
@@ -166,7 +178,13 @@ const CRM = () => {
           .eq('id', payload.id);
         if (error) throw error;
       } else {
-        const insertRecord = { ...record, business_id: selectedBusiness?.id ?? null };
+        const insertRecord = {
+          ...record,
+          business_id: selectedBusiness?.id ?? null,
+          source_type: 'manual',
+          consent_status: 'unknown',
+          priority: payload.data.priority || 'normal',
+        };
         const { error } = await supabase.from('sales_prospects').insert(insertRecord);
         if (error) throw error;
       }
@@ -203,6 +221,8 @@ const CRM = () => {
       mobile_phone: p.mobile_phone || '',
       title: p.title || '',
       status: p.status || 'new',
+      priority: p.priority || 'normal',
+      next_action: p.next_action || '',
     });
     setDialogOpen(true);
   };
@@ -371,6 +391,9 @@ const CRM = () => {
                       <TableHead>Industry</TableHead>
                       <TableHead>Location</TableHead>
                       <TableHead>Status</TableHead>
+                      <TableHead>Priority</TableHead>
+                      <TableHead>Owner</TableHead>
+                      <TableHead>Next Action Due</TableHead>
                       <TableHead>Last Contacted</TableHead>
                       <TableHead className="w-10" />
                     </TableRow>
@@ -414,6 +437,17 @@ const CRM = () => {
                             {p.status || 'new'}
                           </Badge>
                         </TableCell>
+                        <TableCell>
+                          <Badge variant="outline" className="text-xs capitalize">
+                            {p.priority || 'normal'}
+                          </Badge>
+                        </TableCell>
+                        <TableCell className="text-sm text-gray-500">{p.owner_agent || '—'}</TableCell>
+                        <TableCell className="text-sm text-gray-500">
+                          {p.next_action_due_at
+                            ? formatDistanceToNow(new Date(p.next_action_due_at), { addSuffix: true })
+                            : '—'}
+                        </TableCell>
                         <TableCell className="text-sm text-gray-500">
                           {p.last_contacted_at
                             ? formatDistanceToNow(new Date(p.last_contacted_at), {
@@ -436,7 +470,7 @@ const CRM = () => {
                     ))}
                     {filtered.length === 0 && (
                       <TableRow>
-                        <TableCell colSpan={8} className="text-center py-10 text-gray-400">
+                        <TableCell colSpan={11} className="text-center py-10 text-gray-400">
                           No prospects match your filters.
                         </TableCell>
                       </TableRow>
@@ -535,6 +569,32 @@ const CRM = () => {
                   <SelectItem value="unsubscribed">Unsubscribed</SelectItem>
                 </SelectContent>
               </Select>
+            </div>
+            <div className="space-y-1">
+              <Label>Priority</Label>
+              <Select
+                value={form.priority}
+                onValueChange={v => setForm(f => ({ ...f, priority: v }))}
+              >
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="low">Low</SelectItem>
+                  <SelectItem value="normal">Normal</SelectItem>
+                  <SelectItem value="high">High</SelectItem>
+                  <SelectItem value="urgent">Urgent</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-1">
+              <Label htmlFor="next_action">Next action</Label>
+              <Input
+                id="next_action"
+                value={form.next_action}
+                onChange={e => setForm(f => ({ ...f, next_action: e.target.value }))}
+                placeholder="Follow up"
+              />
             </div>
           </div>
 
