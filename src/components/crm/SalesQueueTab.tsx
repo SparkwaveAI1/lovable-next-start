@@ -292,8 +292,9 @@ export function SalesQueueTab({ onProspectClick }: SalesQueueTabProps) {
         prospect_name: prospect.name || 'Unknown',
         company_name: prospect.company || '',
         description: 'Action: follow_up_sent from SWapp',
-        prospect_id: prospect.id,
-        metadata: { prospect_id: prospect.id },
+        // sales_activities.prospect_id is a uuid for a different CRM path; legacy sales queue
+        // prospects use integer ids, so store that linkage in metadata to avoid uuid cast errors.
+        metadata: { legacy_prospect_id: prospect.id },
       });
       if (actError) throw actError;
 
