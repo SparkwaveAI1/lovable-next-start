@@ -2,6 +2,7 @@ import { serve } from "https://deno.land/std@0.190.0/http/server.ts";
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.45.0';
 import { enrollInFollowUp } from "../_shared/follow-up.ts";
 import { checkContactForOutreach, logSendDecision } from "../_shared/contact-checks.ts";
+import { buildDeterministicFightFlowFallback } from "../_shared/fightflow-fallbacks.ts";
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -322,6 +323,16 @@ async function sendInitialOutreach(
     : `Hey! Thanks for reaching out to Fight Flow Academy! Can I answer any questions for you or set you up with a free trial class?`;
   let responseMessage: string = personalizedFallback;
 
+  const scheduleFallbackText = classSchedule
+    .map((cls: any) => {
+      const day = cls.day_name || dayNames[cls.day_of_week] || '';
+      const label = cls.class_name || cls.name || cls.title || 'Class';
+      const time = cls.start_time || '';
+      return [day, label, time].filter(Boolean).join(': ');
+    })
+    .filter(Boolean)
+    .join('\n');
+
   // Build the AI prompt context — either the real inquiry, or a personalized greeting prompt
   const hasRealInquiry = inquiry && inquiry.trim().length > 0 && !isJunkMessage;
   const aiPrompt = hasRealInquiry
@@ -378,17 +389,25 @@ async function sendInitialOutreach(
         );
 
         if (isErrorMessage) {
-          console.error('⚠️ AI response looks like an error, using fallback:', aiMessage);
-          responseMessage = contactName 
-            ? `Hey ${contactName}! Thanks for reaching out to Fight Flow Academy! Can I answer any questions for you or set you up with a free trial class?`
-            : `Hey! Thanks for reaching out to Fight Flow Academy! Can I answer any questions for you or set you up with a free trial class?`;
+          console.error('⚠️ AI response looks like an error, using deterministic fallback:', aiMessage);
+          const deterministicFallback = hasRealInquiry
+            ? buildDeterministicFightFlowFallback({
+                latestMessage: inquiry!,
+                schedule: scheduleFallbackText,
+              })
+            : { message: personalizedFallback, category: 'personalized_greeting', shouldHandoff: false };
+          responseMessage = deterministicFallback.message;
           // Log this for monitoring
           await supabase.from('automation_logs').insert({
-            business_id: endpoint.business_id,
+            business_id: businessId,
             automation_type: 'ai_response_error_filtered',
             status: 'warning',
             error_message: `Filtered suspicious AI response: ${aiMessage.substring(0, 100)}`,
-            processed_data: { contact_id: contactResult?.contact?.id }
+            processed_data: {
+              contact_id: contact.id,
+              fallback_category: deterministicFallback.category,
+              fallback_should_handoff: deterministicFallback.shouldHandoff,
+            }
           });
         } else {
           responseMessage = aiMessage;
@@ -403,19 +422,28 @@ async function sendInitialOutreach(
       } else {
         const errorText = await aiResponse.text();
         console.error('AI response failed:', aiResponse.status, errorText);
-        responseMessage = personalizedFallback;
+        const deterministicFallback = hasRealInquiry
+          ? buildDeterministicFightFlowFallback({ latestMessage: inquiry!, schedule: scheduleFallbackText })
+          : { message: personalizedFallback, category: 'personalized_greeting', shouldHandoff: false };
+        responseMessage = deterministicFallback.message;
         // Log the failure for monitoring
         await supabase.from('automation_logs').insert({
-          business_id: endpoint.business_id,
+          business_id: businessId,
           automation_type: 'ai_response_failed',
           status: 'error',
           error_message: `AI returned status ${aiResponse.status}: ${errorText.substring(0, 200)}`,
-          processed_data: { contact_id: contactResult?.contact?.id }
+          processed_data: {
+            contact_id: contact.id,
+            fallback_category: deterministicFallback.category,
+            fallback_should_handoff: deterministicFallback.shouldHandoff,
+          }
         });
       }
     } catch (aiError: any) {
       console.error('AI response error:', aiError.message);
-      responseMessage = personalizedFallback;
+      responseMessage = hasRealInquiry
+        ? buildDeterministicFightFlowFallback({ latestMessage: inquiry!, schedule: scheduleFallbackText }).message
+        : personalizedFallback;
     }
   }
 

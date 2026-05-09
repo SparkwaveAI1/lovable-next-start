@@ -29,6 +29,7 @@
  */
 
 import { createClient } from "npm:@supabase/supabase-js@2";
+import { buildDeterministicFightFlowFallback } from "../_shared/fightflow-fallbacks.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -490,7 +491,6 @@ Deno.serve(async (req) => {
     );
 
     const apiKey = Deno.env.get("OPENROUTER_API_KEY");
-    if (!apiKey) throw new Error("OPENROUTER_API_KEY not configured");
 
     const twilioSid = Deno.env.get("TWILIO_ACCOUNT_SID") || Deno.env.get("TWILIO_SID");
     const twilioToken = Deno.env.get("TWILIO_AUTH_TOKEN");
@@ -510,7 +510,7 @@ Deno.serve(async (req) => {
     const urgency = scoreUrgency(latestMessage, intent, msgCount);
     const tier = selectTier(urgency, msgCount, intent);
     // SPA-881 fix: urgency >=8 should also trigger handoff (was missing — hot leads slipped through)
-    const shouldHandoff = msgCount >= MAX_MESSAGES_BEFORE_HANDOFF 
+    let shouldHandoff = msgCount >= MAX_MESSAGES_BEFORE_HANDOFF 
       || intent === "ESCALATION"
       || urgency >= 8;
 
@@ -567,22 +567,40 @@ Deno.serve(async (req) => {
 
     // ── Generate response (tiered) ────────────────────────────────────────────
     const primaryModel = tier === "T2" ? MODEL_T2 : MODEL_T1;
-    let aiMessage = await callLLM(
-      primaryModel,
-      [
-        { role: "system", content: systemPrompt },
-        ...(messages ?? []),
-      ],
-      apiKey,
-      120,
-      0.7
-    );
+    let fallbackCategory: string | null = null;
+    let aiMessage: string;
+    if (!apiKey) {
+      const fallback = buildDeterministicFightFlowFallback({ latestMessage, schedule });
+      aiMessage = fallback.message;
+      fallbackCategory = fallback.category;
+      shouldHandoff = shouldHandoff || fallback.shouldHandoff;
+      console.error(`[ai-response] OPENROUTER_API_KEY not configured; deterministic fallback=${fallback.category}`);
+    } else {
+      try {
+        aiMessage = await callLLM(
+          primaryModel,
+          [
+            { role: "system", content: systemPrompt },
+            ...(messages ?? []),
+          ],
+          apiKey,
+          120,
+          0.7
+        );
+      } catch (llmErr) {
+        const fallback = buildDeterministicFightFlowFallback({ latestMessage, schedule });
+        aiMessage = fallback.message;
+        fallbackCategory = fallback.category;
+        shouldHandoff = shouldHandoff || fallback.shouldHandoff;
+        console.error(`[ai-response] LLM failed; deterministic fallback=${fallback.category}:`, llmErr);
+      }
+    }
 
     // Enforce hard char limit (Component 2)
     aiMessage = truncate(aiMessage, MAX_CHARS);
 
     // ── Quality gate (T1 only, non-emergency) ─────────────────────────────────
-    if (tier === "T1" && urgency < 8 && !shouldHandoff) {
+    if (apiKey && !fallbackCategory && tier === "T1" && urgency < 8 && !shouldHandoff) {
       aiMessage = await qualityGate(aiMessage, latestMessage, systemPrompt, apiKey);
     }
 
@@ -703,6 +721,7 @@ Deno.serve(async (req) => {
           msg_count: msgCount,
           handoff_sent: handoffSent,
           reengagement_scheduled: reengagementScheduled,
+          deterministic_fallback_category: fallbackCategory,
           response_preview: aiMessage.slice(0, 100),
         },
       }).then(({ error: logErr }) => { if (logErr) console.error("Log insert error:", logErr.message); });
@@ -720,7 +739,7 @@ Deno.serve(async (req) => {
       shouldBook: false,
       classDetails: null,
       detectedIntents: [intent],
-      evaluation: { enabled: true, tier },
+      evaluation: { enabled: true, tier, deterministicFallbackCategory: fallbackCategory },
     }), {
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
