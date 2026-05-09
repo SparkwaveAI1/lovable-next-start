@@ -51,14 +51,16 @@ describe('buildDeterministicFallbackResponse', () => {
     expect(response).not.toContain('What info can I help you with');
   });
 
-  it('uses schedule fallback when the lead asks class times', () => {
+  it('uses full matching schedule fallback when the lead asks class times', () => {
     const response = buildDeterministicFallbackResponse({
       leadMessage: 'What times are Muay Thai classes?',
-      scheduleText: 'Monday: Muay Thai with Scott (18:00-19:00)\nWednesday: Muay Thai with Scott (18:00-19:00)',
+      scheduleText: 'Sunday: Muay Thai with Daison (16:30-18:00)\nMonday: Muay Thai with Anthony (19:00-20:00)\nTuesday: Muay Thai with Anthony (18:00-19:00)\nWednesday: Muay Thai with Daison (19:00-20:00)\nThursday: Muay Thai with Anthony (18:00-19:00)\nFriday: Muay Thai with Mavrick (19:00-20:15)\nMonday: Boxing Skills (17:30-18:15)',
     });
 
     expect(response).toContain('Current schedule');
-    expect(response).toContain('Muay Thai');
+    expect(response).toContain('Sunday: Muay Thai');
+    expect(response).toContain('Friday: Muay Thai');
+    expect(response).not.toContain('Boxing Skills');
     expect(response).not.toMatch(/pencil|booked|confirmed/i);
   });
 

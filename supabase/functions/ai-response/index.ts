@@ -12,8 +12,7 @@
  * 7. Transfer — natural close; default next step = phone call
  *
  * Tiered Model Routing:
- * - T1: claude-haiku-4.5 — standard qualifying
- * - T2: claude-sonnet-4.6 — complex/transfers (urgency ≥8 or msg ≥4)
+ * - T1/T2: direct OpenAI gpt-4o — standard + complex lead response. Accuracy/reliability over cheap routing.
  *
  * Quality Gate (Sonnet reviews Haiku output ~26% catch rate):
  * - Fires when T1 produces a response for urgency <8 and msg count <4
@@ -40,9 +39,9 @@ const OPENROUTER_BASE = "https://openrouter.ai/api/v1/chat/completions";
 const OPENROUTER_REFERER = "https://fightflowacademy.com";
 const OPENROUTER_TITLE = "Fight Flow Lead Responder";
 
-// Tiered models (Speed-to-Lead Blueprint / IDENTITY.md tiering)
-const MODEL_T1 = "anthropic/claude-haiku-4.5"; // standard qualifying (OpenRouter ID)
-const MODEL_T2 = "anthropic/claude-sonnet-4.6"; // complex / transfers (OpenRouter ID)
+// Use a reliable direct OpenAI model for all lead responses. Do not downshift live sales conversations to flaky/unknown model routes.
+const MODEL_T1 = Deno.env.get("FIGHTFLOW_RESPONSE_MODEL") || "openai-direct/gpt-4o";
+const MODEL_T2 = Deno.env.get("FIGHTFLOW_RESPONSE_MODEL") || "openai-direct/gpt-4o";
 const MODEL_EVAL = "openai/gpt-4o-mini";                // quality gate evaluator (fast)
 
 // Hard limits (7-Component, Component 2)
@@ -146,23 +145,76 @@ function detectBookingGuardrail(message: string): BookingGuardrailAction {
   return null;
 }
 
-function findRelevantScheduleLine(message: string, schedule: string): string | null {
+function requestedClassHint(message: string): string | null {
+  const m = message.toLowerCase();
+  if (m.includes("muay thai")) return "muay thai";
+  if (m.includes("kickboxing")) return "kickboxing";
+  if (m.includes("boxing")) return "boxing";
+  if (m.includes("bjj") || m.includes("jiu") || m.includes("grappling")) return "grappling";
+  if (m.includes("mma")) return "mma";
+  if (m.includes("youth") || m.includes("kids") || m.includes("juniors")) return "youth";
+  return null;
+}
+
+function formatShortTime(t: string): string {
+  if (!t) return "";
+  const [h, m = "00"] = t.split(":");
+  const hr = parseInt(h, 10);
+  const suffix = hr >= 12 ? "p" : "a";
+  const disp = hr === 0 ? 12 : hr > 12 ? hr - 12 : hr;
+  return `${disp}${m !== "00" ? `:${m}` : ""}${suffix}`;
+}
+
+function classMatchesHint(className: string, hint: string): boolean {
+  const name = className.toLowerCase();
+  if (hint === "grappling") return name.includes("grappling") || name.includes("jiu") || name.includes("bjj");
+  if (hint === "youth") return name.includes("youth") || name.includes("juniors") || name.includes("kids");
+  return name.includes(hint);
+}
+
+function formatRequestedClassSchedule(message: string, classes: ClassSchedule[] | null | undefined): string | null {
+  const hint = requestedClassHint(message);
+  if (!hint || !classes?.length) return null;
+  const matches = classes
+    .filter((c) => classMatchesHint(c.class_name, hint))
+    .sort((a, b) => a.day_of_week - b.day_of_week || a.start_time.localeCompare(b.start_time));
+  if (!matches.length) return null;
+
+  const classLabel = hint === "grappling" ? "Grappling" : hint === "youth" ? "Youth/Juniors" : matches[0].class_name;
+  const times = matches.map((c) => `${getDayName(c.day_of_week).slice(0, 3)} ${formatShortTime(c.start_time)}`).join("; ");
+  return truncate(`${classLabel}: ${times}. Free first class — what day works?`, 260);
+}
+
+function shortTimeFromScheduleLine(line: string): string {
+  const m = line.match(/\((\d{1,2}:\d{2})(?::\d{2})?/);
+  if (!m) return "";
+  return formatShortTime(m[1]);
+}
+
+function findRelevantScheduleSummary(message: string, schedule: string): string | null {
   if (!schedule) return null;
   const m = message.toLowerCase();
   const lines = schedule.split("\n").map(l => l.trim()).filter(Boolean);
-  const classHints = ["muay thai", "boxing", "bjj", "jiu", "grappling", "mma", "kickboxing", "youth", "kids"];
-  const hint = classHints.find(h => m.includes(h));
+  const hint = requestedClassHint(message);
   if (hint) {
-    const match = lines.find(l => l.toLowerCase().includes(hint === "jiu" ? "jiu" : hint));
-    if (match) return truncate(match, 120);
+    const matches = lines.filter(l => classMatchesHint(l.toLowerCase(), hint));
+    if (matches.length) {
+      const label = hint === "grappling" ? "Grappling" : hint === "youth" ? "Youth/Juniors" : "Muay Thai";
+      const compactTimes = matches.map((line) => {
+        const day = (line.split(":")[0] || "").slice(0, 3);
+        const time = shortTimeFromScheduleLine(line);
+        return time ? `${day} ${time}` : line;
+      });
+      return truncate(`${label}: ${compactTimes.join("; ")}. Free first class — what day works?`, 260);
+    }
   }
   if (/\b(schedule|time|times|when|class|classes)\b/i.test(m) && lines.length > 0) {
-    return truncate(lines.slice(0, 2).join("; "), 140);
+    return truncate(lines.slice(0, 4).join("; "), 220);
   }
   return null;
 }
 
-function deterministicFallbackResponse(message: string, schedule: string, knowledgeBase: string): string | null {
+function deterministicFallbackResponse(message: string, schedule: string, knowledgeBase: string, classes?: ClassSchedule[] | null): string | null {
   const m = message.toLowerCase();
   const asksPrice = /\b(price|prices|pricing|cost|costs|how much|rate|rates|fee|fees|membership)\b/i.test(m);
   const asksYouth = /\b(youth|kid|kids|child|children|teen|teens|son|daughter|minor|age|ages|old)\b/i.test(m);
@@ -170,11 +222,11 @@ function deterministicFallbackResponse(message: string, schedule: string, knowle
   const asksConsent = /\b(parent|guardian|consent|waiver|minor|under 18|under eighteen)\b/i.test(m);
 
   if (asksConsent) {
-    return "For minors, a parent/guardian needs to handle the waiver. Scott can confirm age fit and next steps before your first class.";
+    return "For minors, a parent/guardian handles the waiver. First class is free — what age and class are you looking for?";
   }
 
   if (asksYouth && asksPrice) {
-    return "We have youth/teen options. Adult unlimited is $159/mo + $50 registration; Scott can confirm youth age fit and pricing.";
+    return "Youth/teen options are available. Adult unlimited is $159/mo + $50 registration. First class is free — what age and class?";
   }
 
   if (asksYouth) {
@@ -183,13 +235,13 @@ function deterministicFallbackResponse(message: string, schedule: string, knowle
 
   if (asksPrice) {
     const kbPriceLine = knowledgeBase.split("\n").find(line => /\$|price|pricing|cost|membership|monthly|fee/i.test(line));
-    if (kbPriceLine) return truncate(`${kbPriceLine.trim()} Want to try a free class first?`, MAX_CHARS);
-    return "Adult unlimited is $159/mo plus a $50 registration fee. Want to try a free class before deciding?";
+    if (kbPriceLine) return truncate(`${kbPriceLine.trim()} First class is free — want to come in?`, MAX_CHARS);
+    return "Adult unlimited is $159/mo plus a $50 registration fee. First class is free — want to come in?";
   }
 
   if (asksSchedule) {
-    const scheduleLine = findRelevantScheduleLine(message, schedule);
-    if (scheduleLine) return truncate(`${scheduleLine}. Want to try that class?`, MAX_CHARS);
+    const scheduleLine = formatRequestedClassSchedule(message, classes) ?? findRelevantScheduleSummary(message, schedule);
+    if (scheduleLine) return truncate(scheduleLine, MAX_CHARS);
     return "We have classes most weekdays and Saturdays. Tell me boxing, Muay Thai, BJJ, or MMA and I'll send the best times.";
   }
 
@@ -429,22 +481,22 @@ function buildSystemPrompt(params: {
   const remaining = MAX_MESSAGES_BEFORE_HANDOFF - msgCount;
 
   const urgencyInstruction = urgency >= 9
-    ? `URGENCY 9-10 (EMERGENCY): Ask ONE clarifying question, then immediately offer a call. Do not qualify further.`
+    ? `URGENCY 9-10: Answer directly, then move to booking or human help only if truly needed.`
     : urgency >= 6
-    ? `URGENCY ${urgency} (FAST-TRACK): Skip small talk. Get to the point. Move toward booking in 1-2 messages.`
-    : `URGENCY ${urgency} (STANDARD): Qualify naturally. Max ${remaining} more message(s) before handing off to Scott.`;
+    ? `URGENCY ${urgency}: Skip small talk. Answer accurately and move toward booking in 1-2 messages.`
+    : `URGENCY ${urgency}: Answer accurately, then move toward a free trial or ask the one missing detail.`;
 
   const intentInstruction = {
     BUYING:       "INTENT: BUYING — They want to start. Remove friction. Give them one clear next step.",
     INFO_SEEKING: "INTENT: INFO-SEEKING — Answer their question directly first, then advance toward trial.",
-    PROBLEM:      "INTENT: PROBLEM — Empathize first. Do not pitch. Offer to connect with Scott immediately.",
-    ROUTINE:      "INTENT: ROUTINE — Keep it natural. Qualify without pressure.",
+    PROBLEM:      "INTENT: PROBLEM — Empathize first, answer if possible, and only escalate for safety/injury/legal/account issues.",
+    ROUTINE:      "INTENT: ROUTINE — Answer directly. Keep it natural and move toward a trial if appropriate.",
     REJECTION:    "INTENT: REJECTION — Accept gracefully. One sentence. Do not pitch or follow up.",
-    ESCALATION:   "INTENT: ESCALATION — They want a human. Acknowledge. Say Scott will reach out. Stop.",
+    ESCALATION:   "INTENT: ESCALATION — They explicitly want a human. Acknowledge and say someone will reach out. Stop.",
   }[intent];
 
   const handoffInstruction = msgCount >= MAX_MESSAGES_BEFORE_HANDOFF
-    ? `\nMANDATORY HANDOFF: This is message ${msgCount + 1} / ${MAX_MESSAGES_BEFORE_HANDOFF + 1}. Transfer NOW. Say something like: "Let me have Scott call you directly — he can answer everything in 2 minutes. What's the best time?"`
+    ? `\nLONG THREAD: Still answer the question. If the lead has given enough detail, move to a free-trial booking. Only hand off if they ask for a person or the answer is unavailable.`
     : "";
 
   return `${dbPersonality}You are a lead responder for Fight Flow Academy — ${businessContext || "Fight Flow Academy"}, an MMA & fitness gym in Raleigh-Durham, NC.
@@ -459,6 +511,9 @@ HARD RULES (non-negotiable):
 - NEVER echo/repeat what the lead just said back to them
 - Answer first, then (optionally) ask ONE question
 - One purpose per message — not two asks
+- Use the loaded schedule and knowledge base as source of truth. Do not invent or give partial class schedules when a full matching schedule is loaded.
+- Do not refer leads to Scott for normal program, schedule, pricing, waiver, or first-class questions. Answer them and move toward booking.
+- Human handoff is only for explicit human request, injury/safety/legal/account issue, or genuinely missing information.
 
 ${urgencyInstruction}
 ${intentInstruction}
@@ -475,13 +530,14 @@ TONE (Component 6):
 - Never robotic. Never repeat their words back at them.
 - Sound like you've been here before. You know the gym. You want them to succeed.
 
-TRANSFER RULE (Component 7):
-- Natural close: "Want to pop in for a free trial?" or "I can grab you a time with Scott."
-- Default next step = book a trial class or a quick call with Scott
+TRANSFER / BOOKING RULE:
+- The job is to set appointments and answer accurately, not offload normal questions.
+- Natural close: "Want to try a free class?" or "What day works?"
+- Default next step = book a free trial class.
 - If the lead agrees to a specific class/day/time, confirm it as booked: "You're booked for [class] [day] at [time]. We'll let the team know to expect you."
 - After agreement, NEVER send a booking link or tell them to book themselves; the system records the appointment and notifies staff.
 - If they want a trial but no exact class/day/time is clear, ask for the one missing detail instead of sending a link.
-- When transferring, end with: "I'll let Scott know to reach out shortly."
+- Only transfer when rules above say human handoff is required.
 
 SCHEDULE:
 ${schedule || "No schedule loaded."}
@@ -544,6 +600,26 @@ async function callOpenAI(
 
   const data = await res.json();
   return (data.choices?.[0]?.message?.content ?? "").trim();
+}
+
+async function callPrimaryResponseModel(
+  model: string,
+  messages: Array<{role: string; content: string}>,
+  openRouterKey: string,
+  maxTokens = 120,
+  temperature = 0.3
+): Promise<string> {
+  if (model === "gpt-5.5" || model === "openai/gpt-5.5") {
+    const openAiKey = Deno.env.get("OPENAI_API_KEY");
+    if (!openAiKey) throw new Error("OPENAI_API_KEY not configured for direct OpenAI response model");
+    return callOpenAI(messages, openAiKey, "gpt-4o", maxTokens, temperature);
+  }
+  if (model.startsWith("openai-direct/")) {
+    const openAiKey = Deno.env.get("OPENAI_API_KEY");
+    if (!openAiKey) throw new Error("OPENAI_API_KEY not configured for direct OpenAI response model");
+    return callOpenAI(messages, openAiKey, model.replace("openai-direct/", ""), maxTokens, temperature);
+  }
+  return callLLM(model, messages, openRouterKey, maxTokens, temperature);
 }
 
 // ─── Quality Gate (T2 reviews T1 output) ─────────────────────────────────────
@@ -706,6 +782,7 @@ Deno.serve(async (req) => {
   let businessId: string;
   let businessContext: any;
   let classSchedule: any;
+  let scheduleText: string;
   let contactName: string;
   let contactPhone: string;
   let threadId: string;
@@ -720,6 +797,7 @@ Deno.serve(async (req) => {
       businessId,
       businessContext,
       classSchedule,
+      scheduleText,
       contactName,
       contactPhone,
       threadId,
@@ -741,7 +819,9 @@ Deno.serve(async (req) => {
 
     // ── Build context ────────────────────────────────────────────────────────
     const msgCount: number = messages?.filter((m: any) => m.role === "user").length ?? 0;
-    const schedule = formatSchedule(classSchedule ?? []);
+    const schedule = Array.isArray(classSchedule) && classSchedule.length > 0
+      ? formatSchedule(classSchedule)
+      : (typeof scheduleText === "string" && scheduleText.trim() ? scheduleText.trim() : formatSchedule([]));
     const knowledgeText = typeof knowledgeBase === "string"
       ? knowledgeBase
       : Array.isArray(knowledgeBase)
@@ -787,7 +867,7 @@ Deno.serve(async (req) => {
       }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
     }
 
-    const deterministicMessage = deterministicFallbackResponse(latestMessage, schedule, knowledgeText);
+    const deterministicMessage = deterministicFallbackResponse(latestMessage, schedule, knowledgeText, classSchedule ?? []);
     if (deterministicMessage) {
       const responseText = truncate(deterministicMessage, MAX_CHARS);
       await logSpeedToLeadResponse({
@@ -820,10 +900,9 @@ Deno.serve(async (req) => {
     const intent = detectIntent(latestMessage);
     const urgency = scoreUrgency(latestMessage, intent, msgCount);
     const tier = selectTier(urgency, msgCount, intent);
-    // SPA-881 fix: urgency >=8 should also trigger handoff (was missing — hot leads slipped through)
-    const shouldHandoff = msgCount >= MAX_MESSAGES_BEFORE_HANDOFF 
-      || intent === "ESCALATION"
-      || urgency >= 8;
+    // Only hand off when the lead explicitly asks for a human or the issue is unsafe/legal/account-risk.
+    // Do not offload normal schedule/pricing/program questions; answer and book the trial.
+    const shouldHandoff = intent === "ESCALATION" || intent === "PROBLEM";
 
     console.log(`[ai-response] intent=${intent} urgency=${urgency} tier=${tier} msgCount=${msgCount} handoff=${shouldHandoff}`);
 
@@ -878,7 +957,7 @@ Deno.serve(async (req) => {
 
     // ── Generate response (tiered) ────────────────────────────────────────────
     const primaryModel = tier === "T2" ? MODEL_T2 : MODEL_T1;
-    let aiMessage = await callLLM(
+    let aiMessage = await callPrimaryResponseModel(
       primaryModel,
       [
         { role: "system", content: systemPrompt },

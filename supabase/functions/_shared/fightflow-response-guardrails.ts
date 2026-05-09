@@ -37,7 +37,7 @@ function relevantLines(text: string | null | undefined, patterns: RegExp[], limi
     .slice(0, limit);
 }
 
-function compactSchedule(scheduleText?: string | null): string {
+function compactSchedule(scheduleText?: string | null, leadMessage = ''): string {
   const lines = (scheduleText || '')
     .split(/\n+/)
     .map((line) => cleanSms(line, 120))
@@ -48,7 +48,16 @@ function compactSchedule(scheduleText?: string | null): string {
     return 'I can help with the schedule — what class are you looking at?';
   }
 
-  return `Current schedule: ${lines.slice(0, 3).join('; ')}.`;
+  const msg = leadMessage.toLowerCase();
+  const hint = msg.includes('muay thai') ? /muay thai/i
+    : msg.includes('kickboxing') ? /kickboxing/i
+    : msg.includes('boxing') ? /boxing/i
+    : msg.includes('mma') ? /mma/i
+    : msg.includes('grappling') || msg.includes('bjj') || msg.includes('jiu') ? /grappling|bjj|jiu/i
+    : null;
+  const relevant = hint ? lines.filter((line) => hint.test(line)) : lines;
+
+  return `Current schedule: ${(relevant.length ? relevant : lines).slice(0, 8).join('; ')}.`;
 }
 
 export function detectBookingGuardrail(leadMessage: string, historyText?: string | null): BookingGuardrailResult | null {
@@ -129,7 +138,7 @@ export function buildDeterministicFallbackResponse(options: FallbackOptions): st
   }
 
   if (scheduleIntent) {
-    return cleanSms(`${prefix}${compactSchedule(options.scheduleText)} Which class are you interested in?`);
+    return cleanSms(`${prefix}${compactSchedule(options.scheduleText, options.leadMessage)} Which day works for a free class?`);
   }
 
   if (classIntent) {
