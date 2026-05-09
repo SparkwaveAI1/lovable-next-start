@@ -172,6 +172,16 @@ function classMatchesHint(className: string, hint: string): boolean {
   return name.includes(hint);
 }
 
+function labelForScheduleHint(hint: string, fallback?: string): string {
+  if (hint === "grappling") return "Grappling";
+  if (hint === "youth") return "Youth/Juniors";
+  if (hint === "muay thai") return "Muay Thai";
+  if (hint === "boxing") return "Boxing";
+  if (hint === "kickboxing") return "Kickboxing";
+  if (hint === "mma") return "MMA";
+  return fallback || hint;
+}
+
 function formatRequestedClassSchedule(message: string, classes: ClassSchedule[] | null | undefined): string | null {
   const hint = requestedClassHint(message);
   if (!hint || !classes?.length) return null;
@@ -180,7 +190,7 @@ function formatRequestedClassSchedule(message: string, classes: ClassSchedule[] 
     .sort((a, b) => a.day_of_week - b.day_of_week || a.start_time.localeCompare(b.start_time));
   if (!matches.length) return null;
 
-  const classLabel = hint === "grappling" ? "Grappling" : hint === "youth" ? "Youth/Juniors" : matches[0].class_name;
+  const classLabel = labelForScheduleHint(hint, matches[0].class_name);
   const times = matches.map((c) => `${getDayName(c.day_of_week).slice(0, 3)} ${formatShortTime(c.start_time)}`).join("; ");
   return truncate(`${classLabel}: ${times}. Free first class — what day works?`, 260);
 }
@@ -199,7 +209,7 @@ function findRelevantScheduleSummary(message: string, schedule: string): string 
   if (hint) {
     const matches = lines.filter(l => classMatchesHint(l.toLowerCase(), hint));
     if (matches.length) {
-      const label = hint === "grappling" ? "Grappling" : hint === "youth" ? "Youth/Juniors" : "Muay Thai";
+      const label = labelForScheduleHint(hint);
       const compactTimes = matches.map((line) => {
         const day = (line.split(":")[0] || "").slice(0, 3);
         const time = shortTimeFromScheduleLine(line);
