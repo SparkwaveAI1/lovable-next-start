@@ -758,6 +758,79 @@ async function detectBookingConfirmation(
   }
 }
 
+function normalizedTimePrefix(timeValue?: string | null): string {
+  const raw = (timeValue || '').trim();
+  if (!raw) return '';
+  const ampmMatch = raw.match(/(\d{1,2})(?::(\d{2}))?\s*(AM|PM)/i);
+  if (ampmMatch) {
+    let hour = Number(ampmMatch[1]);
+    const minute = Number(ampmMatch[2] || '0');
+    const ampm = ampmMatch[3].toUpperCase();
+    if (ampm === 'PM' && hour !== 12) hour += 12;
+    if (ampm === 'AM' && hour === 12) hour = 0;
+    return `${String(hour).padStart(2, '0')}:${String(minute).padStart(2, '0')}`;
+  }
+  const hhmm = raw.match(/(\d{1,2}):(\d{2})/);
+  if (hhmm) return `${String(Number(hhmm[1])).padStart(2, '0')}:${hhmm[2]}`;
+  return raw.slice(0, 5);
+}
+
+async function recordStaffBookingNotification(
+  supabase: any,
+  businessId: string,
+  contactId: string,
+  contactName: string,
+  contactPhone: string | null,
+  contactEmail: string | null,
+  serviceName: string,
+  sessionStartUTC: Date,
+  source: 'sms_booking_confirmed' | 'sms_booking_needs_confirmation',
+) {
+  const sessionEt = sessionStartUTC.toLocaleString('en-US', {
+    timeZone: 'America/New_York',
+    weekday: 'long',
+    month: 'short',
+    day: 'numeric',
+    hour: 'numeric',
+    minute: '2-digit',
+    hour12: true,
+  });
+
+  const title = source === 'sms_booking_confirmed'
+    ? `Trial scheduled: ${contactName} — ${serviceName}`
+    : `Staff booking confirmation needed: ${contactName} — ${serviceName}`;
+
+  const description = [
+    `Lead agreed to ${serviceName} on ${sessionEt}.`,
+    `Contact: ${contactName}${contactPhone ? `, ${contactPhone}` : ''}${contactEmail ? `, ${contactEmail}` : ''}.`,
+    source === 'sms_booking_confirmed'
+      ? 'Automation recorded the appointment and told the lead the team will expect them.'
+      : 'Automation could not fully record the appointment; staff should confirm manually.',
+  ].join('\n');
+
+  await supabase.from('service_requests').insert({
+    business_id: businessId,
+    contact_id: contactId,
+    title,
+    description,
+    request_type: source,
+    status: 'pending_review',
+    priority: 'high',
+  });
+
+  await supabase.from('automation_logs').insert({
+    business_id: businessId,
+    automation_type: 'fightflow_staff_booking_notification',
+    status: 'success',
+    processed_data: {
+      contact_id: contactId,
+      service_name: serviceName,
+      session_start: sessionStartUTC.toISOString(),
+      source,
+    },
+  });
+}
+
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') {
     return new Response('ok', { headers: corsHeaders });
@@ -768,7 +841,7 @@ Deno.serve(async (req) => {
     // ── Test mode: ?test=true uses fake business_id, skips Twilio sends ──────
     const url = new URL(req.url);
     const isTest = url.searchParams.get('test') === 'true';
-    const testBusinessId = '00000000-0000-0000-0000-000000000000';
+    const testBusinessId = url.searchParams.get('businessId') || '00000000-0000-0000-0000-000000000000';
 
     const supabase = createClient(
       Deno.env.get('SUPABASE_URL') ?? '',
@@ -1557,16 +1630,16 @@ INSTRUCTIONS FOR RETURNING CONTACT:
 
           const { data: existingBooking } = await idempotencyQuery.limit(1);
 
-          if (existingBooking && existingBooking.length > 0) {
-            console.log('📅 Booking already exists for this contact/service/date — skipping');
-          } else {
-            // Format date/time in ET for logging
-            const etLogStr = sessionStartUTC.toLocaleString('en-US', {
-              timeZone: 'America/New_York',
-              weekday: 'short', year: 'numeric', month: 'short', day: 'numeric',
-              hour: 'numeric', minute: '2-digit', hour12: true
-            });
+          const etLogStr = sessionStartUTC.toLocaleString('en-US', {
+            timeZone: 'America/New_York',
+            weekday: 'short', year: 'numeric', month: 'short', day: 'numeric',
+            hour: 'numeric', minute: '2-digit', hour12: true
+          });
 
+          let appointmentRecorded = Boolean(existingBooking && existingBooking.length > 0);
+          if (appointmentRecorded) {
+            console.log('📅 Booking already exists for this contact/service/date — skipping appointment insert');
+          } else {
             const { error: insertError } = await supabase
               .from('fightflow_appointments')
               .insert({
@@ -1580,15 +1653,73 @@ INSTRUCTIONS FOR RETURNING CONTACT:
                 status: 'confirmed',
                 sequence_enrolled: false,
                 location: '900 East Six Forks Road, Raleigh, NC, USA',
-                notes: 'Booked via SMS conversation'
+                notes: 'Booked via SMS conversation; staff notified by automation'
               });
 
             if (insertError) {
               console.error('📅 Failed to insert SMS booking:', insertError.message);
             } else {
+              appointmentRecorded = true;
               console.log(`📅 SMS booking created: ${bookingContactName} — ${mappedService} ${etLogStr}`);
             }
           }
+
+          const targetDayNum = ['sunday','monday','tuesday','wednesday','thursday','friday','saturday'].indexOf(bookingResult.day.toLowerCase());
+          const targetClass = classes?.find((cls: any) => {
+            const sameService = mapServiceName(cls.class_name).toLowerCase() === mappedService.toLowerCase()
+              || cls.class_name.toLowerCase().includes(mappedService.toLowerCase());
+            const sameDay = targetDayNum >= 0 ? cls.day_of_week === targetDayNum : true;
+            const classTime = normalizedTimePrefix(cls.start_time);
+            const requestedTime = normalizedTimePrefix(bookingResult.time?.replace(/\s+/g, ''));
+            return sameService && sameDay && (!requestedTime || classTime === requestedTime);
+          });
+
+          if (targetClass) {
+            const bookingDate = sessionStartUTC.toISOString().split('T')[0];
+            const { data: existingClassBooking } = await supabase
+              .from('class_bookings')
+              .select('id')
+              .eq('contact_id', contact.id)
+              .eq('class_schedule_id', targetClass.id)
+              .eq('booking_date', bookingDate)
+              .limit(1);
+
+            if (!existingClassBooking || existingClassBooking.length === 0) {
+              const { error: classBookingError } = await supabase
+                .from('class_bookings')
+                .insert({
+                  contact_id: contact.id,
+                  class_schedule_id: targetClass.id,
+                  booking_date: bookingDate,
+                  status: 'confirmed',
+                  notes: `Booked via SMS conversation; ${mappedService} at ${bookingResult.time}`,
+                });
+              if (classBookingError) {
+                console.error('📅 Failed to insert class_bookings row:', classBookingError.message);
+              }
+            }
+          }
+
+          await supabase
+            .from('contacts')
+            .update({
+              pipeline_stage: appointmentRecorded ? 'trial_scheduled' : 'needs_staff_booking_confirmation',
+              status: appointmentRecorded ? 'qualified' : 'needs_human',
+              last_activity_date: new Date().toISOString(),
+            })
+            .eq('id', contact.id);
+
+          await recordStaffBookingNotification(
+            supabase,
+            businessId,
+            contact.id,
+            bookingContactName,
+            bookingContactPhone,
+            bookingContactEmail,
+            mappedService,
+            sessionStartUTC,
+            appointmentRecorded ? 'sms_booking_confirmed' : 'sms_booking_needs_confirmation',
+          );
         } else {
           console.error(`📅 Could not compute date for: ${bookingResult.day} ${bookingResult.time}`);
         }

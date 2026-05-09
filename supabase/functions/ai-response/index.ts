@@ -266,6 +266,9 @@ TONE (Component 6):
 TRANSFER RULE (Component 7):
 - Natural close: "Want to pop in for a free trial?" or "I can grab you a time with Scott."
 - Default next step = book a trial class or a quick call with Scott
+- If the lead agrees to a specific class/day/time, confirm it as booked: "You're booked for [class] [day] at [time]. We'll let the team know to expect you."
+- After agreement, NEVER send a booking link or tell them to book themselves; the system records the appointment and notifies staff.
+- If they want a trial but no exact class/day/time is clear, ask for the one missing detail instead of sending a link.
 - When transferring, end with: "I'll let Scott know to reach out shortly."
 
 SCHEDULE:
@@ -299,6 +302,32 @@ async function callLLM(
   if (!res.ok) {
     const err = await res.text();
     throw new Error(`OpenRouter ${model} error (${res.status}): ${err}`);
+  }
+
+  const data = await res.json();
+  return (data.choices?.[0]?.message?.content ?? "").trim();
+}
+
+// ─── OpenAI Direct Fallback ───────────────────────────────────────────────────
+async function callOpenAI(
+  messages: Array<{role: string; content: string}>,
+  apiKey: string,
+  model = "gpt-4o-mini",
+  maxTokens = 120,
+  temperature = 0.7
+): Promise<string> {
+  const res = await fetch("https://api.openai.com/v1/chat/completions", {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${apiKey}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({ model, messages, max_tokens: maxTokens, temperature }),
+  });
+
+  if (!res.ok) {
+    const err = await res.text();
+    throw new Error(`OpenAI ${model} error (${res.status}): ${err}`);
   }
 
   const data = await res.json();
@@ -728,22 +757,21 @@ Deno.serve(async (req) => {
   } catch (error: any) {
     console.error("ai-response fatal:", error);
     
-    // RETRY: Try once with a backup model before giving up
-    // Only send the fallback if we truly can't generate a response
+    // RETRY: Try once with OpenAI direct before giving up.
+    // OpenRouter can fail for credits/provider routing; direct OpenAI keeps speed-to-lead alive.
     try {
-      console.log("[ai-response] Retrying with backup model...");
-      const retryApiKey = Deno.env.get("OPENROUTER_API_KEY");
-      if (!retryApiKey) throw new Error("No API key for retry");
-      const backupModel = "openai/gpt-4o-mini";
+      console.log("[ai-response] Retrying with direct OpenAI fallback...");
+      const openAiKey = Deno.env.get("OPENAI_API_KEY");
+      if (!openAiKey) throw new Error("No OPENAI_API_KEY for fallback");
       const backupMessages: Array<{role: string; content: string}> = [
         {
           role: "system",
-          content: `You are a lead responder for Fight Flow Academy, an MMA & fitness gym in Raleigh-Durham, NC. Sound like a real person texting. Max 160 chars. Answer their question directly, then ask one follow-up question. RESPOND ONLY with the SMS text. No quotes. No labels.`
+          content: `You are a lead responder for Fight Flow Academy, an MMA & fitness gym in Raleigh-Durham, NC. Sound like a real person texting. Max 160 chars. Answer directly, then ask one follow-up question. If the lead agrees to a specific class/day/time, confirm they are booked and say the team will expect them. Never send a booking link after agreement. RESPOND ONLY with the SMS text. No quotes. No labels.`
         },
         { role: "user", content: latestMessage || "I'm interested in your gym" }
       ];
       
-      const backupResponse = await callLLM(backupModel, backupMessages, retryApiKey, 120, 0.7);
+      const backupResponse = await callOpenAI(backupMessages, openAiKey, "gpt-4o-mini", 120, 0.7);
       if (backupResponse && backupResponse.length > 5) {
         return new Response(JSON.stringify({
           message: truncate(backupResponse, MAX_CHARS),
