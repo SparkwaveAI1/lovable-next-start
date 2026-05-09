@@ -1,4 +1,5 @@
 import { createClient } from 'npm:@supabase/supabase-js@2';
+import { buildDeterministicFallbackResponse, detectBookingGuardrail } from '../_shared/fightflow-response-guardrails.ts';
 
 // === INLINED: _shared/retry.ts ===
 /**
@@ -336,15 +337,23 @@ const corsHeaders = {
 // STOP/UNSUBSCRIBE KEYWORDS - CHECK FIRST!
 // ========================================
 const STOP_KEYWORDS = [
-  'stop', 'unsubscribe', 'cancel', 'remove', 'quit', 'end',
+  'stop', 'unsubscribe', 'quit', 'end',
   'optout', 'opt out', 'opt-out', 'leave me alone', 'stop texting',
   'do not contact', 'don\'t contact', 'dont contact'
 ];
 
 function isStopRequest(message: string): boolean {
   const lowerMessage = message.toLowerCase().trim();
-  return STOP_KEYWORDS.some(keyword => 
-    lowerMessage === keyword || 
+
+  // Booking/class cancellations must continue to the booking guardrail instead of
+  // being treated as SMS opt-out. Carrier-style STOP keywords still opt out.
+  if (/\b(cancel|remove|unbook|unschedule)\b/i.test(lowerMessage) &&
+      /\b(booking|booked|class|trial|appointment|schedule|reservation|me from)\b/i.test(lowerMessage)) {
+    return false;
+  }
+
+  return STOP_KEYWORDS.some(keyword =>
+    lowerMessage === keyword ||
     lowerMessage.startsWith(keyword + ' ') ||
     lowerMessage.endsWith(' ' + keyword)
   );
@@ -1347,12 +1356,21 @@ INSTRUCTIONS FOR RETURNING CONTACT:
       ? `${contact.first_name} ${contact.last_name || ''}`.trim()
       : null;
 
+    const bookingGuardrail = detectBookingGuardrail(body, historyText);
+
     // ========================================
     // CALL AI - WITH RETRY AND ERROR PROTECTION
     // ========================================
-    // If AI fails, we still send something useful — a personalized greeting
-    // that keeps the conversation going instead of a dead-end "someone will get back to you"
-    let responseMessage = `Hey${contactName ? ' ' + contactName : ''}! Thanks for reaching out to ${businessName || 'us'}. What info can I help you with?`;
+    // If AI fails, send a deterministic answer for common FightFlow questions
+    // instead of a dead-end generic fallback.
+    let responseMessage = bookingGuardrail?.message || buildDeterministicFallbackResponse({
+      contactName,
+      businessName: business?.name || businessName,
+      leadMessage: body,
+      knowledgeText,
+      scheduleText,
+      historyText,
+    });
     let aiResult: any = { message: null };
 
     const maxAiRetries = 2;
@@ -1442,8 +1460,37 @@ INSTRUCTIONS FOR RETURNING CONTACT:
       }
     }
 
+    if (bookingGuardrail) {
+      responseMessage = bookingGuardrail.message;
+      aiResult = { message: responseMessage, shouldBook: false, classDetails: null };
+      await supabase.from('automation_logs').insert({
+        business_id: businessId,
+        automation_type: 'fightflow_booking_guardrail',
+        status: 'success',
+        processed_data: {
+          contact_id: contact.id,
+          thread_id: thread.id,
+          guardrail: bookingGuardrail.kind,
+          needs_human_review: bookingGuardrail.needsHumanReview,
+        }
+      });
+      await supabase
+        .from('conversation_threads')
+        .update({
+          conversation_state: bookingGuardrail.needsHumanReview ? 'needs_human_review' : 'booking_paused',
+          ...(bookingGuardrail.needsHumanReview ? { needs_human_review: true } : {}),
+        })
+        .eq('id', thread.id);
+      if (bookingGuardrail.kind === 'dont_book') {
+        await supabase
+          .from('contacts')
+          .update({ pipeline_stage: 'new', status: 'new_lead' })
+          .eq('id', contact.id);
+      }
+    }
+
     // Handle class booking if AI detected intent
-    if (aiResult.shouldBook && aiResult.classDetails) {
+    if (!bookingGuardrail && aiResult.shouldBook && aiResult.classDetails) {
       console.log('Processing booking:', aiResult.classDetails);
 
       let targetClass = null;
@@ -1595,7 +1642,7 @@ INSTRUCTIONS FOR RETURNING CONTACT:
     try {
       const bookingResult = await detectBookingConfirmation(responseMessage, conversationMessages);
 
-      if (bookingResult.is_booking && bookingResult.service && bookingResult.day && bookingResult.time) {
+      if (!bookingGuardrail && bookingResult.is_booking && bookingResult.service && bookingResult.day && bookingResult.time) {
         const mappedService = mapServiceName(bookingResult.service);
         console.log(`📅 Booking detected: ${mappedService} on ${bookingResult.day} at ${bookingResult.time}`);
 
