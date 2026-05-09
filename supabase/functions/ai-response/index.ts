@@ -228,11 +228,28 @@ function deterministicFallbackResponse(message: string, schedule: string, knowle
   const m = message.toLowerCase();
   const asksPrice = /\b(price|prices|pricing|cost|costs|how much|rate|rates|fee|fees|membership)\b/i.test(m);
   const asksYouth = /\b(youth|kid|kids|child|children|teen|teens|son|daughter|minor|age|ages|old)\b/i.test(m);
-  const asksSchedule = /\b(schedule|time|times|when|class|classes|days?)\b/i.test(m);
+  const asksSpecificSchedule = /\b(schedule|time|times|when|days?|hours)\b/i.test(m);
+  const asksClassSchedule = /\b(class|classes)\b/i.test(m) && requestedClassHint(message) !== null;
+  const asksSchedule = asksSpecificSchedule || asksClassSchedule;
   const asksConsent = /\b(parent|guardian|consent|waiver|minor|under 18|under eighteen)\b/i.test(m);
+  const asksFreeTrial = /\b(free class|trial|try a class|try one|come in|first class)\b/i.test(m);
+  const asksMultipleClasses = /\b(more than one|multiple classes|multiple class|two classes|several classes)\b/i.test(m);
 
   if (asksConsent) {
     return "For minors, a parent/guardian handles the waiver. First class is free — what age and class are you looking for?";
+  }
+
+  if (asksMultipleClasses) {
+    return "Yes — you can do multiple classes. First class is free; which classes are you most interested in trying?";
+  }
+
+  if (asksFreeTrial) {
+    return "Yes — first class is free. Which class do you want to try: Muay Thai, boxing, grappling, or MMA?";
+  }
+
+  if (asksYouth && asksSchedule) {
+    const scheduleLine = formatRequestedClassSchedule(message, classes) ?? findRelevantScheduleSummary(message, schedule);
+    if (scheduleLine) return truncate(scheduleLine, MAX_CHARS);
   }
 
   if (asksYouth && asksPrice) {
@@ -381,7 +398,7 @@ async function applyBookingGuardrail(params: {
     }
     return booking
       ? `${prefix}you're unbooked for now. If you want another time, send the class/day that works.`
-      : `${prefix}I don't see a confirmed booking here. If you want a time, send the class/day that works.`;
+      : `${prefix}you're not booked yet — I don't see a confirmed booking here. If you want a time, send the class/day that works.`;
   }
 
   if (action === "status") {
