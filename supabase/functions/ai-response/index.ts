@@ -81,6 +81,8 @@ interface AgentConfig {
 type Intent = "BUYING" | "INFO_SEEKING" | "PROBLEM" | "ROUTINE" | "REJECTION" | "ESCALATION";
 type Tier = "T1" | "T2";
 
+type BookingGuardrailAction = "defer" | "cancel" | "status" | null;
+
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
 function etHour(): number {
@@ -120,6 +122,216 @@ function formatSchedule(classes: ClassSchedule[]): string {
 
 function truncate(s: string, max: number): string {
   return s.length <= max ? s : s.slice(0, max - 1) + "…";
+}
+
+function detectBookingGuardrail(message: string): BookingGuardrailAction {
+  const m = message.toLowerCase().replace(/[’‘]/g, "'");
+
+  if (/\b(am i|was i|did you|did we)\s+(book|schedule|reserve|confirm)/i.test(m) ||
+      /\b(booked|scheduled|confirmed)\??$/i.test(m) ||
+      /\b(am i booked|am i scheduled|is it booked|is that confirmed)\b/i.test(m)) {
+    return "status";
+  }
+
+  if (/\b(cancel|unbook|unschedule|remove me|take me off|can't make|cant make)\b/i.test(m)) {
+    return "cancel";
+  }
+
+  if (/\b(don't|dont|do not|not yet|hold off|wait|pause)\b.{0,40}\b(book|schedule|reserve|confirm)\b/i.test(m) ||
+      /\b(book|schedule|reserve|confirm)\b.{0,40}\b(not yet|don't|dont|do not|hold off|wait|pause)\b/i.test(m) ||
+      /\bjust looking|not ready|still deciding\b/i.test(m)) {
+    return "defer";
+  }
+
+  return null;
+}
+
+function findRelevantScheduleLine(message: string, schedule: string): string | null {
+  if (!schedule) return null;
+  const m = message.toLowerCase();
+  const lines = schedule.split("\n").map(l => l.trim()).filter(Boolean);
+  const classHints = ["muay thai", "boxing", "bjj", "jiu", "grappling", "mma", "kickboxing", "youth", "kids"];
+  const hint = classHints.find(h => m.includes(h));
+  if (hint) {
+    const match = lines.find(l => l.toLowerCase().includes(hint === "jiu" ? "jiu" : hint));
+    if (match) return truncate(match, 120);
+  }
+  if (/\b(schedule|time|times|when|class|classes)\b/i.test(m) && lines.length > 0) {
+    return truncate(lines.slice(0, 2).join("; "), 140);
+  }
+  return null;
+}
+
+function deterministicFallbackResponse(message: string, schedule: string, knowledgeBase: string): string | null {
+  const m = message.toLowerCase();
+  const asksPrice = /\b(price|prices|pricing|cost|costs|how much|rate|rates|fee|fees|membership)\b/i.test(m);
+  const asksYouth = /\b(youth|kid|kids|child|children|teen|teens|son|daughter|minor|age|ages|old)\b/i.test(m);
+  const asksSchedule = /\b(schedule|time|times|when|class|classes|days?)\b/i.test(m);
+  const asksConsent = /\b(parent|guardian|consent|waiver|minor|under 18|under eighteen)\b/i.test(m);
+
+  if (asksConsent) {
+    return "For minors, a parent/guardian needs to handle the waiver. Scott can confirm age fit and next steps before your first class.";
+  }
+
+  if (asksYouth && asksPrice) {
+    return "We have youth/teen options. Adult unlimited is $159/mo + $50 registration; Scott can confirm youth age fit and pricing.";
+  }
+
+  if (asksYouth) {
+    return "We have youth/teen-friendly training options. What age is your child, and are they more interested in boxing or Muay Thai?";
+  }
+
+  if (asksPrice) {
+    const kbPriceLine = knowledgeBase.split("\n").find(line => /\$|price|pricing|cost|membership|monthly|fee/i.test(line));
+    if (kbPriceLine) return truncate(`${kbPriceLine.trim()} Want to try a free class first?`, MAX_CHARS);
+    return "Adult unlimited is $159/mo plus a $50 registration fee. Want to try a free class before deciding?";
+  }
+
+  if (asksSchedule) {
+    const scheduleLine = findRelevantScheduleLine(message, schedule);
+    if (scheduleLine) return truncate(`${scheduleLine}. Want to try that class?`, MAX_CHARS);
+    return "We have classes most weekdays and Saturdays. Tell me boxing, Muay Thai, BJJ, or MMA and I'll send the best times.";
+  }
+
+  return null;
+}
+
+async function getContactIdForThread(
+  supabase: ReturnType<typeof createClient>,
+  threadId: string | null | undefined
+): Promise<string | null> {
+  if (!threadId) return null;
+  const { data, error } = await supabase
+    .from("conversation_threads")
+    .select("contact_id")
+    .eq("id", threadId)
+    .single();
+  if (error) {
+    console.error("[ai-response] booking guardrail thread lookup error:", error.message);
+    return null;
+  }
+  return data?.contact_id ?? null;
+}
+
+async function latestConfirmedBooking(
+  supabase: ReturnType<typeof createClient>,
+  contactId: string
+): Promise<any | null> {
+  const { data, error } = await supabase
+    .from("class_bookings")
+    .select("id, booking_date, status, class_schedule_id")
+    .eq("contact_id", contactId)
+    .eq("status", "confirmed")
+    .order("booking_date", { ascending: false })
+    .limit(1);
+  if (error) {
+    console.error("[ai-response] booking guardrail booking lookup error:", error.message);
+    return null;
+  }
+  return data?.[0] ?? null;
+}
+
+async function logSpeedToLeadResponse(params: {
+  supabase: ReturnType<typeof createClient>;
+  businessId: string | null | undefined;
+  threadId: string | null | undefined;
+  contactId?: string | null;
+  intent: string;
+  urgency: number;
+  tier: string;
+  msgCount?: number;
+  handoffSent?: boolean;
+  reengagementScheduled?: boolean;
+  response: string;
+  guardrail?: string;
+}): Promise<void> {
+  const { supabase, businessId, threadId } = params;
+  if (!businessId) return;
+
+  const contactId = params.contactId ?? await getContactIdForThread(supabase, threadId);
+  await supabase.from("automation_logs").insert({
+    business_id: businessId,
+    automation_type: "speed_to_lead_response",
+    status: "success",
+    processed_data: {
+      thread_id: threadId,
+      contact_id: contactId,
+      intent: params.intent,
+      urgency: params.urgency,
+      tier: params.tier,
+      msg_count: params.msgCount ?? null,
+      handoff_sent: params.handoffSent ?? false,
+      reengagement_scheduled: params.reengagementScheduled ?? false,
+      response_preview: params.response.slice(0, 100),
+      guardrail: params.guardrail ?? null,
+    },
+  }).then(({ error: logErr }) => { if (logErr) console.error("Log insert error:", logErr.message); });
+}
+
+async function applyBookingGuardrail(params: {
+  supabase: ReturnType<typeof createClient>;
+  action: BookingGuardrailAction;
+  threadId: string | null | undefined;
+  businessId: string | null | undefined;
+  contactName: string | null | undefined;
+}): Promise<string | null> {
+  const { supabase, action, threadId, businessId, contactName } = params;
+  if (!action) return null;
+
+  const contactId = await getContactIdForThread(supabase, threadId);
+  const booking = contactId ? await latestConfirmedBooking(supabase, contactId) : null;
+  const firstName = contactName?.split(" ")[0];
+  const prefix = firstName ? `${firstName}, ` : "";
+
+  if (action === "defer") {
+    if (threadId) {
+      await supabase.from("conversation_threads").update({
+        conversation_state: "booking_deferred",
+        needs_human_review: false,
+      }).eq("id", threadId);
+    }
+    if (contactId) {
+      await supabase.from("contacts").update({
+        pipeline_stage: "new",
+        status: "new_lead",
+      }).eq("id", contactId);
+    }
+    return `${prefix}no problem — I won't book anything yet. When you're ready, send the class/day that works.`;
+  }
+
+  if (action === "cancel") {
+    if (booking?.id) {
+      await supabase.from("class_bookings").update({ status: "cancelled" }).eq("id", booking.id);
+    }
+    if (threadId) {
+      await supabase.from("conversation_threads").update({
+        conversation_state: "booking_cancelled",
+        needs_human_review: true,
+      }).eq("id", threadId);
+    }
+    if (businessId) {
+      await supabase.from("automation_logs").insert({
+        business_id: businessId,
+        automation_type: "booking_guardrail",
+        status: "success",
+        processed_data: { action, contact_id: contactId, thread_id: threadId, booking_id: booking?.id ?? null },
+      });
+    }
+    return booking
+      ? `${prefix}you're unbooked for now. If you want another time, send the class/day that works.`
+      : `${prefix}I don't see a confirmed booking here. If you want a time, send the class/day that works.`;
+  }
+
+  if (action === "status") {
+    if (threadId) {
+      await supabase.from("conversation_threads").update({ conversation_state: "booking_status_checked" }).eq("id", threadId);
+    }
+    return booking
+      ? `${prefix}yes — I see a confirmed class booking on ${booking.booking_date}. The team will expect you.`
+      : `${prefix}I don't see a confirmed booking yet. Send the class/day you want and I can help set it up.`;
+  }
+
+  return null;
 }
 
 // ─── Intent Detection (Component 4) ──────────────────────────────────────────
@@ -499,6 +711,8 @@ Deno.serve(async (req) => {
   let threadId: string;
   let knowledgeBase: any;
   let latestMessage = "";
+  let latestScheduleText = "";
+  let latestKnowledgeText = "";
 
   try {
     ({
@@ -533,6 +747,74 @@ Deno.serve(async (req) => {
       : Array.isArray(knowledgeBase)
         ? knowledgeBase.map((k: any) => `${k.title}: ${k.content}`).join("\n")
         : "";
+    latestScheduleText = schedule;
+    latestKnowledgeText = knowledgeText;
+
+    // ── Deterministic guardrails for known high-risk states/categories ───────
+    const bookingGuardrailAction = detectBookingGuardrail(latestMessage);
+    const bookingGuardrailMessage = await applyBookingGuardrail({
+      supabase,
+      action: bookingGuardrailAction,
+      threadId,
+      businessId,
+      contactName,
+    });
+    if (bookingGuardrailMessage) {
+      const responseText = truncate(bookingGuardrailMessage, MAX_CHARS);
+      await logSpeedToLeadResponse({
+        supabase,
+        businessId,
+        threadId,
+        intent: "BOOKING_GUARDRAIL",
+        urgency: 3,
+        tier: "guardrail",
+        msgCount,
+        response: responseText,
+        guardrail: bookingGuardrailAction ?? "booking_guardrail",
+      });
+      return new Response(JSON.stringify({
+        message: responseText,
+        intent: "ROUTINE",
+        urgency: 3,
+        tier: "T1",
+        shouldHandoff: bookingGuardrailAction === "cancel",
+        handoffSent: false,
+        reengagementScheduled: false,
+        shouldBook: false,
+        classDetails: null,
+        detectedIntents: ["BOOKING_GUARDRAIL"],
+        evaluation: { enabled: false, tier: "guardrail" },
+      }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
+    }
+
+    const deterministicMessage = deterministicFallbackResponse(latestMessage, schedule, knowledgeText);
+    if (deterministicMessage) {
+      const responseText = truncate(deterministicMessage, MAX_CHARS);
+      await logSpeedToLeadResponse({
+        supabase,
+        businessId,
+        threadId,
+        intent: "INFO_SEEKING",
+        urgency: 4,
+        tier: "guardrail",
+        msgCount,
+        response: responseText,
+        guardrail: "deterministic_fallback",
+      });
+      return new Response(JSON.stringify({
+        message: responseText,
+        intent: "INFO_SEEKING",
+        urgency: 4,
+        tier: "T1",
+        shouldHandoff: false,
+        handoffSent: false,
+        reengagementScheduled: false,
+        shouldBook: false,
+        classDetails: null,
+        detectedIntents: ["DETERMINISTIC_FALLBACK"],
+        evaluation: { enabled: false, tier: "guardrail" },
+      }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
+    }
 
     // ── Intent & urgency ─────────────────────────────────────────────────────
     const intent = detectIntent(latestMessage);
@@ -719,23 +1001,18 @@ Deno.serve(async (req) => {
     }
 
     // ── Log to automation_logs ────────────────────────────────────────────────
-    if (businessId) {
-      await supabase.from("automation_logs").insert({
-        business_id: businessId,
-        automation_type: "speed_to_lead_response",
-        status: "success",
-        processed_data: {
-          thread_id: threadId,
-          intent,
-          urgency,
-          tier,
-          msg_count: msgCount,
-          handoff_sent: handoffSent,
-          reengagement_scheduled: reengagementScheduled,
-          response_preview: aiMessage.slice(0, 100),
-        },
-      }).then(({ error: logErr }) => { if (logErr) console.error("Log insert error:", logErr.message); });
-    }
+    await logSpeedToLeadResponse({
+      supabase,
+      businessId,
+      threadId,
+      intent,
+      urgency,
+      tier,
+      msgCount,
+      handoffSent,
+      reengagementScheduled,
+      response: aiMessage,
+    });
 
     return new Response(JSON.stringify({
       message: aiMessage,
@@ -756,6 +1033,25 @@ Deno.serve(async (req) => {
 
   } catch (error: any) {
     console.error("ai-response fatal:", error);
+
+    const deterministicMessage = deterministicFallbackResponse(latestMessage, latestScheduleText, latestKnowledgeText);
+    if (deterministicMessage) {
+      return new Response(JSON.stringify({
+        message: truncate(deterministicMessage, MAX_CHARS),
+        intent: "INFO_SEEKING",
+        urgency: 4,
+        tier: "T1",
+        shouldHandoff: false,
+        handoffSent: false,
+        reengagementScheduled: false,
+        shouldBook: false,
+        classDetails: null,
+        detectedIntents: ["DETERMINISTIC_ERROR_FALLBACK"],
+        evaluation: { enabled: false, tier: "guardrail" },
+      }), {
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
     
     // RETRY: Try once with OpenAI direct before giving up.
     // OpenRouter can fail for credits/provider routing; direct OpenAI keeps speed-to-lead alive.

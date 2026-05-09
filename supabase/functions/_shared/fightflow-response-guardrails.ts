@@ -52,7 +52,7 @@ function compactSchedule(scheduleText?: string | null): string {
 }
 
 export function detectBookingGuardrail(leadMessage: string, historyText?: string | null): BookingGuardrailResult | null {
-  const msg = (leadMessage || '').toLowerCase();
+  const msg = (leadMessage || '').toLowerCase().replace(/[’‘]/g, "'");
   const history = (historyText || '').toLowerCase();
   const hasPriorBookingSignal = /booked|scheduled|confirmed|team will expect|see you/i.test(history);
 

@@ -11,6 +11,13 @@ describe('detectBookingGuardrail', () => {
     expect(result?.needsHumanReview).toBe(true);
   });
 
+  it('pauses booking when the lead uses curly apostrophe in do not book yet', () => {
+    const result = detectBookingGuardrail("Don’t book just yet", 'AI: Want me to pencil you in?');
+
+    expect(result?.kind).toBe('dont_book');
+    expect(result?.suppressBooking).toBe(true);
+  });
+
   it('flags cancellation/unbook requests for staff review', () => {
     const result = detectBookingGuardrail('Can you cancel my trial class?', 'AI: You are booked Friday at 7 PM');
 
@@ -52,6 +59,7 @@ describe('buildDeterministicFallbackResponse', () => {
 
     expect(response).toContain('Current schedule');
     expect(response).toContain('Muay Thai');
+    expect(response).not.toMatch(/pencil|booked|confirmed/i);
   });
 
   it('gives minor consent policy fallback', () => {
