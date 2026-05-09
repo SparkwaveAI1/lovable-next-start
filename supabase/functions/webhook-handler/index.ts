@@ -2,38 +2,12 @@ import { serve } from "https://deno.land/std@0.190.0/http/server.ts";
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.45.0';
 import { enrollInFollowUp } from "../_shared/follow-up.ts";
 import { checkContactForOutreach, logSendDecision } from "../_shared/contact-checks.ts";
+import { extractWixPhone, normalizePhoneNumber } from "../_shared/wix-phone.ts";
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
-
-// Phone normalization function for E.164 format
-function normalizePhoneNumber(phoneNumber: string): string | null {
-  if (!phoneNumber) return null;
-
-  // Remove all non-numeric characters except leading +
-  const cleaned = phoneNumber.replace(/[^\d+]/g, '');
-
-  // If already has +, keep it
-  if (cleaned.startsWith('+')) {
-    return cleaned;
-  }
-
-  // Remove all non-numeric characters
-  const digits = phoneNumber.replace(/\D/g, '');
-
-  if (digits.length === 10) {
-    // 10 digits: assume US number, add country code
-    return '+1' + digits;
-  } else if (digits.length === 11 && digits.startsWith('1')) {
-    // 11 digits starting with 1: already has US country code
-    return '+' + digits;
-  }
-
-  // Return original if we can't normalize
-  return phoneNumber;
-}
 
 // Default message when no specific inquiry is provided
 const DEFAULT_GREETING = "Thanks for your interest in our programs! Can I answer any questions for you or set you up with a free trial class?";
@@ -791,34 +765,15 @@ serve(async (req: Request) => {
       }
 
       // Get phone - prioritize form field data over contact data
-      let leadPhone = '';
-      let phoneSource = 'none';
+      const extractedPhone = extractWixPhone(formData, contactData);
+      let leadPhone = extractedPhone.phone;
+      let phoneSource = extractedPhone.source;
+      const originalPhone = extractedPhone.originalPhone;
 
-      if (formData['field:comp-l3j29uwo']) {
-        leadPhone = formData['field:comp-l3j29uwo'];
-        phoneSource = 'form_field';
-      } else if (formData.phone) {
-        leadPhone = formData.phone;
-        phoneSource = 'form_data';
-      } else if (contactData.phone) {
-        leadPhone = contactData.phone;
-        phoneSource = 'contact_direct';
-      } else if (contactData.phones && contactData.phones.length > 0) {
-        const primaryPhone = contactData.phones.find((p: any) => p.primary) || contactData.phones[0];
-        leadPhone = primaryPhone.phone || primaryPhone.formattedPhone;
-        phoneSource = 'contact_array';
-      }
-
-      // Normalize phone number to E.164 format
-      const originalPhone = leadPhone;
-      if (leadPhone) {
-        const normalizedPhone = normalizePhoneNumber(leadPhone);
-        if (normalizedPhone) {
-          leadPhone = normalizedPhone;
-          console.log(`Phone normalized: ${originalPhone} -> ${leadPhone}`);
-        } else {
-          console.warn(`Failed to normalize phone: ${originalPhone} - keeping original`);
-        }
+      if (originalPhone && leadPhone !== originalPhone) {
+        console.log(`Phone normalized: ${originalPhone} -> ${leadPhone}`);
+      } else if (originalPhone && !leadPhone) {
+        console.warn(`Failed to normalize phone: ${originalPhone} - keeping original`);
       }
 
       // Detect if this is a freeze or cancellation request based on FORM NAME only
