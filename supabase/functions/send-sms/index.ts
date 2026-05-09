@@ -90,9 +90,13 @@ serve(async (req) => {
     });
 
     // Initialize Supabase for contact checks
+    const serviceRoleJwt = Deno.env.get('SERVICE_ROLE_JWT') || '';
+    if (!serviceRoleJwt.startsWith('eyJ')) {
+      throw new Error('SERVICE_ROLE_JWT missing or invalid; do not use SUPABASE_SERVICE_ROLE_KEY in edge runtime');
+    }
     const supabase = createClient(
       Deno.env.get('SUPABASE_URL')!,
-      Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
+      serviceRoleJwt
     );
 
     // PRE-SEND CONTACT CHECK (LR-001)

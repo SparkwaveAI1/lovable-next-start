@@ -42,6 +42,10 @@ interface Contact {
   last_name?: string;
   email?: string;
   phone?: string;
+  sms_status?: string;
+  email_status?: string;
+  status?: string;
+  pipeline_stage?: string;
   tags?: string[];
 }
 
@@ -132,14 +136,91 @@ function personalizeMessage(template: string, contact: Contact): string {
     .replace(/\{\{phone\}\}/gi, contact.phone || '');
 }
 
+function getServiceRoleJwt(): string {
+  const jwt = Deno.env.get('SERVICE_ROLE_JWT') || '';
+  if (!jwt || !jwt.startsWith('eyJ')) {
+    throw new Error('SERVICE_ROLE_JWT missing or invalid; do not use SUPABASE_SERVICE_ROLE_KEY in edge runtime');
+  }
+  return jwt;
+}
+
+function containsPlaceholder(message: string): boolean {
+  return /\[[^\]]+\]|\{\{[^}]+\}\}|\bTODO\b|INSERT_LINK|BOOKING_LINK/i.test(message);
+}
+
+function hasBookingIntent(message: string): boolean {
+  return /free trial|trial class|book|booking|schedule|come try|visit|see you/i.test(message);
+}
+
+function canUseEmail(contact: Contact): boolean {
+  return Boolean(contact.email && contact.email_status !== 'unsubscribed');
+}
+
+function canUseSms(contact: Contact): boolean {
+  return Boolean(contact.phone && contact.sms_status !== 'opted_out');
+}
+
+async function parseJsonBody(req: Request): Promise<Record<string, any>> {
+  if (req.method === 'GET') return {};
+  try {
+    const raw = await req.text();
+    return raw ? JSON.parse(raw) : {};
+  } catch (_error) {
+    return {};
+  }
+}
+
+async function logFollowUpAlert(
+  supabase: any,
+  businessId: string,
+  contactId: string,
+  alertType: string,
+  message: string,
+  data: Record<string, any> = {},
+) {
+  await supabase.from('automation_logs').insert({
+    business_id: businessId,
+    automation_type: 'fightflow_follow_up_alert',
+    status: 'warning',
+    error_message: message,
+    processed_data: {
+      contact_id: contactId,
+      alert_type: alertType,
+      ...data,
+    },
+  });
+}
+
+async function updateCrmStage(
+  supabase: any,
+  contact: Contact,
+  stage: 'nurture' | 'needs_human' | 'trial_pending',
+) {
+  const terminalStages = new Set(['booked', 'won', 'lost', 'cancelled', 'do_not_contact']);
+  if (contact.pipeline_stage && terminalStages.has(contact.pipeline_stage)) return;
+
+  const update = stage === 'trial_pending'
+    ? { pipeline_stage: 'trial_pending', status: 'qualified', last_activity_date: new Date().toISOString() }
+    : stage === 'needs_human'
+      ? { pipeline_stage: 'needs_human', status: 'needs_human', last_activity_date: new Date().toISOString() }
+      : { pipeline_stage: 'nurture', status: contact.status || 'new_lead', last_activity_date: new Date().toISOString() };
+
+  await supabase.from('contacts').update(update).eq('id', contact.id);
+}
+
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') {
     return new Response(null, { headers: corsHeaders });
   }
 
+  const requestBody = await parseJsonBody(req);
+  const dryRun = requestBody.dryRun === true;
+  const scopedContactId = typeof requestBody.contactId === 'string' ? requestBody.contactId : null;
+  const serviceRoleJwt = getServiceRoleJwt();
+  const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
   const supabase = createClient(
-    Deno.env.get('SUPABASE_URL')!,
-    Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
+    supabaseUrl,
+    serviceRoleJwt
   );
 
   const startTime = Date.now();
@@ -157,7 +238,7 @@ Deno.serve(async (req) => {
     console.log('🔄 Processing follow-ups...');
 
     // Find all due follow-ups
-    const { data: dueFollowUps, error: fetchError } = await supabase
+    let dueFollowUpsQuery = supabase
       .from('contact_follow_ups')
       .select(`
         id,
@@ -169,6 +250,12 @@ Deno.serve(async (req) => {
       .eq('status', 'active')
       .lte('next_step_due_at', new Date().toISOString())
       .limit(50); // Process in batches
+
+    if (scopedContactId) {
+      dueFollowUpsQuery = dueFollowUpsQuery.eq('contact_id', scopedContactId);
+    }
+
+    const { data: dueFollowUps, error: fetchError } = await dueFollowUpsQuery;
 
     if (fetchError) {
       throw new Error(`Failed to fetch due follow-ups: ${fetchError.message}`);
@@ -213,7 +300,7 @@ Deno.serve(async (req) => {
         // Get contact details
         const { data: contact, error: contactError } = await supabase
           .from('contacts')
-          .select('id, first_name, last_name, email, phone, sms_status, email_status, tags')
+          .select('id, first_name, last_name, email, phone, sms_status, email_status, status, pipeline_stage, tags')
           .eq('id', followUp.contact_id)
           .single();
 
@@ -231,80 +318,124 @@ Deno.serve(async (req) => {
 
         // Send the message
         let sendSuccess = false;
-        let smsSkippedDueToInvalidPhone = false;
+        let deliveryChannel: 'sms' | 'email' | null = null;
+        let shouldTryEmail = step.channel === 'email';
 
-        if (step.channel === 'sms' && contact.phone && contact.sms_status !== 'opted_out') {
-          // Validate phone number before attempting SMS
-          const phoneValidation = validatePhoneForSMS(contact.phone);
-          
-          if (!phoneValidation.valid) {
-            // Invalid phone - log it and mark the contact
-            console.warn(`⚠️ Invalid phone for SMS: ${contact.phone} (${phoneValidation.reason})`);
-            results.skippedInvalidPhone++;
-            results.invalidPhoneContacts.push({
-              contactId: contact.id,
-              phone: contact.phone,
-              reason: phoneValidation.reason || 'unknown',
-            });
-            smsSkippedDueToInvalidPhone = true;
+        if (containsPlaceholder(message) || (subject && containsPlaceholder(subject))) {
+          const reason = 'Paused follow-up: unresolved placeholder in follow-up template';
+          console.warn(`⏸️ ${reason} for ${contact.id}`);
+          await supabase
+            .from('contact_follow_ups')
+            .update({ status: 'paused', pause_reason: reason })
+            .eq('id', followUp.id);
+          await updateCrmStage(supabase, contact, 'needs_human');
+          await logFollowUpAlert(supabase, followUp.business_id, contact.id, 'placeholder_detected', reason, {
+            sequence_id: followUp.sequence_id,
+            step_order: nextStepOrder,
+            message_preview: message.substring(0, 160),
+          });
+          results.errors.push(`${reason} for ${contact.id}`);
+          continue;
+        }
 
-            // Add "invalid_phone" tag to contact if not already present
-            const currentTags = contact.tags || [];
-            if (!currentTags.includes('invalid_phone')) {
-              await supabase
-                .from('contacts')
-                .update({ tags: [...currentTags, 'invalid_phone'] })
-                .eq('id', contact.id);
-              console.log(`🏷️ Added 'invalid_phone' tag to contact ${contact.id}`);
-            }
+        if (step.channel === 'sms') {
+          if (canUseSms(contact)) {
+            // Validate phone number before attempting SMS
+            const phoneValidation = validatePhoneForSMS(contact.phone);
+            
+            if (!phoneValidation.valid) {
+              // Invalid phone - log it and mark the contact
+              console.warn(`⚠️ Invalid phone for SMS: ${contact.phone} (${phoneValidation.reason})`);
+              results.skippedInvalidPhone++;
+              results.invalidPhoneContacts.push({
+                contactId: contact.id,
+                phone: contact.phone || '',
+                reason: phoneValidation.reason || 'unknown',
+              });
+              shouldTryEmail = canUseEmail(contact);
 
-            // Log the skip to automation_logs
-            await supabase.from('automation_logs').insert({
-              business_id: followUp.business_id,
-              automation_type: 'sms_skipped_invalid_phone',
-              status: 'skipped',
-              processed_data: {
-                contact_id: contact.id,
+              // Add "invalid_phone" tag to contact if not already present
+              const currentTags = contact.tags || [];
+              if (!currentTags.includes('invalid_phone')) {
+                await supabase
+                  .from('contacts')
+                  .update({ tags: [...currentTags, 'invalid_phone'] })
+                  .eq('id', contact.id);
+                console.log(`🏷️ Added 'invalid_phone' tag to contact ${contact.id}`);
+              }
+
+              // Log the skip to automation_logs
+              await supabase.from('automation_logs').insert({
+                business_id: followUp.business_id,
+                automation_type: 'sms_skipped_invalid_phone',
+                status: 'skipped',
+                processed_data: {
+                  contact_id: contact.id,
+                  phone: contact.phone,
+                  reason: phoneValidation.reason,
+                  sequence_id: followUp.sequence_id,
+                  step_order: nextStepOrder,
+                },
+              });
+              await logFollowUpAlert(supabase, followUp.business_id, contact.id, 'invalid_phone_email_fallback', 'SMS follow-up skipped due invalid phone; trying email fallback', {
                 phone: contact.phone,
                 reason: phoneValidation.reason,
-                sequence_id: followUp.sequence_id,
-                step_order: nextStepOrder,
-              },
-            });
-
-            // Fall through to try email fallback below
-          } else {
-            // Valid phone - send SMS
-            console.log(`📱 Sending SMS to ${contact.phone}`);
-            
-            const smsResponse = await fetch(`${Deno.env.get('SUPABASE_URL')}/functions/v1/send-sms`, {
-              method: 'POST',
-              headers: {
-                'Authorization': `Bearer ${Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')}`,
-                'Content-Type': 'application/json',
-              },
-              body: JSON.stringify({
-                to: contact.phone,
-                message: message,
-                businessId: followUp.business_id,
-                contactId: contact.id,
-              }),
-            });
-
-            if (smsResponse.ok) {
+                has_email: canUseEmail(contact),
+              });
+            } else if (dryRun) {
+              console.log(`[DRY RUN] Would send SMS to ${contact.phone}`);
               sendSuccess = true;
+              deliveryChannel = 'sms';
               results.smsSent++;
-              console.log(`✅ SMS sent to ${contact.phone}`);
             } else {
-              const errorText = await smsResponse.text();
-              console.error(`❌ SMS failed: ${errorText}`);
-              results.errors.push(`SMS failed for ${contact.id}: ${errorText}`);
+              // Valid phone - send SMS
+              console.log(`📱 Sending SMS to ${contact.phone}`);
+              const smsResponse = await fetch(`${supabaseUrl}/functions/v1/send-sms`, {
+                method: 'POST',
+                headers: {
+                  'Authorization': `Bearer ${serviceRoleJwt}`,
+                  'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                  to: contact.phone,
+                  message: message,
+                  businessId: followUp.business_id,
+                  contactId: contact.id,
+                }),
+              });
+
+              const smsText = await smsResponse.text();
+              let smsResult: any = {};
+              try { smsResult = smsText ? JSON.parse(smsText) : {}; } catch (_error) { smsResult = { raw: smsText }; }
+
+              if (smsResponse.ok && smsResult.success === true && smsResult.messageSid) {
+                sendSuccess = true;
+                deliveryChannel = 'sms';
+                results.smsSent++;
+                console.log(`✅ SMS sent to ${contact.phone}`);
+              } else {
+                const errorText = smsResult.error || smsResult.reason || smsText || `HTTP ${smsResponse.status}`;
+                console.error(`❌ SMS failed/blocked: ${errorText}`);
+                results.errors.push(`SMS failed for ${contact.id}: ${errorText}`);
+                await logFollowUpAlert(supabase, followUp.business_id, contact.id, smsResult.blocked ? 'sms_blocked' : 'sms_failed', `SMS follow-up failed: ${String(errorText).substring(0, 200)}`, {
+                  http_status: smsResponse.status,
+                  response: smsResult,
+                });
+                shouldTryEmail = canUseEmail(contact);
+              }
             }
+          } else {
+            shouldTryEmail = canUseEmail(contact);
+            await logFollowUpAlert(supabase, followUp.business_id, contact.id, contact.phone ? 'sms_opted_out_email_fallback' : 'no_phone_email_fallback', 'SMS follow-up cannot be sent; trying email fallback if available', {
+              has_phone: Boolean(contact.phone),
+              sms_status: contact.sms_status,
+              has_email: canUseEmail(contact),
+            });
           }
         }
         
-        // Handle email channel OR fallback from invalid SMS phone
-        if (!sendSuccess && (step.channel === 'email' || smsSkippedDueToInvalidPhone) && contact.email && contact.email_status !== 'unsubscribed') {
+        // Handle email channel OR fallback from SMS-ineligible/failed contacts.
+        if (!sendSuccess && shouldTryEmail && canUseEmail(contact)) {
           // Send Email
           console.log(`📧 Sending email to ${contact.email}`);
 
@@ -322,41 +453,60 @@ Deno.serve(async (req) => {
             .eq('business_id', followUp.business_id)
             .single();
 
-          const emailResponse = await fetch(`${Deno.env.get('SUPABASE_URL')}/functions/v1/send-email`, {
-            method: 'POST',
-            headers: {
-              'Authorization': `Bearer ${Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')}`,
-              'Content-Type': 'application/json',
-            },
-            body: JSON.stringify({
-              to: contact.email,
-              subject: subject || 'Following up',
-              html: message,
-              from_email: agentConfig?.from_email,
-              from_name: agentConfig?.from_name || business?.name,
-              contact_id: contact.id,
-            }),
-          });
-
-          if (emailResponse.ok) {
+          if (dryRun) {
+            console.log(`[DRY RUN] Would send email to ${contact.email}`);
             sendSuccess = true;
+            deliveryChannel = 'email';
             results.emailSent++;
-            console.log(`✅ Email sent to ${contact.email}`);
           } else {
-            const errorText = await emailResponse.text();
-            console.error(`❌ Email failed: ${errorText}`);
-            results.errors.push(`Email failed for ${contact.id}: ${errorText}`);
-            
-            // Email failed - pause follow-up to prevent infinite retries
-            console.warn(`⏸️ Pausing follow-up for ${contact.id} - email send failed`);
-            await supabase
-              .from('contact_follow_ups')
-              .update({ 
-                status: 'paused',
-                pause_reason: `Email failed: ${errorText.substring(0, 200)}`
-              })
-              .eq('id', followUp.id);
-            results.errors.push(`Paused follow-up for ${contact.id} - email failed`);
+            const emailResponse = await fetch(`${supabaseUrl}/functions/v1/send-email`, {
+              method: 'POST',
+              headers: {
+                'Authorization': `Bearer ${serviceRoleJwt}`,
+                'Content-Type': 'application/json',
+              },
+              body: JSON.stringify({
+                to: contact.email,
+                subject: subject || 'Following up',
+                html: message,
+                from_email: agentConfig?.from_email,
+                from_name: agentConfig?.from_name || business?.name,
+                business_id: followUp.business_id,
+                contact_id: contact.id,
+              }),
+            });
+
+            const emailText = await emailResponse.text();
+            let emailResult: any = {};
+            try { emailResult = emailText ? JSON.parse(emailText) : {}; } catch (_error) { emailResult = { raw: emailText }; }
+
+            if (emailResponse.ok && emailResult.success === true) {
+              sendSuccess = true;
+              deliveryChannel = 'email';
+              results.emailSent++;
+              console.log(`✅ Email sent to ${contact.email}`);
+            } else {
+              const errorText = emailResult.error || emailResult.message || emailText || `HTTP ${emailResponse.status}`;
+              console.error(`❌ Email failed: ${errorText}`);
+              results.errors.push(`Email failed for ${contact.id}: ${errorText}`);
+              
+              // Email failed - pause follow-up to prevent infinite retries
+              const pauseReason = `Email failed: ${String(errorText).substring(0, 200)}`;
+              console.warn(`⏸️ Pausing follow-up for ${contact.id} - email send failed`);
+              await supabase
+                .from('contact_follow_ups')
+                .update({ 
+                  status: 'paused',
+                  pause_reason: pauseReason
+                })
+                .eq('id', followUp.id);
+              await updateCrmStage(supabase, contact, 'needs_human');
+              await logFollowUpAlert(supabase, followUp.business_id, contact.id, 'email_failed', pauseReason, {
+                http_status: emailResponse.status,
+                response: emailResult,
+              });
+              results.errors.push(`Paused follow-up for ${contact.id} - email failed`);
+            }
           }
 
         } else if (!sendSuccess) {
@@ -364,11 +514,19 @@ Deno.serve(async (req) => {
           console.warn(`⚠️ Cannot send ${step.channel} to contact ${contact.id} - missing info or opted out`);
           
           // No fallback available - pause the follow-up
-          console.warn(`⏸️ Pausing follow-up for ${contact.id} - no valid channel`);
+          const pauseReason = `No valid channel: sms=${canUseSms(contact)} email=${canUseEmail(contact)}`;
+          console.warn(`⏸️ Pausing follow-up for ${contact.id} - ${pauseReason}`);
           await supabase
             .from('contact_follow_ups')
-            .update({ status: 'paused' })
+            .update({ status: 'paused', pause_reason: pauseReason })
             .eq('id', followUp.id);
+          await updateCrmStage(supabase, contact, 'needs_human');
+          await logFollowUpAlert(supabase, followUp.business_id, contact.id, 'no_valid_channel', pauseReason, {
+            has_phone: Boolean(contact.phone),
+            sms_status: contact.sms_status,
+            has_email: Boolean(contact.email),
+            email_status: contact.email_status,
+          });
           results.errors.push(`Paused follow-up for ${contact.id} - no valid channel`);
         }
 
@@ -386,16 +544,20 @@ Deno.serve(async (req) => {
             ? new Date(Date.now() + nextStep.delay_hours * 60 * 60 * 1000).toISOString()
             : null;
 
-          await supabase
-            .from('contact_follow_ups')
-            .update({
-              current_step: nextStepOrder,
-              last_step_sent_at: new Date().toISOString(),
-              next_step_due_at: nextStepDue,
-              status: nextStepDue ? 'active' : 'completed',
-              completed_at: nextStepDue ? null : new Date().toISOString(),
-            })
-            .eq('id', followUp.id);
+          if (!dryRun) {
+            await supabase
+              .from('contact_follow_ups')
+              .update({
+                current_step: nextStepOrder,
+                last_step_sent_at: new Date().toISOString(),
+                next_step_due_at: nextStepDue,
+                status: nextStepDue ? 'active' : 'completed',
+                completed_at: nextStepDue ? null : new Date().toISOString(),
+              })
+              .eq('id', followUp.id);
+
+            await updateCrmStage(supabase, contact, hasBookingIntent(message) ? 'trial_pending' : 'nurture');
+          }
 
           results.processed++;
         }
@@ -410,6 +572,9 @@ Deno.serve(async (req) => {
             sequence_id: followUp.sequence_id,
             step_order: nextStepOrder,
             channel: step.channel,
+            delivery_channel: deliveryChannel,
+            dry_run: dryRun,
+            crm_stage_target: sendSuccess ? (hasBookingIntent(message) ? 'trial_pending' : 'nurture') : 'needs_human',
             message_preview: message.substring(0, 100),
           },
           error_message: sendSuccess ? null : results.errors[results.errors.length - 1],

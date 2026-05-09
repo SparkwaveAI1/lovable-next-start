@@ -128,7 +128,10 @@ Deno.serve(async (req) => {
     }
 
     const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
-    const supabaseKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
+    const supabaseKey = Deno.env.get('SERVICE_ROLE_JWT') || '';
+    if (!supabaseKey.startsWith('eyJ')) {
+      throw new Error('SERVICE_ROLE_JWT missing or invalid; do not use SUPABASE_SERVICE_ROLE_KEY in edge runtime');
+    }
     const supabase = createClient(supabaseUrl, supabaseKey);
 
     const body: SendEmailRequest = await req.json();
