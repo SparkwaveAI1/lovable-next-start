@@ -39,9 +39,9 @@ const OPENROUTER_BASE = "https://openrouter.ai/api/v1/chat/completions";
 const OPENROUTER_REFERER = "https://fightflowacademy.com";
 const OPENROUTER_TITLE = "Fight Flow Lead Responder";
 
-// Use a reliable direct OpenAI model for all lead responses. Do not downshift live sales conversations to flaky/unknown model routes.
-const MODEL_T1 = Deno.env.get("FIGHTFLOW_RESPONSE_MODEL") || "openai-direct/gpt-4o";
-const MODEL_T2 = Deno.env.get("FIGHTFLOW_RESPONSE_MODEL") || "openai-direct/gpt-4o";
+// Use GPT-5.5 direct through OpenAI for all lead responses. Do not downshift live sales conversations to cheaper models.
+const MODEL_T1 = Deno.env.get("FIGHTFLOW_RESPONSE_MODEL") || "openai-direct/gpt-5.5";
+const MODEL_T2 = Deno.env.get("FIGHTFLOW_RESPONSE_MODEL") || "openai-direct/gpt-5.5";
 const MODEL_EVAL = "openai/gpt-4o-mini";                // quality gate evaluator (fast)
 
 // Hard limits (7-Component, Component 2)
@@ -234,6 +234,7 @@ function deterministicFallbackResponse(message: string, schedule: string, knowle
   const asksConsent = /\b(parent|guardian|consent|waiver|minor|under 18|under eighteen)\b/i.test(m);
   const asksFreeTrial = /\b(free class|trial|try a class|try one|come in|first class)\b/i.test(m);
   const asksMultipleClasses = /\b(more than one|multiple classes|multiple class|two classes|several classes)\b/i.test(m);
+  const generalTrainingInterest = /\b(interested in training|want to train|looking to train|start training)\b/i.test(m);
 
   if (asksConsent) {
     return "For minors, a parent/guardian handles the waiver. First class is free — what age and class are you looking for?";
@@ -241,6 +242,10 @@ function deterministicFallbackResponse(message: string, schedule: string, knowle
 
   if (asksMultipleClasses) {
     return "Yes — you can do multiple classes. First class is free; which classes are you most interested in trying?";
+  }
+
+  if (generalTrainingInterest) {
+    return "Great — are you interested in Muay Thai, Boxing, MMA, Grappling, Self Defense, or general fitness?";
   }
 
   if (asksFreeTrial) {
@@ -611,13 +616,18 @@ async function callOpenAI(
   maxTokens = 120,
   temperature = 0.7
 ): Promise<string> {
+  const isGpt5 = /^gpt-5/i.test(model);
+  const body = isGpt5
+    ? { model, messages, max_completion_tokens: Math.max(maxTokens, 512) }
+    : { model, messages, max_tokens: maxTokens, temperature };
+
   const res = await fetch("https://api.openai.com/v1/chat/completions", {
     method: "POST",
     headers: {
       Authorization: `Bearer ${apiKey}`,
       "Content-Type": "application/json",
     },
-    body: JSON.stringify({ model, messages, max_tokens: maxTokens, temperature }),
+    body: JSON.stringify(body),
   });
 
   if (!res.ok) {
@@ -639,7 +649,7 @@ async function callPrimaryResponseModel(
   if (model === "gpt-5.5" || model === "openai/gpt-5.5") {
     const openAiKey = Deno.env.get("OPENAI_API_KEY");
     if (!openAiKey) throw new Error("OPENAI_API_KEY not configured for direct OpenAI response model");
-    return callOpenAI(messages, openAiKey, "gpt-4o", maxTokens, temperature);
+    return callOpenAI(messages, openAiKey, "gpt-5.5", maxTokens, temperature);
   }
   if (model.startsWith("openai-direct/")) {
     const openAiKey = Deno.env.get("OPENAI_API_KEY");
@@ -678,7 +688,7 @@ If any rule fails, reply ONLY with a corrected version of the SMS (no explanatio
 
   try {
     const result = await callLLM(
-      MODEL_T2,
+      MODEL_EVAL,
       [{ role: "user", content: evalPrompt }],
       apiKey,
       120,
@@ -890,6 +900,40 @@ Deno.serve(async (req) => {
         shouldBook: false,
         classDetails: null,
         detectedIntents: ["BOOKING_GUARDRAIL"],
+        evaluation: { enabled: false, tier: "guardrail" },
+      }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
+    }
+
+    const priorBookedMessage = (messages || [])
+      .filter((m: any) => m.role === "assistant" && /booked for|you're booked|you are booked/i.test(m.content || ""))
+      .map((m: any) => m.content || "")
+      .pop();
+    if (priorBookedMessage && /\b(trained before|experience|experienced|trained)\b/i.test(latestMessage)) {
+      const bookedMatch = priorBookedMessage.match(/booked for\s+([^\.]+)|you're booked for\s+([^\.]+)|you are booked for\s+([^\.]+)/i);
+      const bookedText = (bookedMatch?.[1] || bookedMatch?.[2] || bookedMatch?.[3] || "your class").trim();
+      const responseText = truncate(`Great — we'll see you for ${bookedText}. Bring any gear you have; the team will expect you.`, MAX_CHARS);
+      await logSpeedToLeadResponse({
+        supabase,
+        businessId,
+        threadId,
+        intent: "BOOKING_CONTEXT_GUARDRAIL",
+        urgency: 3,
+        tier: "guardrail",
+        msgCount,
+        response: responseText,
+        guardrail: "booking_context_retention",
+      });
+      return new Response(JSON.stringify({
+        message: responseText,
+        intent: "ROUTINE",
+        urgency: 3,
+        tier: "T1",
+        shouldHandoff: false,
+        handoffSent: false,
+        reengagementScheduled: false,
+        shouldBook: false,
+        classDetails: null,
+        detectedIntents: ["BOOKING_CONTEXT_GUARDRAIL"],
         evaluation: { enabled: false, tier: "guardrail" },
       }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
     }
@@ -1132,7 +1176,7 @@ Deno.serve(async (req) => {
       shouldBook: false,
       classDetails: null,
       detectedIntents: [intent],
-      evaluation: { enabled: true, tier },
+      evaluation: { enabled: true, tier, responseModel: primaryModel },
     }), {
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
