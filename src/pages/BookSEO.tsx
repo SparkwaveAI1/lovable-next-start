@@ -7,6 +7,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
+import { getLeadAttribution } from "@/lib/leadAttribution";
 import { CheckCircle2, Clock, TrendingUp } from "lucide-react";
 import sparkwaveIcon from "@/assets/sparkwave-icon.png";
 
@@ -92,6 +93,7 @@ export default function BookSEO() {
     submitCooldown.current = true;
 
     // Step 1: Insert to Supabase
+    const attribution = getLeadAttribution();
     const { error: insertError } = await supabase
       .from("sparkwave_booking_requests")
       .insert({
@@ -108,6 +110,7 @@ export default function BookSEO() {
           seo_challenge: seoChallenge,
         }),
         status: "pending",
+        ...attribution,
       });
 
     if (insertError) {

@@ -9,6 +9,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
+import { getLeadAttribution } from "@/lib/leadAttribution";
 import { CalendarDays, CheckCircle2, Clock, Sparkles } from "lucide-react";
 import sparkwaveIcon from "@/assets/sparkwave-icon.png";
 
@@ -64,6 +65,8 @@ export default function Book() {
     setLoading(true);
 
     try {
+      const attribution = getLeadAttribution();
+
       const { error } = await supabase
         .from('sparkwave_booking_requests')
         .insert({
@@ -73,7 +76,8 @@ export default function Book() {
           preferred_date: preferredDate,
           preferred_time: preferredTime,
           topic,
-          message: message || null
+          message: message || null,
+          ...attribution,
         });
 
       if (error) {
