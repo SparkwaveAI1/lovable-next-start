@@ -121,8 +121,7 @@ const CRM = () => {
     const active = contacts.filter(c => ['active', 'member', 'active_member', 'customer'].includes(c.status?.toLowerCase() || '')).length;
     const leads = contacts.filter(c => ['new_lead', 'lead', 'contacted', 'qualified', 'trial', 'opportunity'].includes(c.status?.toLowerCase() || '')).length;
     const withActivity = contacts.filter(c => c.last_activity_date).length;
-    const withEmail = contacts.filter(c => c.email).length;
-    const withPhone = contacts.filter(c => c.phone).length;
+    const reachable = contacts.filter(c => c.email || c.phone).length;
 
     const sourceMap = contacts.reduce<Record<string, number>>((acc, contact) => {
       const source = contact.source || 'unknown';
@@ -135,7 +134,7 @@ const CRM = () => {
       .sort((a, b) => b.count - a.count)
       .slice(0, 6);
 
-    return { active, leads, withActivity, withEmail, withPhone, sourceCounts };
+    return { active, leads, withActivity, reachable, sourceCounts };
   }, [contacts]);
 
   const filtered = contacts.filter(contact => {
@@ -219,7 +218,7 @@ const CRM = () => {
               </CardTitle>
             </CardHeader>
             <CardContent>
-              <div className="text-3xl font-bold">{Math.max(metrics.withEmail, metrics.withPhone).toLocaleString()}</div>
+              <div className="text-3xl font-bold">{metrics.reachable.toLocaleString()}</div>
               <p className="text-xs text-muted-foreground">Email or phone present in current sample</p>
             </CardContent>
           </Card>
