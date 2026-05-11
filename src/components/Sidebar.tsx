@@ -3,30 +3,22 @@ import { Link, useLocation } from "react-router-dom"
 import {
   LayoutDashboard,
   Users,
-  FileText,
   Image,
   Headphones,
-  Mail,
   Shield,
   CalendarDays,
   Rocket,
-  Bot,
   ChevronLeft,
   ChevronRight,
   ChevronDown,
-  ClipboardList,
   BookOpen,
   TrendingUp,
   MessageSquare,
-  Twitter,
   HelpCircle,
   LayoutPanelLeft,
-  Settings,
-  Activity,
+  ClipboardList,
+  FileText,
   Building2,
-  Radio,
-  Server,
-  BarChart3,
 } from "lucide-react"
 import { cn } from "@/lib/utils"
 import sparkwaveIcon from "@/assets/sparkwave-icon.png"
@@ -44,31 +36,15 @@ interface NavGroup {
   collapsible?: boolean
 }
 
-// Organized navigation with clear hierarchy
+// Organized navigation around the current Growth OS work areas.
+// Legacy agent/system/reporting dashboards still have direct routes, but are
+// intentionally hidden here until they are rebuilt or revalidated as useful.
 const navGroups: NavGroup[] = [
   {
     label: "Core",
     items: [
-      { label: "Dashboard", href: "/", icon: LayoutDashboard },
+      { label: "Dashboard", href: "/dashboard", icon: LayoutDashboard },
       { label: "Mission Control", href: "/mission-control", icon: Rocket },
-    ],
-  },
-  {
-    label: "AI & Automation",
-    items: [
-      { label: "Agents", href: "/agents", icon: Bot },
-      { label: "System Operations", href: "/system-operations", icon: Settings },
-      { label: "Reports", href: "/reports", icon: ClipboardList },
-      { label: "Twitter Analytics", href: "/twitter-analytics", icon: Twitter },
-    ],
-  },
-  {
-    label: "System",
-    items: [
-      { label: "System Monitoring", href: "/system-monitoring", icon: Activity },
-      { label: "Org Monitoring", href: "/monitoring", icon: Radio },
-      { label: "Process Monitoring", href: "/process-monitoring", icon: Server },
-      { label: "Business Metrics", href: "/business-metrics", icon: BarChart3 },
     ],
   },
   {
@@ -84,7 +60,9 @@ const navGroups: NavGroup[] = [
   {
     label: "Content",
     items: [
+      { label: "Strategy Queue", href: "/content-strategy", icon: FileText },
       { label: "Content Hub", href: "/content-hub", icon: LayoutPanelLeft },
+      { label: "Approval Queue", href: "/content-review", icon: ClipboardList },
       { label: "Media Library", href: "/media-library", icon: Image },
     ],
   },

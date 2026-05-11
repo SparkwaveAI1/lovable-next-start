@@ -9,6 +9,8 @@ import Index from "./pages/Index";
 import Homepage from "./pages/Homepage";
 import NotFound from "./pages/NotFound";
 import ContentHub from "./pages/ContentHub";
+import ContentStrategy from "./pages/ContentStrategy";
+import ContentReviewPage from "./pages/ContentReviewPage";
 import Contacts from "./pages/Contacts";
 import MediaLibraryPage from "./pages/MediaLibraryPage";
 import EmployeeUpload from "./pages/EmployeeUpload";
@@ -101,9 +103,11 @@ const App = () => (
             <Route path="/" element={<Homepage />} />
             <Route path="/dashboard" element={<ProtectedRoute><ErrorBoundary><Index /></ErrorBoundary></ProtectedRoute>} />
             <Route path="/contacts" element={<ProtectedRoute><ErrorBoundary><Contacts /></ErrorBoundary></ProtectedRoute>} />
+            <Route path="/content-strategy" element={<ProtectedRoute><ErrorBoundary><ContentStrategy /></ErrorBoundary></ProtectedRoute>} />
             <Route path="/content-hub" element={<ProtectedRoute><ErrorBoundary><ContentHub /></ErrorBoundary></ProtectedRoute>} />
+            <Route path="/content-review" element={<ProtectedRoute><ErrorBoundary><ContentReviewPage /></ErrorBoundary></ProtectedRoute>} />
             <Route path="/content-center" element={<Navigate replace to="/content-hub" />} />
-            <Route path="/content" element={<Navigate replace to="/content-hub" />} />
+            <Route path="/content" element={<Navigate replace to="/content-strategy" />} />
             <Route path="/media-library" element={<ProtectedRoute><ErrorBoundary><MediaLibraryPage /></ErrorBoundary></ProtectedRoute>} />
             <Route path="/service-requests" element={<ProtectedRoute><ErrorBoundary><ServiceRequests /></ErrorBoundary></ProtectedRoute>} />
             <Route path="/late-setup" element={<ProtectedRoute><ErrorBoundary><LateSetup /></ErrorBoundary></ProtectedRoute>} />
@@ -129,7 +133,6 @@ const App = () => (
             <Route path="/faq" element={<ProtectedRoute><ErrorBoundary><FAQ /></ErrorBoundary></ProtectedRoute>} />
             <Route path="/help" element={<ProtectedRoute><ErrorBoundary><Help /></ErrorBoundary></ProtectedRoute>} />
             <Route path="/content-visibility" element={<Navigate replace to="/content-hub" />} />
-            <Route path="/content-review" element={<Navigate replace to="/content-hub" />} />
             <Route path="/system-monitoring" element={<ProtectedRoute><ErrorBoundary><SystemMonitoring /></ErrorBoundary></ProtectedRoute>} />
             <Route path="/monitoring" element={<ProtectedRoute><ErrorBoundary><MonitoringPage /></ErrorBoundary></ProtectedRoute>} />
             <Route path="/org-monitoring" element={<ProtectedRoute><ErrorBoundary><OrgMonitoring /></ErrorBoundary></ProtectedRoute>} />
