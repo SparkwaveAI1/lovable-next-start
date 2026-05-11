@@ -1,5 +1,6 @@
 import { createClient } from 'npm:@supabase/supabase-js@2';
-import { buildDeterministicFallbackResponse, detectBookingGuardrail } from '../_shared/fightflow-response-guardrails.ts';
+import { buildDeterministicFallbackResponse, detectBookingGuardrail, validateFightFlowOutbound } from '../_shared/fightflow-response-guardrails.ts';
+import { buildSafeFightFlowContactUpdate } from '../_shared/fightflow-crm-state.ts';
 
 // === INLINED: _shared/retry.ts ===
 /**
@@ -578,14 +579,14 @@ async function findOrCreateContact(
   supabase: any,
   businessId: string,
   phone: string
-): Promise<{ id: string; business_id: string; isNew: boolean; email?: string; first_name?: string; last_name?: string; preferred_channel?: string; tags?: string[] }> {
+): Promise<{ id: string; business_id: string; isNew: boolean; email?: string; first_name?: string; last_name?: string; preferred_channel?: string; tags?: string[]; status?: string | null; pipeline_stage?: string | null }> {
 
   const normalizedPhone = normalizePhoneNumber(phone);
   console.log(`Looking up contact: phone=${normalizedPhone}, businessId=${businessId}`);
 
   const { data: existingContact, error: lookupError } = await supabase
     .from('contacts')
-    .select('id, business_id, first_name, last_name, email, phone, preferred_channel, tags')
+    .select('id, business_id, first_name, last_name, email, phone, preferred_channel, tags, status, pipeline_stage')
     .eq('business_id', businessId)
     .eq('phone', normalizedPhone)
     .single();
@@ -598,7 +599,7 @@ async function findOrCreateContact(
   if (normalizedPhone !== phone) {
     const { data: altContact } = await supabase
       .from('contacts')
-      .select('id, business_id, first_name, last_name, email, phone, preferred_channel, tags')
+      .select('id, business_id, first_name, last_name, email, phone, preferred_channel, tags, status, pipeline_stage')
       .eq('business_id', businessId)
       .eq('phone', phone)
       .single();
@@ -1119,17 +1120,42 @@ Deno.serve(async (req) => {
 
     if (contact.isNew) {
       console.log(`New contact created from SMS: ${contact.id}`);
-      
-      enrollInFollowUp(supabase, {
-        contactId: contact.id,
-        businessId: businessId,
-        trigger: 'new_lead',
-      }).catch(err => console.error('Follow-up enrollment failed:', err));
+      try {
+        const enrollmentResult = await enrollInFollowUp(supabase, {
+          contactId: contact.id,
+          businessId: businessId,
+          trigger: 'new_lead',
+        });
+        await supabase.from('automation_logs').insert({
+          business_id: businessId,
+          automation_type: 'fightflow_follow_up_enrollment',
+          status: enrollmentResult.enrolled ? 'success' : 'warning',
+          processed_data: { contact_id: contact.id, result: enrollmentResult }
+        });
+      } catch (err: any) {
+        console.error('Follow-up enrollment failed:', err.message);
+        await supabase.from('automation_logs').insert({
+          business_id: businessId,
+          automation_type: 'fightflow_follow_up_enrollment',
+          status: 'error',
+          error_message: err.message,
+          processed_data: { contact_id: contact.id }
+        });
+      }
     } else {
       console.log(`Matched existing contact: ${contact.id}`);
-      
-      pauseFollowUpOnResponse(supabase, contact.id)
-        .catch(err => console.error('Follow-up pause failed:', err));
+      try {
+        await pauseFollowUpOnResponse(supabase, contact.id);
+      } catch (err: any) {
+        console.error('Follow-up pause failed:', err.message);
+        await supabase.from('automation_logs').insert({
+          business_id: businessId,
+          automation_type: 'fightflow_follow_up_pause_failed',
+          status: 'error',
+          error_message: err.message,
+          processed_data: { contact_id: contact.id }
+        });
+      }
     }
 
     // STEP 3: Find or create conversation thread
@@ -1482,12 +1508,37 @@ INSTRUCTIONS FOR RETURNING CONTACT:
         })
         .eq('id', thread.id);
       if (bookingGuardrail.kind === 'dont_book') {
-        await supabase
-          .from('contacts')
-          .update({ pipeline_stage: 'new', status: 'new_lead' })
-          .eq('id', contact.id);
+        const safeState = buildSafeFightFlowContactUpdate(contact, {
+          pipeline_stage: 'new',
+          status: 'new_lead',
+          last_activity_date: new Date().toISOString(),
+        });
+
+        if (Object.keys(safeState.update).length > 0) {
+          await supabase
+            .from('contacts')
+            .update(safeState.update)
+            .eq('id', contact.id);
+        }
+
+        if (safeState.blockedDowngrades.length > 0) {
+          await supabase.from('automation_logs').insert({
+            business_id: businessId,
+            automation_type: 'fightflow_crm_state_downgrade_blocked',
+            status: 'warning',
+            processed_data: {
+              contact_id: contact.id,
+              thread_id: thread.id,
+              blocked_downgrades: safeState.blockedDowngrades,
+              current_status: contact.status,
+              current_pipeline_stage: contact.pipeline_stage,
+            }
+          });
+        }
       }
     }
+
+    let bookingExistsOrCreated = false;
 
     // Handle class booking if AI detected intent
     if (!bookingGuardrail && aiResult.shouldBook && aiResult.classDetails) {
@@ -1530,6 +1581,7 @@ INSTRUCTIONS FOR RETURNING CONTACT:
           });
 
         if (!bookingError) {
+          bookingExistsOrCreated = true;
           console.log(`Booking created: ${targetClass.class_name} on ${classDate.toDateString()}`);
 
           await supabase
@@ -1554,6 +1606,63 @@ INSTRUCTIONS FOR RETURNING CONTACT:
     // Send SMS via Twilio FIRST, then store with twilio_sid
     let twilioSid = null;
     let smsPhone = null;
+
+    const outboundValidation = validateFightFlowOutbound({
+      message: responseMessage,
+      leadMessage: body,
+      contactName,
+      businessName: business?.name || businessName,
+      knowledgeText,
+      scheduleText,
+      historyText,
+      hasRealInquiry: Boolean(body && body.trim()),
+      hasPhone: Boolean(from),
+      hasEmail: Boolean((contact as any).email),
+      smsConsent: true,
+      bookingExistsOrCreated,
+    });
+
+    if (outboundValidation.action === 'block') {
+      console.error('FightFlow outbound SMS blocked by pre-send validator:', outboundValidation.reasons.join(','));
+      await supabase.from('automation_logs').insert({
+        business_id: businessId,
+        automation_type: 'fightflow_outbound_validation_blocked',
+        status: 'warning',
+        error_message: `Blocked outbound SMS: ${outboundValidation.reasons.join(',')}`,
+        processed_data: {
+          contact_id: contact.id,
+          thread_id: thread.id,
+          original_message: responseMessage,
+          reasons: outboundValidation.reasons,
+          needs_human_review: outboundValidation.needsHumanReview,
+        }
+      });
+      if (outboundValidation.needsHumanReview) {
+        await supabase
+          .from('conversation_threads')
+          .update({ needs_human_review: true, conversation_state: 'needs_human_review' })
+          .eq('id', thread.id);
+      }
+      return new Response(`<?xml version="1.0" encoding="UTF-8"?><Response></Response>`, {
+        headers: { ...corsHeaders, 'Content-Type': 'text/xml; charset=utf-8' }
+      });
+    }
+
+    if (outboundValidation.action === 'rewrite') {
+      await supabase.from('automation_logs').insert({
+        business_id: businessId,
+        automation_type: 'fightflow_outbound_validation_rewrite',
+        status: 'success',
+        processed_data: {
+          contact_id: contact.id,
+          thread_id: thread.id,
+          original_message: responseMessage,
+          safe_message: outboundValidation.safeMessage,
+          reasons: outboundValidation.reasons,
+        }
+      });
+      responseMessage = outboundValidation.safeMessage;
+    }
 
     if (isTest) {
       // ── TEST MODE: Skip real Twilio send, use fake SID ────────────────────
@@ -1621,8 +1730,22 @@ INSTRUCTIONS FOR RETURNING CONTACT:
     }
     } // end else (non-test Twilio send)
 
-    // Store AI response AFTER sending (with twilio_sid and phone)
-    await supabase
+    if (!isTest && !twilioSid) {
+      await supabase.from('automation_logs').insert({
+        business_id: businessId,
+        automation_type: 'sms_response_failed',
+        status: 'error',
+        error_message: 'Outbound SMS was not stored in conversation history because Twilio did not return a SID',
+        processed_data: { contact_id: contact.id, thread_id: thread.id, phone: from }
+      });
+      return new Response(`<?xml version="1.0" encoding="UTF-8"?><Response></Response>`, {
+        headers: { ...corsHeaders, 'Content-Type': 'text/xml; charset=utf-8' }
+      });
+    }
+
+    // Store AI response AFTER confirmed Twilio delivery (with twilio_sid and phone), then create a monitor breadcrumb
+    // so missing response_grades rows can be detected against the sms_messages.id source of truth.
+    const { data: outboundMessage, error: outboundInsertError } = await supabase
       .from('sms_messages')
       .insert({
         thread_id: thread.id,
@@ -1633,7 +1756,31 @@ INSTRUCTIONS FOR RETURNING CONTACT:
         phone: smsPhone,
         twilio_sid: twilioSid,
         business_id: businessId
+      })
+      .select('id')
+      .single();
+
+    if (outboundInsertError) {
+      await supabase.from('automation_logs').insert({
+        business_id: businessId,
+        automation_type: 'fightflow_outbound_sms_persist_failed',
+        status: 'error',
+        error_message: outboundInsertError.message,
+        processed_data: { contact_id: contact.id, thread_id: thread.id, twilio_sid: twilioSid }
       });
+    } else if (outboundMessage?.id) {
+      await supabase.from('automation_logs').insert({
+        business_id: businessId,
+        automation_type: 'fightflow_response_grade_expected',
+        status: 'pending',
+        processed_data: {
+          sms_message_id: outboundMessage.id,
+          contact_id: contact.id,
+          thread_id: thread.id,
+          expected_by: new Date(Date.now() + 10 * 60 * 1000).toISOString(),
+        }
+      });
+    }
 
     // ========================================
     // STEP 7: BOOKING DETECTION → fightflow_appointments

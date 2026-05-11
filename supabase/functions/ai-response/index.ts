@@ -315,6 +315,62 @@ async function latestConfirmedBooking(
   return data?.[0] ?? null;
 }
 
+async function updateContactCrmStateSafely(params: {
+  supabase: ReturnType<typeof createClient>;
+  contactId: string | null;
+  businessId: string | null | undefined;
+  requestedStage: string;
+  requestedStatus: string;
+  reason: string;
+}): Promise<void> {
+  const { supabase, contactId, businessId, requestedStage, requestedStatus, reason } = params;
+  if (!contactId) return;
+
+  const { data: contact, error } = await supabase
+    .from("contacts")
+    .select("pipeline_stage,status")
+    .eq("id", contactId)
+    .single();
+
+  if (error) {
+    console.error("[ai-response] CRM state lookup error:", error.message);
+    return;
+  }
+
+  const stageRank: Record<string, number> = {
+    new: 0,
+    new_lead: 0,
+    lead: 1,
+    contacted: 2,
+    qualified: 3,
+    trial_pending: 4,
+    booked: 5,
+    won: 6,
+    lost: 6,
+    cancelled: 6,
+    do_not_contact: 6,
+  };
+  const currentStage = contact?.pipeline_stage ?? "new";
+  const currentRank = stageRank[currentStage] ?? 0;
+  const requestedRank = stageRank[requestedStage] ?? 0;
+
+  if (requestedRank < currentRank) {
+    await supabase.from("automation_logs").insert({
+      business_id: businessId,
+      automation_type: "crm_transition_blocked",
+      status: "warning",
+      error_message: `Blocked CRM downgrade ${currentStage} -> ${requestedStage}`,
+      processed_data: { contact_id: contactId, current_stage: currentStage, requested_stage: requestedStage, reason },
+    });
+    return;
+  }
+
+  await supabase.from("contacts").update({
+    pipeline_stage: requestedStage,
+    status: requestedStatus,
+  }).eq("id", contactId);
+}
+
 async function logSpeedToLeadResponse(params: {
   supabase: ReturnType<typeof createClient>;
   businessId: string | null | undefined;
@@ -375,34 +431,35 @@ async function applyBookingGuardrail(params: {
       }).eq("id", threadId);
     }
     if (contactId) {
-      await supabase.from("contacts").update({
-        pipeline_stage: "new",
-        status: "new_lead",
-      }).eq("id", contactId);
+      await updateContactCrmStateSafely({
+        supabase,
+        contactId,
+        businessId,
+        requestedStage: "new",
+        requestedStatus: "new_lead",
+        reason: "booking_defer_guardrail",
+      });
     }
     return `${prefix}no problem — I won't book anything yet. When you're ready, send the class/day that works.`;
   }
 
   if (action === "cancel") {
-    if (booking?.id) {
-      await supabase.from("class_bookings").update({ status: "cancelled" }).eq("id", booking.id);
-    }
     if (threadId) {
       await supabase.from("conversation_threads").update({
-        conversation_state: "booking_cancelled",
+        conversation_state: "pending_cancellation",
         needs_human_review: true,
       }).eq("id", threadId);
     }
     if (businessId) {
       await supabase.from("automation_logs").insert({
         business_id: businessId,
-        automation_type: "booking_guardrail",
-        status: "success",
-        processed_data: { action, contact_id: contactId, thread_id: threadId, booking_id: booking?.id ?? null },
+        automation_type: "booking_guardrail_human_review",
+        status: "warning",
+        processed_data: { action, contact_id: contactId, thread_id: threadId, booking_id: booking?.id ?? null, mutation: "blocked_pending_human_review" },
       });
     }
     return booking
-      ? `${prefix}you're unbooked for now. If you want another time, send the class/day that works.`
+      ? `${prefix}I’ll have the team check that booking and help with the change. What day/time would work better?`
       : `${prefix}you're not booked yet — I don't see a confirmed booking here. If you want a time, send the class/day that works.`;
   }
 
@@ -769,7 +826,7 @@ async function scheduleReEngagement(
   threadId: string,
   _businessId: string,
   type: "no_reply" | "mid_convo_drop"
-): Promise<void> {
+): Promise<boolean> {
   // Check if re-engagement already pending for this thread
   const { data: existing } = await supabase
     .from("fightflow_sequence_steps")
@@ -781,7 +838,7 @@ async function scheduleReEngagement(
 
   if (existing && existing.length > 0) {
     console.log("Re-engagement already scheduled for thread", threadId);
-    return;
+    return true;
   }
 
   const delays = type === "no_reply"
@@ -803,8 +860,17 @@ async function scheduleReEngagement(
   const { error } = await supabase.from("fightflow_sequence_steps").insert(rows);
   if (error) {
     console.error("Re-engagement schedule error:", error.message);
+    await supabase.from("automation_logs").insert({
+      business_id: _businessId,
+      automation_type: "fightflow_reengagement_schedule_failed",
+      status: "error",
+      error_message: error.message,
+      processed_data: { thread_id: threadId, table: "fightflow_sequence_steps", type },
+    });
+    return false;
   } else {
     console.log(`Re-engagement (${type}) scheduled: ${delays.length} attempt(s) for thread ${threadId}`);
+    return true;
   }
 }
 
@@ -998,9 +1064,10 @@ Deno.serve(async (req) => {
       // Cancel any pending re-engagement
       if (threadId) {
         await supabase
-          .from("fightflow_reengagement_queue")
+          .from("fightflow_sequence_steps")
           .update({ status: "cancelled" })
-          .eq("thread_id", threadId)
+          .eq("appointment_id", threadId)
+          .eq("step_name", "reengage_no_reply")
           .eq("status", "pending");
       }
       return new Response(JSON.stringify({
@@ -1131,8 +1198,7 @@ Deno.serve(async (req) => {
     let reengagementScheduled = false;
     if (threadId && businessId && !shouldHandoff && !isQuietHours()) {
       const reType = msgCount > 1 ? "mid_convo_drop" : "no_reply";
-      await scheduleReEngagement(supabase, threadId, businessId, reType);
-      reengagementScheduled = true;
+      reengagementScheduled = await scheduleReEngagement(supabase, threadId, businessId, reType);
     }
 
     // ── Update conversation state ─────────────────────────────────────────────

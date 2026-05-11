@@ -16,6 +16,136 @@ interface FallbackOptions {
   historyText?: string | null;
 }
 
+export type FightFlowOutboundValidationReason =
+  | 'empty_message'
+  | 'generic_dead_end'
+  | 'technical_text'
+  | 'placeholder_text'
+  | 'booking_confirmation_without_booking'
+  | 'bare_form_booking_defer'
+  | 'booking_defer_on_bare_form'
+  | 'unsupported_schedule_or_price'
+  | 'no_reachable_channel'
+  | 'no_valid_sms_channel'
+  | 'no_sms_consent'
+  | 'missing_sms_consent';
+
+export interface FightFlowOutboundValidationInput extends Partial<FallbackOptions> {
+  message: string;
+  channel?: 'sms' | 'email' | 'internal';
+  contactPhone?: string | null;
+  hasRealInquiry?: boolean;
+  hasPhone?: boolean;
+  hasEmail?: boolean;
+  smsConsent?: boolean;
+  bookingExistsOrCreated?: boolean;
+  bookingAlreadyConfirmed?: boolean;
+}
+
+export interface FightFlowOutboundValidationResult {
+  action: 'allow' | 'rewrite' | 'block';
+  allowed?: boolean;
+  safeMessage: string;
+  message?: string;
+  reasons: FightFlowOutboundValidationReason[];
+  needsHumanReview: boolean;
+}
+
+export type FightFlowCrmStatus = 'new_lead' | 'qualified' | 'needs_human' | 'converted' | string | null | undefined;
+export type FightFlowPipelineStage =
+  | 'new'
+  | 'qualified'
+  | 'trial_pending'
+  | 'trial_scheduled'
+  | 'needs_staff_booking_confirmation'
+  | 'pending_cancellation'
+  | 'pending_review'
+  | string
+  | null
+  | undefined;
+
+export interface FightFlowCrmTransitionInput {
+  currentStatus?: FightFlowCrmStatus;
+  currentPipelineStage?: FightFlowPipelineStage;
+  requestedStatus?: FightFlowCrmStatus;
+  requestedPipelineStage?: FightFlowPipelineStage;
+  reason: string;
+  source: 'sms_webhook' | 'webhook_handler' | 'follow_up' | 'manual' | string;
+}
+
+export interface FightFlowCrmTransitionDecision {
+  allowed: boolean;
+  status?: string;
+  pipelineStage?: string;
+  blockedReason?: 'crm_downgrade_blocked';
+  log: {
+    reason: string;
+    source: string;
+    from: { status?: FightFlowCrmStatus; pipelineStage?: FightFlowPipelineStage };
+    requested: { status?: FightFlowCrmStatus; pipelineStage?: FightFlowPipelineStage };
+    applied: { status?: string; pipelineStage?: string };
+  };
+}
+
+const CRM_STAGE_RANK: Record<string, number> = {
+  new: 10,
+  new_lead: 10,
+  qualified: 30,
+  trial_pending: 40,
+  needs_staff_booking_confirmation: 45,
+  pending_cancellation: 50,
+  pending_review: 50,
+  trial_scheduled: 60,
+  converted: 90,
+};
+
+function crmRank(value?: string | null): number {
+  return CRM_STAGE_RANK[(value || '').toLowerCase()] ?? 20;
+}
+
+export function decideFightFlowCrmTransition(input: FightFlowCrmTransitionInput): FightFlowCrmTransitionDecision {
+  const currentStatusRank = crmRank(input.currentStatus);
+  const currentStageRank = crmRank(input.currentPipelineStage);
+  const requestedStatusRank = crmRank(input.requestedStatus);
+  const requestedStageRank = crmRank(input.requestedPipelineStage);
+  const wouldDowngrade = requestedStatusRank < currentStatusRank || requestedStageRank < currentStageRank;
+
+  if (wouldDowngrade) {
+    return {
+      allowed: false,
+      status: input.currentStatus || undefined,
+      pipelineStage: input.currentPipelineStage || undefined,
+      blockedReason: 'crm_downgrade_blocked',
+      log: {
+        reason: input.reason,
+        source: input.source,
+        from: { status: input.currentStatus, pipelineStage: input.currentPipelineStage },
+        requested: { status: input.requestedStatus, pipelineStage: input.requestedPipelineStage },
+        applied: { status: input.currentStatus || undefined, pipelineStage: input.currentPipelineStage || undefined },
+      },
+    };
+  }
+
+  return {
+    allowed: true,
+    status: input.requestedStatus || input.currentStatus || undefined,
+    pipelineStage: input.requestedPipelineStage || input.currentPipelineStage || undefined,
+    log: {
+      reason: input.reason,
+      source: input.source,
+      from: { status: input.currentStatus, pipelineStage: input.currentPipelineStage },
+      requested: { status: input.requestedStatus, pipelineStage: input.requestedPipelineStage },
+      applied: { status: input.requestedStatus || input.currentStatus || undefined, pipelineStage: input.requestedPipelineStage || input.currentPipelineStage || undefined },
+    },
+  };
+}
+
+export function shouldRouteBookingMutationToHumanReview(message: string): boolean {
+  return /(cancel|unbook|remove|reschedule|change)\s+(my\s+)?(booking|class|trial|appointment)|can't\s+make\s+it|cant\s+make\s+it/i.test(
+    (message || '').toLowerCase().replace(/[’‘]/g, "'"),
+  );
+}
+
 function cleanSms(text: string, max = 320): string {
   return text.replace(/\s+/g, ' ').trim().slice(0, max);
 }
@@ -146,4 +276,111 @@ export function buildDeterministicFallbackResponse(options: FallbackOptions): st
   }
 
   return cleanSms(`Hey${name ? ` ${name}` : ''}! Thanks for reaching out to ${options.businessName || 'Fight Flow Academy'}. What info can I help you with?`);
+}
+
+export function validateFightFlowOutbound(input: FightFlowOutboundValidationInput): FightFlowOutboundValidationResult {
+  const originalMessage = cleanSms(input.message || '', 500);
+  const lower = originalMessage.toLowerCase().replace(/[’‘]/g, "'");
+  const reasons: FightFlowOutboundValidationReason[] = [];
+
+  const isSms = input.channel === 'sms';
+  const hasPhoneInput = input.hasPhone !== undefined || input.contactPhone !== undefined;
+  const hasEmailInput = input.hasEmail !== undefined;
+  const effectiveHasPhone = input.hasPhone ?? Boolean(input.contactPhone);
+  const effectiveHasEmail = input.hasEmail ?? false;
+  const hasAnyChannel = Boolean(effectiveHasPhone || effectiveHasEmail);
+  const shouldValidateReachability = isSms || hasPhoneInput || hasEmailInput;
+  const bookingConfirmed = Boolean(input.bookingExistsOrCreated || input.bookingAlreadyConfirmed);
+
+  if (shouldValidateReachability && !hasAnyChannel) reasons.push('no_reachable_channel');
+  if (isSms && !effectiveHasPhone) reasons.push('no_valid_sms_channel');
+  if (input.smsConsent === false) reasons.push('no_sms_consent', 'missing_sms_consent');
+  if (!originalMessage || originalMessage.length < 3) reasons.push('empty_message');
+
+  const leadHasSpecificIntent = /(price|cost|how much|schedule|what time|when|class|classes|boxing|muay thai|mma|bjj|grappling|age|kid|teen|waiver|parent)/i.test(input.leadMessage || '');
+  const isGenericDeadEnd = /someone (will|would) get back to you/i.test(originalMessage)
+    || /what info can i help you with\??$/i.test(originalMessage)
+    || (leadHasSpecificIntent && /thanks for reaching out|can i answer any questions|how can i help/i.test(originalMessage));
+  if (isGenericDeadEnd && input.hasRealInquiry) reasons.push('generic_dead_end');
+
+  if (/(typeerror|referenceerror|syntaxerror|stack trace|cannot read propert|undefined is not|null is not|jwt|api key|unauthorized|forbidden|internal server error|bad gateway|exception in)/i.test(originalMessage)) {
+    reasons.push('technical_text');
+  }
+
+  if (/\[[^\]]+\]|\{\{[^}]+\}\}|<[^>]+>|TODO|INSERT_|YOUR_|TBD/i.test(originalMessage)) {
+    reasons.push('placeholder_text');
+  }
+
+  const claimsBooking = /(you're|you are|you’re|we have you|got you|all set).{0,40}(booked|scheduled|confirmed)|team will expect you|see you (at|for|on)|confirmed for/i.test(lower);
+  if (claimsBooking && !bookingConfirmed) {
+    reasons.push('booking_confirmation_without_booking');
+  }
+
+  const bookingDefer = /(won't|will not|don't|do not|not going to).{0,25}(book|schedule)|not book(ing)? (it|anything)? yet/i.test(lower);
+  if (bookingDefer && !input.hasRealInquiry) {
+    reasons.push('bare_form_booking_defer', 'booking_defer_on_bare_form');
+  }
+
+  const unsupportedPriceOrSchedule = /\b(\$\d+|\d+\s*(am|pm)|monday|tuesday|wednesday|thursday|friday|saturday|sunday)\b/i.test(originalMessage)
+    && input.hasRealInquiry
+    && !input.knowledgeText
+    && !input.scheduleText
+    && /not sure|maybe|probably|i think|should be/i.test(originalMessage);
+  if (unsupportedPriceOrSchedule) reasons.push('unsupported_schedule_or_price');
+
+  const safeFallback = buildDeterministicFallbackResponse({
+    contactName: input.contactName,
+    businessName: input.businessName,
+    leadMessage: input.leadMessage || '',
+    knowledgeText: input.knowledgeText,
+    scheduleText: input.scheduleText,
+    historyText: input.historyText,
+  });
+
+  const blockingReasons = new Set<FightFlowOutboundValidationReason>([
+    'empty_message',
+    'technical_text',
+    'placeholder_text',
+    'booking_confirmation_without_booking',
+    'bare_form_booking_defer',
+    'booking_defer_on_bare_form',
+    'unsupported_schedule_or_price',
+    'no_reachable_channel',
+    'no_valid_sms_channel',
+    'no_sms_consent',
+    'missing_sms_consent',
+  ]);
+
+  const hasBlockingReason = reasons.some((reason) => blockingReasons.has(reason));
+  if (hasBlockingReason) {
+    const safeMessage = reasons.includes('technical_text') || reasons.includes('placeholder_text') ? '' : safeFallback;
+    return {
+      action: 'block',
+      allowed: false,
+      safeMessage,
+      message: safeMessage,
+      reasons,
+      needsHumanReview: true,
+    };
+  }
+
+  if (reasons.includes('generic_dead_end')) {
+    return {
+      action: 'rewrite',
+      allowed: true,
+      safeMessage: safeFallback,
+      message: safeFallback,
+      reasons,
+      needsHumanReview: false,
+    };
+  }
+
+  return {
+    action: 'allow',
+    allowed: true,
+    safeMessage: originalMessage,
+    message: originalMessage,
+    reasons,
+    needsHumanReview: false,
+  };
 }

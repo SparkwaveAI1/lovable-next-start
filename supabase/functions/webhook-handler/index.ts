@@ -1,12 +1,13 @@
-import { serve } from "https://deno.land/std@0.190.0/http/server.ts";
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.45.0';
 import { enrollInFollowUp } from "../_shared/follow-up.ts";
 import { checkContactForOutreach, logSendDecision } from "../_shared/contact-checks.ts";
 import { extractWixPhone, normalizePhoneNumber } from "../_shared/wix-phone.ts";
+import { validateFightFlowOutbound } from "../_shared/fightflow-response-guardrails.ts";
+import { buildWebhookIdempotencyKey, extractExplicitSmsConsent, validateLeadReachability, verifyWebhookSharedSecret } from "../_shared/fightflow-webhook-safety.ts";
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
+  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type, x-webhook-secret, x-wix-webhook-secret, x-sparkwave-webhook-secret',
 };
 
 // Default message when no specific inquiry is provided
@@ -19,6 +20,7 @@ interface ContactData {
   comments?: string;
   leadType?: string;
   pipelineStage?: string;
+  smsConsent?: boolean;
 }
 
 interface Contact {
@@ -37,6 +39,46 @@ interface BusinessData {
   name: string;
   slug: string;
   timezone?: string;
+}
+
+async function ensureConversationThread(
+  supabase: any,
+  contactId: string,
+  businessId: string,
+): Promise<string | null> {
+  const { data: existingThread, error: lookupError } = await supabase
+    .from('conversation_threads')
+    .select('id')
+    .eq('contact_id', contactId)
+    .eq('business_id', businessId)
+    .in('status', ['active', 'open'])
+    .order('created_at', { ascending: false })
+    .limit(1)
+    .maybeSingle();
+
+  if (existingThread?.id && !lookupError) {
+    console.log('Reusing conversation thread:', existingThread.id);
+    return existingThread.id;
+  }
+
+  const { data: thread, error: threadError } = await supabase
+    .from('conversation_threads')
+    .insert({
+      contact_id: contactId,
+      business_id: businessId,
+      status: 'active',
+      conversation_state: 'initial'
+    })
+    .select('id')
+    .single();
+
+  if (threadError || !thread?.id) {
+    console.error('Failed to create conversation thread:', threadError?.message || 'unknown');
+    return null;
+  }
+
+  console.log('Created conversation thread:', thread.id);
+  return thread.id;
 }
 
 /**
@@ -125,7 +167,10 @@ async function findOrCreateContact(
     }
     if (!existingContact.phone && phone) {
       updates.phone = phone;
+      updates.sms_status = formData.smsConsent ? 'active' : 'no_consent';
       console.log(`Updating contact with new phone: ${phone}`);
+    } else if (phone && formData.smsConsent && existingContact.sms_status !== 'active') {
+      updates.sms_status = 'active';
     }
     if (existingContact.first_name === 'Unknown' || existingContact.first_name === 'SMS Contact') {
       if (firstName && firstName !== 'Unknown') {
@@ -170,7 +215,7 @@ async function findOrCreateContact(
       source: 'wix_form',
       status: 'new_lead',
       email_status: email ? 'subscribed' : null,
-      sms_status: phone ? 'active' : null,
+      sms_status: phone ? (formData.smsConsent ? 'active' : 'no_consent') : null,
       comments: formData.comments || '',
       lead_type: formData.leadType || 'sales_lead',
       pipeline_stage: formData.pipelineStage || 'new',
@@ -227,6 +272,34 @@ async function sendInitialOutreach(
     console.log(`⚠️ REVIEW flag for ${contact.first_name}: ${checkResult.reason}`);
     // For now, still proceed but log warning
     // Future: Route to approval queue
+  }
+
+  // Create/reuse the thread before any AI call so ai-response, inbound message,
+  // outbound message, human-review flags, and re-engagement state all attach to
+  // the same durable conversation record.
+  const threadId = await ensureConversationThread(supabase, contact.id, businessId);
+  if (!threadId) {
+    await supabase.from('automation_logs').insert({
+      business_id: businessId,
+      automation_type: 'fightflow_thread_create_failed',
+      status: 'error',
+      error_message: 'Initial outreach skipped because no conversation thread could be created or reused',
+      processed_data: { contact_id: contact.id }
+    });
+    return;
+  }
+
+  // Store the inquiry as inbound message before AI so conversation history and
+  // downstream grading have a complete thread.
+  if (inquiry && inquiry.trim().length > 0) {
+    await supabase.from('sms_messages').insert({
+      thread_id: threadId,
+      contact_id: contact.id,
+      direction: 'inbound',
+      message: inquiry,
+      ai_response: false,
+      business_id: businessId
+    });
   }
 
   // Load business knowledge base
@@ -325,6 +398,8 @@ async function sendInitialOutreach(
           businessId: businessId,
           businessContext: businessName,
           contactName: contactName,
+          threadId,
+          conversationHistory: inquiry ? `Customer: ${inquiry}` : 'No previous messages',
           classSchedule: classSchedule,
           knowledgeBase: knowledgeText
         })
@@ -362,11 +437,11 @@ async function sendInitialOutreach(
             : `Hey! Thanks for reaching out to Fight Flow Academy! Can I answer any questions for you or set you up with a free trial class?`;
           // Log this for monitoring
           await supabase.from('automation_logs').insert({
-            business_id: endpoint.business_id,
+            business_id: businessId,
             automation_type: 'ai_response_error_filtered',
             status: 'warning',
             error_message: `Filtered suspicious AI response: ${aiMessage.substring(0, 100)}`,
-            processed_data: { contact_id: contactResult?.contact?.id }
+            processed_data: { contact_id: contact.id }
           });
         } else {
           responseMessage = aiMessage;
@@ -384,51 +459,17 @@ async function sendInitialOutreach(
         responseMessage = personalizedFallback;
         // Log the failure for monitoring
         await supabase.from('automation_logs').insert({
-          business_id: endpoint.business_id,
+          business_id: businessId,
           automation_type: 'ai_response_failed',
           status: 'error',
           error_message: `AI returned status ${aiResponse.status}: ${errorText.substring(0, 200)}`,
-          processed_data: { contact_id: contactResult?.contact?.id }
+          processed_data: { contact_id: contact.id }
         });
       }
     } catch (aiError: any) {
       console.error('AI response error:', aiError.message);
       responseMessage = personalizedFallback;
     }
-  }
-
-  // Create conversation thread for this contact
-  let threadId: string | null = null;
-  try {
-    const { data: thread, error: threadError } = await supabase
-      .from('conversation_threads')
-      .insert({
-        contact_id: contact.id,
-        business_id: businessId,
-        status: 'active',
-        conversation_state: 'initial'
-      })
-      .select('id')
-      .single();
-
-    if (thread) {
-      threadId = thread.id;
-      console.log('Created conversation thread:', threadId);
-    }
-  } catch (threadError: any) {
-    console.error('Failed to create thread:', threadError.message);
-  }
-
-  // Store the inquiry as inbound message if provided
-  if (threadId && inquiry && inquiry.trim().length > 0) {
-    await supabase.from('sms_messages').insert({
-      thread_id: threadId,
-      contact_id: contact.id,
-      direction: 'inbound',
-      message: inquiry,
-      ai_response: false,
-      business_id: businessId
-    });
   }
 
   // SEND SMS if contact has phone - and THEN record to sms_messages with twilio_sid
@@ -438,11 +479,68 @@ async function sendInitialOutreach(
   // Test mode: skip real Twilio sends
   const isTestBusiness = businessId === '00000000-0000-0000-0000-000000000000';
 
-  if (isTestBusiness && contact.phone) {
+  const canSmsContact = Boolean(contact.phone && contact.sms_status !== 'unsubscribed' && contact.sms_status !== 'no_consent');
+  const outboundValidation = validateFightFlowOutbound({
+    message: responseMessage,
+    leadMessage: inquiry,
+    contactName,
+    businessName,
+    knowledgeText,
+    scheduleText: classSchedule.map((cls: any) => `${cls.day_name}: ${cls.class_name || cls.name || 'Class'} (${cls.start_time || ''}-${cls.end_time || ''})`).join('\n'),
+    channel: canSmsContact ? 'sms' : 'email',
+    contactPhone: canSmsContact ? contact.phone : null,
+    hasRealInquiry: Boolean(hasRealInquiry),
+    hasPhone: Boolean(canSmsContact),
+    hasEmail: Boolean(contact.email),
+    smsConsent: !contact.phone || canSmsContact,
+    bookingExistsOrCreated: false,
+  });
+
+  if (outboundValidation.action === 'block') {
+    console.error('FightFlow outbound SMS blocked by pre-send validator:', outboundValidation.reasons.join(','));
+    await supabase.from('automation_logs').insert({
+      business_id: businessId,
+      automation_type: 'fightflow_outbound_validation_blocked',
+      status: 'warning',
+      error_message: `Blocked outbound SMS: ${outboundValidation.reasons.join(',')}`,
+      processed_data: {
+        contact_id: contact.id,
+        thread_id: threadId,
+        original_message: responseMessage,
+        reasons: outboundValidation.reasons,
+        needs_human_review: outboundValidation.needsHumanReview,
+      }
+    });
+    if (threadId && outboundValidation.needsHumanReview) {
+      await supabase
+        .from('conversation_threads')
+        .update({ needs_human_review: true, conversation_state: 'needs_human_review' })
+        .eq('id', threadId);
+    }
+    return;
+  }
+
+  if (outboundValidation.action === 'rewrite') {
+    await supabase.from('automation_logs').insert({
+      business_id: businessId,
+      automation_type: 'fightflow_outbound_validation_rewrite',
+      status: 'success',
+      processed_data: {
+        contact_id: contact.id,
+        thread_id: threadId,
+        original_message: responseMessage,
+        safe_message: outboundValidation.safeMessage,
+        reasons: outboundValidation.reasons,
+      }
+    });
+    responseMessage = outboundValidation.safeMessage;
+  }
+
+  if (isTestBusiness && canSmsContact) {
     twilioSid = 'TEST_' + crypto.randomUUID().slice(0, 8);
     smsPhone = contact.phone;
     console.log('[TEST] Would send SMS to:', contact.phone, '-', responseMessage);
-  } else if (contact.phone) {
+  } else if (canSmsContact) {
     try {
       console.log('Sending SMS to:', contact.phone);
 
@@ -495,9 +593,10 @@ async function sendInitialOutreach(
     }
   }
 
-  // Store the outbound response AFTER sending (with twilio_sid and phone captured)
-  if (threadId) {
-    await supabase.from('sms_messages').insert({
+  // Store the outbound response AFTER confirmed Twilio delivery (with twilio_sid and phone captured).
+  // If Twilio fails, log/alert above but do not add a normal conversation-history row.
+  if (threadId && (!canSmsContact || twilioSid)) {
+    const { data: outboundMessage, error: outboundInsertError } = await supabase.from('sms_messages').insert({
       thread_id: threadId,
       contact_id: contact.id,
       direction: 'outbound',
@@ -506,7 +605,29 @@ async function sendInitialOutreach(
       phone: smsPhone,
       twilio_sid: twilioSid,
       business_id: businessId
-    });
+    }).select('id').single();
+
+    if (outboundInsertError) {
+      await supabase.from('automation_logs').insert({
+        business_id: businessId,
+        automation_type: 'fightflow_outbound_sms_persist_failed',
+        status: 'error',
+        error_message: outboundInsertError.message,
+        processed_data: { contact_id: contact.id, thread_id: threadId, twilio_sid: twilioSid }
+      });
+    } else if (outboundMessage?.id) {
+      await supabase.from('automation_logs').insert({
+        business_id: businessId,
+        automation_type: 'fightflow_response_grade_expected',
+        status: 'pending',
+        processed_data: {
+          sms_message_id: outboundMessage.id,
+          contact_id: contact.id,
+          thread_id: threadId,
+          expected_by: new Date(Date.now() + 10 * 60 * 1000).toISOString(),
+        }
+      });
+    }
   }
 
   // SEND EMAIL if contact has email
@@ -608,17 +729,35 @@ async function sendInitialOutreach(
   console.log('Initial outreach complete');
 }
 
-serve(async (req: Request) => {
+Deno.serve(async (req: Request) => {
   // Handle CORS preflight requests
   if (req.method === 'OPTIONS') {
     return new Response(null, { headers: corsHeaders });
   }
 
+  let supabase: any = null;
+  let activeWebhookSubmission: { key: string; businessId: string } | null = null;
+
+  const markActiveWebhookSubmission = async (status: 'processed' | 'failed', errorMessage?: string) => {
+    if (!supabase || !activeWebhookSubmission) return;
+    const { error } = await supabase
+      .from('webhook_submissions')
+      .update({
+        status,
+        error_message: errorMessage || null,
+        processed_at: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+      })
+      .eq('submission_id', activeWebhookSubmission.key)
+      .eq('business_id', activeWebhookSubmission.businessId);
+    if (error) console.error(`Failed to mark webhook submission ${status}:`, error.message);
+  };
+
   try {
     // Initialize Supabase client
     const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
     const supabaseKey = Deno.env.get('SERVICE_ROLE_JWT')!;
-    const supabase = createClient(supabaseUrl, supabaseKey);
+    supabase = createClient(supabaseUrl, supabaseKey);
 
     // Parse URL to get endpoint slug
     const url = new URL(req.url);
@@ -659,6 +798,19 @@ serve(async (req: Request) => {
       );
     }
 
+    const enforceWebhookSecret = Deno.env.get('FIGHTFLOW_ENFORCE_WEBHOOK_SECRET') === 'true';
+    const webhookAuth = verifyWebhookSharedSecret(req.headers, endpoint.secret_key, isTest, enforceWebhookSecret);
+    if (!webhookAuth.allowed) {
+      console.warn(`Webhook authentication failed for ${endpointSlug}: ${webhookAuth.reason}`);
+      return new Response(
+        JSON.stringify({ error: 'Webhook authentication failed', reason: webhookAuth.reason }),
+        {
+          status: (webhookAuth as any).status,
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+        }
+      );
+    }
+
     // ── Test mode: Override business_id and skip Twilio sends ──────────────
     if (isTest) {
       (endpoint as any).business_id = testBusinessId;
@@ -666,10 +818,11 @@ serve(async (req: Request) => {
       console.log('[TEST MODE] Overriding business_id to test ID');
     }
 
-    // Parse request body
+    // Parse request body once. req.json() cannot be retried after auth/dedup checks.
     let requestBody;
+    const rawBody = await req.text();
     try {
-      requestBody = await req.json();
+      requestBody = JSON.parse(rawBody || '{}');
     } catch (e) {
       console.error('Invalid JSON in request body:', e);
       return new Response(
@@ -695,25 +848,44 @@ serve(async (req: Request) => {
       const contactData = requestBody.data?.contact || {};
       const formData = requestBody.data || requestBody;
 
-      // ATOMIC DEDUPLICATION: Use database unique constraint instead of check-then-insert
-      // This prevents race conditions when Wix sends contact_created + contact_updated simultaneously
-      const submissionId = formData.submissionId;
-      if (submissionId) {
-        const { error: dedupError } = await supabase
-          .from('webhook_submissions')
-          .insert({ 
-            submission_id: submissionId, 
-            business_id: endpoint.business_id 
-          });
+      // Idempotency marker with explicit status. Wix may retry after a partial
+      // failure; failed markers are reclaimable while processing/processed markers
+      // are safely skipped. Missing submissionId gets a deterministic payload hash.
+      const idempotency = await buildWebhookIdempotencyKey(requestBody);
+      const submissionId = idempotency.key;
+      const { error: dedupError } = await supabase
+        .from('webhook_submissions')
+        .insert({
+          submission_id: submissionId,
+          business_id: endpoint.business_id,
+          status: 'processing',
+          idempotency_source: idempotency.source,
+          updated_at: new Date().toISOString()
+        });
 
-        // If unique_violation (23505), this submission was already processed
-        if (dedupError?.code === '23505') {
-          console.log(`Duplicate submission detected (atomic): ${submissionId} - skipping processing`);
+      if (dedupError?.code === '23505') {
+        const { data: existingSubmission } = await supabase
+          .from('webhook_submissions')
+          .select('status')
+          .eq('submission_id', submissionId)
+          .eq('business_id', endpoint.business_id)
+          .maybeSingle();
+
+        if (existingSubmission?.status === 'failed') {
+          console.log(`Retrying previously failed webhook submission: ${submissionId}`);
+          await supabase
+            .from('webhook_submissions')
+            .update({ status: 'processing', error_message: null, updated_at: new Date().toISOString() })
+            .eq('submission_id', submissionId)
+            .eq('business_id', endpoint.business_id);
+        } else {
+          console.log(`Duplicate submission detected (${existingSubmission?.status || 'unknown'}): ${submissionId} - skipping processing`);
           return new Response(
             JSON.stringify({
               success: true,
-              message: 'Duplicate submission - already processed',
-              submissionId
+              message: 'Duplicate submission - already claimed',
+              submissionId,
+              status: existingSubmission?.status || 'unknown'
             }),
             {
               status: 200,
@@ -721,12 +893,11 @@ serve(async (req: Request) => {
             }
           );
         }
-        
-        // Log any other errors but continue processing
-        if (dedupError && dedupError.code !== '23505') {
-          console.error('Dedup insert warning (non-fatal):', dedupError.message);
-        }
+      } else if (dedupError) {
+        console.error('Webhook idempotency reservation failed:', dedupError.message);
+        throw new Error(`Webhook idempotency reservation failed: ${dedupError.message}`);
       }
+      activeWebhookSubmission = { key: submissionId, businessId: endpoint.business_id };
 
       // PRIORITY REVERSAL: Check form fields FIRST, then fall back to contact data
 
@@ -778,6 +949,20 @@ serve(async (req: Request) => {
         console.log(`Phone normalized: ${originalPhone} -> ${leadPhone}`);
       } else if (originalPhone && !leadPhone) {
         console.warn(`Failed to normalize phone: ${originalPhone} - keeping original`);
+      }
+
+      const smsConsent = extractExplicitSmsConsent(formData, contactData);
+      const reachability = validateLeadReachability({ phone: leadPhone, email: leadEmail, smsConsent });
+      if (reachability.reasons.length > 0) {
+        console.log('Lead reachability/consent decision:', JSON.stringify(reachability));
+      }
+      if (leadPhone && !reachability.hasValidPhone) {
+        leadPhone = '';
+        phoneSource = `${phoneSource}:invalid_quarantined`;
+      }
+      if (leadEmail && !reachability.hasValidEmail) {
+        leadEmail = '';
+        emailSource = `${emailSource}:invalid_quarantined`;
       }
 
       // Detect if this is a freeze or cancellation request based on FORM NAME only
@@ -851,7 +1036,7 @@ serve(async (req: Request) => {
             const val = value.trim();
             // Skip if it looks like: email, phone, checkbox, or very short single word (likely a name)
             if (val.includes('@') ||                    // email
-                /^[\d\s\-\+\(\)]+$/.test(val) ||       // phone number
+                /^[\d\s+()-]+$/.test(val) ||       // phone number
                 val === 'Checked' ||                    // checkbox
                 val === 'Unchecked' ||
                 (val.split(' ').length === 1 && val.length < 10)) {  // single short word (name)
@@ -902,7 +1087,10 @@ serve(async (req: Request) => {
         source: 'wix_form',
         timestamp: new Date().toISOString(),
         leadType: leadType,
-        pipelineStage: pipelineStage
+        pipelineStage: reachability.quarantine ? 'pending_review' : pipelineStage,
+        smsConsent,
+        reachability,
+        quarantineReason: reachability.quarantine ? reachability.reasons.join(',') : null
       };
 
       console.log('Processed form data:', processedData);
@@ -923,13 +1111,35 @@ serve(async (req: Request) => {
         if (contactResult.isNew) {
           console.log(`New contact created: ${contactResult.contact.id}`);
           automationType = 'contact_created';
-          
-          // Enroll new leads in follow-up sequence (async, don't wait)
-          enrollInFollowUp(supabase, {
-            contactId: contactResult.contact.id,
-            businessId: endpoint.business_id,
-            trigger: 'new_lead',
-          }).catch(err => console.error('Follow-up enrollment failed:', err));
+
+          // Enroll new leads in follow-up sequence and log the result so failures do not
+          // silently drop a lead out of follow-up.
+          try {
+            const followUpResult = await enrollInFollowUp(supabase, {
+              contactId: contactResult.contact.id,
+              businessId: endpoint.business_id,
+              trigger: 'new_lead',
+            });
+            await supabase.from('automation_logs').insert({
+              business_id: endpoint.business_id,
+              automation_type: 'fightflow_follow_up_enrollment',
+              status: followUpResult.enrolled || followUpResult.reason === 'already_enrolled' ? 'success' : 'warning',
+              processed_data: {
+                contact_id: contactResult.contact.id,
+                enrolled: followUpResult.enrolled,
+                reason: followUpResult.reason || null,
+              }
+            });
+          } catch (err: any) {
+            console.error('Follow-up enrollment failed:', err.message);
+            await supabase.from('automation_logs').insert({
+              business_id: endpoint.business_id,
+              automation_type: 'fightflow_follow_up_enrollment',
+              status: 'error',
+              error_message: err.message,
+              processed_data: { contact_id: contactResult.contact.id }
+            });
+          }
         } else {
           console.log(`Existing contact matched by ${contactResult.matchedBy}: ${contactResult.contact.id}`);
           automationType = 'contact_updated';
@@ -940,7 +1150,22 @@ serve(async (req: Request) => {
         const inquiry = processedData.comments || null;
         const hasInquiry = inquiry && inquiry.trim().length > 0;
 
-        if (isServiceRequest) {
+        if (processedData.reachability?.quarantine) {
+          console.log(`Lead quarantined - no valid reachable consented channel: ${processedData.quarantineReason}`);
+          await supabase.from('automation_logs').insert({
+            business_id: endpoint.business_id,
+            automation_type: 'fightflow_lead_quarantined',
+            status: 'warning',
+            processed_data: {
+              contact_id: contactResult.contact.id,
+              reasons: processedData.reachability.reasons,
+              has_valid_phone: processedData.reachability.hasValidPhone,
+              has_valid_email: processedData.reachability.hasValidEmail,
+              sms_consent: processedData.smsConsent,
+              requires_staff_action: true
+            }
+          });
+        } else if (isServiceRequest) {
           console.log(`Service request (${leadType}) - skipping AI outreach, logging only`);
           // Log the service request for staff follow-up
           await supabase.from('automation_logs').insert({
@@ -1015,7 +1240,9 @@ serve(async (req: Request) => {
           source: 'wix_form',
           phone: processedData.phone,
           email: processedData.email,
-          consent_sms: true
+          sms_consent: processedData.smsConsent,
+          reachability: processedData.reachability,
+          quarantine_reason: processedData.quarantineReason
         },
         error_message: errorMessage,
         execution_time_ms: executionTime
@@ -1026,6 +1253,8 @@ serve(async (req: Request) => {
     } else {
       console.log(`Successfully logged ${automationType} execution`);
     }
+
+    await markActiveWebhookSubmission(status === 'success' ? 'processed' : 'failed', errorMessage || undefined);
 
     // Return success response
     return new Response(
@@ -1045,6 +1274,7 @@ serve(async (req: Request) => {
 
   } catch (error: any) {
     console.error('Webhook processing error:', error);
+    await markActiveWebhookSubmission('failed', error.message);
     return new Response(
       JSON.stringify({
         error: 'Internal server error',
