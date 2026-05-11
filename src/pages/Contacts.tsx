@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
@@ -121,10 +121,16 @@ const TAG_COLORS: Record<string, string> = {
   red: 'bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-300',
 };
 
-export default function Contacts() {
+function getErrorMessage(error: unknown, fallback: string) {
+  return error instanceof Error ? error.message : fallback;
+}
+
+export default function Contacts({ crmMode = false }: { crmMode?: boolean } = {}) {
   const { selectedBusiness, setSelectedBusiness } = useBusinessContext();
   const { data: businesses = [] } = useBusinesses();
   const { toast } = useToast();
+  const [searchParams, setSearchParams] = useSearchParams();
+  const contactIdParam = searchParams.get('contact');
 
   // View state
   const [drawerOpen, setDrawerOpen] = useState(false);
@@ -231,9 +237,46 @@ export default function Contacts() {
     enabled: !!selectedBusiness?.id,
   });
 
+  const { data: deepLinkedContact } = useQuery({
+    queryKey: ['contact-detail-deeplink', selectedBusiness?.id, contactIdParam],
+    queryFn: async () => {
+      if (!selectedBusiness?.id || !contactIdParam) return null;
+
+      const { data, error } = await supabase
+        .from('contacts')
+        .select('id, first_name, last_name, email, phone, source, status, pipeline_stage, tags, last_activity_date, created_at')
+        .eq('business_id', selectedBusiness.id)
+        .eq('id', contactIdParam)
+        .maybeSingle();
+
+      if (error) throw error;
+      return data as Contact | null;
+    },
+    enabled: !!selectedBusiness?.id && !!contactIdParam,
+  });
+
   const contacts = contactsData?.contacts || [];
   const totalCount = contactsData?.totalCount || 0;
   const totalPages = Math.ceil(totalCount / pageSize);
+
+  useEffect(() => {
+    if (!contactIdParam) return;
+
+    const contact = contacts.find(c => c.id === contactIdParam) || deepLinkedContact;
+    if (!contact) return;
+
+    setDrawerContact(contact as DrawerContact);
+    setDrawerOpen(true);
+  }, [contactIdParam, contacts, deepLinkedContact]);
+
+  const closeContactDrawer = () => {
+    setDrawerOpen(false);
+    if (contactIdParam) {
+      const next = new URLSearchParams(searchParams);
+      next.delete('contact');
+      setSearchParams(next, { replace: true });
+    }
+  };
 
   // Handle sort
   const handleSort = (field: SortField) => {
@@ -302,10 +345,10 @@ export default function Contacts() {
       setBulkSelectedTags([]);
       setSelectedIds(new Set());
       refetch();
-    } catch (error: any) {
+    } catch (error: unknown) {
       toast({
         title: 'Error',
-        description: error.message || 'Failed to update tags',
+        description: getErrorMessage(error, 'Failed to update tags'),
         variant: 'destructive',
       });
     } finally {
@@ -335,10 +378,10 @@ export default function Contacts() {
       setBulkNewStatus('');
       setSelectedIds(new Set());
       refetch();
-    } catch (error: any) {
+    } catch (error: unknown) {
       toast({
         title: 'Error',
-        description: error.message || 'Failed to update status',
+        description: getErrorMessage(error, 'Failed to update status'),
         variant: 'destructive',
       });
     } finally {
@@ -377,10 +420,10 @@ export default function Contacts() {
       setNewContactEmail('');
       setNewContactPhone('');
       refetch();
-    } catch (error: any) {
+    } catch (error: unknown) {
       toast({
         title: 'Error',
-        description: error.message || 'Failed to add contact',
+        description: getErrorMessage(error, 'Failed to add contact'),
         variant: 'destructive',
       });
     } finally {
@@ -415,7 +458,7 @@ export default function Contacts() {
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
             <div className="flex items-center gap-2 sm:gap-3">
               <Users className="h-5 w-5 sm:h-6 sm:w-6" />
-              <h1 className="text-xl sm:text-2xl font-bold">Contacts</h1>
+              <h1 className="text-xl sm:text-2xl font-bold">{crmMode ? 'CRM' : 'Contacts'}</h1>
               <Badge variant="secondary" className="text-xs">{totalCount}</Badge>
             </div>
             <Button onClick={() => setAddContactDialogOpen(true)} disabled={!selectedBusiness?.id} size="sm" className="sm:size-default w-full sm:w-auto">
@@ -972,7 +1015,7 @@ export default function Contacts() {
       </Dialog>
       <ContactDetailDrawer
         open={drawerOpen}
-        onClose={() => setDrawerOpen(false)}
+        onClose={closeContactDrawer}
         contact={drawerContact}
         onActionComplete={() => refetch()}
       />
