@@ -296,15 +296,19 @@ async function sendInitialOutreach(
     : `Hey! Thanks for reaching out to Fight Flow Academy! Can I answer any questions for you or set you up with a free trial class?`;
   let responseMessage: string = personalizedFallback;
 
-  // Build the AI prompt context — either the real inquiry, or a personalized greeting prompt
+  // Build the AI prompt context only when the lead provided a real inquiry.
+  // For bare website form submissions, use the deterministic greeting instead of
+  // asking ai-response to write a greeting. The generated greeting prompt contains
+  // wording like “schedule a free trial” and “Do NOT use...”, which can trip the
+  // booking-defer guardrail and produce nonsense like “I won't book anything yet”
+  // even though the lead never asked not to book.
   const hasRealInquiry = inquiry && inquiry.trim().length > 0 && !isJunkMessage;
-  const aiPrompt = hasRealInquiry
-    ? inquiry!
-    : `New lead just signed up via our website contact form. Their name is ${contactName || 'a potential student'}. Please write a warm, personalized opening text message to welcome them by name and invite them to ask questions or schedule a free trial class. Do NOT use the phrase "Thanks for your interest in our programs". Make it sound like a real person texting them.`;
+  const aiPrompt = hasRealInquiry ? inquiry! : null;
 
-  // Always use AI for the response — either to answer their inquiry or generate a personalized greeting
-  {
-    console.log(hasRealInquiry ? 'Inquiry provided, generating AI response...' : 'No inquiry, generating personalized AI greeting...');
+  if (!hasRealInquiry) {
+    console.log('No real inquiry provided; using deterministic personalized greeting.');
+  } else {
+    console.log('Inquiry provided, generating AI response...');
 
     console.log('Knowledge base loaded:', knowledgeBase.length, 'items');
     console.log('Class schedule loaded:', classSchedule.length, 'items');
