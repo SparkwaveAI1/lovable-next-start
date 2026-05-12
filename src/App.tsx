@@ -7,6 +7,7 @@ import { Analytics } from "@/components/Analytics";
 import { AssistantButton } from "@/components/assistant";
 import Index from "./pages/Index";
 import Homepage from "./pages/Homepage";
+import ExecutiveControl from "./pages/ExecutiveControl";
 import NotFound from "./pages/NotFound";
 import ContentHub from "./pages/ContentHub";
 import Contacts from "./pages/Contacts";
@@ -61,6 +62,8 @@ import CRM from "./pages/CRM";
 import AccountDetailPage from "./pages/AccountDetailPage";
 import DealPipeline from "./pages/DealPipeline";
 import BusinessMetrics from "./pages/BusinessMetrics";
+import AnalyticsLearning from "./pages/AnalyticsLearning";
+import GrowthOSAnalytics from "./pages/GrowthOSAnalytics";
 import ToneyFalknerQuestionnaire from "./pages/questionnaire/ToneyFalknerQuestionnaire";
 import ToneyFalknerResults from "./pages/questionnaire/ToneyFalknerResults";
 import ProtectedRoute from "./components/ProtectedRoute";
@@ -99,6 +102,7 @@ const App = () => (
             <Route path="/crisis-monitor" element={<CrisisMonitor />} />
             <Route path="/upload" element={<EmployeeUpload />} />
             <Route path="/" element={<Homepage />} />
+            <Route path="/executive-control" element={<ProtectedRoute><ErrorBoundary><ExecutiveControl /></ErrorBoundary></ProtectedRoute>} />
             <Route path="/dashboard" element={<ProtectedRoute><ErrorBoundary><Index /></ErrorBoundary></ProtectedRoute>} />
             <Route path="/contacts" element={<ProtectedRoute><ErrorBoundary><Contacts /></ErrorBoundary></ProtectedRoute>} />
             <Route path="/content-hub" element={<ProtectedRoute><ErrorBoundary><ContentHub /></ErrorBoundary></ProtectedRoute>} />
@@ -140,6 +144,8 @@ const App = () => (
             <Route path="/crm/deals" element={<ProtectedRoute><ErrorBoundary><DealPipeline /></ErrorBoundary></ProtectedRoute>} />
             <Route path="/crm/:id" element={<ProtectedRoute><ErrorBoundary><AccountDetailPage /></ErrorBoundary></ProtectedRoute>} />
             <Route path="/business-metrics" element={<ProtectedRoute><ErrorBoundary><BusinessMetrics /></ErrorBoundary></ProtectedRoute>} />
+            <Route path="/growth-os-analytics" element={<ProtectedRoute><ErrorBoundary><GrowthOSAnalytics /></ErrorBoundary></ProtectedRoute>} />
+            <Route path="/analytics-learning" element={<ProtectedRoute><ErrorBoundary><AnalyticsLearning /></ErrorBoundary></ProtectedRoute>} />
             <Route path="/questionnaire/toney-falkner" element={<ToneyFalknerQuestionnaire />} />
             <Route path="/questionnaire/toney-falkner/results" element={<ProtectedRoute><ErrorBoundary><ToneyFalknerResults /></ErrorBoundary></ProtectedRoute>} />
             {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}

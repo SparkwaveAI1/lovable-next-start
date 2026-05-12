@@ -4,6 +4,7 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { ArrowLeft, Calendar, User } from 'lucide-react';
 import { Link } from 'react-router-dom';
+import { SEO } from '@/components/SEO';
 
 interface BlogLayoutProps {
   meta: BlogPostMeta;
@@ -19,6 +20,13 @@ export function BlogLayout({ meta, children }: BlogLayoutProps) {
 
   return (
     <div className="min-h-screen bg-background">
+      <SEO
+        title={meta.title}
+        description={meta.excerpt}
+        canonical={`/blog/${meta.slug}`}
+        ogType="article"
+        ogImage={meta.image}
+      />
       <div className="max-w-3xl mx-auto px-4 py-8">
         {/* Back button */}
         <Link to="/blog">

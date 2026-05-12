@@ -30,7 +30,7 @@ export function QuickActions() {
     },
     {
       label: 'Create Content',
-      href: '/content-center',
+      href: '/content-hub',
       icon: Sparkles,
       description: 'AI content',
       color: 'text-indigo-600',

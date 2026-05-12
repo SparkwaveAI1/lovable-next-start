@@ -63,7 +63,7 @@ export default function AdminDashboard() {
           </CardHeader>
           <CardContent>
             <Button asChild className="w-full">
-              <Link to="/">Return to Dashboard</Link>
+              <Link to="/dashboard">Return to Dashboard</Link>
             </Button>
           </CardContent>
         </Card>

@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { Link } from "react-router-dom";
 import { SEO } from "@/components/SEO";
+import { SEO_CONFIG } from "@/lib/seo-config";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -142,11 +143,7 @@ export default function Homepage() {
 
   return (
     <div className="min-h-screen bg-[#0a0e1a] text-white">
-      <SEO
-        title="AI Automation That Drives Revenue"
-        description="We build custom AI systems for sales, marketing, and operations. Not chatbot wrappers. Real automation that 10x your team output."
-        canonical="/"
-      />
+      <SEO {...SEO_CONFIG.home} />
 
       {/* ── NAVIGATION ── */}
       <nav className="fixed top-0 left-0 right-0 z-50 bg-[#0a0e1a]/95 backdrop-blur-sm border-b border-white/10">

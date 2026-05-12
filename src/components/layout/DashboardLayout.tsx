@@ -172,7 +172,7 @@ export function DashboardLayout({
               >
                 <Menu className="h-5 w-5" />
               </Button>
-              <Link to="/" className="lg:hidden flex items-center gap-2">
+              <Link to="/dashboard" className="lg:hidden flex items-center gap-2">
                 <img 
                   src={sparkwaveIcon} 
                   alt="Sparkwave" 

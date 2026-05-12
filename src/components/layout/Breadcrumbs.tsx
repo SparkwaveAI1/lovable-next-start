@@ -9,12 +9,12 @@ interface BreadcrumbItem {
 
 // Route to breadcrumb mapping
 const routeLabels: Record<string, string> = {
-  "/": "Dashboard",
+  "/dashboard": "Dashboard",
   "/mission-control": "Mission Control",
   "/contacts": "Contacts",
   "/bookings": "Bookings",
   "/service-requests": "Service Requests",
-  "/content-center": "Content Center",
+  "/content-hub": "Content Hub",
   "/media-library": "Media Library",
   "/email-marketing": "Email Marketing",
   "/agents": "Agents",
@@ -32,7 +32,7 @@ const routeLabels: Record<string, string> = {
 const routeParents: Record<string, string> = {
   "/agents": "/mission-control",
   "/reports": "/mission-control",
-  "/media-library": "/content-center",
+  "/media-library": "/content-hub",
   "/admin-setup": "/admin",
   "/permissions": "/admin",
   "/late-connections": "/late-setup",
@@ -43,10 +43,10 @@ export function Breadcrumbs({ className }: { className?: string }) {
   const pathname = location.pathname
 
   // Don't show breadcrumbs on dashboard
-  if (pathname === "/") return null
+  if (pathname === "/dashboard") return null
 
   const buildBreadcrumbs = (): BreadcrumbItem[] => {
-    const items: BreadcrumbItem[] = [{ label: "Dashboard", href: "/" }]
+    const items: BreadcrumbItem[] = [{ label: "Dashboard", href: "/dashboard" }]
     
     // Handle docs sub-routes
     if (pathname.startsWith("/docs")) {

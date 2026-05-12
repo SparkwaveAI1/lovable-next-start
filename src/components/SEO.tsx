@@ -1,6 +1,6 @@
 import { Helmet } from 'react-helmet-async';
 
-const BASE_URL = 'https://sparkwave-ai.com';
+const BASE_URL = 'https://sparkwaveai.app';
 const DEFAULT_IMAGE = `${BASE_URL}/og-image.png`;
 
 interface SEOProps {
@@ -21,7 +21,7 @@ export function SEO({
   noIndex = false,
 }: SEOProps) {
   const siteName = 'Sparkwave AI';
-  const fullTitle = title ? `${title} | ${siteName}` : `${siteName} - 10x Your Output, Zero Extra Hours`;
+  const fullTitle = title || `${siteName} - 10x Your Output, Zero Extra Hours`;
   const metaDescription =
     description ||
     '10x your output, zero extra hours. Custom AI automation that multiplies your productivity—not just saves time.';

@@ -13,7 +13,6 @@ import {
   Menu,
   CalendarDays,
   Rocket,
-  Bot,
 } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { Button } from "@/components/ui/button"
@@ -30,17 +29,19 @@ interface NavItem {
   adminOnly?: boolean
 }
 
+// Organized navigation — stale items suppressed per SPA-5126/SPA-4985 matrix:
+// - /agents removed: Hide/Kill per rank 18 (static/old agent registry, not Growth OS surface)
+// - /email-marketing kept but flagged: standalone send surface per rank 12, should fold into Campaigns/Outbound
+// - D-Slice1-nav decision (SPA-5125): /content-center alias kept for backward compat; canonical nav = /content-hub
 const navItems: NavItem[] = [
-  { label: "Dashboard", href: "/", icon: LayoutDashboard },
+  { label: "Dashboard", href: "/dashboard", icon: LayoutDashboard },
   { label: "Contacts", href: "/contacts", icon: Users },
   { label: "Bookings", href: "/bookings", icon: CalendarDays },
-  { label: "Content Center", href: "/content-center", icon: FileText },
+  { label: "Content Hub", href: "/content-hub", icon: FileText },
   { label: "Media Library", href: "/media-library", icon: Image },
   { label: "Service Requests", href: "/service-requests", icon: Headphones },
   { label: "Email", href: "/email-marketing", icon: Mail },
   { label: "Mission Control", href: "/mission-control", icon: Rocket },
-  { label: "Agents", href: "/agents", icon: Bot },
-  { label: "Admin", href: "/admin", icon: Shield, adminOnly: true },
 ]
 
 interface DashboardHeaderProps {

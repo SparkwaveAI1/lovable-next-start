@@ -9,16 +9,12 @@ import {
   Mail,
   Shield,
   CalendarDays,
-  Rocket,
-  Bot,
   ChevronLeft,
   ChevronRight,
   ChevronDown,
   ClipboardList,
   BookOpen,
-  TrendingUp,
   MessageSquare,
-  Twitter,
   HelpCircle,
   LayoutPanelLeft,
   Settings,
@@ -27,6 +23,8 @@ import {
   Radio,
   Server,
   BarChart3,
+  Gauge,
+  Lightbulb,
 } from "lucide-react"
 import { cn } from "@/lib/utils"
 import sparkwaveIcon from "@/assets/sparkwave-icon.png"
@@ -43,32 +41,23 @@ interface NavGroup {
   items: NavItem[]
   collapsible?: boolean
 }
-
 // Organized navigation with clear hierarchy
+// Stale pages hidden per SPA-5126 execution of SPA-4985 keep/rebuild/delete matrix:
+// - AI & Automation section removed: Agents, System Operations, Reports, Twitter Analytics (Hide/Kill per rank 18, 19)
+// - System section removed: System Monitoring, Org Monitoring, Process Monitoring, Business Metrics (Hide/Kill per rank 20, 17)
+// - Business Metrics removed from Operations (Hide per rank 17)
+// - Investments removed from Reference (Hide/Kill per rank 25)
+// - /bookings flagged P2/hide pending Rico dependency check (will be addressed in follow-up)
+// - /executive-control replaces /dashboard as primary nav (SPA-5131 rebuild)
+// - /mission-control retained for backward compat
+// - /analytics-learning added per SPA-5132 (replaces stale /reports + /business-metrics)
 const navGroups: NavGroup[] = [
   {
     label: "Core",
     items: [
-      { label: "Dashboard", href: "/", icon: LayoutDashboard },
-      { label: "Mission Control", href: "/mission-control", icon: Rocket },
-    ],
-  },
-  {
-    label: "AI & Automation",
-    items: [
-      { label: "Agents", href: "/agents", icon: Bot },
-      { label: "System Operations", href: "/system-operations", icon: Settings },
-      { label: "Reports", href: "/reports", icon: ClipboardList },
-      { label: "Twitter Analytics", href: "/twitter-analytics", icon: Twitter },
-    ],
-  },
-  {
-    label: "System",
-    items: [
-      { label: "System Monitoring", href: "/system-monitoring", icon: Activity },
-      { label: "Org Monitoring", href: "/monitoring", icon: Radio },
-      { label: "Process Monitoring", href: "/process-monitoring", icon: Server },
-      { label: "Business Metrics", href: "/business-metrics", icon: BarChart3 },
+      { label: "Executive Control", href: "/executive-control", icon: Gauge },
+      { label: "Mission Control", href: "/mission-control", icon: Activity },
+      { label: "Analytics & Learning", href: "/analytics-learning", icon: Lightbulb },
     ],
   },
   {
@@ -95,11 +84,9 @@ const navGroups: NavGroup[] = [
       { label: "Docs", href: "/docs", icon: BookOpen },
       { label: "FAQ", href: "/faq", icon: HelpCircle },
       { label: "Help", href: "/help", icon: HelpCircle },
-      { label: "Investments", href: "/investments", icon: TrendingUp },
     ],
   },
 ]
-
 const adminNavItems: NavItem[] = [
   { label: "Admin", href: "/admin", icon: Shield, adminOnly: true },
 ]

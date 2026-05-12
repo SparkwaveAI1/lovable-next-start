@@ -118,8 +118,8 @@ const helpContentMap: Record<string, HelpContent> = {
       }
     ]
   },
-  "/content-center": {
-    title: "Content Center",
+  "/content-hub": {
+    title: "Content Hub",
     icon: <FileText className="h-5 w-5 text-pink-500" />,
     description: "Create, manage, and publish content across all channels.",
     sections: [
