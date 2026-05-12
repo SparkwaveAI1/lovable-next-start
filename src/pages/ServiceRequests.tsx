@@ -193,9 +193,9 @@ export default function ServiceRequests() {
     >
       <main className="container mx-auto p-6 space-y-6">
         <div>
-          <h1 className="text-3xl font-bold mb-2">Service Requests</h1>
+          <h1 className="text-3xl font-bold mb-2">Submission Review Queue</h1>
           <p className="text-muted-foreground">
-            Manage freeze and cancellation requests
+            Review intake submissions before they are promoted into bookings, CRM, or service work
           </p>
         </div>
 
@@ -204,7 +204,7 @@ export default function ServiceRequests() {
           <Card>
             <CardHeader className="pb-2">
               <CardTitle className="text-sm font-medium text-muted-foreground">
-                Total Requests
+                Total Submissions
               </CardTitle>
             </CardHeader>
             <CardContent>
@@ -253,7 +253,7 @@ export default function ServiceRequests() {
         <Card>
           <CardHeader>
             <div className="flex items-center justify-between">
-              <CardTitle>Requests</CardTitle>
+              <CardTitle>Review intake submissions</CardTitle>
               <Select value={statusFilter} onValueChange={setStatusFilter}>
                 <SelectTrigger className="w-[180px]">
                   <SelectValue placeholder="Filter by status" />
@@ -276,7 +276,7 @@ export default function ServiceRequests() {
               </div>
             ) : requests.length === 0 ? (
               <div className="text-center py-8 text-muted-foreground">
-                No service requests found
+                No submissions found
               </div>
             ) : (
               <Table>

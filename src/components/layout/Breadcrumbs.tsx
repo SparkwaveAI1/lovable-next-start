@@ -13,7 +13,7 @@ const routeLabels: Record<string, string> = {
   "/mission-control": "Mission Control",
   "/contacts": "Contacts",
   "/bookings": "Bookings",
-  "/service-requests": "Service Requests",
+  "/service-requests": "Review Queue",
   "/content-hub": "Content Hub",
   "/media-library": "Media Library",
   "/email-marketing": "Email Marketing",

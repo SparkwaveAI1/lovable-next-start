@@ -37,31 +37,55 @@ import { toast } from '@/hooks/use-toast';
 import { useBusinessContext } from '@/contexts/BusinessContext';
 
 // ---------------------------------------------------------------------------
-// Brand configuration
-// Each brand entry maps to campaign_tag prefixes (case-insensitive substring).
-// A prospect is assigned to a brand if its campaign_tag contains the prefix.
-// Prospects with no campaign_tag are bucketed under 'sparkwave' as the default.
+// Pipeline configuration
+// The pipeline should not count raw imported contact lists as live leads.
+// FightFlow Academy has real leads today; other businesses stay visible but
+// intentionally show empty until they have qualified/intake records.
 // ---------------------------------------------------------------------------
 const BRANDS = [
-  { key: 'all',         label: 'All Brands' },
-  { key: 'sparkwave',   label: 'Sparkwave' },
-  { key: 'personaai',  label: 'PersonaAI' },
-  { key: 'charx',      label: 'CharX' },
-  { key: 'fightflow',  label: 'Fight Flow' },
+  { key: 'fightflow',  label: 'FightFlow Academy' },
+  { key: 'sparkwave',   label: 'Sparkwave — no active leads yet' },
+  { key: 'personaai',  label: 'PersonaAI — no active leads yet' },
+  { key: 'charx',      label: 'CharX — no active leads yet' },
 ] as const;
 
 type BrandKey = (typeof BRANDS)[number]['key'];
 
-/** Map a campaign_tag string to the canonical brand key. */
+/** Map a campaign/source string to the canonical brand key. */
 function tagToBrand(tag: string | null): BrandKey {
-  if (!tag) return 'sparkwave'; // untagged → default brand
+  if (!tag) return 'sparkwave';
   const t = tag.toLowerCase();
   if (t.includes('personaai') || t.includes('persona-ai')) return 'personaai';
-  if (t.includes('charx') || t.includes('char-x'))           return 'charx';
-  if (t.includes('fightflow') || t.includes('fight-flow') || t.includes('fight_flow') || t.includes('mma'))
+  if (t.includes('charx') || t.includes('char-x')) return 'charx';
+  if (t.includes('fightflow') || t.includes('fight-flow') || t.includes('fight_flow') || t.includes('mma')) {
     return 'fightflow';
-  // iris-seo-outreach, sparkwave, or anything else → sparkwave
+  }
   return 'sparkwave';
+}
+
+function stringifyQualificationData(value: unknown): string {
+  if (!value) return '';
+  if (typeof value === 'string') return value.toLowerCase();
+  try {
+    return JSON.stringify(value).toLowerCase();
+  } catch {
+    return '';
+  }
+}
+
+function isActivePipelineProspect(prospect: Prospect): boolean {
+  const brandSignals = [
+    prospect.campaign_tag,
+    prospect.source_type,
+    prospect.owner_agent,
+    prospect.ai_summary,
+    stringifyQualificationData(prospect.qualification_data),
+  ]
+    .filter(Boolean)
+    .join(' ')
+    .toLowerCase();
+
+  return tagToBrand(brandSignals) === 'fightflow';
 }
 
 // ---------------------------------------------------------------------------
@@ -134,8 +158,8 @@ const CRM = () => {
 
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState('all');
-  // Default to Sparkwave — never show all brands mixed by default
-  const [brandFilter, setBrandFilter] = useState<BrandKey>('sparkwave');
+  // Default to FightFlow because it is the only business with real pipeline leads today.
+  const [brandFilter, setBrandFilter] = useState<BrandKey>('fightflow');
 
   // Dialog state
   const [dialogOpen, setDialogOpen] = useState(false);
@@ -242,10 +266,13 @@ const CRM = () => {
     }
   };
 
-  // Brand-scoped prospects (applied before search/status)
-  const brandScoped = brandFilter === 'all'
-    ? prospects
-    : prospects.filter(p => tagToBrand(p.campaign_tag) === brandFilter);
+  const pipelineProspects = prospects.filter(isActivePipelineProspect);
+
+  // Brand-scoped active pipeline leads (applied before search/status). Other brands are kept
+  // visible but intentionally empty until their real leads exist.
+  const brandScoped = brandFilter === 'fightflow'
+    ? pipelineProspects
+    : pipelineProspects.filter(p => tagToBrand(p.campaign_tag) === brandFilter);
 
   const filtered = brandScoped.filter(p => {
     const matchStatus = statusFilter === 'all' || p.status === statusFilter;
@@ -276,9 +303,9 @@ const CRM = () => {
       <PageHeader
         title="CRM — Prospect Pipeline"
         description={
-          brandFilter === 'all'
-            ? `${prospects.length.toLocaleString()} prospects across all brands`
-            : `${brandScoped.length.toLocaleString()} prospects · ${activeBrandLabel}`
+          brandFilter === 'fightflow'
+            ? `${brandScoped.length.toLocaleString()} active FightFlow Academy leads`
+            : 'Other businesses do not have active leads yet — imported contacts stay in Contacts, not Pipeline'
         }
       />
       <PageContent>
@@ -295,18 +322,9 @@ const CRM = () => {
               }`}
             >
               {brand.label}
-              {brand.key !== 'all' && (
-                <span className={`ml-1.5 text-xs ${brandFilter === brand.key ? 'text-indigo-200' : 'text-gray-400'}`}>
-                  {brand.key === brandFilter
-                    ? brandScoped.length.toLocaleString()
-                    : prospects.filter(p => tagToBrand(p.campaign_tag) === brand.key).length.toLocaleString()}
-                </span>
-              )}
-              {brand.key === 'all' && (
-                <span className={`ml-1.5 text-xs ${brandFilter === brand.key ? 'text-indigo-200' : 'text-gray-400'}`}>
-                  {prospects.length.toLocaleString()}
-                </span>
-              )}
+              <span className={`ml-1.5 text-xs ${brandFilter === brand.key ? 'text-indigo-200' : 'text-gray-400'}`}>
+                {brand.key === 'fightflow' ? pipelineProspects.length.toLocaleString() : '0'}
+              </span>
             </button>
           ))}
         </div>

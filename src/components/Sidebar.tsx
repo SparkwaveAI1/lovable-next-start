@@ -67,7 +67,7 @@ const navGroups: NavGroup[] = [
       { label: "CRM", href: "/crm", icon: Building2 },
       { label: "Communications", href: "/communications", icon: MessageSquare },
       { label: "Bookings", href: "/bookings", icon: CalendarDays },
-      { label: "Service Requests", href: "/service-requests", icon: Headphones },
+      { label: "Review Queue", href: "/service-requests", icon: Headphones },
     ],
   },
   {

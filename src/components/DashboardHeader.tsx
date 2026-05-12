@@ -39,7 +39,7 @@ const navItems: NavItem[] = [
   { label: "Bookings", href: "/bookings", icon: CalendarDays },
   { label: "Content Hub", href: "/content-hub", icon: FileText },
   { label: "Media Library", href: "/media-library", icon: Image },
-  { label: "Service Requests", href: "/service-requests", icon: Headphones },
+  { label: "Review Queue", href: "/service-requests", icon: Headphones },
   { label: "Email", href: "/email-marketing", icon: Mail },
   { label: "Mission Control", href: "/mission-control", icon: Rocket },
 ]

@@ -323,6 +323,11 @@ const Bookings = () => {
     return matchStatus && matchSearch;
   });
 
+  const todaysTrialClasses = bookings.filter(b =>
+    isSameDay(parseISO(b.booking_date), new Date()) &&
+    b.status !== 'cancelled'
+  );
+
   return (
     <DashboardLayout>
       <PageHeader
@@ -351,6 +356,40 @@ const Bookings = () => {
           <Card><CardContent className="pt-4"><div className="text-2xl font-bold text-green-600">{confirmed}</div><div className="text-sm text-gray-500">Confirmed</div></CardContent></Card>
           <Card><CardContent className="pt-4"><div className="text-2xl font-bold text-red-500">{cancelled}</div><div className="text-sm text-gray-500">Cancelled</div></CardContent></Card>
         </div>
+
+        {/* Today's trial classes belong in Bookings, not Executive Control */}
+        <Card className="mb-6">
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2 text-base">
+              <Clock className="h-5 w-5 text-indigo-600" />
+              Today's Trial Classes
+              <Badge variant="outline" className="ml-1">{todaysTrialClasses.length}</Badge>
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            {todaysTrialClasses.length === 0 ? (
+              <div className="text-sm text-gray-400">No trial classes booked for today.</div>
+            ) : (
+              <div className="space-y-2">
+                {todaysTrialClasses.map(b => (
+                  <div key={b.id} className="flex items-center justify-between p-3 rounded-lg border border-indigo-100 bg-indigo-50/40">
+                    <div>
+                      <div className="font-medium text-gray-900 text-sm">
+                        {b.contacts ? `${b.contacts.first_name} ${b.contacts.last_name}` : 'Unknown Member'}
+                      </div>
+                      <div className="text-xs text-gray-500">
+                        {b.class_schedule?.class_name} · {b.class_schedule?.instructor}
+                      </div>
+                    </div>
+                    <div className="text-xs text-gray-500">
+                      {b.class_schedule?.start_time?.slice(0, 5)}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </CardContent>
+        </Card>
 
         {/* Weekly class schedule grid */}
         <Card className="mb-6">
