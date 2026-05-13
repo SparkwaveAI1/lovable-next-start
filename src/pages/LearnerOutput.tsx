@@ -51,9 +51,18 @@ const pageRequirements = [
 const nextImplementationSteps = [
   "Back the page with a Supabase learner_outputs table instead of static snapshots.",
   "Update the Learner cron to insert one structured record per run after writing the wiki artifact.",
+  "Add a document intake form backed by Supabase Storage/table records so Scott can upload studies and source docs from the app.",
   "Add filters for all, decisions needed, task candidates, PersonaAI, FightFlow, CRM, content, and operations drift.",
   "Add an Executive Control card showing the latest Learner scan and unresolved decision count.",
   "Allow Rico/PM to promote an output into a Paperclip task only after acceptance criteria are clear.",
+];
+
+const intakeSources = [
+  "PersonaAI comparison-study source docs and human qualitative research summaries.",
+  "PersonaAI mirrored-study outputs, comparison notes, screenshots, and claim boundaries.",
+  "Alternative visual designs for the client-demo/product presentation flow.",
+  "Customer/demo service module examples and sales-call notes.",
+  "Strategic docs that should influence daily/weekly Learning Layer recommendations.",
 ];
 
 function StatusPill({ label }: { label: string }) {
@@ -187,6 +196,35 @@ export default function LearnerOutput() {
               <p className="mt-4 rounded-lg bg-slate-50 px-3 py-2 font-mono text-xs text-slate-500">{scan.artifact}</p>
             </article>
           ))}
+        </section>
+
+        <section className="mb-8 rounded-2xl border border-indigo-200 bg-indigo-50 p-5">
+          <div className="flex flex-col gap-5 lg:flex-row lg:items-start lg:justify-between">
+            <div className="max-w-2xl">
+              <div className="mb-3 flex items-center gap-2">
+                <FileText className="h-5 w-5 text-indigo-700" />
+                <h2 className="text-lg font-bold text-indigo-950">Learner intake</h2>
+              </div>
+              <p className="text-sm leading-6 text-indigo-900">
+                The intake folder is now active as a source Learner reads before daily scans. Use it for documents
+                that should influence Learner’s recommendations before the SW app upload form is wired to storage.
+              </p>
+              <p className="mt-3 rounded-lg bg-white/70 px-3 py-2 font-mono text-xs text-indigo-800">
+                /root/wiki/ops/learning-layer/intake/
+              </p>
+            </div>
+            <div className="rounded-xl bg-white/70 p-4 lg:min-w-96">
+              <p className="mb-3 text-xs font-semibold uppercase tracking-wide text-indigo-500">Good intake documents</p>
+              <ul className="space-y-2 text-sm text-indigo-900">
+                {intakeSources.map((item) => (
+                  <li key={item} className="flex gap-2">
+                    <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0 text-indigo-600" />
+                    <span>{item}</span>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          </div>
         </section>
 
         <section className="grid gap-6 lg:grid-cols-2">
