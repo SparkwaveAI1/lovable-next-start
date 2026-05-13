@@ -127,6 +127,12 @@ const COMPLETION_SURFACES = [
     state: "Event-backed learning surface",
     next: "Only trust verified event data; avoid placeholder business claims.",
   },
+  {
+    name: "Learner Output",
+    route: "/learner-output",
+    state: "Daily scan archive and decision-discussion surface",
+    next: "Use for readable Learner outputs, decision-needed items, and task candidates before Paperclip conversion.",
+  },
 ];
 
 function getRelativeTime(isoString: string | null | undefined): string {

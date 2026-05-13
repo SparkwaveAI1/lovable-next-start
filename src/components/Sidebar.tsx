@@ -58,6 +58,7 @@ const navGroups: NavGroup[] = [
       { label: "Executive Control", href: "/executive-control", icon: Gauge },
       { label: "Mission Control", href: "/mission-control", icon: Activity },
       { label: "Analytics & Learning", href: "/analytics-learning", icon: Lightbulb },
+      { label: "Learner Output", href: "/learner-output", icon: BookOpen },
     ],
   },
   {

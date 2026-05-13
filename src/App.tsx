@@ -63,6 +63,7 @@ import AccountDetailPage from "./pages/AccountDetailPage";
 import DealPipeline from "./pages/DealPipeline";
 import BusinessMetrics from "./pages/BusinessMetrics";
 import AnalyticsLearning from "./pages/AnalyticsLearning";
+import LearnerOutput from "./pages/LearnerOutput";
 import GrowthOSAnalytics from "./pages/GrowthOSAnalytics";
 import ToneyFalknerQuestionnaire from "./pages/questionnaire/ToneyFalknerQuestionnaire";
 import ToneyFalknerResults from "./pages/questionnaire/ToneyFalknerResults";
@@ -146,6 +147,7 @@ const App = () => (
             <Route path="/business-metrics" element={<ProtectedRoute><ErrorBoundary><BusinessMetrics /></ErrorBoundary></ProtectedRoute>} />
             <Route path="/growth-os-analytics" element={<ProtectedRoute><ErrorBoundary><GrowthOSAnalytics /></ErrorBoundary></ProtectedRoute>} />
             <Route path="/analytics-learning" element={<ProtectedRoute><ErrorBoundary><AnalyticsLearning /></ErrorBoundary></ProtectedRoute>} />
+            <Route path="/learner-output" element={<ProtectedRoute><ErrorBoundary><LearnerOutput /></ErrorBoundary></ProtectedRoute>} />
             <Route path="/questionnaire/toney-falkner" element={<ToneyFalknerQuestionnaire />} />
             <Route path="/questionnaire/toney-falkner/results" element={<ProtectedRoute><ErrorBoundary><ToneyFalknerResults /></ErrorBoundary></ProtectedRoute>} />
             {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
