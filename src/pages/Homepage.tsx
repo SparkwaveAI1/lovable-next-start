@@ -26,12 +26,8 @@ import {
 export default function Homepage() {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 
-  const handleBookAudit = () => {
-    window.open("https://calendly.com/scott-sparkwave/30min", "_blank");
-  };
-
-  const handleBookDemo = () => {
-    window.open("https://calendly.com/scott-sparkwave/30min", "_blank");
+  const handleBookDemo = (source: string = "homepage") => {
+    window.location.href = `/book?source_path=/${source}&request_type=demo`;
   };
 
   const scrollToSection = (id: string) => {
@@ -203,13 +199,13 @@ export default function Homepage() {
             {/* Desktop CTA */}
             <div className="hidden md:flex items-center gap-3">
               <Link
-                to="/about"
+                to="/book?source_path=/homepage-nav&request_type=contact"
                 className="text-sm text-gray-300 hover:text-white transition-colors"
               >
                 Contact
               </Link>
               <Button
-                onClick={handleBookDemo}
+                onClick={() => handleBookDemo("homepage-nav")}
                 className="bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700 text-white text-sm font-semibold px-5 py-2 rounded-lg"
               >
                 Book a Demo
@@ -277,7 +273,7 @@ export default function Homepage() {
             </Link>
             <div className="pt-2 border-t border-white/10">
               <Button
-                onClick={handleBookDemo}
+                onClick={() => handleBookDemo("homepage-mobile-nav")}
                 className="w-full bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700 text-white font-semibold rounded-lg"
               >
                 Book a Demo
@@ -331,7 +327,7 @@ export default function Homepage() {
                 </Link>
                 <Button
                   size="lg"
-                  onClick={handleBookAudit}
+                  onClick={() => handleBookDemo("homepage-hero")}
                   className="bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700 text-white font-semibold px-8 py-6 text-base rounded-xl"
                 >
                   Book a Demo

@@ -1,12 +1,11 @@
 import { useState } from "react"
 import { Link, useLocation } from "react-router-dom"
 import {
-  LayoutDashboard,
+  Gauge,
   Users,
   Image,
   Headphones,
   Shield,
-  CalendarDays,
   Rocket,
   ChevronLeft,
   ChevronRight,
@@ -19,6 +18,9 @@ import {
   ClipboardList,
   FileText,
   Building2,
+  Brain,
+  Bot,
+  Zap,
 } from "lucide-react"
 import { cn } from "@/lib/utils"
 import sparkwaveIcon from "@/assets/sparkwave-icon.png"
@@ -41,19 +43,21 @@ interface NavGroup {
 // intentionally hidden here until they are rebuilt or revalidated as useful.
 const navGroups: NavGroup[] = [
   {
-    label: "Core",
+    label: "AI Growth Hub",
     items: [
-      { label: "Dashboard", href: "/dashboard", icon: LayoutDashboard },
-      { label: "Mission Control", href: "/mission-control", icon: Rocket },
+      { label: "Growth Hub", href: "/growth-hub", icon: Rocket },
+      { label: "Dashboard", href: "/dashboard", icon: Gauge },
+      { label: "Business Brain", href: "/analytics", icon: Brain },
+      { label: "Growth Agent", href: "/mission-control", icon: Bot },
     ],
   },
   {
-    label: "Operations",
+    label: "Lead Engine",
     items: [
+      { label: "Lead Dashboard", href: "/crm", icon: Building2 },
+      { label: "Speed-to-Lead", href: "/fight-flow", icon: Zap },
       { label: "Contacts", href: "/contacts", icon: Users },
-      { label: "CRM", href: "/crm", icon: Building2 },
       { label: "Communications", href: "/communications", icon: MessageSquare },
-      { label: "Bookings", href: "/bookings", icon: CalendarDays },
       { label: "Service Requests", href: "/service-requests", icon: Headphones },
     ],
   },

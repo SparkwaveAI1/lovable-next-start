@@ -91,11 +91,11 @@ export const MODULE_ROUTES: Record<ModuleSlug, string[]> = {
   [MODULE_SLUGS.INVESTMENT]: ['/investments'],
   [MODULE_SLUGS.SOCIAL_MEDIA]: ['/twitter-analytics'],
   [MODULE_SLUGS.ANALYTICS]: ['/analytics'],
-  [MODULE_SLUGS.AUTOMATION]: ['/automation-app', '/automation-audit'],
+  [MODULE_SLUGS.AUTOMATION]: ['/automation', '/audit'],
   [MODULE_SLUGS.BOOKING]: ['/bookings'],
   [MODULE_SLUGS.MISSION_CONTROL]: ['/mission-control'],
   [MODULE_SLUGS.COMMUNICATIONS]: ['/communications'],
-  [MODULE_SLUGS.CONTENT_CENTER]: ['/content-hub', '/content-center', '/content-visibility'],
+  [MODULE_SLUGS.CONTENT_CENTER]: ['/content-hub', '/content-center', '/content-visibility'], // legacy aliases redirect in App.tsx
   [MODULE_SLUGS.MEDIA_LIBRARY]: ['/media-library'],
   [MODULE_SLUGS.AGENTS]: ['/agents'],
   [MODULE_SLUGS.REPORTS]: ['/reports'],

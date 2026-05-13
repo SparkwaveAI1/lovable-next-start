@@ -4,7 +4,7 @@ import { PageContent } from "@/components/layout/PageLayout";
 import { useBusinessContext } from "@/contexts/BusinessContext";
 import { useBusinesses } from "@/hooks/useBusinesses";
 import { supabase } from "@/integrations/supabase/client";
-import { RefreshCw, FileText, X, ChevronDown, Calendar, ChevronRight } from "lucide-react";
+import { RefreshCw, FileText, X, ChevronDown, Calendar, ChevronRight, BarChart3, ShieldCheck, Target, TrendingUp } from "lucide-react";
 import { useToast } from "@/components/ui/use-toast";
 import ReactMarkdown from "react-markdown";
 import { format, formatDistanceToNow, startOfDay, subDays } from "date-fns";
@@ -105,6 +105,58 @@ const AGENT_COLORS: Record<string, string> = {
   Dev: 'bg-emerald-100 text-emerald-700',
   Jerry: 'bg-amber-100 text-amber-700',
 };
+
+type ConnectorState = 'live' | 'placeholder' | 'blocked';
+
+interface GrowthOsKpiRow {
+  view: string;
+  kpi: string;
+  formula: string;
+  source: string;
+  state: ConnectorState;
+  cadence: string;
+}
+
+interface FunnelStageRow {
+  stage: string;
+  event: string;
+  source: string;
+  requiredFields: string;
+  state: ConnectorState;
+}
+
+const CONNECTOR_BADGE_CLASSES: Record<ConnectorState, string> = {
+  live: 'bg-emerald-100 text-emerald-700 border-emerald-200',
+  placeholder: 'bg-amber-100 text-amber-700 border-amber-200',
+  blocked: 'bg-slate-100 text-slate-600 border-slate-200',
+};
+
+const growthOsKpis: GrowthOsKpiRow[] = [
+  { view: 'Daily outbound', kpi: 'Emails sent', formula: 'count(outbound_email_sent)', source: 'Sending platform export/API', state: 'blocked', cadence: 'Daily' },
+  { view: 'Daily outbound', kpi: 'Positive replies', formula: 'count(outbound_reply_classified where category is positive)', source: 'Reply queue + CRM taxonomy', state: 'blocked', cadence: 'Daily' },
+  { view: 'Daily outbound', kpi: 'Bounce rate', formula: 'outbound_email_bounced / outbound_email_sent', source: 'Sending platform', state: 'blocked', cadence: 'Daily' },
+  { view: 'Weekly ICP test', kpi: 'Qualified conversation rate', formula: 'qualified_conversation_created / outbound_email_sent', source: 'CRM qualification fields + sending platform', state: 'blocked', cadence: 'Weekly' },
+  { view: 'Weekly ICP test', kpi: 'Cost per qualified conversation', formula: 'outbound_campaign_cost / qualified_conversations', source: 'Cost log + CRM qualification', state: 'blocked', cadence: 'Weekly' },
+  { view: 'Account pipeline', kpi: 'Booked-call rate', formula: 'sales_call_booked / positive_replies', source: 'Calendar + CRM + reply taxonomy', state: 'blocked', cadence: 'Weekly' },
+  { view: 'Content performance', kpi: 'Content engagement', formula: 'views, saves, replies, DMs, clicks by source package', source: 'Postiz/social exports + feedback log', state: 'placeholder', cadence: 'Weekly' },
+  { view: 'ICP scorecard', kpi: 'Segment recommendation', formula: 'scale / revise / pause / kill based on reply quality, cost, booked calls', source: 'Weekly ICP scorecard', state: 'placeholder', cadence: 'Weekly' },
+];
+
+const funnelStages: FunnelStageRow[] = [
+  { stage: 'Reply', event: 'outbound_reply_received', source: 'Sending platform / mailbox', requiredFields: 'lead_id, reply_id, campaign_name, inbox_id, reply_received_at', state: 'blocked' },
+  { stage: 'Positive reply', event: 'outbound_reply_classified', source: 'CRM or reply-management workflow', requiredFields: 'reply_category, classified_by, confidence, next_action', state: 'blocked' },
+  { stage: 'Qualified conversation', event: 'qualified_conversation_created', source: 'CRM', requiredFields: 'qualification_status, pain_signal, authority_signal, budget_signal, owner', state: 'blocked' },
+  { stage: 'Booked', event: 'sales_call_booked', source: 'Calendar + CRM', requiredFields: 'meeting_id, booked_at, meeting_time, booking_source', state: 'blocked' },
+  { stage: 'Attended', event: 'sales_call_attended', source: 'CRM/calendar', requiredFields: 'meeting_id, attended_at, show_status, owner', state: 'blocked' },
+  { stage: 'Proposal', event: 'proposal_sent', source: 'CRM/proposal system', requiredFields: 'opportunity_id, proposal_sent_at, proposed_value, owner', state: 'blocked' },
+  { stage: 'Close', event: 'closed_won / closed_lost', source: 'CRM/accounting', requiredFields: 'opportunity_id, closed_at, won_amount or loss_reason, source', state: 'blocked' },
+];
+
+const renderConnectorBadge = (state: ConnectorState) => (
+  <span className={`inline-flex items-center rounded-full border px-2 py-0.5 text-xs font-semibold ${CONNECTOR_BADGE_CLASSES[state]}`}>
+    {state}
+  </span>
+);
 
 // ─── Date range helpers ───────────────────────────────────────────────────────
 
@@ -342,6 +394,122 @@ export default function Reports() {
       businessName={selectedBusiness?.name}
     >
       <PageContent>
+        {/* Growth OS Analytics Implementation */}
+        <div className="mb-8 space-y-6">
+          <div className="rounded-2xl border border-indigo-100 bg-gradient-to-br from-indigo-50 via-white to-sky-50 p-6">
+            <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+              <div>
+                <div className="mb-2 inline-flex items-center gap-2 rounded-full border border-indigo-200 bg-white px-3 py-1 text-xs font-semibold text-indigo-700">
+                  <BarChart3 className="h-3.5 w-3.5" />
+                  Growth OS Area 9 reporting shell
+                </div>
+                <h1 className="text-2xl font-bold text-slate-900">Analytics dashboard views and KPI tracking</h1>
+                <p className="mt-2 max-w-3xl text-sm text-slate-600">
+                  Daily outbound, weekly ICP testing, account pipeline, content performance, cost per qualified conversation, and funnel-stage tracking are mapped below. This is an analytics setup view only: no outbound launch, publish, CRM migration, tracking changes, CPA/CAC claim, or external contact is performed here.
+                </p>
+              </div>
+              <div className="grid gap-2 text-sm sm:grid-cols-3 lg:min-w-[420px]">
+                <div className="rounded-xl border border-white bg-white/80 p-3 shadow-sm">
+                  <div className="flex items-center gap-2 text-slate-500"><Target className="h-4 w-4" /> North star</div>
+                  <div className="mt-1 font-semibold text-slate-900">Qualified conversations</div>
+                </div>
+                <div className="rounded-xl border border-white bg-white/80 p-3 shadow-sm">
+                  <div className="flex items-center gap-2 text-slate-500"><TrendingUp className="h-4 w-4" /> Primary KPI</div>
+                  <div className="mt-1 font-semibold text-slate-900">Cost per qualified conversation</div>
+                </div>
+                <div className="rounded-xl border border-white bg-white/80 p-3 shadow-sm">
+                  <div className="flex items-center gap-2 text-slate-500"><ShieldCheck className="h-4 w-4" /> Data mode</div>
+                  <div className="mt-1 font-semibold text-slate-900">Placeholder / blocked until QA</div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div className="grid gap-4 lg:grid-cols-3">
+            <div className="rounded-xl border border-slate-200 bg-white p-4">
+              <h2 className="font-semibold text-slate-900">Daily outbound view</h2>
+              <p className="mt-1 text-xs text-slate-500">Send pacing, bounces, replies, positive replies, complaints, unsubscribes, booked calls, and objections. Live values remain blocked until the sending platform export/API and reply classification are verified.</p>
+            </div>
+            <div className="rounded-xl border border-slate-200 bg-white p-4">
+              <h2 className="font-semibold text-slate-900">Weekly ICP test view</h2>
+              <p className="mt-1 text-xs text-slate-500">Cuts by vertical, segment, geography, lead source, campaign, variant, inbox/domain, and owner. Used to recommend scale, revise, pause, or kill decisions after launch data exists.</p>
+            </div>
+            <div className="rounded-xl border border-slate-200 bg-white p-4">
+              <h2 className="font-semibold text-slate-900">Account pipeline view</h2>
+              <p className="mt-1 text-xs text-slate-500">Tracks reply to positive reply to booked to attended to proposal to close. Booked-call and CAC claims stay blocked until calendar, CRM, cost, and revenue mappings are verified.</p>
+            </div>
+          </div>
+
+          <div className="rounded-xl border border-slate-200 bg-white overflow-hidden">
+            <div className="border-b border-slate-100 p-4">
+              <h2 className="font-semibold text-slate-900">KPI and event mapping</h2>
+              <p className="mt-1 text-xs text-slate-500">Mapped from SPA-4651 and the Full Stack Agency analytics schema. Placeholder rows demonstrate layout and formulas only.</p>
+            </div>
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="border-b border-slate-100 bg-slate-50">
+                    <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-slate-500">View</th>
+                    <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-slate-500">KPI</th>
+                    <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-slate-500">Formula</th>
+                    <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-slate-500">Source</th>
+                    <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-slate-500">State</th>
+                    <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-slate-500">Cadence</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-50">
+                  {growthOsKpis.map((row) => (
+                    <tr key={`${row.view}-${row.kpi}`} className="hover:bg-slate-50">
+                      <td className="px-4 py-3 font-medium text-slate-800">{row.view}</td>
+                      <td className="px-4 py-3 text-slate-700">{row.kpi}</td>
+                      <td className="px-4 py-3 font-mono text-xs text-slate-600">{row.formula}</td>
+                      <td className="px-4 py-3 text-slate-600">{row.source}</td>
+                      <td className="px-4 py-3">{renderConnectorBadge(row.state)}</td>
+                      <td className="px-4 py-3 text-slate-600">{row.cadence}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+
+          <div className="rounded-xl border border-slate-200 bg-white overflow-hidden">
+            <div className="border-b border-slate-100 p-4">
+              <h2 className="font-semibold text-slate-900">Funnel conversion tracking</h2>
+              <p className="mt-1 text-xs text-slate-500">Tracking starts once outbound launches and the required connector QA gates pass. Until then these stages are reporting definitions, not live performance proof.</p>
+            </div>
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="border-b border-slate-100 bg-slate-50">
+                    <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-slate-500">Stage</th>
+                    <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-slate-500">Event</th>
+                    <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-slate-500">Source</th>
+                    <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-slate-500">Required fields</th>
+                    <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-slate-500">State</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-50">
+                  {funnelStages.map((row) => (
+                    <tr key={row.event} className="hover:bg-slate-50">
+                      <td className="px-4 py-3 font-medium text-slate-800">{row.stage}</td>
+                      <td className="px-4 py-3 font-mono text-xs text-slate-600">{row.event}</td>
+                      <td className="px-4 py-3 text-slate-600">{row.source}</td>
+                      <td className="px-4 py-3 text-xs text-slate-600">{row.requiredFields}</td>
+                      <td className="px-4 py-3">{renderConnectorBadge(row.state)}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+
+          <div className="rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900">
+            <p className="font-semibold">Claim boundary and reporting cadence</p>
+            <p className="mt-1">Daily outbound report: daily after approved launch. Weekly ICP, account pipeline, content performance, and cost-per-qualified-conversation reports: weekly. CPA/CAC/revenue claims remain blocked until cost inputs, CRM qualification, calendar matching, and closed-won/source attribution are verified with live connector data.</p>
+          </div>
+        </div>
+
         {/* Page Header */}
         <div className="flex items-center justify-between mb-6">
           <div>

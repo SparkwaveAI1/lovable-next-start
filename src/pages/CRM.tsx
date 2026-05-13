@@ -1,23 +1,14 @@
 import { useMemo, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { Link } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
-import { formatDistanceToNow } from 'date-fns';
 import { supabase } from '@/integrations/supabase/client';
 import { useBusinessContext } from '@/contexts/BusinessContext';
 import { DashboardLayout } from '@/components/layout/DashboardLayout';
 import { PageHeader, PageContent } from '@/components/layout/PageLayout';
-import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
-import { Badge } from '@/components/ui/badge';
-import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@/components/ui/select';
+import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
 import {
   Table,
   TableBody,
@@ -26,20 +17,10 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table';
-import {
-  Activity,
-  AlertTriangle,
-  ArrowRight,
-  BarChart3,
-  Database,
-  Mail,
-  MessageSquare,
-  Search,
-  ShieldCheck,
-  Users,
-} from 'lucide-react';
+import { ArrowRight, Brain, Clock3, Mail, MessageSquare, Phone, Search, Target, Users, Zap } from 'lucide-react';
+import { formatDistanceToNow } from 'date-fns';
 
-interface ContactRecord {
+type Contact = {
   id: string;
   first_name: string | null;
   last_name: string | null;
@@ -51,330 +32,457 @@ interface ContactRecord {
   tags: string[] | null;
   last_activity_date: string | null;
   created_at: string;
+};
+
+type EmailSend = {
+  id: string;
+  to_email: string | null;
+  subject: string | null;
+  status: string | null;
+  created_at: string | null;
+  sent_at: string | null;
+  contact_id: string | null;
+};
+
+type EmailReply = {
+  id: string;
+  from_email: string | null;
+  from_name: string | null;
+  subject: string | null;
+  status: string | null;
+  received_at: string | null;
+  contact_id: string | null;
+};
+
+type SmsMessage = {
+  id: string;
+  direction: string | null;
+  message: string | null;
+  created_at: string;
+  contact_id: string | null;
+  thread_id: string | null;
+};
+
+const statusClassName: Record<string, string> = {
+  active: 'bg-emerald-100 text-emerald-700 border-emerald-200',
+  new_lead: 'bg-blue-100 text-blue-700 border-blue-200',
+  lead: 'bg-blue-100 text-blue-700 border-blue-200',
+  qualified: 'bg-green-100 text-green-700 border-green-200',
+  trial: 'bg-amber-100 text-amber-700 border-amber-200',
+  member: 'bg-purple-100 text-purple-700 border-purple-200',
+  active_member: 'bg-purple-100 text-purple-700 border-purple-200',
+  inactive: 'bg-slate-100 text-slate-500 border-slate-200',
+  cancelled: 'bg-red-100 text-red-700 border-red-200',
+};
+
+function formatName(contact: Contact) {
+  return [contact.first_name, contact.last_name].filter(Boolean).join(' ') || contact.email || contact.phone || 'Unnamed contact';
 }
 
-type SourceCount = { source: string; count: number };
+function formatRelative(value: string | null | undefined) {
+  if (!value) return 'No activity yet';
+  return formatDistanceToNow(new Date(value), { addSuffix: true });
+}
 
-const statusLabel = (value: string | null) => {
-  if (!value) return 'Unknown';
-  return value
-    .split('_')
-    .map(part => part.charAt(0).toUpperCase() + part.slice(1))
-    .join(' ');
-};
+function normalizeStatus(value: string | null | undefined) {
+  if (!value) return 'unknown';
+  return value.replace(/_/g, ' ');
+}
 
-const statusClass = (value: string | null) => {
-  const key = value?.toLowerCase() ?? '';
-  if (['active', 'member', 'active_member', 'customer'].includes(key)) {
-    return 'bg-emerald-100 text-emerald-700 border-emerald-200';
-  }
-  if (['new_lead', 'lead', 'contacted'].includes(key)) {
-    return 'bg-blue-100 text-blue-700 border-blue-200';
-  }
-  if (['qualified', 'trial', 'opportunity'].includes(key)) {
-    return 'bg-amber-100 text-amber-700 border-amber-200';
-  }
-  if (['inactive', 'cancelled', 'suppressed', 'do_not_contact'].includes(key)) {
-    return 'bg-red-100 text-red-700 border-red-200';
-  }
-  return 'bg-slate-100 text-slate-500 border-slate-200';
-};
-
-const CRM = () => {
-  const navigate = useNavigate();
+export default function CRM() {
   const { selectedBusiness } = useBusinessContext();
   const [search, setSearch] = useState('');
-  const [statusFilter, setStatusFilter] = useState('all');
 
-  const { data, isLoading, error } = useQuery({
+  const { data: contacts = [], isLoading: contactsLoading } = useQuery({
     queryKey: ['crm-control-plane-contacts', selectedBusiness?.id],
     queryFn: async () => {
-      if (!selectedBusiness?.id) {
-        return { contacts: [] as ContactRecord[], totalCount: 0 };
-      }
-
-      const { data: contacts, error: contactsError, count } = await supabase
+      if (!selectedBusiness?.id) return [];
+      const { data, error } = await supabase
         .from('contacts')
-        .select(
-          'id, first_name, last_name, email, phone, source, status, pipeline_stage, tags, last_activity_date, created_at',
-          { count: 'exact' }
-        )
+        .select('id, first_name, last_name, email, phone, source, status, pipeline_stage, tags, last_activity_date, created_at')
         .eq('business_id', selectedBusiness.id)
         .order('last_activity_date', { ascending: false, nullsFirst: false })
-        .order('created_at', { ascending: false })
         .limit(500);
 
-      if (contactsError) throw contactsError;
-
-      return {
-        contacts: (contacts || []) as ContactRecord[],
-        totalCount: count || 0,
-      };
+      if (error) throw error;
+      return data as Contact[];
     },
     enabled: !!selectedBusiness?.id,
   });
 
-  const contacts = data?.contacts || [];
-  const totalCount = data?.totalCount || 0;
+  const contactIds = useMemo(() => contacts.map(contact => contact.id), [contacts]);
 
-  const metrics = useMemo(() => {
-    const active = contacts.filter(c => ['active', 'member', 'active_member', 'customer'].includes(c.status?.toLowerCase() || '')).length;
-    const leads = contacts.filter(c => ['new_lead', 'lead', 'contacted', 'qualified', 'trial', 'opportunity'].includes(c.status?.toLowerCase() || '')).length;
-    const withActivity = contacts.filter(c => c.last_activity_date).length;
-    const reachable = contacts.filter(c => c.email || c.phone).length;
+  const { data: recentSms = [] } = useQuery({
+    queryKey: ['crm-control-plane-sms', selectedBusiness?.id],
+    queryFn: async () => {
+      if (!selectedBusiness?.id) return [];
+      const { data: threads, error: threadsError } = await supabase
+        .from('conversation_threads')
+        .select('id')
+        .eq('business_id', selectedBusiness.id)
+        .order('created_at', { ascending: false })
+        .limit(100);
 
-    const sourceMap = contacts.reduce<Record<string, number>>((acc, contact) => {
-      const source = contact.source || 'unknown';
-      acc[source] = (acc[source] || 0) + 1;
-      return acc;
-    }, {});
+      if (threadsError) throw threadsError;
+      const threadIds = (threads || []).map(thread => thread.id);
+      if (threadIds.length === 0) return [];
 
-    const sourceCounts: SourceCount[] = Object.entries(sourceMap)
-      .map(([source, count]) => ({ source, count }))
-      .sort((a, b) => b.count - a.count)
-      .slice(0, 6);
+      const { data, error } = await supabase
+        .from('sms_messages')
+        .select('id, direction, message, created_at, contact_id, thread_id')
+        .in('thread_id', threadIds)
+        .order('created_at', { ascending: false })
+        .limit(50);
 
-    return { active, leads, withActivity, reachable, sourceCounts };
-  }, [contacts]);
-
-  const filtered = contacts.filter(contact => {
-    const q = search.trim().toLowerCase();
-    const matchesSearch = !q || [
-      contact.first_name,
-      contact.last_name,
-      contact.email,
-      contact.phone,
-      contact.source,
-      contact.pipeline_stage,
-      ...(contact.tags || []),
-    ]
-      .filter(Boolean)
-      .join(' ')
-      .toLowerCase()
-      .includes(q);
-
-    const matchesStatus = statusFilter === 'all' || (contact.status || 'unknown') === statusFilter;
-    return matchesSearch && matchesStatus;
+      if (error) throw error;
+      return data as SmsMessage[];
+    },
+    enabled: !!selectedBusiness?.id,
+    refetchInterval: 30000,
   });
 
-  const statusOptions = Array.from(new Set(contacts.map(c => c.status || 'unknown'))).sort();
+  const { data: recentEmails = [] } = useQuery({
+    queryKey: ['crm-control-plane-emails', selectedBusiness?.id, contactIds],
+    queryFn: async () => {
+      if (!selectedBusiness?.id || contactIds.length === 0) return [];
+      const { data, error } = await supabase
+        .from('email_sends')
+        .select('id, to_email, subject, status, created_at, sent_at, contact_id')
+        .in('contact_id', contactIds)
+        .order('created_at', { ascending: false })
+        .limit(50);
+
+      if (error) throw error;
+      return data as EmailSend[];
+    },
+    enabled: !!selectedBusiness?.id && contactIds.length > 0,
+    refetchInterval: 30000,
+  });
+
+  const { data: recentReplies = [] } = useQuery({
+    queryKey: ['crm-control-plane-email-replies', selectedBusiness?.id],
+    queryFn: async () => {
+      if (!selectedBusiness?.id) return [];
+      const { data, error } = await supabase
+        .from('email_replies')
+        .select('id, from_email, from_name, subject, status, received_at, contact_id')
+        .eq('business_id', selectedBusiness.id)
+        .order('received_at', { ascending: false })
+        .limit(50);
+
+      if (error) throw error;
+      return data as EmailReply[];
+    },
+    enabled: !!selectedBusiness?.id,
+    refetchInterval: 30000,
+  });
+
+  const contactById = useMemo(() => new Map(contacts.map(contact => [contact.id, contact])), [contacts]);
+
+  const filteredContacts = useMemo(() => {
+    const q = search.trim().toLowerCase();
+    if (!q) return contacts;
+
+    return contacts.filter(contact => {
+      const haystack = [
+        contact.first_name,
+        contact.last_name,
+        contact.email,
+        contact.phone,
+        contact.source,
+        contact.status,
+        contact.pipeline_stage,
+        ...(contact.tags || []),
+      ]
+        .filter(Boolean)
+        .join(' ')
+        .toLowerCase();
+
+      return haystack.includes(q);
+    });
+  }, [contacts, search]);
+
+  const stats = useMemo(() => {
+    const leadStatuses = ['lead', 'new_lead', 'qualified', 'trial'];
+    const activeContacts = contacts.filter(contact => ['active', ...leadStatuses, 'member', 'active_member'].includes(contact.status || '')).length;
+    const newLeads = contacts.filter(contact => leadStatuses.includes(contact.status || '') || (contact.pipeline_stage || '').toLowerCase().includes('lead')).length;
+    const withEmail = contacts.filter(contact => !!contact.email).length;
+    const withPhone = contacts.filter(contact => !!contact.phone).length;
+    const needsFollowUp = contacts.filter(contact => !contact.last_activity_date).length;
+    const booked = contacts.filter(contact => {
+      const stage = `${contact.pipeline_stage || ''} ${contact.status || ''}`.toLowerCase();
+      return stage.includes('book') || stage.includes('appointment') || stage.includes('consult');
+    }).length;
+
+    return { activeContacts, newLeads, withEmail, withPhone, needsFollowUp, booked };
+  }, [contacts]);
+
+  const recentActivity = useMemo(() => {
+    const sms = recentSms.map(item => ({
+      id: `sms-${item.id}`,
+      channel: 'SMS',
+      contactId: item.contact_id,
+      title: item.message || 'SMS message',
+      subtitle: item.direction === 'inbound' ? 'Inbound SMS' : 'Outbound SMS',
+      at: item.created_at,
+    }));
+
+    const emailSends = recentEmails.map(item => ({
+      id: `email-${item.id}`,
+      channel: 'Email',
+      contactId: item.contact_id,
+      title: item.subject || 'Email sent',
+      subtitle: item.to_email || item.status || 'Outbound email',
+      at: item.created_at || item.sent_at || '',
+    }));
+
+    const replies = recentReplies.map(item => ({
+      id: `reply-${item.id}`,
+      channel: 'Reply',
+      contactId: item.contact_id,
+      title: item.subject || 'Email reply',
+      subtitle: item.from_name || item.from_email || item.status || 'Inbound email',
+      at: item.received_at || '',
+    }));
+
+    return [...sms, ...emailSends, ...replies]
+      .filter(item => !!item.at)
+      .sort((a, b) => new Date(b.at).getTime() - new Date(a.at).getTime())
+      .slice(0, 8);
+  }, [recentEmails, recentReplies, recentSms]);
 
   return (
     <DashboardLayout>
       <PageHeader
-        title="CRM Control Plane"
-        description="Canonical CRM surface rebuilt on Contacts as source of truth, with Communications as the activity layer."
+        title="Lead Dashboard"
+        description="Stop losing leads: track new inquiries, follow-up gaps, communications, and booking signals from the CRM source of truth."
       />
       <PageContent>
-        <Alert className="mb-6 border-amber-200 bg-amber-50">
-          <AlertTriangle className="h-4 w-4 text-amber-600" />
-          <AlertTitle className="text-amber-900">Source-of-truth decision applied</AlertTitle>
-          <AlertDescription className="text-amber-800">
-            SPA-4957 verified /contacts as canonical. The old CRM prospect table is no longer used here because it was legacy/outbound-only, while crm_accounts/deals/interactions/documents were empty.
-          </AlertDescription>
-        </Alert>
+        <div className="mb-6 rounded-2xl border border-indigo-100 bg-gradient-to-r from-indigo-50 via-white to-cyan-50 p-5">
+          <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+            <div>
+              <div className="mb-2 inline-flex items-center gap-2 rounded-full bg-indigo-100 px-3 py-1 text-xs font-semibold text-indigo-700">
+                <Target className="h-3.5 w-3.5" /> AI Growth Hub lead engine
+              </div>
+              <h2 className="text-2xl font-bold tracking-tight">Every lead needs a next action.</h2>
+              <p className="mt-1 max-w-3xl text-sm text-muted-foreground">
+                This is the demo-safe front door: show inquiries, response evidence, stale records, and where speed-to-lead automation takes over.
+              </p>
+            </div>
+            <div className="flex flex-wrap gap-2">
+              <Button asChild variant="outline">
+                <Link to="/fight-flow"><Zap className="mr-2 h-4 w-4" /> Speed-to-lead</Link>
+              </Button>
+              <Button asChild variant="outline">
+                <Link to="/analytics"><Brain className="mr-2 h-4 w-4" /> Business Brain</Link>
+              </Button>
+            </div>
+          </div>
+        </div>
 
-        <div className="grid grid-cols-1 gap-4 md:grid-cols-4 mb-6">
+        <div className="grid gap-4 md:grid-cols-5 mb-6">
           <Card>
-            <CardHeader className="pb-2">
-              <CardTitle className="text-sm font-medium text-muted-foreground flex items-center gap-2">
-                <Users className="h-4 w-4" /> Canonical contacts
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="text-3xl font-bold">{totalCount.toLocaleString()}</div>
-              <p className="text-xs text-muted-foreground">Scoped to selected business</p>
+            <CardContent className="pt-5">
+              <div className="flex items-center justify-between">
+                <Users className="h-5 w-5 text-blue-600" />
+                <Badge variant="outline">Contacts</Badge>
+              </div>
+              <div className="text-2xl font-bold mt-3">{contacts.length.toLocaleString()}</div>
+              <p className="text-sm text-muted-foreground">total in selected business</p>
             </CardContent>
           </Card>
-
           <Card>
-            <CardHeader className="pb-2">
-              <CardTitle className="text-sm font-medium text-muted-foreground flex items-center gap-2">
-                <BarChart3 className="h-4 w-4" /> Pipeline contacts
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="text-3xl font-bold">{metrics.leads.toLocaleString()}</div>
-              <p className="text-xs text-muted-foreground">Leads, qualified, trial, opportunity</p>
+            <CardContent className="pt-5">
+              <div className="flex items-center justify-between">
+                <Target className="h-5 w-5 text-indigo-600" />
+                <Badge>Leads</Badge>
+              </div>
+              <div className="text-2xl font-bold mt-3">{stats.newLeads.toLocaleString()}</div>
+              <p className="text-sm text-muted-foreground">lead-stage records</p>
             </CardContent>
           </Card>
-
           <Card>
-            <CardHeader className="pb-2">
-              <CardTitle className="text-sm font-medium text-muted-foreground flex items-center gap-2">
-                <Activity className="h-4 w-4" /> Recent activity coverage
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="text-3xl font-bold">{metrics.withActivity.toLocaleString()}</div>
-              <p className="text-xs text-muted-foreground">Sampled contacts with activity dates</p>
+            <CardContent className="pt-5">
+              <div className="flex items-center justify-between">
+                <Clock3 className="h-5 w-5 text-amber-600" />
+                <Badge variant="outline">Follow-up</Badge>
+              </div>
+              <div className="text-2xl font-bold mt-3">{stats.needsFollowUp.toLocaleString()}</div>
+              <p className="text-sm text-muted-foreground">missing activity date</p>
             </CardContent>
           </Card>
-
           <Card>
-            <CardHeader className="pb-2">
-              <CardTitle className="text-sm font-medium text-muted-foreground flex items-center gap-2">
-                <ShieldCheck className="h-4 w-4" /> Reachable records
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="text-3xl font-bold">{metrics.reachable.toLocaleString()}</div>
-              <p className="text-xs text-muted-foreground">Email or phone present in current sample</p>
+            <CardContent className="pt-5">
+              <div className="flex items-center justify-between">
+                <Phone className="h-5 w-5 text-emerald-600" />
+                <Badge variant="outline">Phone</Badge>
+              </div>
+              <div className="text-2xl font-bold mt-3">{stats.withPhone.toLocaleString()}</div>
+              <p className="text-sm text-muted-foreground">can receive SMS/calls</p>
+            </CardContent>
+          </Card>
+          <Card>
+            <CardContent className="pt-5">
+              <div className="flex items-center justify-between">
+                <Mail className="h-5 w-5 text-cyan-600" />
+                <Badge variant="outline">Booked</Badge>
+              </div>
+              <div className="text-2xl font-bold mt-3">{stats.booked.toLocaleString()}</div>
+              <p className="text-sm text-muted-foreground">booking/consult signals</p>
             </CardContent>
           </Card>
         </div>
 
-        <div className="grid grid-cols-1 gap-4 lg:grid-cols-3 mb-6">
-          <Card className="lg:col-span-2">
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between mb-6">
+          <div className="relative flex-1 max-w-xl">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+            <Input
+              value={search}
+              onChange={event => setSearch(event.target.value)}
+              placeholder="Search contacts by name, email, phone, source, status, or tag..."
+              className="pl-9"
+            />
+          </div>
+          <div className="flex gap-2">
+            <Button asChild variant="outline">
+              <Link to="/communications">Open communications</Link>
+            </Button>
+            <Button asChild>
+              <Link to="/contacts">Open contacts</Link>
+            </Button>
+          </div>
+        </div>
+
+        <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_380px]">
+          <Card>
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
-                <Database className="h-5 w-5 text-indigo-600" /> Operating model
+                <Users className="h-5 w-5 text-blue-600" />
+                Contacts source of truth
+                <Badge variant="outline">{filteredContacts.length.toLocaleString()}</Badge>
               </CardTitle>
-              <CardDescription>CRM now reads canonical contact records and routes work to existing operational surfaces.</CardDescription>
+              <CardDescription>
+                Manage records in /contacts; use this page to reconcile CRM readiness against current communication activity.
+              </CardDescription>
             </CardHeader>
-            <CardContent className="grid gap-3 sm:grid-cols-2">
-              <Button variant="outline" className="justify-between h-auto py-4" onClick={() => navigate('/contacts')}>
-                <span className="flex items-center gap-2"><Users className="h-4 w-4" /> Manage canonical contacts</span>
-                <ArrowRight className="h-4 w-4" />
-              </Button>
-              <Button variant="outline" className="justify-between h-auto py-4" onClick={() => navigate('/communications')}>
-                <span className="flex items-center gap-2"><MessageSquare className="h-4 w-4" /> Review communications</span>
-                <ArrowRight className="h-4 w-4" />
-              </Button>
-              <Button variant="outline" className="justify-between h-auto py-4" onClick={() => navigate('/email-marketing')}>
-                <span className="flex items-center gap-2"><Mail className="h-4 w-4" /> Open email marketing</span>
-                <ArrowRight className="h-4 w-4" />
-              </Button>
-              <Button variant="outline" className="justify-between h-auto py-4" onClick={() => navigate('/sales')}>
-                <span className="flex items-center gap-2"><BarChart3 className="h-4 w-4" /> Review sales surface</span>
-                <ArrowRight className="h-4 w-4" />
-              </Button>
-            </CardContent>
-          </Card>
-
-          <Card>
-            <CardHeader>
-              <CardTitle>Source attribution</CardTitle>
-              <CardDescription>Top sources in the current canonical contact sample.</CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-3">
-              {metrics.sourceCounts.length === 0 ? (
-                <p className="text-sm text-muted-foreground">No source attribution available yet.</p>
-              ) : metrics.sourceCounts.map(item => (
-                <div key={item.source} className="flex items-center justify-between gap-3">
-                  <span className="text-sm truncate">{item.source}</span>
-                  <Badge variant="secondary">{item.count.toLocaleString()}</Badge>
-                </div>
-              ))}
-            </CardContent>
-          </Card>
-        </div>
-
-        <Card>
-          <CardHeader>
-            <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
-              <div>
-                <CardTitle>Canonical contact pipeline</CardTitle>
-                <CardDescription>Read-only CRM list backed by contacts, not legacy sales_prospects.</CardDescription>
-              </div>
-              <div className="flex flex-col gap-2 sm:flex-row">
-                <div className="relative">
-                  <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-                  <Input
-                    value={search}
-                    onChange={event => setSearch(event.target.value)}
-                    placeholder="Search contacts..."
-                    className="pl-9 sm:w-64"
-                  />
-                </div>
-                <Select value={statusFilter} onValueChange={setStatusFilter}>
-                  <SelectTrigger className="sm:w-48">
-                    <SelectValue placeholder="Status" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="all">All statuses</SelectItem>
-                    {statusOptions.map(status => (
-                      <SelectItem key={status} value={status}>{statusLabel(status)}</SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-            </div>
-          </CardHeader>
-          <CardContent>
-            {!selectedBusiness?.id ? (
-              <div className="py-10 text-center text-muted-foreground">Select a business to view CRM contacts.</div>
-            ) : isLoading ? (
-              <div className="py-10 text-center text-muted-foreground">Loading canonical contacts...</div>
-            ) : error ? (
-              <div className="py-10 text-center text-red-600">Unable to load CRM contacts: {(error as Error).message}</div>
-            ) : (
-              <div className="overflow-x-auto">
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead>Contact</TableHead>
-                      <TableHead>Reachability</TableHead>
-                      <TableHead>Status</TableHead>
-                      <TableHead>Pipeline</TableHead>
-                      <TableHead>Source</TableHead>
-                      <TableHead>Last activity</TableHead>
-                      <TableHead className="text-right">Action</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {filtered.slice(0, 200).map(contact => (
-                      <TableRow key={contact.id}>
-                        <TableCell>
-                          <div className="font-medium">
-                            {[contact.first_name, contact.last_name].filter(Boolean).join(' ') || 'Unnamed contact'}
-                          </div>
-                          <div className="text-xs text-muted-foreground">Created {formatDistanceToNow(new Date(contact.created_at), { addSuffix: true })}</div>
-                        </TableCell>
-                        <TableCell>
-                          <div className="space-y-1 text-sm">
-                            <div>{contact.email || 'No email'}</div>
-                            <div className="text-muted-foreground">{contact.phone || 'No phone'}</div>
-                          </div>
-                        </TableCell>
-                        <TableCell>
-                          <Badge variant="outline" className={statusClass(contact.status)}>{statusLabel(contact.status)}</Badge>
-                        </TableCell>
-                        <TableCell>{contact.pipeline_stage || '—'}</TableCell>
-                        <TableCell>{contact.source || 'unknown'}</TableCell>
-                        <TableCell>
-                          {contact.last_activity_date
-                            ? formatDistanceToNow(new Date(contact.last_activity_date), { addSuffix: true })
-                            : 'No activity yet'}
-                        </TableCell>
-                        <TableCell className="text-right">
-                          <Button variant="ghost" size="sm" onClick={() => navigate(`/contacts?contact=${contact.id}`)}>
-                            Open in Contacts
-                          </Button>
-                        </TableCell>
-                      </TableRow>
-                    ))}
-                    {filtered.length === 0 && (
+            <CardContent>
+              {contactsLoading ? (
+                <div className="py-10 text-center text-muted-foreground">Loading contacts...</div>
+              ) : (
+                <div className="overflow-x-auto">
+                  <Table>
+                    <TableHeader>
                       <TableRow>
-                        <TableCell colSpan={7} className="py-10 text-center text-muted-foreground">
-                          No canonical contacts match this filter.
-                        </TableCell>
+                        <TableHead>Contact</TableHead>
+                        <TableHead>Status</TableHead>
+                        <TableHead>Source</TableHead>
+                        <TableHead>Last activity</TableHead>
+                        <TableHead>Tags</TableHead>
                       </TableRow>
-                    )}
-                  </TableBody>
-                </Table>
-                {filtered.length > 200 && (
-                  <p className="mt-3 text-center text-sm text-muted-foreground">
-                    Showing 200 of {filtered.length.toLocaleString()} matching contacts. Refine search to narrow the list.
-                  </p>
+                    </TableHeader>
+                    <TableBody>
+                      {filteredContacts.slice(0, 100).map(contact => (
+                        <TableRow key={contact.id}>
+                          <TableCell>
+                            <div className="font-medium">{formatName(contact)}</div>
+                            <div className="text-xs text-muted-foreground flex flex-wrap gap-x-3 gap-y-1 mt-1">
+                              {contact.email && <span>{contact.email}</span>}
+                              {contact.phone && <span>{contact.phone}</span>}
+                            </div>
+                          </TableCell>
+                          <TableCell>
+                            <Badge variant="outline" className={`capitalize ${statusClassName[contact.status || ''] || 'bg-slate-100 text-slate-600 border-slate-200'}`}>
+                              {normalizeStatus(contact.status)}
+                            </Badge>
+                          </TableCell>
+                          <TableCell className="capitalize text-sm text-muted-foreground">{contact.source || '—'}</TableCell>
+                          <TableCell className="text-sm text-muted-foreground">{formatRelative(contact.last_activity_date)}</TableCell>
+                          <TableCell>
+                            <div className="flex flex-wrap gap-1">
+                              {(contact.tags || []).slice(0, 3).map(tag => (
+                                <Badge key={tag} variant="secondary" className="text-xs">{tag}</Badge>
+                              ))}
+                              {(contact.tags || []).length > 3 && (
+                                <Badge variant="outline" className="text-xs">+{(contact.tags || []).length - 3}</Badge>
+                              )}
+                            </div>
+                          </TableCell>
+                        </TableRow>
+                      ))}
+                      {filteredContacts.length === 0 && (
+                        <TableRow>
+                          <TableCell colSpan={5} className="text-center py-10 text-muted-foreground">
+                            No contacts match this search.
+                          </TableCell>
+                        </TableRow>
+                      )}
+                    </TableBody>
+                  </Table>
+                  {filteredContacts.length > 100 && (
+                    <p className="text-center text-sm text-muted-foreground mt-3">
+                      Showing 100 of {filteredContacts.length.toLocaleString()} contacts. Refine search to narrow the list.
+                    </p>
+                  )}
+                </div>
+              )}
+            </CardContent>
+          </Card>
+
+          <div className="space-y-6">
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <MessageSquare className="h-5 w-5 text-teal-600" />
+                  Recent communications
+                </CardTitle>
+                <CardDescription>Latest SMS, sent email, and inbound reply activity tied back to contacts when available.</CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-3">
+                {recentActivity.map(item => {
+                  const contact = item.contactId ? contactById.get(item.contactId) : null;
+                  return (
+                    <div key={item.id} className="rounded-lg border p-3">
+                      <div className="flex items-start justify-between gap-3">
+                        <div className="min-w-0">
+                          <div className="text-sm font-medium truncate">{item.title}</div>
+                          <div className="text-xs text-muted-foreground truncate">{contact ? formatName(contact) : item.subtitle}</div>
+                        </div>
+                        <Badge variant="outline">{item.channel}</Badge>
+                      </div>
+                      <div className="text-xs text-muted-foreground mt-2">{formatRelative(item.at)}</div>
+                    </div>
+                  );
+                })}
+                {recentActivity.length === 0 && (
+                  <div className="text-sm text-muted-foreground py-6 text-center">No recent communications found.</div>
                 )}
-              </div>
-            )}
-          </CardContent>
-        </Card>
+                <Button asChild variant="outline" className="w-full">
+                  <Link to="/communications" className="flex items-center justify-center gap-2">
+                    Review full communications timeline <ArrowRight className="h-4 w-4" />
+                  </Link>
+                </Button>
+              </CardContent>
+            </Card>
+
+            <Card>
+              <CardHeader>
+                <CardTitle>Reconciliation guardrails</CardTitle>
+                <CardDescription>Current CRM operating rules for the Growth OS revision.</CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-3 text-sm text-muted-foreground">
+                <p>1. Contacts are the canonical person record; do not create new prospect-only CRM rows from this page.</p>
+                <p>2. Communications are read from live email/SMS tables and shown as activity evidence, not duplicated into CRM-only interaction tables.</p>
+                <p>3. Use /contacts for record edits and /communications for outbound/inbound review until a dedicated contact detail route is approved.</p>
+                {stats.needsFollowUp > 0 && (
+                  <div className="rounded-md bg-amber-50 border border-amber-200 p-3 text-amber-800">
+                    {stats.needsFollowUp.toLocaleString()} contacts have no recorded last activity date. Treat these as candidates for follow-up hygiene, not automatic outreach.
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+          </div>
+        </div>
       </PageContent>
     </DashboardLayout>
   );
-};
-
-export default CRM;
+}

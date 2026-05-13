@@ -22,9 +22,9 @@ const roadmap: RoadmapItem[] = [
     title: "PersonaAI — Behavioral Simulation Research for enterprise insights",
     audience: "Enterprise insights professionals, market research directors, UX research leaders, innovation/product strategy teams.",
     cta: "Run Your First Study + $25 credits",
-    status: "First review candidate — revise before publishing",
-    nextOwner: "Jerry revises; SEO prepares publish-readiness; Larry drafts only after approval",
-    decision: "Approve enterprise-insights positioning, Behavioral Simulation Research category, CTA, and claim boundaries.",
+    status: "Approved for draft-only social handoff — no scheduling/publishing yet",
+    nextOwner: "Larry prepares LinkedIn, X/thread, and short-video drafts; SEO remains no-deploy until signup/credit path is verified",
+    decision: "Approved: enterprise-insights audience, Behavioral Simulation Research category, and Run Your First Study + $25 credits CTA.",
     risks: [
       "Do not lead with synthetic-research language.",
       "Keep claim boundary: directional, pre-fieldwork, complements primary research, not representative proof.",
@@ -78,8 +78,8 @@ const roadmap: RoadmapItem[] = [
 ];
 
 const reviewQueue = [
-  "Review PersonaAI first: positioning, CTA, and claim boundaries.",
-  "Confirm PersonaAI $25 credit offer and Run Your First Study destination.",
+  "PersonaAI approved for Larry draft-only social handoff: LinkedIn Page, X/thread, and optional short-form video.",
+  "Before any public push: confirm PersonaAI signup/credit path and final destination URL.",
   "Review Sparkwave Growth OS public frame and CTA destination.",
   "Fact-check FightFlow, CharX, and Elisa before any public push.",
 ];

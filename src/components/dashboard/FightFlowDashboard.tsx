@@ -1,23 +1,31 @@
+import { useMemo } from 'react';
 import { useQuery } from '@tanstack/react-query';
+import { differenceInSeconds, format, formatDistanceToNow, parseISO, subDays } from 'date-fns';
+import { AlertTriangle, CalendarCheck, Clock, Mail, MessageSquare, ShieldCheck, UserRound } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
-import { formatDistanceToNow, format, subDays } from 'date-fns';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Button } from '@/components/ui/button';
 
-// ─── Interfaces ──────────────────────────────────────────────────────────────
+interface FightFlowDashboardProps {
+  businessId: string;
+  onContactClick: (contactId: string) => void;
+}
 
-interface UrgentThread {
+interface FightFlowSubmission {
   id: string;
-  contact_id: string;
-  conversation_state: string | null;
-  needs_human_review: boolean;
-  updated_at: string;
-  contacts: {
-    id: string;
-    first_name: string | null;
-    last_name: string | null;
-    phone: string | null;
-  } | null;
+  first_name: string | null;
+  last_name: string | null;
+  phone: string | null;
+  email: string | null;
+  message: string | null;
+  subject: string | null;
+  source: string | null;
+  status: string | null;
+  submitted_at: string;
+  auto_responded: boolean | null;
+  auto_response_sent_at: string | null;
+  alerted: boolean | null;
 }
 
 interface FightFlowAppointment {
@@ -29,566 +37,301 @@ interface FightFlowAppointment {
   service_name: string | null;
 }
 
-interface RecentContact {
+interface QueueMessage {
   id: string;
-  first_name: string | null;
-  last_name: string | null;
-  phone: string | null;
+  message_type: 'sms' | 'email';
+  recipient_name: string | null;
+  recipient_contact: string;
+  status: string;
   created_at: string;
-  status: string | null;
-  last_activity_at: string | null;
+  sent_at: string | null;
 }
 
-interface AppointmentWithStatus extends FightFlowAppointment {
-  lead_status: string | null;
-  auto_responded: boolean;
+function leadName(lead: FightFlowSubmission): string {
+  return `${lead.first_name ?? ''} ${lead.last_name ?? ''}`.trim() || lead.email || lead.phone || 'Unknown lead';
 }
 
-// ─── Props ───────────────────────────────────────────────────────────────────
+function formatResponseTime(lead: FightFlowSubmission): string {
+  if (!lead.auto_response_sent_at) return 'No first response logged';
 
-interface FightFlowDashboardProps {
-  businessId: string;
-  onContactClick: (contactId: string) => void;
+  const seconds = differenceInSeconds(parseISO(lead.auto_response_sent_at), parseISO(lead.submitted_at));
+  if (seconds < 60) return `${Math.max(seconds, 0)} sec`;
+  const minutes = Math.round(seconds / 60);
+  if (minutes < 60) return `${minutes} min`;
+  return `${Math.round(minutes / 60)} hr`;
 }
 
-// ─── Helpers ─────────────────────────────────────────────────────────────────
-
-function getTodayET(): string {
-  const raw = new Date().toLocaleDateString('en-US', { timeZone: 'America/New_York' });
-  // raw = "M/D/YYYY" → convert to YYYY-MM-DD
-  const [month, day, year] = raw.split('/');
-  return `${year}-${month.padStart(2, '0')}-${day.padStart(2, '0')}`;
-}
-
-function displayName(first: string | null, last: string | null): string {
-  return `${first ?? ''} ${last ?? ''}`.trim() || 'Unknown';
-}
-
-// ─── Status Badge Helper ──────────────────────────────────────────────────────
-
-interface StatusBadgeProps {
-  status: string | null;
-}
-
-function LeadStatusBadge({ status }: StatusBadgeProps) {
-  switch (status) {
-    case 'new_lead':
-      return <Badge className="bg-orange-100 text-orange-800 border-orange-300">New Lead</Badge>;
-    case 'contacted':
-      return <Badge className="bg-blue-100 text-blue-800 border-blue-300">Contacted</Badge>;
-    case 'responded':
-      return <Badge className="bg-green-100 text-green-800 border-green-300 font-bold">Responded</Badge>;
-    case 'converted':
-      return <Badge className="bg-green-700 text-white border-green-800">Converted</Badge>;
-    case 'closed':
-      return <Badge className="bg-gray-100 text-gray-600 border-gray-300">Closed</Badge>;
-    default:
-      return <Badge variant="secondary">{status ?? '—'}</Badge>;
+function slaState(lead: FightFlowSubmission): { label: string; className: string } {
+  if (!lead.auto_response_sent_at) {
+    return { label: 'Needs response evidence', className: 'bg-red-100 text-red-800 border-red-300' };
   }
+
+  const seconds = differenceInSeconds(parseISO(lead.auto_response_sent_at), parseISO(lead.submitted_at));
+  if (seconds <= 300) {
+    return { label: 'Inside 5-min SLA', className: 'bg-green-100 text-green-800 border-green-300' };
+  }
+  if (seconds <= 900) {
+    return { label: 'Late but recovered', className: 'bg-yellow-100 text-yellow-800 border-yellow-300' };
+  }
+  return { label: 'SLA miss', className: 'bg-red-100 text-red-800 border-red-300' };
 }
 
-// ─── Panel 1: Needs Your Attention ───────────────────────────────────────────
+function LeadStatusBadge({ lead }: { lead: FightFlowSubmission }) {
+  const state = slaState(lead);
+  return <Badge className={state.className}>{state.label}</Badge>;
+}
 
-function NeedsAttentionPanel({
-  businessId,
-  onContactClick,
-}: {
-  businessId: string;
-  onContactClick: (id: string) => void;
-}) {
-  const { data: threads = [], isLoading } = useQuery({
-    queryKey: ['ff-urgent-threads', businessId],
-    queryFn: async (): Promise<UrgentThread[]> => {
+export function FightFlowDashboard({ businessId }: FightFlowDashboardProps) {
+  const since = useMemo(() => subDays(new Date(), 30).toISOString(), []);
+  const today = format(new Date(), 'yyyy-MM-dd');
+
+  const { data: leads = [], isLoading: leadsLoading } = useQuery({
+    queryKey: ['lead-response-fightflow-submissions', since],
+    queryFn: async (): Promise<FightFlowSubmission[]> => {
       const { data, error } = await supabase
-        .from('conversation_threads')
-        .select(`
-          id,
-          contact_id,
-          conversation_state,
-          needs_human_review,
-          updated_at,
-          contacts (
-            id,
-            first_name,
-            last_name,
-            phone
-          )
-        `)
-        .eq('business_id', businessId)
-        .or('needs_human_review.eq.true,conversation_state.eq.hot_re_engagement')
-        .order('updated_at', { ascending: false });
+        .from('fightflow_form_submissions')
+        .select('id, first_name, last_name, phone, email, message, subject, source, status, submitted_at, auto_responded, auto_response_sent_at, alerted')
+        .gte('submitted_at', since)
+        .order('submitted_at', { ascending: false })
+        .limit(25);
 
-      if (error) {
-        console.error('Error fetching urgent threads:', error);
-        return [];
-      }
-
-      return (data ?? []) as UrgentThread[];
+      if (error) throw error;
+      return (data ?? []) as FightFlowSubmission[];
     },
-    enabled: !!businessId,
-    refetchInterval: 30000,
+    refetchInterval: 60000,
   });
 
-  return (
-    <Card>
-      <CardHeader className="pb-3">
-        <CardTitle className="flex items-center justify-between text-lg">
-          <span>🔥 Needs Your Attention</span>
-          {threads.length > 0 && (
-            <Badge className="bg-red-100 text-red-800 border-red-300">
-              {threads.length} urgent
-            </Badge>
-          )}
-        </CardTitle>
-      </CardHeader>
-      <CardContent>
-        {isLoading ? (
-          <div className="space-y-3">
-            {[1, 2].map(i => (
-              <div key={i} className="animate-pulse h-16 bg-gray-100 rounded-lg" />
-            ))}
-          </div>
-        ) : threads.length === 0 ? (
-          <p className="text-green-600 font-medium py-4 text-center">
-            ✅ No urgent leads right now
-          </p>
-        ) : (
-          <div className="space-y-3">
-            {threads.map(thread => {
-              const contact = thread.contacts;
-              const isHotRe = thread.conversation_state === 'hot_re_engagement';
-              const isHumanReview = thread.needs_human_review;
-              const name = contact
-                ? displayName(contact.first_name, contact.last_name)
-                : 'Unknown';
-
-              return (
-                <div
-                  key={thread.id}
-                  onClick={() => onContactClick(thread.contact_id)}
-                  className="flex items-start justify-between p-3 rounded-lg border border-gray-200 hover:bg-gray-50 cursor-pointer transition-colors"
-                >
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-2 flex-wrap mb-1">
-                      <span className="font-semibold text-gray-900">{name}</span>
-                      {contact?.phone && (
-                        <a
-                          href={`tel:${contact.phone}`}
-                          onClick={e => e.stopPropagation()}
-                          className="text-sm text-blue-600 hover:underline"
-                        >
-                          {contact.phone}
-                        </a>
-                      )}
-                    </div>
-                    <div className="flex items-center gap-2 flex-wrap">
-                      {isHotRe && (
-                        <Badge className="bg-orange-100 text-orange-800 border-orange-300">
-                          Hot Re-engagement
-                        </Badge>
-                      )}
-                      {isHumanReview && (
-                        <Badge className="bg-red-100 text-red-800 border-red-300">
-                          Needs Human
-                        </Badge>
-                      )}
-                    </div>
-                  </div>
-                  <span className="text-xs text-gray-400 flex-shrink-0 ml-2 mt-1">
-                    {formatDistanceToNow(new Date(thread.updated_at), { addSuffix: true })}
-                  </span>
-                </div>
-              );
-            })}
-          </div>
-        )}
-      </CardContent>
-    </Card>
-  );
-}
-
-// ─── Panel 2: Today's Trial Classes ──────────────────────────────────────────
-
-function TrialClassesPanel() {
-  const todayET = getTodayET();
-
-  const { data: appointments = [], isLoading } = useQuery({
-    queryKey: ['ff-trial-classes', todayET],
-    queryFn: async (): Promise<AppointmentWithStatus[]> => {
-      // Fetch today's appointments
-      const { data: appts, error: apptError } = await supabase
+  const { data: appointments = [], isLoading: appointmentsLoading } = useQuery({
+    queryKey: ['lead-response-fightflow-appointments', today],
+    queryFn: async (): Promise<FightFlowAppointment[]> => {
+      const { data, error } = await supabase
         .from('fightflow_appointments')
         .select('id, contact_name, contact_phone, contact_email, session_start, service_name')
-        .gte('session_start', `${todayET}T00:00:00`)
-        .lte('session_start', `${todayET}T23:59:59`)
+        .gte('session_start', `${today}T00:00:00`)
+        .lte('session_start', `${today}T23:59:59`)
         .order('session_start', { ascending: true });
 
-      if (apptError) {
-        console.error('Error fetching appointments:', apptError);
-        return [];
-      }
-
-      if (!appts || appts.length === 0) return [];
-
-      // Build phone / email lookup arrays
-      const phones = appts.map(a => a.contact_phone).filter((p): p is string => !!p);
-      const emails = appts.map(a => a.contact_email).filter((e): e is string => !!e);
-
-      // Fetch matching contacts
-      let contactRows: { phone: string | null; email: string | null; status: string | null; auto_responded: boolean | null }[] = [];
-
-      if (phones.length > 0 || emails.length > 0) {
-        let query = supabase
-          .from('contacts')
-          .select('phone, email, status, auto_responded');
-
-        if (phones.length > 0 && emails.length > 0) {
-          query = query.or(`phone.in.(${phones.join(',')}),email.in.(${emails.join(',')})`);
-        } else if (phones.length > 0) {
-          query = query.in('phone', phones);
-        } else {
-          query = query.in('email', emails);
-        }
-
-        const { data: contacts } = await query;
-        contactRows = (contacts ?? []) as typeof contactRows;
-      }
-
-      // Build lookup map: phone/email → status + auto_responded
-      const statusByPhone = new Map<string, { status: string | null; auto_responded: boolean }>();
-      const statusByEmail = new Map<string, { status: string | null; auto_responded: boolean }>();
-      for (const c of contactRows) {
-        if (c.phone) statusByPhone.set(c.phone, { status: c.status, auto_responded: c.auto_responded ?? false });
-        if (c.email) statusByEmail.set(c.email, { status: c.status, auto_responded: c.auto_responded ?? false });
-      }
-
-      return appts.map(a => {
-        const match =
-          (a.contact_phone ? statusByPhone.get(a.contact_phone) : undefined) ??
-          (a.contact_email ? statusByEmail.get(a.contact_email) : undefined);
-        return {
-          ...a,
-          lead_status: match?.status ?? null,
-          auto_responded: match?.auto_responded ?? false,
-        };
-      });
+      if (error) throw error;
+      return (data ?? []) as FightFlowAppointment[];
     },
-    enabled: true,
     refetchInterval: 60000,
   });
 
-  return (
-    <Card>
-      <CardHeader className="pb-3">
-        <CardTitle className="text-lg">📅 Today's Trial Classes</CardTitle>
-      </CardHeader>
-      <CardContent>
-        {isLoading ? (
-          <div className="animate-pulse h-24 bg-gray-100 rounded-lg" />
-        ) : appointments.length === 0 ? (
-          <p className="text-gray-500 py-4 text-center">No classes scheduled for today.</p>
-        ) : (
-          <div className="overflow-x-auto">
-            <table className="w-full text-sm">
-              <thead>
-                <tr className="text-left text-gray-500 border-b">
-                  <th className="pb-2 pr-4 font-medium">Name</th>
-                  <th className="pb-2 pr-4 font-medium">Time</th>
-                  <th className="pb-2 pr-4 font-medium">Service</th>
-                  <th className="pb-2 pr-4 font-medium">Status</th>
-                  <th className="pb-2 font-medium">Auto-responded?</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-gray-100">
-                {appointments.map(appt => (
-                  <tr key={appt.id} className="hover:bg-gray-50">
-                    <td className="py-2 pr-4 font-medium text-gray-900">
-                      {appt.contact_name ?? '—'}
-                    </td>
-                    <td className="py-2 pr-4 text-gray-600">
-                      {appt.session_start ? new Date(appt.session_start).toLocaleTimeString('en-US', { timeZone: 'America/New_York', hour: 'numeric', minute: '2-digit' }) : '—'}
-                    </td>
-                    <td className="py-2 pr-4 text-gray-600">
-                      {appt.service_name ?? '—'}
-                    </td>
-                    <td className="py-2 pr-4">
-                      <LeadStatusBadge status={appt.lead_status} />
-                    </td>
-                    <td className="py-2">
-                      {appt.auto_responded ? (
-                        <span className="text-green-600 font-medium">✓ Yes</span>
-                      ) : (
-                        <span className="text-gray-400">No</span>
-                      )}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        )}
-      </CardContent>
-    </Card>
-  );
-}
-
-// ─── Panel 3: Last 72 Hours ───────────────────────────────────────────────────
-
-function RecentLeadsPanel({
-  businessId,
-  onContactClick,
-}: {
-  businessId: string;
-  onContactClick: (id: string) => void;
-}) {
-  const { data: contacts = [], isLoading } = useQuery({
-    queryKey: ['ff-recent-leads', businessId],
-    queryFn: async (): Promise<RecentContact[]> => {
-      const since = subDays(new Date(), 30).toISOString();
-
+  const { data: queue = [], isLoading: queueLoading } = useQuery({
+    queryKey: ['lead-response-message-queue', businessId],
+    queryFn: async (): Promise<QueueMessage[]> => {
       const { data, error } = await supabase
-        .from('contacts')
-        .select('id, first_name, last_name, phone, created_at, status, last_activity_at')
+        .from('outbound_message_queue')
+        .select('id, message_type, recipient_name, recipient_contact, status, created_at, sent_at')
         .eq('business_id', businessId)
-        .gte('created_at', since)
-        .order('created_at', { ascending: false });
-
-      if (error) {
-        console.error('Error fetching recent contacts:', error);
-        return [];
-      }
-
-      return (data ?? []) as RecentContact[];
-    },
-    enabled: !!businessId,
-    refetchInterval: 60000,
-  });
-
-  return (
-    <Card>
-      <CardHeader className="pb-3">
-        <CardTitle className="flex items-center justify-between text-lg">
-          <span>🆕 Last 30 Days</span>
-          {contacts.length > 0 && (
-            <Badge variant="secondary">{contacts.length} leads</Badge>
-          )}
-        </CardTitle>
-      </CardHeader>
-      <CardContent>
-        {isLoading ? (
-          <div className="animate-pulse h-24 bg-gray-100 rounded-lg" />
-        ) : contacts.length === 0 ? (
-          <p className="text-gray-500 py-4 text-center">No new leads in the last 72 hours.</p>
-        ) : (
-          <div className="overflow-x-auto">
-            <table className="w-full text-sm">
-              <thead>
-                <tr className="text-left text-gray-500 border-b">
-                  <th className="pb-2 pr-4 font-medium">Name</th>
-                  <th className="pb-2 pr-4 font-medium">Submitted</th>
-                  <th className="pb-2 pr-4 font-medium">Status</th>
-                  <th className="pb-2 pr-4 font-medium">Last Activity</th>
-                  <th className="pb-2 font-medium">Phone</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-gray-100">
-                {contacts.map(contact => (
-                  <tr
-                    key={contact.id}
-                    onClick={() => onContactClick(contact.id)}
-                    className="hover:bg-gray-50 cursor-pointer"
-                  >
-                    <td className="py-2 pr-4 font-medium text-gray-900">
-                      {displayName(contact.first_name, contact.last_name)}
-                    </td>
-                    <td className="py-2 pr-4 text-gray-600">
-                      {formatDistanceToNow(new Date(contact.created_at), { addSuffix: true })}
-                    </td>
-                    <td className="py-2 pr-4">
-                      <LeadStatusBadge status={contact.status} />
-                    </td>
-                    <td className="py-2 pr-4 text-gray-600">
-                      {contact.last_activity_at
-                        ? formatDistanceToNow(new Date(contact.last_activity_at), { addSuffix: true })
-                        : '—'}
-                    </td>
-                    <td className="py-2">
-                      {contact.phone ? (
-                        <a
-                          href={`tel:${contact.phone}`}
-                          onClick={e => e.stopPropagation()}
-                          className="text-blue-600 hover:underline"
-                        >
-                          {contact.phone}
-                        </a>
-                      ) : (
-                        <span className="text-gray-400">—</span>
-                      )}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        )}
-      </CardContent>
-    </Card>
-  );
-}
-
-// ─── Panel 4: Automation Status ──────────────────────────────────────────────
-
-interface AutomationLog {
-  id: string;
-  automation_type: string;
-  status: string;
-  source_data: Record<string, any> | null;
-  processed_data: Record<string, any> | null;
-  error_message: string | null;
-  execution_time_ms: number | null;
-  created_at: string;
-}
-
-function AutomationStatusPanel({ businessId }: { businessId: string }) {
-  const { data: logs = [], isLoading } = useQuery({
-    queryKey: ['ff-automation-logs', businessId],
-    queryFn: async (): Promise<AutomationLog[]> => {
-      const since = subHours(new Date(), 24).toISOString();
-
-      const { data, error } = await supabase
-        .from('automation_logs')
-        .select('id, automation_type, status, source_data, processed_data, error_message, execution_time_ms, created_at')
-        .eq('business_id', businessId)
-        .gte('created_at', since)
         .order('created_at', { ascending: false })
         .limit(10);
 
-      if (error) {
-        console.error('Error fetching automation logs:', error);
-        return [];
-      }
-
-      return (data ?? []) as AutomationLog[];
+      if (error) throw error;
+      return (data ?? []) as QueueMessage[];
     },
     enabled: !!businessId,
-    refetchInterval: 30000,
+    refetchInterval: 60000,
   });
 
-  const successCount = logs.filter(l => l.status === 'success').length;
-  const failureCount = logs.filter(l => l.status === 'error').length;
-  const pendingCount = logs.filter(l => l.status === 'pending').length;
+  const proofLead = leads.find(lead => lead.auto_responded || lead.auto_response_sent_at) ?? leads[0];
+  const responded = leads.filter(lead => !!lead.auto_response_sent_at).length;
+  const alerted = leads.filter(lead => !!lead.alerted && !lead.auto_response_sent_at).length;
+  const slaHits = leads.filter(lead => {
+    if (!lead.auto_response_sent_at) return false;
+    return differenceInSeconds(parseISO(lead.auto_response_sent_at), parseISO(lead.submitted_at)) <= 300;
+  }).length;
+  const pendingQueue = queue.filter(message => message.status === 'pending').length;
+  const sentQueue = queue.filter(message => message.status === 'sent').length;
 
-  const automationTypeLabel = (type: string): string => {
-    const map: Record<string, string> = {
-      'sms_send': '📱 SMS',
-      'email_send': '✉️ Email',
-      'ai_response': '🤖 AI Response',
-      'sequence_send': '📨 Sequence',
-      'appointment_reminder': '📅 Reminder',
-    };
-    return map[type] || type;
-  };
-
-  return (
-    <Card>
-      <CardHeader className="pb-3">
-        <CardTitle className="flex items-center justify-between text-lg">
-          <span>⚡ Automation Status (Last 24h)</span>
-          <div className="flex gap-2">
-            {successCount > 0 && (
-              <Badge className="bg-green-100 text-green-800 border-green-300">
-                {successCount} sent
-              </Badge>
-            )}
-            {failureCount > 0 && (
-              <Badge className="bg-red-100 text-red-800 border-red-300">
-                {failureCount} failed
-              </Badge>
-            )}
-            {pendingCount > 0 && (
-              <Badge className="bg-yellow-100 text-yellow-800 border-yellow-300">
-                {pendingCount} pending
-              </Badge>
-            )}
-          </div>
-        </CardTitle>
-      </CardHeader>
-      <CardContent>
-        {isLoading ? (
-          <div className="space-y-3">
-            {[1, 2, 3].map(i => (
-              <div key={i} className="animate-pulse h-14 bg-gray-100 rounded-lg" />
-            ))}
-          </div>
-        ) : logs.length === 0 ? (
-          <p className="text-gray-500 py-4 text-center">No automations in the last 24 hours.</p>
-        ) : (
-          <div className="space-y-2">
-            {logs.map(log => {
-              const recipient =
-                log.source_data?.phone ||
-                log.source_data?.email ||
-                log.processed_data?.phone ||
-                log.processed_data?.email ||
-                'Unknown';
-              const statusColor =
-                log.status === 'success'
-                  ? 'text-green-600'
-                  : log.status === 'error'
-                  ? 'text-red-600'
-                  : 'text-yellow-600';
-              const statusIcon =
-                log.status === 'success' ? '✓' : log.status === 'error' ? '✗' : '⏳';
-
-              return (
-                <div
-                  key={log.id}
-                  className="flex items-start justify-between p-3 rounded-lg border border-gray-200 hover:bg-gray-50"
-                >
-                  <div className="flex-1">
-                    <div className="flex items-center gap-3 mb-1">
-                      <span className={`font-semibold ${statusColor}`}>
-                        {statusIcon}
-                      </span>
-                      <span className="font-medium text-gray-900">
-                        {automationTypeLabel(log.automation_type)}
-                      </span>
-                      <span className="text-sm text-gray-500">→ {recipient}</span>
-                    </div>
-                    {log.error_message && (
-                      <div className="text-xs text-red-600 mt-1">
-                        Error: {log.error_message}
-                      </div>
-                    )}
-                  </div>
-                  <div className="flex flex-col items-end gap-1 flex-shrink-0 ml-2">
-                    <span className={`text-xs font-medium ${statusColor}`}>
-                      {log.status.charAt(0).toUpperCase() + log.status.slice(1)}
-                    </span>
-                    <span className="text-xs text-gray-400">
-                      {formatDistanceToNow(new Date(log.created_at), { addSuffix: true })}
-                    </span>
-                  </div>
-                </div>
-              );
-            })}
-          </div>
-        )}
-      </CardContent>
-    </Card>
-  );
-}
-
-// ─── Main Export ──────────────────────────────────────────────────────────────
-
-export function FightFlowDashboard({ businessId, onContactClick }: FightFlowDashboardProps) {
   return (
     <div className="space-y-6">
-      <h2 className="text-xl font-bold text-gray-900">Fight Flow At-a-Glance</h2>
-      <NeedsAttentionPanel businessId={businessId} onContactClick={onContactClick} />
-      <AutomationStatusPanel businessId={businessId} />
-      <TrialClassesPanel />
-      <RecentLeadsPanel businessId={businessId} onContactClick={onContactClick} />
+      <div className="flex flex-col gap-2 md:flex-row md:items-start md:justify-between">
+        <div>
+          <h2 className="text-2xl font-bold text-gray-900">Lead Response / Speed-to-Lead</h2>
+          <p className="text-sm text-gray-500">
+            FightFlow capture, first response, follow-up booking, quality review, and queue evidence in one surface.
+          </p>
+        </div>
+        <Badge variant="outline" className="w-fit border-indigo-200 bg-indigo-50 text-indigo-700">
+          Message Queue absorbed here
+        </Badge>
+      </div>
+
+      <div className="grid gap-4 md:grid-cols-4">
+        <Card>
+          <CardContent className="pt-5">
+            <div className="flex items-center gap-2 text-sm text-gray-500"><UserRound className="h-4 w-4" /> New leads</div>
+            <div className="mt-2 text-3xl font-bold">{leads.length}</div>
+            <div className="text-xs text-gray-400">last 30 days</div>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardContent className="pt-5">
+            <div className="flex items-center gap-2 text-sm text-gray-500"><Clock className="h-4 w-4" /> First responses</div>
+            <div className="mt-2 text-3xl font-bold text-green-600">{responded}</div>
+            <div className="text-xs text-gray-400">{slaHits} inside 5-min SLA</div>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardContent className="pt-5">
+            <div className="flex items-center gap-2 text-sm text-gray-500"><AlertTriangle className="h-4 w-4" /> Staff alerts</div>
+            <div className="mt-2 text-3xl font-bold text-orange-600">{alerted}</div>
+            <div className="text-xs text-gray-400">alerted without response evidence</div>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardContent className="pt-5">
+            <div className="flex items-center gap-2 text-sm text-gray-500"><CalendarCheck className="h-4 w-4" /> Today bookings</div>
+            <div className="mt-2 text-3xl font-bold text-blue-600">{appointments.length}</div>
+            <div className="text-xs text-gray-400">trial/class appointments</div>
+          </CardContent>
+        </Card>
+      </div>
+
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2 text-lg"><ShieldCheck className="h-5 w-5 text-green-600" /> Forward-looking proof case</CardTitle>
+        </CardHeader>
+        <CardContent>
+          {leadsLoading ? (
+            <div className="h-24 animate-pulse rounded-lg bg-gray-100" />
+          ) : !proofLead ? (
+            <p className="text-sm text-gray-500">No FightFlow form submissions found for the current 30-day proof window.</p>
+          ) : (
+            <div className="grid gap-4 lg:grid-cols-[1.2fr_2fr]">
+              <div className="rounded-lg border border-gray-200 p-4">
+                <div className="mb-2 flex flex-wrap items-center gap-2">
+                  <span className="font-semibold text-gray-900">{leadName(proofLead)}</span>
+                  <LeadStatusBadge lead={proofLead} />
+                </div>
+                <div className="space-y-1 text-sm text-gray-600">
+                  <div>Captured: {format(parseISO(proofLead.submitted_at), 'MMM d, h:mm a')}</div>
+                  <div>First response: {proofLead.auto_response_sent_at ? format(parseISO(proofLead.auto_response_sent_at), 'MMM d, h:mm a') : 'not logged'}</div>
+                  <div>Speed-to-lead: {formatResponseTime(proofLead)}</div>
+                  <div>Source: {proofLead.source ?? 'FightFlow form'}</div>
+                </div>
+              </div>
+              <div className="grid gap-3 md:grid-cols-4">
+                {[
+                  ['1 Capture', 'Wix/FightFlow form submission recorded'],
+                  ['2 First response', proofLead.auto_response_sent_at ? `Auto response sent in ${formatResponseTime(proofLead)}` : 'Response evidence missing'],
+                  ['3 Follow-up / booking', appointments.length > 0 ? `${appointments.length} appointment(s) visible today` : 'No same-day booking visible yet'],
+                  ['4 Quality review', proofLead.alerted ? 'Staff alert raised for review' : 'No open staff alert on proof case'],
+                ].map(([step, detail]) => (
+                  <div key={step} className="rounded-lg border border-gray-200 bg-white p-3">
+                    <div className="text-sm font-semibold text-gray-900">{step}</div>
+                    <div className="mt-1 text-xs text-gray-500">{detail}</div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+        </CardContent>
+      </Card>
+
+      <div className="grid gap-6 xl:grid-cols-2">
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2 text-lg"><Clock className="h-5 w-5 text-indigo-600" /> Speed-to-lead events</CardTitle>
+          </CardHeader>
+          <CardContent>
+            {leadsLoading ? (
+              <div className="h-40 animate-pulse rounded-lg bg-gray-100" />
+            ) : leads.length === 0 ? (
+              <p className="text-sm text-gray-500">No lead events in the current window.</p>
+            ) : (
+              <div className="space-y-3">
+                {leads.slice(0, 8).map(lead => (
+                  <div key={lead.id} className="rounded-lg border border-gray-200 p-3">
+                    <div className="flex flex-wrap items-center justify-between gap-2">
+                      <div className="font-medium text-gray-900">{leadName(lead)}</div>
+                      <LeadStatusBadge lead={lead} />
+                    </div>
+                    <div className="mt-1 text-sm text-gray-500">
+                      Captured {formatDistanceToNow(parseISO(lead.submitted_at), { addSuffix: true })} · Response: {formatResponseTime(lead)}
+                    </div>
+                    {(lead.phone || lead.email) && (
+                      <div className="mt-1 text-xs text-gray-400">{lead.phone ?? lead.email}</div>
+                    )}
+                  </div>
+                ))}
+              </div>
+            )}
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2 text-lg"><CalendarCheck className="h-5 w-5 text-blue-600" /> Follow-up / booking evidence</CardTitle>
+          </CardHeader>
+          <CardContent>
+            {appointmentsLoading ? (
+              <div className="h-40 animate-pulse rounded-lg bg-gray-100" />
+            ) : appointments.length === 0 ? (
+              <p className="text-sm text-gray-500">No FightFlow appointments scheduled for today.</p>
+            ) : (
+              <div className="space-y-3">
+                {appointments.map(appointment => (
+                  <div key={appointment.id} className="flex items-start justify-between gap-4 rounded-lg border border-gray-200 p-3">
+                    <div>
+                      <div className="font-medium text-gray-900">{appointment.contact_name ?? appointment.contact_email ?? appointment.contact_phone ?? 'Unknown appointment'}</div>
+                      <div className="text-sm text-gray-500">{appointment.service_name ?? 'Class / trial booking'}</div>
+                      <div className="text-xs text-gray-400">{appointment.contact_phone ?? appointment.contact_email ?? 'No contact detail'}</div>
+                    </div>
+                    <Badge variant="outline">
+                      {appointment.session_start ? new Date(appointment.session_start).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', timeZone: 'America/New_York' }) : 'time TBD'}
+                    </Badge>
+                  </div>
+                ))}
+              </div>
+            )}
+          </CardContent>
+        </Card>
+      </div>
+
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2 text-lg"><MessageSquare className="h-5 w-5 text-purple-600" /> Outbound message queue</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <div className="mb-4 flex flex-wrap gap-2">
+            <Badge variant="outline">{queue.length} recent</Badge>
+            <Badge className="bg-orange-100 text-orange-800 border-orange-300">{pendingQueue} pending</Badge>
+            <Badge className="bg-green-100 text-green-800 border-green-300">{sentQueue} sent</Badge>
+          </div>
+          {queueLoading ? (
+            <div className="h-24 animate-pulse rounded-lg bg-gray-100" />
+          ) : queue.length === 0 ? (
+            <div className="rounded-lg border border-dashed border-gray-300 p-6 text-center text-sm text-gray-500">
+              Standalone Message Queue has no rows for this business. It is hidden from primary navigation and represented here as part of lead response readiness.
+            </div>
+          ) : (
+            <div className="space-y-2">
+              {queue.map(message => {
+                const Icon = message.message_type === 'email' ? Mail : MessageSquare;
+                return (
+                  <div key={message.id} className="flex items-center justify-between rounded-lg border border-gray-200 p-3">
+                    <div className="flex items-center gap-3">
+                      <Icon className="h-4 w-4 text-gray-400" />
+                      <div>
+                        <div className="font-medium text-gray-900">{message.recipient_name ?? message.recipient_contact}</div>
+                        <div className="text-xs text-gray-500">{message.message_type.toUpperCase()} · queued {formatDistanceToNow(parseISO(message.created_at), { addSuffix: true })}</div>
+                      </div>
+                    </div>
+                    <Badge variant="outline" className="capitalize">{message.status}</Badge>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </CardContent>
+      </Card>
+
+      <div className="flex flex-wrap gap-2">
+        <Button asChild variant="outline" size="sm"><a href="/contacts">Open contacts</a></Button>
+        <Button asChild variant="outline" size="sm"><a href="/communications">Open communications</a></Button>
+      </div>
     </div>
   );
 }

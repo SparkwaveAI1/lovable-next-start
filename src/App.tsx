@@ -24,9 +24,10 @@ import BusinessPermissionsPage from "./pages/BusinessPermissionsPage";
 import AdminDashboard from "./pages/AdminDashboard";
 import EmailMarketing from "./pages/EmailMarketing";
 import MissionControl from "./pages/MissionControl";
+import AIGrowthHub from "./pages/AIGrowthHub";
+import ExecutiveControl from "./pages/ExecutiveControl";
 import AgentRegistry from "./pages/AgentRegistry";
 import Agents from "./pages/Agents";
-import Bookings from "./pages/Bookings";
 import Book from "./pages/Book";
 import BookSEO from "./pages/BookSEO";
 import Reports from "./pages/Reports";
@@ -38,7 +39,6 @@ import AutomationApp from "./pages/AutomationApp";
 import PersonaAIPage from "./pages/PersonaAIPage";
 import CaseStudies from "./pages/CaseStudies";
 import Services from "./pages/Services";
-import MessageQueue from "./pages/MessageQueue";
 import ClientSuccess from "./pages/ClientSuccess";
 import Communications from "./pages/Communications";
 import Blog from "./pages/Blog";
@@ -63,6 +63,8 @@ import CRM from "./pages/CRM";
 import AccountDetailPage from "./pages/AccountDetailPage";
 import DealPipeline from "./pages/DealPipeline";
 import BusinessMetrics from "./pages/BusinessMetrics";
+import GrowthOSAnalytics from "./pages/GrowthOSAnalytics";
+import AnalyticsLearning from "./pages/AnalyticsLearning";
 import ToneyFalknerQuestionnaire from "./pages/questionnaire/ToneyFalknerQuestionnaire";
 import ToneyFalknerResults from "./pages/questionnaire/ToneyFalknerResults";
 import ProtectedRoute from "./components/ProtectedRoute";
@@ -89,6 +91,8 @@ const App = () => (
             <Route path="/book" element={<Book />} />
             <Route path="/book/seo" element={<BookSEO />} />
             <Route path="/audit" element={<AutomationAudit />} />
+            <Route path="/automation-audit" element={<Navigate replace to="/audit" />} />
+            <Route path="/automation-app" element={<Navigate replace to="/automation" />} />
             <Route path="/roi-calculator" element={<ROICalculator />} />
             <Route path="/sales" element={<Sales />} />
             <Route path="/about" element={<About />} />
@@ -101,7 +105,9 @@ const App = () => (
             <Route path="/crisis-monitor" element={<CrisisMonitor />} />
             <Route path="/upload" element={<EmployeeUpload />} />
             <Route path="/" element={<Homepage />} />
-            <Route path="/dashboard" element={<ProtectedRoute><ErrorBoundary><Index /></ErrorBoundary></ProtectedRoute>} />
+            <Route path="/dashboard" element={<ProtectedRoute><ErrorBoundary><ExecutiveControl /></ErrorBoundary></ProtectedRoute>} />
+            <Route path="/growth-hub" element={<ProtectedRoute><ErrorBoundary><AIGrowthHub /></ErrorBoundary></ProtectedRoute>} />
+            <Route path="/executive-control" element={<ProtectedRoute><ErrorBoundary><ExecutiveControl /></ErrorBoundary></ProtectedRoute>} />
             <Route path="/contacts" element={<ProtectedRoute><ErrorBoundary><Contacts /></ErrorBoundary></ProtectedRoute>} />
             <Route path="/content-strategy" element={<ProtectedRoute><ErrorBoundary><ContentStrategy /></ErrorBoundary></ProtectedRoute>} />
             <Route path="/content-hub" element={<ProtectedRoute><ErrorBoundary><ContentHub /></ErrorBoundary></ProtectedRoute>} />
@@ -120,11 +126,11 @@ const App = () => (
             <Route path="/system-operations" element={<ProtectedRoute><ErrorBoundary><SystemOperations /></ErrorBoundary></ProtectedRoute>} />
             <Route path="/agents" element={<ProtectedRoute><ErrorBoundary><Agents /></ErrorBoundary></ProtectedRoute>} />
             <Route path="/agent-registry" element={<ProtectedRoute><ErrorBoundary><AgentRegistry /></ErrorBoundary></ProtectedRoute>} />
-            <Route path="/bookings" element={<ProtectedRoute><ErrorBoundary><Bookings /></ErrorBoundary></ProtectedRoute>} />
+            <Route path="/bookings" element={<Navigate replace to="/fight-flow" />} />
             <Route path="/reports" element={<ProtectedRoute><ErrorBoundary><Reports /></ErrorBoundary></ProtectedRoute>} />
             <Route path="/docs/*" element={<ProtectedRoute><ErrorBoundary><Docs /></ErrorBoundary></ProtectedRoute>} />
             <Route path="/investments" element={<ProtectedRoute><ErrorBoundary><Investments /></ErrorBoundary></ProtectedRoute>} />
-            <Route path="/message-queue" element={<ProtectedRoute><ErrorBoundary><MessageQueue /></ErrorBoundary></ProtectedRoute>} />
+            <Route path="/message-queue" element={<Navigate replace to="/fight-flow" />} />
             <Route path="/client-success" element={<ProtectedRoute><ErrorBoundary><ClientSuccess /></ErrorBoundary></ProtectedRoute>} />
             <Route path="/communications" element={<ProtectedRoute><ErrorBoundary><Communications /></ErrorBoundary></ProtectedRoute>} />
             <Route path="/twitter-analytics" element={<ProtectedRoute><ErrorBoundary><TwitterAnalytics /></ErrorBoundary></ProtectedRoute>} />
@@ -143,6 +149,8 @@ const App = () => (
             <Route path="/crm/deals" element={<ProtectedRoute><ErrorBoundary><DealPipeline /></ErrorBoundary></ProtectedRoute>} />
             <Route path="/crm/:id" element={<ProtectedRoute><ErrorBoundary><AccountDetailPage /></ErrorBoundary></ProtectedRoute>} />
             <Route path="/business-metrics" element={<ProtectedRoute><ErrorBoundary><BusinessMetrics /></ErrorBoundary></ProtectedRoute>} />
+            <Route path="/growth-os-analytics" element={<ProtectedRoute><ErrorBoundary><GrowthOSAnalytics /></ErrorBoundary></ProtectedRoute>} />
+            <Route path="/analytics" element={<ProtectedRoute><ErrorBoundary><AnalyticsLearning /></ErrorBoundary></ProtectedRoute>} />
             <Route path="/questionnaire/toney-falkner" element={<ToneyFalknerQuestionnaire />} />
             <Route path="/questionnaire/toney-falkner/results" element={<ProtectedRoute><ErrorBoundary><ToneyFalknerResults /></ErrorBoundary></ProtectedRoute>} />
             {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}

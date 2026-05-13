@@ -400,12 +400,6 @@ export default function MissionControl() {
         <div className="mb-6">
           <AgentOutputsFeedPanel />
         </div>
-
-        {/* 8. Paperclip Live: Priorities + Agent Health (side by side) */}
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
-          <PrioritiesPanel />
-          <AgentHealthPanel />
-        </div>
           </>
         )}
 

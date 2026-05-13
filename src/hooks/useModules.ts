@@ -371,14 +371,14 @@ export function useIsRouteEnabled(businessId?: string, routePath?: string): bool
     '/investments': 'investment',
     '/twitter-analytics': 'social_media',
     '/analytics': 'analytics',
-    '/automation-app': 'automation',
-    '/automation-audit': 'automation',
+    '/automation': 'automation',
+    '/audit': 'automation',
     '/bookings': 'booking',
     '/mission-control': 'mission_control',
     '/communications': 'communications',
     '/content-hub': 'content_center',
-    '/content-center': 'content_center',
-    '/content-visibility': 'content_center',
+    '/content-center': 'content_center', // legacy alias redirects to /content-hub
+    '/content-visibility': 'content_center', // legacy alias redirects to /content-hub
     '/media-library': 'media_library',
     '/agents': 'agents',
     '/reports': 'reports',

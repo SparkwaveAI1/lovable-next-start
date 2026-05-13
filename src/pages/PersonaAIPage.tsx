@@ -17,7 +17,7 @@ import {
 
 export default function PersonaAIPage() {
   const handleBookCall = () => {
-    window.open('https://calendly.com/scott-sparkwave/30min', '_blank');
+    window.location.href = '/book?source_path=/persona-ai&request_type=persona-ai-demo';
   };
 
   const handleVisitPersonaAI = () => {
@@ -72,19 +72,19 @@ export default function PersonaAIPage() {
         <div className="max-w-4xl mx-auto text-center">
           <Badge variant="outline" className="mb-6 border-violet-500/50 text-violet-300">
             <Sparkles className="w-4 h-4 mr-2" />
-            PersonaAI Research Platform
+            Behavioral Simulation Research Platform
           </Badge>
           
           <h1 className="text-4xl sm:text-5xl lg:text-6xl font-bold text-white mb-6 leading-tight">
-            AI Personas for
+            Behavioral Simulation for
             <span className="block bg-gradient-to-r from-blue-400 via-purple-400 to-pink-400 bg-clip-text text-transparent">
-              Real-World Research
+              Enterprise Insights Teams
             </span>
           </h1>
           
           <p className="text-xl text-gray-400 max-w-2xl mx-auto mb-10">
-            Test ideas, gather feedback, and simulate customer conversations with 
-            demographically diverse AI personas — before you spend on real research.
+            Run fast, directional studies with simulated audience panels before you commit budget to fieldwork.
+            Start with $25 in credits for your first study.
           </p>
 
           <div className="flex flex-col sm:flex-row items-center justify-center gap-4">
@@ -94,7 +94,7 @@ export default function PersonaAIPage() {
               onClick={handleVisitPersonaAI}
             >
               <Users className="w-5 h-5 mr-2" />
-              Try PersonaAI
+              Run Your First Study
               <ArrowRight className="w-5 h-5 ml-2" />
             </Button>
             <Button 
@@ -248,7 +248,7 @@ export default function PersonaAIPage() {
               onClick={handleVisitPersonaAI}
             >
               <Users className="w-5 h-5 mr-2" />
-              Try PersonaAI Free
+              Run Your First Study — $25 Credits
               <ArrowRight className="w-5 h-5 ml-2" />
             </Button>
           </div>

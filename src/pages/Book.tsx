@@ -59,11 +59,41 @@ export default function Book() {
     return maxDate.toISOString().split('T')[0];
   };
 
+  const buildIntakeContext = () => {
+    const params = new URLSearchParams(window.location.search);
+    const utm = ['utm_source', 'utm_medium', 'utm_campaign', 'utm_term', 'utm_content']
+      .map((key) => [key, params.get(key)] as const)
+      .filter(([, value]) => value);
+
+    const context = {
+      source_path: params.get('source_path') || window.location.pathname,
+      source_url: window.location.href,
+      request_type: params.get('request_type') || 'discovery_call',
+      consent_state: 'booking_request_submit',
+      test_live_flag: import.meta.env.MODE === 'production' ? 'live' : 'test',
+      owner_status: 'pending_manual_review',
+      ...(utm.length ? { utm: Object.fromEntries(utm) } : {})
+    };
+
+    return `[Intake context: ${JSON.stringify(context)}]`;
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+
+    if (!preferredTime || !topic) {
+      toast({
+        title: "Missing details",
+        description: "Please choose a time and topic before submitting.",
+        variant: "destructive",
+      });
+      return;
+    }
+
     setLoading(true);
 
     try {
+      const messageWithContext = [message.trim(), buildIntakeContext()].filter(Boolean).join('\n\n');
       const { error } = await supabase
         .from('sparkwave_booking_requests')
         .insert({
@@ -73,7 +103,8 @@ export default function Book() {
           preferred_date: preferredDate,
           preferred_time: preferredTime,
           topic,
-          message: message || null
+          status: 'pending',
+          message: messageWithContext
         });
 
       if (error) {

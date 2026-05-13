@@ -13,6 +13,7 @@ import {
   Menu,
   CalendarDays,
   Rocket,
+  BarChart3,
 } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { Button } from "@/components/ui/button"
@@ -32,6 +33,7 @@ interface NavItem {
 const navItems: NavItem[] = [
   { label: "Dashboard", href: "/dashboard", icon: LayoutDashboard },
   { label: "Mission Control", href: "/mission-control", icon: Rocket },
+  { label: "Growth Analytics", href: "/growth-os-analytics", icon: BarChart3 },
   { label: "Contacts", href: "/contacts", icon: Users },
   { label: "Bookings", href: "/bookings", icon: CalendarDays },
   { label: "Content Hub", href: "/content-hub", icon: FileText },

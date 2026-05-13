@@ -12,7 +12,8 @@ const routeLabels: Record<string, string> = {
   "/": "Dashboard",
   "/mission-control": "Mission Control",
   "/contacts": "Contacts",
-  "/bookings": "Bookings",
+  "/bookings": "Lead Response",
+  "/fight-flow": "Lead Response",
   "/service-requests": "Service Requests",
   "/content-center": "Content Center",
   "/media-library": "Media Library",
@@ -32,7 +33,7 @@ const routeLabels: Record<string, string> = {
 const routeParents: Record<string, string> = {
   "/agents": "/mission-control",
   "/reports": "/mission-control",
-  "/media-library": "/content-center",
+  "/media-library": "/content-hub",
   "/admin-setup": "/admin",
   "/permissions": "/admin",
   "/late-connections": "/late-setup",
