@@ -4,6 +4,7 @@ import { PageContent } from "@/components/layout/PageLayout";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { aiGrowthHubDemoPackage } from "@/lib/aiGrowthHubDemoPackage";
 import {
   ArrowRight,
   Bot,
@@ -263,6 +264,68 @@ export default function AIGrowthHub() {
                 <div className="flex items-center justify-between"><MessageSquare className="h-5 w-5 text-emerald-600" /><Badge variant="secondary">Interface</Badge></div>
                 <div className="mt-3 text-2xl font-bold">Growth Agent</div>
                 <p className="text-sm text-muted-foreground">A business-specific assistant for action.</p>
+              </CardContent>
+            </Card>
+          </section>
+
+          <section>
+            <Card className="border-cyan-100 bg-gradient-to-br from-white via-cyan-50/60 to-indigo-50">
+              <CardHeader>
+                <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
+                  <div>
+                    <Badge variant="secondary" className="mb-3">Demo business package</Badge>
+                    <CardTitle>{aiGrowthHubDemoPackage.businessProfile.name}: full loop story</CardTitle>
+                    <CardDescription>
+                      {aiGrowthHubDemoPackage.businessProfile.vertical} in {aiGrowthHubDemoPackage.businessProfile.location} · {aiGrowthHubDemoPackage.weeklyFocus.title}
+                    </CardDescription>
+                  </div>
+                  <div className="rounded-xl border border-cyan-100 bg-white/80 p-3 text-sm text-slate-700">
+                    {aiGrowthHubDemoPackage.businessProfile.safeDataNote}
+                  </div>
+                </div>
+              </CardHeader>
+              <CardContent className="space-y-5">
+                <div className="grid gap-3 lg:grid-cols-3">
+                  <div className="rounded-xl border bg-white p-4">
+                    <div className="text-xs font-semibold uppercase tracking-wide text-indigo-600">Business profile</div>
+                    <div className="mt-2 font-semibold text-slate-900">{aiGrowthHubDemoPackage.businessProfile.buyer}</div>
+                    <p className="mt-2 text-sm leading-6 text-muted-foreground">
+                      Lead sources: {aiGrowthHubDemoPackage.businessProfile.leadSources.join(", ")}.
+                    </p>
+                  </div>
+                  <div className="rounded-xl border bg-white p-4">
+                    <div className="text-xs font-semibold uppercase tracking-wide text-cyan-600">Uploaded intake</div>
+                    <div className="mt-2 font-semibold text-slate-900">{aiGrowthHubDemoPackage.uploadedIntake.fileName}</div>
+                    <p className="mt-2 text-sm leading-6 text-muted-foreground">
+                      {aiGrowthHubDemoPackage.uploadedIntake.rows} demo rows · {aiGrowthHubDemoPackage.uploadedIntake.example}
+                    </p>
+                  </div>
+                  <div className="rounded-xl border bg-white p-4">
+                    <div className="text-xs font-semibold uppercase tracking-wide text-emerald-600">Business Brain insight</div>
+                    <div className="mt-2 font-semibold text-slate-900">{aiGrowthHubDemoPackage.businessBrainInsight.headline}</div>
+                    <p className="mt-2 text-sm leading-6 text-muted-foreground">{aiGrowthHubDemoPackage.businessBrainInsight.confidence}</p>
+                  </div>
+                </div>
+                <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
+                  {aiGrowthHubDemoPackage.timeline.map((step) => (
+                    <Link key={step.stage} to={step.route} className="rounded-xl border bg-white p-4 transition hover:border-indigo-200 hover:shadow-sm">
+                      <div className="flex items-center justify-between gap-2">
+                        <Badge variant={step.status === "approved" ? "default" : step.status === "evidence" ? "outline" : "secondary"}>{step.owner}</Badge>
+                        <ArrowRight className="h-4 w-4 text-muted-foreground" />
+                      </div>
+                      <div className="mt-3 font-semibold text-slate-900">{step.stage}</div>
+                      <p className="mt-2 text-sm leading-6 text-muted-foreground">{step.evidence}</p>
+                    </Link>
+                  ))}
+                </div>
+                <div className="rounded-2xl border border-indigo-100 bg-indigo-50 p-4">
+                  <div className="text-sm font-semibold text-indigo-950">Growth Agent proposed action</div>
+                  <p className="mt-2 text-sm leading-6 text-indigo-900">{aiGrowthHubDemoPackage.growthAgentAction.recommendation}</p>
+                  <p className="mt-2 text-sm font-medium text-indigo-950">{aiGrowthHubDemoPackage.growthAgentAction.approvalGate}</p>
+                  <Button asChild className="mt-4">
+                    <Link to="/growth-agent">Open demo in Growth Agent <ArrowRight className="ml-2 h-4 w-4" /></Link>
+                  </Button>
+                </div>
               </CardContent>
             </Card>
           </section>

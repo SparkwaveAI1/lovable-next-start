@@ -6,6 +6,7 @@ import { DashboardLayout } from "@/components/layout/DashboardLayout";
 import { PageContent, PageHeader } from "@/components/layout/PageLayout";
 import { useBusinessContext } from "@/contexts/BusinessContext";
 import { supabase } from "@/integrations/supabase/client";
+import { aiGrowthHubDemoPackage, getDemoLoopSummary } from "@/lib/aiGrowthHubDemoPackage";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -35,6 +36,7 @@ type EmailReply = {
 };
 
 const promptChips = [
+  aiGrowthHubDemoPackage.growthAgentAction.nextPrompt,
   "Which leads need follow-up today?",
   "Which opportunities are going stale?",
   "Where are we missing response evidence?",
@@ -114,6 +116,19 @@ export default function GrowthAgent() {
   }, [leadContacts]);
 
   const answer = useMemo(() => {
+    if (selectedPrompt === aiGrowthHubDemoPackage.growthAgentAction.nextPrompt) {
+      return {
+        title: aiGrowthHubDemoPackage.businessBrainInsight.headline,
+        summary: getDemoLoopSummary(),
+        bullets: [
+          aiGrowthHubDemoPackage.businessBrainInsight.detail,
+          aiGrowthHubDemoPackage.growthAgentAction.recommendation,
+          aiGrowthHubDemoPackage.growthAgentAction.approvalGate,
+          aiGrowthHubDemoPackage.executionEvidence.proof,
+        ],
+      };
+    }
+
     if (selectedPrompt === "Which leads need follow-up today?") {
       return {
         title: "Follow up with the oldest open leads first.",
@@ -181,6 +196,37 @@ export default function GrowthAgent() {
               </div>
             </div>
           </section>
+
+          <Card className="border-cyan-100 bg-cyan-50/60">
+            <CardHeader>
+              <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
+                <div>
+                  <Badge variant="secondary" className="mb-3">Connected demo package</Badge>
+                  <CardTitle>{aiGrowthHubDemoPackage.businessProfile.name}</CardTitle>
+                  <CardDescription>
+                    {aiGrowthHubDemoPackage.weeklyFocus.target} · {aiGrowthHubDemoPackage.uploadedIntake.rows} static intake rows
+                  </CardDescription>
+                </div>
+                <Button asChild variant="outline">
+                  <Link to="/growth-hub">View full loop in Growth Hub</Link>
+                </Button>
+              </div>
+            </CardHeader>
+            <CardContent className="grid gap-3 md:grid-cols-3">
+              <div className="rounded-xl border bg-white p-4">
+                <div className="text-xs font-semibold uppercase tracking-wide text-indigo-600">Weekly focus</div>
+                <p className="mt-2 text-sm leading-6 text-slate-700">{aiGrowthHubDemoPackage.weeklyFocus.whyNow}</p>
+              </div>
+              <div className="rounded-xl border bg-white p-4">
+                <div className="text-xs font-semibold uppercase tracking-wide text-cyan-600">Proposed action</div>
+                <p className="mt-2 text-sm leading-6 text-slate-700">{aiGrowthHubDemoPackage.growthAgentAction.recommendation}</p>
+              </div>
+              <div className="rounded-xl border bg-white p-4">
+                <div className="text-xs font-semibold uppercase tracking-wide text-emerald-600">Execution evidence</div>
+                <p className="mt-2 text-sm leading-6 text-slate-700">{aiGrowthHubDemoPackage.executionEvidence.proof}</p>
+              </div>
+            </CardContent>
+          </Card>
 
           <div className="grid gap-4 md:grid-cols-3">
             <Card>
