@@ -57,6 +57,7 @@ import MonitoringPage from "./pages/Monitoring";
 import OrgMonitoring from "./pages/OrgMonitoring";
 import ProcessMonitoring from "./pages/ProcessMonitoring";
 import FightFlow from "./pages/FightFlow";
+import SpeedToLead from "./pages/SpeedToLead";
 import SystemOperations from "./pages/SystemOperations";
 import CRM from "./pages/CRM";
 import AccountDetailPage from "./pages/AccountDetailPage";
@@ -140,6 +141,7 @@ const App = () => (
             <Route path="/org-monitoring" element={<ProtectedRoute><ErrorBoundary><OrgMonitoring /></ErrorBoundary></ProtectedRoute>} />
             <Route path="/process-monitoring" element={<ProtectedRoute><ErrorBoundary><ProcessMonitoring /></ErrorBoundary></ProtectedRoute>} />
             <Route path="/tools/autoresearch" element={<ProtectedRoute><ErrorBoundary><AutoresearchDashboard /></ErrorBoundary></ProtectedRoute>} />
+            <Route path="/speed-to-lead" element={<ProtectedRoute><ErrorBoundary><SpeedToLead /></ErrorBoundary></ProtectedRoute>} />
             <Route path="/fight-flow" element={<ProtectedRoute><ErrorBoundary><FightFlow /></ErrorBoundary></ProtectedRoute>} />
             <Route path="/crm" element={<ProtectedRoute><ErrorBoundary><CRM /></ErrorBoundary></ProtectedRoute>} />
             <Route path="/crm/deals" element={<ProtectedRoute><ErrorBoundary><DealPipeline /></ErrorBoundary></ProtectedRoute>} />

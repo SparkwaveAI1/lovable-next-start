@@ -82,11 +82,11 @@ const LANES: LaneDefinition[] = [
     route: "/analytics-learning",
   },
   {
-    id: "fightflow",
-    name: "FightFlow Proof Loop",
-    keywords: ["fightflow", "fight flow", "staff alert", "wix", "lead automation"],
-    surface: "FightFlow + Review Queue",
-    route: "/fight-flow",
+    id: "speedToLead",
+    name: "Speed-to-Lead",
+    keywords: ["speed to lead", "speed-to-lead", "first response", "lead automation", "follow up", "at risk"],
+    surface: "Generic Speed-to-Lead",
+    route: "/speed-to-lead",
   },
 ];
 

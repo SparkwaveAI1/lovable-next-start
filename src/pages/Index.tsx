@@ -112,7 +112,7 @@ const Index = () => {
               <QuickActions />
             </div>
 
-            {/* Fight Flow At-a-Glance — TOP of dashboard when Fight Flow selected */}
+            {/* Speed-to-Lead At-a-Glance — TOP of dashboard when a FightFlow-style proof business is selected */}
             {(selectedBusiness.name.toLowerCase().includes('fight') || selectedBusiness.slug?.toLowerCase().includes('fight')) && (
               <div className="mb-8">
                 <FightFlowDashboard
