@@ -25,6 +25,7 @@ import AdminDashboard from "./pages/AdminDashboard";
 import EmailMarketing from "./pages/EmailMarketing";
 import MissionControl from "./pages/MissionControl";
 import AIGrowthHub from "./pages/AIGrowthHub";
+import GrowthAgent from "./pages/GrowthAgent";
 import ExecutiveControl from "./pages/ExecutiveControl";
 import AgentRegistry from "./pages/AgentRegistry";
 import Agents from "./pages/Agents";
@@ -107,6 +108,7 @@ const App = () => (
             <Route path="/" element={<Homepage />} />
             <Route path="/dashboard" element={<ProtectedRoute><ErrorBoundary><ExecutiveControl /></ErrorBoundary></ProtectedRoute>} />
             <Route path="/growth-hub" element={<ProtectedRoute><ErrorBoundary><AIGrowthHub /></ErrorBoundary></ProtectedRoute>} />
+            <Route path="/growth-agent" element={<ProtectedRoute><ErrorBoundary><GrowthAgent /></ErrorBoundary></ProtectedRoute>} />
             <Route path="/executive-control" element={<ProtectedRoute><ErrorBoundary><ExecutiveControl /></ErrorBoundary></ProtectedRoute>} />
             <Route path="/contacts" element={<ProtectedRoute><ErrorBoundary><Contacts /></ErrorBoundary></ProtectedRoute>} />
             <Route path="/content-strategy" element={<ProtectedRoute><ErrorBoundary><ContentStrategy /></ErrorBoundary></ProtectedRoute>} />

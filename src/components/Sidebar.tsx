@@ -48,7 +48,7 @@ const navGroups: NavGroup[] = [
       { label: "Growth Hub", href: "/growth-hub", icon: Rocket },
       { label: "Dashboard", href: "/dashboard", icon: Gauge },
       { label: "Business Brain", href: "/analytics", icon: Brain },
-      { label: "Growth Agent", href: "/mission-control", icon: Bot },
+      { label: "Growth Agent", href: "/growth-agent", icon: Bot },
     ],
   },
   {

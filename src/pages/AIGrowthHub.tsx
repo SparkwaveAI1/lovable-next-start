@@ -47,7 +47,7 @@ const walkthroughSteps = [
   {
     time: "3:35–4:25",
     title: "Show Ask Your Growth Agent",
-    route: "/mission-control",
+    route: "/growth-agent",
     say: "This is where the team asks plain-English questions like: which leads need follow-up today, where are we losing people, and what should we improve next?",
   },
   {
@@ -106,7 +106,7 @@ const demoSurfaces = [
   },
   {
     title: "Ask Your Growth Agent",
-    href: "/mission-control",
+    href: "/growth-agent",
     icon: Bot,
     status: "demo-critical",
     description: "Client-facing assistant surface for asking about leads, follow-up, content, and growth priorities.",
