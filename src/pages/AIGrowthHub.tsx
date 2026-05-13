@@ -15,8 +15,69 @@ import {
   Rocket,
   Sparkles,
   Target,
+  XCircle,
   Zap,
 } from "lucide-react";
+
+const walkthroughSteps = [
+  {
+    time: "0:00–0:40",
+    title: "Open the Growth Hub",
+    route: "/growth-hub",
+    say: "Most businesses do not need another dashboard. They need fewer missed opportunities. This hub helps you see every lead, respond faster, follow up, and know what needs attention.",
+  },
+  {
+    time: "0:40–1:45",
+    title: "Show the Lead Dashboard",
+    route: "/crm",
+    say: "This is the front door. Which leads need attention right now? New, stale, not booked, or missing follow-up should be visible here.",
+  },
+  {
+    time: "1:45–2:40",
+    title: "Show Speed-to-Lead",
+    route: "/fight-flow",
+    say: "This shows the first response path: lead captured, first reply, follow-up or booking signal, and whether a human needs to review anything.",
+  },
+  {
+    time: "2:40–3:35",
+    title: "Show the Business Brain",
+    route: "/analytics",
+    say: "Think of this as the daily report: what changed, what might be slipping, what customers are asking about, and what to do next.",
+  },
+  {
+    time: "3:35–4:25",
+    title: "Show Ask Your Growth Agent",
+    route: "/mission-control",
+    say: "This is where the team asks plain-English questions like: which leads need follow-up today, where are we losing people, and what should we improve next?",
+  },
+  {
+    time: "4:25–4:45",
+    title: "Optional Content Ideas preview",
+    route: "/content-strategy",
+    say: "Once lead response is credible, the same hub can suggest useful content based on what customers are already asking.",
+  },
+];
+
+const sayInstead = [
+  "Stop losing leads",
+  "Respond faster",
+  "Follow up consistently",
+  "See what needs attention",
+  "Know which leads are stale",
+  "Business Brain",
+  "Growth Agent",
+  "Simple next steps",
+];
+
+const avoidSaying = [
+  "Agentic architecture",
+  "Learning layer",
+  "Context ingestion",
+  "Semantic monitoring",
+  "Guaranteed revenue lift",
+  "Guaranteed booked appointments",
+  "Live sends are active unless verified and approved",
+];
 
 const demoSurfaces = [
   {
@@ -24,24 +85,24 @@ const demoSurfaces = [
     href: "/crm",
     icon: Target,
     status: "demo-critical",
-    description: "See every inquiry, source, status, owner, last activity, and follow-up gap in one place.",
-    bullets: ["New consultation / estimate leads", "Stale leads needing action", "Booked vs. not booked", "Source and pipeline stage"],
+    description: "The front door for every lead: source, status, last activity, booking signal, and next action.",
+    bullets: ["New inquiries in one place", "Stale leads needing action", "Booked vs. not booked", "Source, status, and last activity"],
   },
   {
-    title: "Speed-to-lead automation",
+    title: "Speed-to-lead",
     href: "/fight-flow",
     icon: Zap,
     status: "demo-critical",
-    description: "Show what happens after a form fill, call, or message so clients understand we stop lead leakage.",
-    bullets: ["First response path", "SMS/email follow-up", "Human handoff queue", "No customer-facing claims without verified events"],
+    description: "Show what happens immediately after a form fill, call, text, or message.",
+    bullets: ["Lead captured", "First response evidence", "Follow-up or booking signal", "Human review when needed"],
   },
   {
     title: "Business Brain report",
     href: "/analytics",
     icon: Brain,
     status: "demo-critical",
-    description: "Plain-English daily learning layer: it watches what is happening and tells the business what matters.",
-    bullets: ["What changed today", "Risks and stale assumptions", "Recommended next actions", "Evidence and confidence boundaries"],
+    description: "A plain-English report showing what changed, what might be slipping, and what to do next.",
+    bullets: ["What changed today", "Leads or follow-up at risk", "Customer questions noticed", "Recommended next actions"],
   },
   {
     title: "Ask Your Growth Agent",
@@ -49,30 +110,42 @@ const demoSurfaces = [
     icon: Bot,
     status: "demo-critical",
     description: "Client-facing assistant surface for asking about leads, follow-up, content, and growth priorities.",
-    bullets: ["Ask what needs attention", "Summarize a lead", "Draft follow-up", "Explain today's priorities"],
+    bullets: ["Which leads need follow-up today?", "Which opportunities are going stale?", "What did customers ask this week?", "What should we improve next?"],
   },
   {
-    title: "Content / SEO preview",
+    title: "Content Ideas",
     href: "/content-strategy",
     icon: FileText,
     status: "expansion layer",
-    description: "Secondary value story after speed-to-lead: turn real business questions into content and SEO opportunities.",
-    bullets: ["Content ideas from inquiries", "Local SEO topics", "Approval-gated drafts", "Postiz/social handoff"],
+    description: "A small expansion preview: turn common lead and customer questions into useful content topics.",
+    bullets: ["Ideas from inquiries", "Customer question topics", "Local SEO opportunities", "Approval required before publishing"],
   },
 ];
 
 const verticalModules = [
   {
     vertical: "Med spa",
-    modules: ["New Consultation Leads", "Speed-to-Lead Follow-Up", "Treatment Inquiry Nurture", "No-Show Recovery", "Before/After Content Ideas", "Ask Your Growth Agent"],
+    promise: "Help consultation inquiries get answered, followed up, and booked instead of slipping through the cracks.",
+    modules: ["New Consultation Leads", "Speed-to-Lead Follow-Up", "Treatment Inquiry Nurture", "No-Show Recovery", "Clinic Growth Report", "Ask Your Clinic Growth Agent", "Treatment Education Topics"],
+    cta: "Show me which consultation leads need follow-up today.",
+  },
+  {
+    vertical: "Dental / ortho / implants",
+    promise: "Help high-value patient inquiries get answered, followed up, and booked.",
+    modules: ["New Patient & Consult Leads", "Fast Patient Response", "Treatment Plan Follow-Up", "Unbooked Consultation Recovery", "Practice Growth Report", "Ask Your Practice Growth Agent", "Patient Education Topics"],
+    cta: "Show me which new patient or consult leads are not booked yet.",
   },
   {
     vertical: "Home services",
-    modules: ["Estimate Requests", "Missed Call Recovery", "Quote Follow-Up", "Seasonal Campaigns", "Review Requests", "Ask Your Growth Agent"],
+    promise: "Respond to estimate requests faster, follow up on open quotes, and recover missed calls.",
+    modules: ["Estimate Requests", "Missed Call & Estimate Response", "Quote Follow-Up", "Job Booking Opportunities", "Service Growth Report", "Ask Your Service Growth Agent", "Local Service Content Ideas"],
+    cta: "Show me which estimate requests and quotes need follow-up today.",
   },
   {
-    vertical: "Organic farm",
-    modules: ["Wholesale Leads", "CSA Follow-Up", "Seasonal Product Campaigns", "Recipe/Education Content", "Agritourism SEO", "Ask Your Farm Growth Agent"],
+    vertical: "Organic farm / local example",
+    promise: "A custom/local skin for CSA, wholesale, farm stand, and seasonal product inquiries.",
+    modules: ["Wholesale Leads", "CSA Follow-Up", "Seasonal Product Campaigns", "Recipe/Education Content", "Farm Growth Report", "Ask Your Farm Growth Agent"],
+    cta: "Show me which customer and wholesale inquiries need follow-up today.",
   },
 ];
 
@@ -89,8 +162,12 @@ export default function AIGrowthHub() {
                 </div>
                 <h1 className="text-4xl font-bold tracking-tight lg:text-5xl">We help you stop losing leads.</h1>
                 <p className="mt-4 max-w-3xl text-lg leading-8 text-indigo-100">
-                  This is the modular SW app story: a client-specific growth hub that responds faster, follows up automatically,
-                  tracks what is running, supports content, and learns from the business every day.
+                  The AI Growth Hub gives your team one place to see new inquiries, respond faster,
+                  follow up consistently, and know what needs attention today.
+                </p>
+                <p className="mt-4 max-w-2xl text-sm leading-6 text-indigo-100/90">
+                  Start with the lead leak. Do not demo the whole product. Show the path from new lead
+                  to first response, follow-up, Business Brain report, and Ask Your Growth Agent.
                 </p>
                 <div className="mt-6 flex flex-wrap gap-3">
                   <Button asChild size="lg" className="bg-white text-indigo-950 hover:bg-indigo-50">
@@ -103,15 +180,67 @@ export default function AIGrowthHub() {
               </div>
               <div className="rounded-2xl border border-white/20 bg-white/10 p-5 backdrop-blur">
                 <div className="mb-4 flex items-center gap-2 font-semibold">
-                  <Rocket className="h-5 w-5 text-cyan-200" /> Monday demo gate
+                  <Rocket className="h-5 w-5 text-cyan-200" /> Demo readiness gate
                 </div>
                 <div className="space-y-3 text-sm text-indigo-50">
                   <div className="flex items-start gap-3"><CheckCircle2 className="mt-0.5 h-4 w-4 text-emerald-300" /> Show the five demo-critical surfaces, not the whole product.</div>
-                  <div className="flex items-start gap-3"><CheckCircle2 className="mt-0.5 h-4 w-4 text-emerald-300" /> Use simple buyer language: speed, follow-up, revenue leakage, Business Brain.</div>
+                  <div className="flex items-start gap-3"><CheckCircle2 className="mt-0.5 h-4 w-4 text-emerald-300" /> Use simple buyer language: leads, response, follow-up, Business Brain.</div>
                   <div className="flex items-start gap-3"><CheckCircle2 className="mt-0.5 h-4 w-4 text-emerald-300" /> Keep claims evidence-bound until connectors and outcomes are verified.</div>
                 </div>
               </div>
             </div>
+          </section>
+
+          <section className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_360px]">
+            <Card>
+              <CardHeader>
+                <CardTitle>5-minute buyer walkthrough</CardTitle>
+                <CardDescription>Show the buyer problem in order: leads, response, follow-up, Business Brain, then Growth Agent.</CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-3">
+                {walkthroughSteps.map((step) => (
+                  <div key={step.time} className="rounded-xl border border-slate-100 bg-slate-50 p-3">
+                    <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
+                      <div>
+                        <div className="flex flex-wrap items-center gap-2">
+                          <Badge variant="outline">{step.time}</Badge>
+                          <span className="font-semibold text-slate-900">{step.title}</span>
+                        </div>
+                        <p className="mt-2 text-sm leading-6 text-slate-600">“{step.say}”</p>
+                      </div>
+                      <Button asChild variant="outline" size="sm" className="shrink-0">
+                        <Link to={step.route}>Open step <ArrowRight className="ml-2 h-4 w-4" /></Link>
+                      </Button>
+                    </div>
+                  </div>
+                ))}
+              </CardContent>
+            </Card>
+
+            <Card>
+              <CardHeader>
+                <CardTitle>Demo language guardrails</CardTitle>
+                <CardDescription>Keep the story buyer-simple and evidence-bound.</CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-5">
+                <div>
+                  <div className="mb-2 flex items-center gap-2 text-sm font-semibold text-emerald-700">
+                    <CheckCircle2 className="h-4 w-4" /> Say this
+                  </div>
+                  <div className="flex flex-wrap gap-2">
+                    {sayInstead.map((phrase) => <Badge key={phrase} variant="secondary">{phrase}</Badge>)}
+                  </div>
+                </div>
+                <div>
+                  <div className="mb-2 flex items-center gap-2 text-sm font-semibold text-red-700">
+                    <XCircle className="h-4 w-4" /> Avoid this
+                  </div>
+                  <div className="flex flex-wrap gap-2">
+                    {avoidSaying.map((phrase) => <Badge key={phrase} variant="outline" className="border-red-200 text-red-700">{phrase}</Badge>)}
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
           </section>
 
           <section className="grid gap-4 md:grid-cols-3">
@@ -182,20 +311,47 @@ export default function AIGrowthHub() {
 
           <section>
             <h2 className="mb-4 text-2xl font-bold tracking-tight">Vertical skins, one modular system</h2>
-            <div className="grid gap-4 lg:grid-cols-3">
+            <div className="grid gap-4 lg:grid-cols-2">
               {verticalModules.map((item) => (
                 <Card key={item.vertical}>
                   <CardHeader>
                     <CardTitle>{item.vertical}</CardTitle>
-                    <CardDescription>Same product spine, vertical-specific labels, examples, workflows, and reports.</CardDescription>
+                    <CardDescription>{item.promise}</CardDescription>
                   </CardHeader>
-                  <CardContent className="flex flex-wrap gap-2">
-                    {item.modules.map((module) => <Badge key={module} variant="outline">{module}</Badge>)}
+                  <CardContent className="space-y-4">
+                    <div className="flex flex-wrap gap-2">
+                      {item.modules.map((module) => <Badge key={module} variant="outline">{module}</Badge>)}
+                    </div>
+                    <div className="rounded-lg bg-indigo-50 p-3 text-sm font-medium text-indigo-900">“{item.cta}”</div>
                   </CardContent>
                 </Card>
               ))}
             </div>
           </section>
+
+          <Card className="border-indigo-100 bg-gradient-to-r from-indigo-50 via-white to-cyan-50">
+            <CardHeader>
+              <CardTitle>Best next step</CardTitle>
+              <CardDescription>Do not connect everything at once. Start by mapping the lead leak.</CardDescription>
+            </CardHeader>
+            <CardContent>
+              <p className="max-w-3xl text-sm leading-6 text-muted-foreground">
+                Let us map where your leads are coming from and where follow-up is getting missed.
+                Then we pick one lead source and show the first response and follow-up path we would install first.
+              </p>
+              <p className="mt-3 text-sm font-semibold text-slate-900">
+                Which lead source should we map first: forms, calls, texts, ads, or your CRM?
+              </p>
+              <div className="mt-4 flex flex-wrap gap-2">
+                <Button asChild>
+                  <Link to="/crm">Map lead sources</Link>
+                </Button>
+                <Button asChild variant="outline">
+                  <Link to="/fight-flow">Show first response path</Link>
+                </Button>
+              </div>
+            </CardContent>
+          </Card>
         </div>
       </PageContent>
     </DashboardLayout>

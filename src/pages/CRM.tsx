@@ -17,7 +17,7 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table';
-import { ArrowRight, Brain, Clock3, Mail, MessageSquare, Phone, Search, Target, Users, Zap } from 'lucide-react';
+import { AlertTriangle, ArrowRight, Brain, Clock3, Mail, MessageSquare, Phone, Search, Target, Users, Zap } from 'lucide-react';
 import { formatDistanceToNow } from 'date-fns';
 
 type Contact = {
@@ -251,6 +251,63 @@ export default function CRM() {
       .slice(0, 8);
   }, [recentEmails, recentReplies, recentSms]);
 
+  const leadsAtRisk = useMemo(() => {
+    const now = Date.now();
+    const activityByContact = new Map<string, number>();
+    const inboundReplyContactIds = new Set(recentReplies.map(reply => reply.contact_id).filter(Boolean));
+
+    [...recentSms, ...recentEmails, ...recentReplies].forEach(item => {
+      const contactId = item.contact_id;
+      const activityAt = 'received_at' in item ? item.received_at : 'sent_at' in item ? (item.sent_at || item.created_at) : item.created_at;
+      if (!contactId || !activityAt) return;
+      activityByContact.set(contactId, Math.max(activityByContact.get(contactId) || 0, new Date(activityAt).getTime()));
+    });
+
+    return contacts
+      .map(contact => {
+        const statusText = `${contact.status || ''} ${contact.pipeline_stage || ''}`.toLowerCase();
+        const isLead = ['lead', 'new_lead', 'qualified', 'trial', 'opportunity'].some(term => statusText.includes(term));
+        if (!isLead) return null;
+
+        const lastKnownTouch = activityByContact.get(contact.id) || (contact.last_activity_date ? new Date(contact.last_activity_date).getTime() : 0);
+        const hoursSinceTouch = lastKnownTouch ? Math.floor((now - lastKnownTouch) / 3600000) : null;
+        const reasons: string[] = [];
+        const nextActions: string[] = [];
+
+        if (inboundReplyContactIds.has(contact.id)) {
+          reasons.push('Inbound reply waiting');
+          nextActions.push('Review and route the reply');
+        }
+        if (!lastKnownTouch) {
+          reasons.push('No response evidence');
+          nextActions.push('Confirm first response path');
+        } else if (hoursSinceTouch !== null && hoursSinceTouch >= 24) {
+          reasons.push(`No activity in ${hoursSinceTouch >= 48 ? `${Math.floor(hoursSinceTouch / 24)} days` : '24h'}`);
+          nextActions.push('Draft or schedule follow-up');
+        }
+        if (!statusText.includes('book') && !statusText.includes('consult') && !statusText.includes('appointment')) {
+          reasons.push('Booked signal missing');
+          nextActions.push('Check booking or handoff status');
+        }
+        if (!contact.phone && !contact.email) {
+          reasons.push('No reachable channel');
+          nextActions.push('Fix contact details before outreach');
+        }
+
+        if (reasons.length === 0) return null;
+
+        return {
+          contact,
+          riskReason: reasons.slice(0, 2).join(' · '),
+          nextAction: nextActions[0] || 'Review lead status',
+          lastTouch: lastKnownTouch ? new Date(lastKnownTouch).toISOString() : null,
+        };
+      })
+      .filter((item): item is { contact: Contact; riskReason: string; nextAction: string; lastTouch: string | null } => Boolean(item))
+      .sort((a, b) => (a.lastTouch ? new Date(a.lastTouch).getTime() : 0) - (b.lastTouch ? new Date(b.lastTouch).getTime() : 0))
+      .slice(0, 6);
+  }, [contacts, recentEmails, recentReplies, recentSms]);
+
   return (
     <DashboardLayout>
       <PageHeader
@@ -332,6 +389,62 @@ export default function CRM() {
             </CardContent>
           </Card>
         </div>
+
+        <Card className="mb-6 border-amber-200 bg-amber-50/40">
+          <CardHeader>
+            <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+              <div>
+                <CardTitle className="flex items-center gap-2">
+                  <AlertTriangle className="h-5 w-5 text-amber-600" />
+                  Leads at risk right now
+                  <Badge variant="outline">{leadsAtRisk.length.toLocaleString()}</Badge>
+                </CardTitle>
+                <CardDescription>
+                  Demo-safe next-action queue: lead records with missing response evidence, stale activity, inbound replies, or missing booking signals.
+                </CardDescription>
+              </div>
+              <Button asChild variant="outline">
+                <Link to="/communications">Review communications</Link>
+              </Button>
+            </div>
+          </CardHeader>
+          <CardContent>
+            {leadsAtRisk.length === 0 ? (
+              <div className="rounded-lg border border-dashed border-amber-200 bg-white/70 p-4 text-sm text-muted-foreground">
+                No lead-risk rows found from the current sample. On a live install, this panel shows who needs the next touch before they slip.
+              </div>
+            ) : (
+              <div className="grid gap-3 lg:grid-cols-2">
+                {leadsAtRisk.map(({ contact, riskReason, nextAction, lastTouch }) => (
+                  <div key={contact.id} className="rounded-xl border border-amber-100 bg-white p-4 shadow-sm">
+                    <div className="flex items-start justify-between gap-3">
+                      <div className="min-w-0">
+                        <div className="font-semibold text-slate-900 truncate">{formatName(contact)}</div>
+                        <div className="mt-1 flex flex-wrap gap-2 text-xs text-muted-foreground">
+                          {contact.source && <span>Source: {contact.source}</span>}
+                          <span>Last touch: {formatRelative(lastTouch)}</span>
+                        </div>
+                      </div>
+                      <Badge variant="outline" className="border-amber-200 bg-amber-50 text-amber-700">At risk</Badge>
+                    </div>
+                    <div className="mt-3 rounded-lg bg-amber-50 p-3 text-sm text-amber-900">
+                      <div className="font-medium">{riskReason}</div>
+                      <div className="mt-1 text-amber-800">Next action: {nextAction}</div>
+                    </div>
+                    <div className="mt-3 flex flex-wrap gap-2">
+                      <Button asChild size="sm" variant="outline">
+                        <Link to={`/contacts?contact=${contact.id}`}>Open contact</Link>
+                      </Button>
+                      <Button asChild size="sm" variant="outline">
+                        <Link to="/communications">View activity</Link>
+                      </Button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </CardContent>
+        </Card>
 
         <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between mb-6">
           <div className="relative flex-1 max-w-xl">
