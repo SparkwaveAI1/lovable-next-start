@@ -30,7 +30,7 @@ describe('parseWorkerConfig', () => {
     });
 
     expect(config.supabaseUrl).toBe('http://127.0.0.1:54321');
-    expect(config.hermesApiBaseUrl).toBe('http://127.0.0.1:8000');
+    expect(config.hermesApiBaseUrl).toBe('http://127.0.0.1:8642');
     expect(config.hermesProfile).toBe('growth-agent');
     expect(config.hermesToolsets).toEqual(['terminal', 'file']);
     expect(config.pollIntervalMs).toBe(5000);
@@ -96,7 +96,7 @@ describe('GrowthAgentWorker.processOne', () => {
       p_safe_action_types: DEFAULT_SAFE_ACTION_TYPES,
       p_stale_after_seconds: 900,
     });
-    expect(fetch).toHaveBeenCalledWith('http://127.0.0.1:8000/v1/runs', expect.objectContaining({
+    expect(fetch).toHaveBeenCalledWith('http://127.0.0.1:8642/v1/runs', expect.objectContaining({
       method: 'POST',
       headers: expect.objectContaining({ Authorization: 'Bearer api-key' }),
     }));

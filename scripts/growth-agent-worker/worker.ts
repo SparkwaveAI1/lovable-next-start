@@ -87,7 +87,7 @@ export function parseWorkerConfig(env: Record<string, string | undefined> = proc
   return {
     supabaseUrl: env.SUPABASE_URL!,
     supabaseServiceRoleKey: env.SUPABASE_SERVICE_ROLE_KEY!,
-    hermesApiBaseUrl: (env.HERMES_API_BASE_URL || 'http://127.0.0.1:8000').replace(/\/$/, ''),
+    hermesApiBaseUrl: (env.HERMES_API_BASE_URL || 'http://127.0.0.1:8642').replace(/\/$/, ''),
     apiServerKey: env.API_SERVER_KEY!,
     hermesProfile: env.HERMES_GROWTH_AGENT_PROFILE || 'growth-agent',
     hermesToolsets: splitCsv(env.HERMES_GROWTH_AGENT_TOOLSETS, ['terminal', 'file']),
@@ -185,7 +185,7 @@ export class GrowthAgentWorker {
       p_stale_after_seconds: this.config.staleAfterSeconds,
     });
     if (claim.error) throw new Error(`claim_next_growth_agent_action failed: ${claim.error.message || 'unknown error'}`);
-    if (!claim.data) return false;
+    if (!claim.data || !claim.data.id) return false;
 
     const action = claim.data;
     try {
@@ -293,7 +293,12 @@ export class GrowthAgentWorker {
 
 
 if (import.meta.url === `file://${process.argv[1]}`) {
-  const worker = new GrowthAgentWorker({ config: parseWorkerConfig() });
+  const worker = new GrowthAgentWorker({
+    config: parseWorkerConfig({
+      ...process.env,
+      GROWTH_AGENT_ONCE: process.argv.includes('--once') ? '1' : process.env.GROWTH_AGENT_ONCE,
+    }),
+  });
   worker.runForever().catch((error) => {
     console.error(error);
     process.exitCode = 1;
