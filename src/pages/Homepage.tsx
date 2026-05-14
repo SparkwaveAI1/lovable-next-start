@@ -30,6 +30,10 @@ export default function Homepage() {
     window.location.href = `/book?source_path=/${source}&request_type=demo`;
   };
 
+  const handleBookAudit = () => {
+    window.location.href = "/book?source_path=/homepage-audit&request_type=audit";
+  };
+
   const scrollToSection = (id: string) => {
     setMobileMenuOpen(false);
     const el = document.getElementById(id);
