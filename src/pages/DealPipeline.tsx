@@ -31,6 +31,7 @@ import { formatDistanceToNow, format, parseISO } from 'date-fns';
 import { useToast } from '@/hooks/use-toast';
 import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
+import { getLeadDashboardDemoSeedDeals } from '@/lib/lead-dashboard-demo-seed';
 import {
   Dialog,
   DialogContent,
@@ -72,12 +73,12 @@ const BLANK_DEAL: NewDealForm = {
 };
 
 const COLUMNS = [
-  { id: 'lead',         label: 'Lead',        color: 'border-t-gray-400',    badge: 'bg-gray-100 text-gray-700'       },
-  { id: 'qualified',    label: 'Qualified',   color: 'border-t-blue-400',    badge: 'bg-blue-100 text-blue-700'       },
+  { id: 'lead',         label: 'New Leads',   color: 'border-t-gray-400',    badge: 'bg-gray-100 text-gray-700'       },
+  { id: 'qualified',    label: 'Stale Leads', color: 'border-t-blue-400',    badge: 'bg-blue-100 text-blue-700'       },
   { id: 'proposal',     label: 'Proposal',    color: 'border-t-yellow-400',  badge: 'bg-yellow-100 text-yellow-700'   },
   { id: 'negotiation',  label: 'Negotiation', color: 'border-t-orange-400',  badge: 'bg-orange-100 text-orange-700'   },
-  { id: 'closed_won',   label: 'Closed Won',  color: 'border-t-emerald-500', badge: 'bg-emerald-100 text-emerald-700' },
-  { id: 'closed_lost',  label: 'Closed Lost', color: 'border-t-red-400',     badge: 'bg-red-100 text-red-700'         },
+  { id: 'closed_won',   label: 'Booked',      color: 'border-t-emerald-500', badge: 'bg-emerald-100 text-emerald-700' },
+  { id: 'closed_lost',  label: 'Missed',      color: 'border-t-red-400',     badge: 'bg-red-100 text-red-700'         },
 ];
 
 const QUERY_KEY = 'deal_pipeline_crm_deals';
@@ -203,8 +204,10 @@ const DealPipeline = () => {
     useSensor(KeyboardSensor),
   );
 
-  const { data: deals = [], isLoading } = useQuery({
-    queryKey: [QUERY_KEY, selectedBusiness?.id],
+  const dealQueryKey = [QUERY_KEY, selectedBusiness?.id] as const;
+
+  const { data: crmDeals = [], isLoading } = useQuery({
+    queryKey: dealQueryKey,
     queryFn: async () => {
       if (!selectedBusiness?.id) return [];
       const { data, error } = await supabase
@@ -218,6 +221,10 @@ const DealPipeline = () => {
     enabled: !!selectedBusiness?.id,
   });
 
+  const deals = crmDeals.length > 0
+    ? crmDeals
+    : getLeadDashboardDemoSeedDeals(selectedBusiness?.id);
+
   // ── Stage mutation with optimistic update + rollback ──────────────────────
   const stageMutation = useMutation({
     mutationFn: async ({ id, stage }: { id: string; stage: string }) => {
@@ -228,16 +235,16 @@ const DealPipeline = () => {
       if (error) throw error;
     },
     onMutate: async ({ id, stage }) => {
-      await queryClient.cancelQueries({ queryKey: [QUERY_KEY] });
-      const previous = queryClient.getQueryData<Deal[]>([QUERY_KEY]);
-      queryClient.setQueryData<Deal[]>([QUERY_KEY], (old) =>
+      await queryClient.cancelQueries({ queryKey: dealQueryKey });
+      const previous = queryClient.getQueryData<Deal[]>(dealQueryKey);
+      queryClient.setQueryData<Deal[]>(dealQueryKey, (old) =>
         (old ?? []).map((d) => (d.id === id ? { ...d, stage } : d)),
       );
       return { previous };
     },
     onError: (_err, _vars, context) => {
       if (context?.previous) {
-        queryClient.setQueryData([QUERY_KEY], context.previous);
+        queryClient.setQueryData(dealQueryKey, context.previous);
       }
       toast({
         title: 'Failed to move deal',
@@ -246,11 +253,18 @@ const DealPipeline = () => {
       });
     },
     onSettled: () => {
-      queryClient.invalidateQueries({ queryKey: [QUERY_KEY] });
+      queryClient.invalidateQueries({ queryKey: dealQueryKey });
     },
   });
 
   const moveDeal = (id: string, stage: string) => {
+    if (id.startsWith('demo-')) {
+      toast({
+        title: 'Demo lead board',
+        description: 'Seed demo leads are read-only until real CRM deals exist.',
+      });
+      return;
+    }
     stageMutation.mutate({ id, stage });
   };
 

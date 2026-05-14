@@ -45,7 +45,7 @@ const navGroups: NavGroup[] = [
   {
     label: "AI Growth Hub",
     items: [
-      { label: "Growth Hub", href: "/growth-hub", icon: Rocket },
+      { label: "Growth Hub", href: "/ai-growth-hub", icon: Rocket },
       { label: "Dashboard", href: "/dashboard", icon: Gauge },
       { label: "Business Brain", href: "/analytics", icon: Brain },
       { label: "Growth Agent", href: "/growth-agent", icon: Bot },
@@ -55,7 +55,7 @@ const navGroups: NavGroup[] = [
     label: "Lead Engine",
     items: [
       { label: "Lead Dashboard", href: "/crm", icon: Building2 },
-      { label: "Speed-to-Lead", href: "/fight-flow", icon: Zap },
+      { label: "Speed-to-Lead", href: "/speed-to-lead", icon: Zap },
       { label: "Contacts", href: "/contacts", icon: Users },
       { label: "Communications", href: "/communications", icon: MessageSquare },
       { label: "Service Requests", href: "/service-requests", icon: Headphones },
