@@ -62,6 +62,12 @@ const navGroups: NavGroup[] = [
     ],
   },
   {
+    label: "Client Workspaces",
+    items: [
+      { label: "Elisa Veras Imóveis", href: "/clients/elisa-veras", icon: Building2 },
+    ],
+  },
+  {
     label: "Content",
     items: [
       { label: "Strategy Queue", href: "/content-strategy", icon: FileText },
