@@ -75,6 +75,13 @@ import { ErrorBoundary } from "./components/ErrorBoundary";
 import { BusinessProvider } from "@/contexts/BusinessContext";
 import { AuthProvider } from "@/contexts/AuthContext";
 
+// Business namespace scaffold imports (scaffold only - not security boundary)
+import BusinessShell from "./app/routes/business/BusinessShell";
+import BusinessHome from "./app/routes/business/BusinessHome";
+import BusinessCRMPlaceholder from "./app/routes/business/BusinessCRMPlaceholder";
+import BusinessAgentsPlaceholder from "./app/routes/business/BusinessAgentsPlaceholder";
+import BusinessApprovalsPlaceholder from "./app/routes/business/BusinessApprovalsPlaceholder";
+
 const queryClient = new QueryClient();
 
 const App = () => (
@@ -152,7 +159,8 @@ const App = () => (
             <Route path="/tools/autoresearch" element={<ProtectedRoute><ErrorBoundary><AutoresearchDashboard /></ErrorBoundary></ProtectedRoute>} />
             <Route path="/fight-flow" element={<ProtectedRoute><ErrorBoundary><FightFlow /></ErrorBoundary></ProtectedRoute>} />
             <Route path="/crm" element={<ProtectedRoute><ErrorBoundary><CRM /></ErrorBoundary></ProtectedRoute>} />
-            <Route path="/clients/elisa-veras" element={<ProtectedRoute><ErrorBoundary><ElisaVerasClientModule /></ErrorBoundary></ProtectedRoute>} />
+            {/* Legacy client route - redirects to new business namespace */}
+            <Route path="/clients/elisa-veras" element={<Navigate replace to="/ElisaVeras" />} />
             <Route path="/crm/deals" element={<ProtectedRoute><ErrorBoundary><DealPipeline /></ErrorBoundary></ProtectedRoute>} />
             <Route path="/crm/:id" element={<ProtectedRoute><ErrorBoundary><AccountDetailPage /></ErrorBoundary></ProtectedRoute>} />
             <Route path="/business-metrics" element={<ProtectedRoute><ErrorBoundary><BusinessMetrics /></ErrorBoundary></ProtectedRoute>} />
@@ -160,6 +168,14 @@ const App = () => (
             <Route path="/analytics" element={<ProtectedRoute><ErrorBoundary><AnalyticsLearning /></ErrorBoundary></ProtectedRoute>} />
             <Route path="/questionnaire/toney-falkner" element={<ToneyFalknerQuestionnaire />} />
             <Route path="/questionnaire/toney-falkner/results" element={<ProtectedRoute><ErrorBoundary><ToneyFalknerResults /></ErrorBoundary></ProtectedRoute>} />
+            {/* Business namespace routes (scaffold only - not security boundary) */}
+            <Route path="/ElisaVeras" element={<ProtectedRoute><ErrorBoundary><BusinessShell /></ErrorBoundary></ProtectedRoute>}>
+              <Route index element={<BusinessHome />} />
+              <Route path="crm" element={<BusinessCRMPlaceholder />} />
+              <Route path="agents" element={<BusinessAgentsPlaceholder />} />
+              <Route path="approvals" element={<BusinessApprovalsPlaceholder />} />
+            </Route>
+
             {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
             <Route path="*" element={<NotFound />} />
             </Routes>
