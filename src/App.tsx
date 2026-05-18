@@ -19,10 +19,18 @@ import AdminSetupPage from "./pages/AdminSetupPage";
 import BusinessPermissionsPage from "./pages/BusinessPermissionsPage";
 import AdminDashboard from "./pages/AdminDashboard";
 import EmailMarketing from "./pages/EmailMarketing";
+import Bookings from "./pages/Bookings";
 import ProtectedRoute from "./components/ProtectedRoute";
 import { ErrorBoundary } from "./components/ErrorBoundary";
 import { BusinessProvider } from "@/contexts/BusinessContext";
 import { AuthProvider } from "@/contexts/AuthContext";
+
+// Business namespace scaffold imports
+import BusinessShell from "./app/routes/business/BusinessShell";
+import BusinessHome from "./app/routes/business/BusinessHome";
+import BusinessCRMPlaceholder from "./app/routes/business/BusinessCRMPlaceholder";
+import BusinessAgentsPlaceholder from "./app/routes/business/BusinessAgentsPlaceholder";
+import BusinessApprovalsPlaceholder from "./app/routes/business/BusinessApprovalsPlaceholder";
 
 const queryClient = new QueryClient();
 
@@ -50,6 +58,16 @@ const App = () => (
             <Route path="/permissions" element={<ProtectedRoute><ErrorBoundary><BusinessPermissionsPage /></ErrorBoundary></ProtectedRoute>} />
             <Route path="/admin" element={<ProtectedRoute><ErrorBoundary><AdminDashboard /></ErrorBoundary></ProtectedRoute>} />
             <Route path="/email-marketing" element={<ProtectedRoute><ErrorBoundary><EmailMarketing /></ErrorBoundary></ProtectedRoute>} />
+            <Route path="/bookings" element={<ProtectedRoute><ErrorBoundary><Bookings /></ErrorBoundary></ProtectedRoute>} />
+
+            {/* Business namespace routes (scaffold only - not security boundary) */}
+            <Route path="/:businessSlug" element={<ProtectedRoute><ErrorBoundary><BusinessShell /></ErrorBoundary></ProtectedRoute>}>
+              <Route index element={<BusinessHome />} />
+              <Route path="crm" element={<BusinessCRMPlaceholder />} />
+              <Route path="agents" element={<BusinessAgentsPlaceholder />} />
+              <Route path="approvals" element={<BusinessApprovalsPlaceholder />} />
+            </Route>
+
             {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
             <Route path="*" element={<NotFound />} />
             </Routes>
