@@ -5,8 +5,8 @@
  * No publishing, content approval, or workflow automation is wired
  */
 
-import { useParams } from 'react-router-dom';
 import { getBusinessBySlug } from '@/businesses/registry';
+import { useBusinessSlug } from './BusinessShell';
 import { CheckCircle, Clock, XCircle, FileText } from 'lucide-react';
 
 // Mock approval items for display only
@@ -55,8 +55,14 @@ const statusConfig = {
   },
 };
 
-export default function BusinessApprovalsPlaceholder() {
-  const { businessSlug } = useParams<{ businessSlug: string }>();
+interface BusinessApprovalsPlaceholderProps {
+  businessSlug?: string;
+}
+
+export default function BusinessApprovalsPlaceholder({ businessSlug: businessSlugProp }: BusinessApprovalsPlaceholderProps) {
+  // Use prop if provided, otherwise get from outlet context (set by BusinessShell)
+  const outletContext = useBusinessSlug();
+  const businessSlug = businessSlugProp ?? outletContext?.businessSlug;
   const config = businessSlug ? getBusinessBySlug(businessSlug) : undefined;
 
   if (!config) {

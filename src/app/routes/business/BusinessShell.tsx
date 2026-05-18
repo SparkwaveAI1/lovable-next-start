@@ -7,9 +7,24 @@
  * Real authorization requires business_id + RLS on Supabase.
  */
 
-import { Outlet, useParams, Link, useLocation } from 'react-router-dom';
+import { Outlet, useParams, Link, useLocation, useOutletContext } from 'react-router-dom';
 import { getBusinessBySlug, type NavItem, type FeatureStatus } from '@/businesses/registry';
 import { Home, Users, Bot, CheckCircle, AlertTriangle } from 'lucide-react';
+
+// Props type for explicit slug with useParams fallback
+interface BusinessShellProps {
+  businessSlug?: string;
+}
+
+// Context type for child routes
+type BusinessOutletContext = {
+  businessSlug: string;
+};
+
+// Hook for child components to get businessSlug from outlet context
+export function useBusinessSlug() {
+  return useOutletContext<BusinessOutletContext>();
+}
 
 const iconMap: Record<string, React.ComponentType<{ className?: string }>> = {
   home: Home,
@@ -61,8 +76,9 @@ function NavLink({ item, isActive }: { item: NavItem; isActive: boolean }) {
   );
 }
 
-export default function BusinessShell() {
-  const { businessSlug } = useParams<{ businessSlug: string }>();
+export default function BusinessShell({ businessSlug: businessSlugProp }: BusinessShellProps) {
+  const params = useParams<{ businessSlug?: string }>();
+  const businessSlug = businessSlugProp ?? params.businessSlug;
   const location = useLocation();
   const config = businessSlug ? getBusinessBySlug(businessSlug) : undefined;
 
@@ -117,7 +133,7 @@ export default function BusinessShell() {
 
       {/* Main content area */}
       <main className="flex-1 overflow-auto">
-        <Outlet />
+        <Outlet context={{ businessSlug } satisfies BusinessOutletContext} />
       </main>
     </div>
   );

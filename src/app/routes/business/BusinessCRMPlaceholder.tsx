@@ -5,8 +5,8 @@
  * No Supabase queries, lead contacts, messaging, or automation
  */
 
-import { useParams } from 'react-router-dom';
 import { getBusinessBySlug } from '@/businesses/registry';
+import { useBusinessSlug } from './BusinessShell';
 import { Users, Search, Plus, Filter } from 'lucide-react';
 
 // Mock data for demo purposes only
@@ -16,8 +16,14 @@ const mockContacts = [
   { id: '3', name: 'Demo Contact C', status: 'Customer', source: 'Social' },
 ];
 
-export default function BusinessCRMPlaceholder() {
-  const { businessSlug } = useParams<{ businessSlug: string }>();
+interface BusinessCRMPlaceholderProps {
+  businessSlug?: string;
+}
+
+export default function BusinessCRMPlaceholder({ businessSlug: businessSlugProp }: BusinessCRMPlaceholderProps) {
+  // Use prop if provided, otherwise get from outlet context (set by BusinessShell)
+  const outletContext = useBusinessSlug();
+  const businessSlug = businessSlugProp ?? outletContext?.businessSlug;
   const config = businessSlug ? getBusinessBySlug(businessSlug) : undefined;
 
   if (!config) {

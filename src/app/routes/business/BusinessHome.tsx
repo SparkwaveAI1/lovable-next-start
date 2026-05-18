@@ -4,13 +4,19 @@
  * DEMO/SCAFFOLD ONLY - No live data connections
  */
 
-import { useParams } from 'react-router-dom';
-import { getBusinessBySlug } from '@/businesses/registry';
-import { Building2, ArrowRight } from 'lucide-react';
 import { Link } from 'react-router-dom';
+import { getBusinessBySlug } from '@/businesses/registry';
+import { useBusinessSlug } from './BusinessShell';
+import { Building2, ArrowRight } from 'lucide-react';
 
-export default function BusinessHome() {
-  const { businessSlug } = useParams<{ businessSlug: string }>();
+interface BusinessHomeProps {
+  businessSlug?: string;
+}
+
+export default function BusinessHome({ businessSlug: businessSlugProp }: BusinessHomeProps) {
+  // Use prop if provided, otherwise get from outlet context (set by BusinessShell)
+  const outletContext = useBusinessSlug();
+  const businessSlug = businessSlugProp ?? outletContext?.businessSlug;
   const config = businessSlug ? getBusinessBySlug(businessSlug) : undefined;
 
   if (!config) {

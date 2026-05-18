@@ -6,8 +6,8 @@
  * No local Rico-side profiles are created or implied
  */
 
-import { useParams } from 'react-router-dom';
 import { getBusinessBySlug } from '@/businesses/registry';
+import { useBusinessSlug } from './BusinessShell';
 import { Bot, Zap, Brain, Search as SearchIcon } from 'lucide-react';
 
 // Display-only agent cards - these represent Walter-server/Elisa-side roles
@@ -42,8 +42,14 @@ const displayAgents = [
   },
 ];
 
-export default function BusinessAgentsPlaceholder() {
-  const { businessSlug } = useParams<{ businessSlug: string }>();
+interface BusinessAgentsPlaceholderProps {
+  businessSlug?: string;
+}
+
+export default function BusinessAgentsPlaceholder({ businessSlug: businessSlugProp }: BusinessAgentsPlaceholderProps) {
+  // Use prop if provided, otherwise get from outlet context (set by BusinessShell)
+  const outletContext = useBusinessSlug();
+  const businessSlug = businessSlugProp ?? outletContext?.businessSlug;
   const config = businessSlug ? getBusinessBySlug(businessSlug) : undefined;
 
   if (!config) {

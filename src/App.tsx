@@ -169,11 +169,11 @@ const App = () => (
             <Route path="/questionnaire/toney-falkner" element={<ToneyFalknerQuestionnaire />} />
             <Route path="/questionnaire/toney-falkner/results" element={<ProtectedRoute><ErrorBoundary><ToneyFalknerResults /></ErrorBoundary></ProtectedRoute>} />
             {/* Business namespace routes (scaffold only - not security boundary) */}
-            <Route path="/ElisaVeras" element={<ProtectedRoute><ErrorBoundary><BusinessShell /></ErrorBoundary></ProtectedRoute>}>
-              <Route index element={<BusinessHome />} />
-              <Route path="crm" element={<BusinessCRMPlaceholder />} />
-              <Route path="agents" element={<BusinessAgentsPlaceholder />} />
-              <Route path="approvals" element={<BusinessApprovalsPlaceholder />} />
+            <Route path="/ElisaVeras" element={<ProtectedRoute><ErrorBoundary><BusinessShell businessSlug="ElisaVeras" /></ErrorBoundary></ProtectedRoute>}>
+              <Route index element={<BusinessHome businessSlug="ElisaVeras" />} />
+              <Route path="crm" element={<BusinessCRMPlaceholder businessSlug="ElisaVeras" />} />
+              <Route path="agents" element={<BusinessAgentsPlaceholder businessSlug="ElisaVeras" />} />
+              <Route path="approvals" element={<BusinessApprovalsPlaceholder businessSlug="ElisaVeras" />} />
             </Route>
 
             {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
