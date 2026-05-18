@@ -15,9 +15,6 @@ import {
   Twitter
 } from "lucide-react";
 
-import { SEO } from '@/components/SEO';
-import { SEO_CONFIG } from '@/lib/seo-config';
-
 export default function About() {
   const handleBookCall = () => {
     window.open('https://calendly.com/scott-sparkwave/30min', '_blank');
