@@ -8,78 +8,155 @@
  * Real authorization requires business_id + RLS on Supabase.
  */
 
-export type FeatureStatus = 'live' | 'demo' | 'planned' | 'not-in-scope';
+import {
+  type BusinessModuleKey,
+  type BusinessModuleStatus,
+  businessModuleRegistry,
+  getBusinessModulePath,
+  getModuleDefinition,
+} from './modules';
 
+// Re-export module types for convenience
+export type { BusinessModuleKey, BusinessModuleStatus };
+
+// Re-export FeatureStatus as alias for backwards compatibility
+export type FeatureStatus = BusinessModuleStatus;
+
+/**
+ * Module enablement config for a business.
+ */
+export interface BusinessModuleConfig {
+  enabled: boolean;
+  status: BusinessModuleStatus;
+}
+
+/**
+ * Navigation item derived from module config.
+ */
 export interface NavItem {
+  key: BusinessModuleKey;
   label: string;
   path: string;
   icon: string;
-  status?: FeatureStatus;
+  status: BusinessModuleStatus;
+  description: string;
 }
 
-export interface FeatureFlag {
-  enabled: boolean;
-  status: FeatureStatus;
-}
-
+/**
+ * Business configuration using typed module keys.
+ */
 export interface BusinessConfig {
-  id: string; // Should map to Supabase business_id when RLS is implemented
-  slug: string; // URL namespace e.g. "ElisaVeras"
-  name: string; // Display name
-  displayRoles: string[]; // Walter-server/business-side display roles (NOT local user profiles)
-  navigation: NavItem[];
+  /** Should map to Supabase business_id when RLS is implemented */
+  id: string;
+  /** URL namespace e.g. "ElisaVeras" */
+  slug: string;
+  /** Display name */
+  name: string;
+  /** Walter-server/business-side display roles (NOT local user profiles) */
+  displayRoles: string[];
+  /** Module enablement using typed keys */
+  modules: Record<BusinessModuleKey, BusinessModuleConfig>;
+  /** Branding colors */
   branding: {
     primaryColor: string;
     accentColor: string;
   };
-  features: Record<string, FeatureFlag>;
 }
 
 // Import business configs
 import { elisaVerasConfig } from './elisa-veras.config';
 
 /**
- * Registry of all business configurations
- * Key is the URL slug (case-sensitive)
+ * Registry of all business configurations.
+ * Key is the URL slug (case-sensitive).
  */
 export const businessRegistry: Record<string, BusinessConfig> = {
   ElisaVeras: elisaVerasConfig,
 };
 
 /**
- * Get business config by slug
+ * Get business config by slug.
  */
 export function getBusinessBySlug(slug: string): BusinessConfig | undefined {
   return businessRegistry[slug];
 }
 
 /**
- * Get all registered business slugs
+ * Get all registered business slugs.
  */
 export function getBusinessSlugs(): string[] {
   return Object.keys(businessRegistry);
 }
 
 /**
- * Check if a feature is available for a business
+ * Check if a module is enabled for a business.
  */
-export function isFeatureEnabled(
+export function isModuleEnabled(
   businessSlug: string,
-  featureKey: string
+  moduleKey: BusinessModuleKey
 ): boolean {
   const config = getBusinessBySlug(businessSlug);
   if (!config) return false;
-  return config.features[featureKey]?.enabled ?? false;
+  return config.modules[moduleKey]?.enabled ?? false;
 }
 
 /**
- * Get feature status for display purposes
+ * Get module status for a business.
  */
-export function getFeatureStatus(
+export function getModuleStatus(
   businessSlug: string,
-  featureKey: string
-): FeatureStatus | undefined {
+  moduleKey: BusinessModuleKey
+): BusinessModuleStatus | undefined {
   const config = getBusinessBySlug(businessSlug);
   if (!config) return undefined;
-  return config.features[featureKey]?.status;
+  return config.modules[moduleKey]?.status;
 }
+
+/**
+ * Get navigation items for a business based on enabled modules.
+ * Derives labels, icons, and paths from the central module registry.
+ */
+export function getBusinessNavigation(businessSlug: string): NavItem[] {
+  const config = getBusinessBySlug(businessSlug);
+  if (!config) return [];
+
+  const navItems: NavItem[] = [];
+
+  // Iterate over module keys in registry order
+  for (const [key, moduleDef] of Object.entries(businessModuleRegistry)) {
+    const moduleKey = key as BusinessModuleKey;
+    const moduleConfig = config.modules[moduleKey];
+
+    // Only include enabled modules in navigation
+    if (moduleConfig?.enabled) {
+      navItems.push({
+        key: moduleKey,
+        label: moduleDef.label,
+        path: getBusinessModulePath(businessSlug, moduleKey),
+        icon: moduleDef.iconKey,
+        status: moduleConfig.status,
+        description: moduleDef.description,
+      });
+    }
+  }
+
+  return navItems;
+}
+
+/**
+ * Get all enabled module keys for a business.
+ */
+export function getEnabledModules(businessSlug: string): BusinessModuleKey[] {
+  const config = getBusinessBySlug(businessSlug);
+  if (!config) return [];
+
+  return (Object.entries(config.modules) as [BusinessModuleKey, BusinessModuleConfig][])
+    .filter(([, moduleConfig]) => moduleConfig.enabled)
+    .map(([key]) => key);
+}
+
+/**
+ * Get module definition from central registry.
+ * Re-exported for convenience.
+ */
+export { getModuleDefinition, getBusinessModulePath };

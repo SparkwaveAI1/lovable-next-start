@@ -8,8 +8,14 @@
  */
 
 import { Outlet, useParams, Link, useLocation, useOutletContext } from 'react-router-dom';
-import { getBusinessBySlug, type NavItem, type FeatureStatus } from '@/businesses/registry';
-import { Home, Users, Bot, CheckCircle, AlertTriangle } from 'lucide-react';
+import {
+  getBusinessBySlug,
+  getBusinessNavigation,
+  type NavItem,
+  type FeatureStatus,
+} from '@/businesses/registry';
+import { getModuleIcon } from '@/businesses/modules';
+import { AlertTriangle } from 'lucide-react';
 
 // Props type for explicit slug with useParams fallback
 interface BusinessShellProps {
@@ -25,13 +31,6 @@ type BusinessOutletContext = {
 export function useBusinessSlug() {
   return useOutletContext<BusinessOutletContext>();
 }
-
-const iconMap: Record<string, React.ComponentType<{ className?: string }>> = {
-  home: Home,
-  users: Users,
-  bot: Bot,
-  'check-circle': CheckCircle,
-};
 
 function StatusBadge({ status }: { status?: FeatureStatus }) {
   if (!status || status === 'live') return null;
@@ -58,7 +57,8 @@ function StatusBadge({ status }: { status?: FeatureStatus }) {
 }
 
 function NavLink({ item, isActive }: { item: NavItem; isActive: boolean }) {
-  const Icon = iconMap[item.icon] || Home;
+  // Get icon component from module registry
+  const Icon = getModuleIcon(item.key);
 
   return (
     <Link
@@ -68,6 +68,7 @@ function NavLink({ item, isActive }: { item: NavItem; isActive: boolean }) {
           ? 'bg-blue-100 text-blue-900'
           : 'text-gray-700 hover:bg-gray-100'
       }`}
+      title={item.description}
     >
       <Icon className="w-5 h-5" />
       <span>{item.label}</span>
@@ -81,6 +82,9 @@ export default function BusinessShell({ businessSlug: businessSlugProp }: Busine
   const businessSlug = businessSlugProp ?? params.businessSlug;
   const location = useLocation();
   const config = businessSlug ? getBusinessBySlug(businessSlug) : undefined;
+
+  // Derive navigation from module registry
+  const navigation = businessSlug ? getBusinessNavigation(businessSlug) : [];
 
   if (!config) {
     return (
@@ -111,11 +115,11 @@ export default function BusinessShell({ businessSlug: businessSlugProp }: Busine
           </p>
         </div>
 
-        {/* Navigation */}
+        {/* Navigation - derived from module registry */}
         <nav className="flex-1 p-4 space-y-1">
-          {config.navigation.map((item) => (
+          {navigation.map((item) => (
             <NavLink
-              key={item.path}
+              key={item.key}
               item={item}
               isActive={location.pathname === item.path}
             />
